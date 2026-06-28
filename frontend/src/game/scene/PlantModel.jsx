@@ -37,7 +37,7 @@ function isBasePlantModel(modelUrl) {
   return modelUrl === '/plant.gltf' || modelUrl.endsWith('/plant.gltf')
 }
 
-function GenericPlantModel({ modelUrl, visualOverrides, scale, lean, isMature = false, growthProgress = 0 }) {
+function GenericPlantModel({ modelUrl, visualOverrides, scale, lean, isMature = false, isPaused = false, growthProgress = 0 }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
   const clonedScene = useMemo(() => scene.clone(true), [scene])
@@ -53,16 +53,16 @@ function GenericPlantModel({ modelUrl, visualOverrides, scale, lean, isMature = 
 
       const duration = action.getClip().duration
       const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
-      action.timeScale = 0.018
+      action.timeScale = isPaused ? 0 : 0.018
       action.time = isMature ? duration : duration * progress
       action.play()
-      if (isMature) {
+      if (isMature || isPaused) {
         action.paused = true
       }
     })
 
     return () => Object.values(actions).forEach((action) => action?.stop())
-  }, [actions, growthProgress, isMature])
+  }, [actions, growthProgress, isMature, isPaused])
 
   return (
     <group ref={group} rotation={[0, 0, lean]} scale={scale} position={PLANT_ORIGIN}>
@@ -71,7 +71,7 @@ function GenericPlantModel({ modelUrl, visualOverrides, scale, lean, isMature = 
   )
 }
 
-export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isMature = false, growthProgress = 0, ...props }) {
+export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
   const scale = 1.1
   const lean = 0
@@ -79,12 +79,12 @@ export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isM
   if (isBasePlantModel(resolvedModelUrl)) {
     return (
       <group position={PLANT_ORIGIN} scale={scale} rotation={[0, 0, lean]} {...props}>
-        <GltfPlant visualOverrides={visualOverrides} isMature={isMature} growthProgress={growthProgress} />
+        <GltfPlant visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
       </group>
     )
   }
 
-  return <GenericPlantModel modelUrl={resolvedModelUrl} visualOverrides={visualOverrides} scale={scale} lean={lean} isMature={isMature} growthProgress={growthProgress} {...props} />
+  return <GenericPlantModel modelUrl={resolvedModelUrl} visualOverrides={visualOverrides} scale={scale} lean={lean} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} {...props} />
 }
 
 const pestAnchors = {

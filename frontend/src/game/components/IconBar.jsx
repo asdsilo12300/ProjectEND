@@ -1,6 +1,9 @@
 import { MetricIcon } from '../icons/MetricIcon'
 
 export function IconBar({ label, value, icon, color, compact = false }) {
+  const normalizedValue = Math.min(100, Math.max(0, Number(value) || 0))
+  const displayValue = Number.isInteger(normalizedValue) ? normalizedValue : normalizedValue.toFixed(1)
+
   return (
     <div className={`grid items-center text-slate-200 ${compact ? 'grid-cols-[28px_66px_1fr_30px] gap-2 text-xs' : 'grid-cols-[32px_70px_1fr_34px] gap-3 text-sm'}`}>
       <MetricIcon type={icon} color={color} label={`${label} icon`} size={compact ? 'sm' : 'md'} />
@@ -11,11 +14,11 @@ export function IconBar({ label, value, icon, color, compact = false }) {
         aria-label={label}
         aria-valuemin="0"
         aria-valuemax="100"
-        aria-valuenow={value}
+        aria-valuenow={normalizedValue}
       >
-        <div className="h-full rounded-[2px]" style={{ width: `${value}%`, backgroundColor: color }} />
+        <div className="h-full rounded-[2px] transition-[width] duration-300 ease-out" style={{ width: `${normalizedValue}%`, backgroundColor: color }} />
       </div>
-      <strong className="text-right text-lime-50">{value}</strong>
+      <strong className="text-right text-lime-50">{displayValue}</strong>
     </div>
   )
 }

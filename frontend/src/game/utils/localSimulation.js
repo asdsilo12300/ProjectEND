@@ -66,18 +66,42 @@ export function buildSimulationFactors(climate, outdoorWeather) {
 
 export function evaluateLocalSimulation(factors) {
   const stressStates = []
+  const hardStops = []
 
-  if (factors.water < 35) stressStates.push('underwatered')
-  if (factors.water > 82 || factors.soil_humidity > 82) stressStates.push('overwatered')
-  if (factors.fertilizer < 25) stressStates.push('nutrient_deficient')
-  if (factors.fertilizer > 75) stressStates.push('burnt')
-  if (factors.air_temp > 34) stressStates.push('heat_stress')
-  if (factors.air_temp < 16) stressStates.push('cold_stress')
+  function addStress(state) {
+    if (!stressStates.includes(state)) stressStates.push(state)
+  }
 
-  const visualState = stressStates.length >= 3 ? 'stunted' : stressStates[0] ?? 'healthy'
-  const stressPenalty = stressStates.length * 4
-  const severePenalty = stressStates.length >= 3 ? 10 : 0
-  const growthPoint = Math.max(0, visualState === 'healthy' ? 14 : 8 - stressPenalty - severePenalty)
+  function addHardStop(state) {
+    addStress(state)
+    if (!hardStops.includes(state)) hardStops.push(state)
+  }
+
+  if (factors.water <= 10) addHardStop('underwatered')
+  else if (factors.water < 35) addStress('underwatered')
+
+  if (factors.water >= 95 || factors.soil_humidity >= 95) addHardStop('overwatered')
+  else if (factors.water > 82 || factors.soil_humidity > 82) addStress('overwatered')
+
+  if (factors.fertilizer < 25) addStress('nutrient_deficient')
+  if (factors.fertilizer >= 90) addHardStop('burnt')
+  else if (factors.fertilizer > 75) addStress('burnt')
+
+  if (factors.light <= 8) addHardStop('stunted')
+  else if (factors.light < 22) addStress('stunted')
+
+  if (factors.air_temp >= 42) addHardStop('heat_stress')
+  else if (factors.air_temp > 34) addStress('heat_stress')
+
+  if (factors.air_temp <= 8) addHardStop('cold_stress')
+  else if (factors.air_temp < 16) addStress('cold_stress')
+
+  const visualState = stressStates.length >= 3 ? 'stunted' : hardStops[0] ?? stressStates[0] ?? 'healthy'
+  const growthPoint = visualState === 'healthy'
+    ? 14
+    : hardStops.length > 0 || visualState === 'stunted'
+      ? 0
+      : Math.max(1, 8 - stressStates.length * 3)
   const pestRisks = {
     aphid: clampChance((factors.air_humidity < 35 ? 35 : 0) + (factors.air_temp > 32 ? 30 : 0)),
     snail: clampChance((factors.soil_humidity > 72 ? 65 : 0) + (factors.soil_humidity > 90 ? 30 : 0) + (factors.rain > 0.5 ? 35 : 0)),

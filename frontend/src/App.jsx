@@ -24,6 +24,24 @@ const initialOutdoorWeather = {
   addressLabel: '',
 }
 
+const initialGrowthTrack = {
+  progress: 0,
+  history: [0, 0, 0, 0, 0, 0, 0],
+}
+
+const growthAnimationScale = 100
+
+function getStageForGrowth(progress) {
+  if (progress >= 100) return { stage_no: 4, stage_name: 'Mature', required_growth_point: 100 }
+  if (progress >= 60) return { stage_no: 3, stage_name: 'Young Plant', required_growth_point: 60 }
+  if (progress >= 25) return { stage_no: 2, stage_name: 'Sprout', required_growth_point: 25 }
+  return { stage_no: 1, stage_name: 'Seedling', required_growth_point: 0 }
+}
+
+function clampSimulationProgress(value) {
+  return Math.min(100, Math.max(0, Number(value) || 0))
+}
+
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
   const [climate, setClimate] = useState(defaultClimate)
@@ -35,6 +53,7 @@ function App() {
   const [growingMode, setGrowingMode] = useState(null)
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
   const [simulationVisual, setSimulationVisual] = useState(defaultSimulationVisual)
+  const [growthTrack, setGrowthTrack] = useState(initialGrowthTrack)
   const [user, setUser] = useState(null)
   const [authMode, setAuthMode] = useState('login')
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
@@ -111,21 +130,74 @@ function App() {
     }
   }, [growingMode])
 
+  useEffect(() => {
+    if (!growingMode) return undefined
+
+    let frameId = 0
+    let previousTime = window.performance.now()
+    let updateElapsed = 0
+    let historyElapsed = 0
+
+    function animateGrowth(now) {
+      const deltaSeconds = Math.min(0.2, (now - previousTime) / 1000)
+      previousTime = now
+      updateElapsed += deltaSeconds
+      historyElapsed += deltaSeconds
+
+      if (updateElapsed >= 0.08) {
+        const factors = buildSimulationFactors(climate, outdoorWeather)
+        const evaluation = evaluateLocalSimulation(factors)
+        const cycleGrowth = Math.max(0, Number(evaluation.growth_point) || 0)
+        const elapsed = updateElapsed
+        const shouldRecordHistory = historyElapsed >= 0.6
+        updateElapsed = 0
+        if (shouldRecordHistory) historyElapsed = 0
+
+        setGrowthTrack((current) => {
+          const nextProgress =
+            current.progress >= 100 || cycleGrowth <= 0
+              ? current.progress
+              : Math.min(100, current.progress + (cycleGrowth / growthAnimationScale) * elapsed)
+          const roundedProgress = Number(nextProgress.toFixed(2))
+          const nextHistory = shouldRecordHistory ? [...current.history.slice(1), roundedProgress] : current.history
+
+          if (roundedProgress === current.progress && nextHistory === current.history) return current
+
+          return {
+            progress: roundedProgress,
+            history: nextHistory,
+          }
+        })
+      }
+
+      frameId = window.requestAnimationFrame(animateGrowth)
+    }
+
+    frameId = window.requestAnimationFrame(animateGrowth)
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [climate, growingMode, outdoorWeather])
+
   const previewSimulationVisual = useMemo(() => {
-    if (!growingMode) return simulationVisual
+    if (!growingMode) return { ...simulationVisual, growth_history: growthTrack.history }
 
     const factors = buildSimulationFactors(climate, outdoorWeather)
     const preview = evaluateLocalSimulation(factors)
+    const progress = clampSimulationProgress(growthTrack.progress)
 
     return {
       ...simulationVisual,
+      growth_point: progress,
+      growth_history: growthTrack.history,
+      growth_rate: preview.growth_point,
+      current_stage: getStageForGrowth(progress),
       visual_state: preview.visual_state,
       visual_overrides: preview.visual_overrides,
       pest_risks: preview.pest_risks,
       active_pests: preview.active_pests,
       current_model_url: simulationVisual.current_model_url ?? preview.current_model_url,
     }
-  }, [climate, growingMode, outdoorWeather, simulationVisual])
+  }, [climate, growingMode, growthTrack, outdoorWeather, simulationVisual])
   function openWindow(id) {
     setWindows((value) => {
       if (id === 'friends') {
@@ -155,6 +227,7 @@ function App() {
 
   async function chooseGrowingMode(mode) {
     setGrowingMode(mode)
+    setGrowthTrack(initialGrowthTrack)
 
     if (mode === 'outdoor') {
       setWindows((value) => ({
@@ -227,6 +300,7 @@ function App() {
     )
     setAppliedAsset(labLibrary.Items[0])
     setSimulationVisual(defaultSimulationVisual)
+    setGrowthTrack(initialGrowthTrack)
     setActionMessage('Simulation reset')
   }
 

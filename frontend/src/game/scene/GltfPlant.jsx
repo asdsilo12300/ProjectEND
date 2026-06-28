@@ -17,7 +17,7 @@ function clonePlantMaterials(materials) {
   return cloned
 }
 
-export function GltfPlant({ visualOverrides = {}, isMature = false, growthProgress = 0, ...props }) {
+export function GltfPlant({ visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF('/plant.gltf')
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene])
@@ -50,17 +50,17 @@ export function GltfPlant({ visualOverrides = {}, isMature = false, growthProgre
       action.reset()
       action.setLoop(LoopOnce, 1)
       action.clampWhenFinished = true
-      action.timeScale = 0.018
+      action.timeScale = isPaused ? 0 : 0.018
       action.time = isMature ? duration : duration * progress
       action.play()
 
-      if (isMature) {
+      if (isMature || isPaused) {
         action.paused = true
       }
     })
 
     return () => Object.values(actions).forEach((action) => action?.stop?.())
-  }, [actions, isMature, progress])
+  }, [actions, isMature, isPaused, progress])
 
   return (
     <group ref={group} {...props} dispose={null}>

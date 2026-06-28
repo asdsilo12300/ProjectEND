@@ -9,7 +9,9 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
+  const growthRate = Number(simulationVisual?.growth_rate ?? 0)
   const isMature = currentStageNo >= 3 || growthPoint >= 100
+  const isPaused = growthRate <= 0 && !isMature
   const growthProgress = Math.min(1, Math.max(0, growthPoint / 100))
 
   return (
@@ -27,7 +29,7 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
           <pointLight position={[4, 1, -3]} intensity={0.75} color="#7fb069" />
           <Suspense fallback={<Loading />}>
             <SceneEnvironment mode={mode} />
-            <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} growthProgress={growthProgress} />
+            <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
             {pests.map((pest, index) => <PestModel key={`${pest.pest?.name_en ?? 'pest'}-${pest.id ?? index}`} pest={pest} index={index} />)}
             <Environment preset="city" />
           </Suspense>
