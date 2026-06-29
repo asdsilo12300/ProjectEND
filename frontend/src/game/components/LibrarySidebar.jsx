@@ -12,6 +12,7 @@ export function LibrarySidebar({ sections, openSections, onToggle, onApply }) {
       <div className="p-2">
         {Object.entries(sections).map(([section, items]) => {
           const expanded = openSections[section]
+          const visibleItems = section === 'Plants' ? items.slice(0, 1) : items
 
           return (
             <section className="mb-2" key={section}>
@@ -28,7 +29,7 @@ export function LibrarySidebar({ sections, openSections, onToggle, onApply }) {
 
               {expanded && (
                 <div className={`mt-2 rounded-md border border-lime-100/10 bg-black/20 p-2 ${section === 'Plants' ? 'grid gap-1.5' : 'grid grid-cols-2 gap-2'}`}>
-                  {items.map((item) => (
+                  {visibleItems.map((item) => (
                     <button
                       className={`group min-w-0 rounded-md border border-lime-100/10 bg-white/[0.045] text-left transition hover:border-lime-200/35 hover:bg-white/[0.075] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${section === 'Plants' ? 'flex items-center gap-2 p-2' : 'p-1.5'}`}
                       type="button"
@@ -64,6 +65,12 @@ export function LibrarySidebar({ sections, openSections, onToggle, onApply }) {
                       )}
                     </button>
                   ))}
+                  {section === 'Plants' && (
+                    <div className="rounded-md border border-dashed border-lime-100/15 bg-[#101511]/70 px-3 py-3 text-center">
+                      <strong className="block text-[11px] text-lime-50">More plants coming soon</strong>
+                      <span className="mt-0.5 block text-[10px] leading-relaxed text-slate-400">Please wait for the next update.</span>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

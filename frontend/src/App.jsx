@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { defaultClimate, labLibrary } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
@@ -42,6 +42,28 @@ function clampSimulationProgress(value) {
   return Math.min(100, Math.max(0, Number(value) || 0))
 }
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
+function ModeLoadingOverlay({ mode }) {
+  const label = mode === 'outdoor' ? 'outdoor field' : 'greenhouse lab'
+
+  return (
+    <div className="absolute inset-0 z-[90] grid place-items-center bg-black/55 px-4 backdrop-blur-md">
+      <div className="rounded-lg border border-lime-100/15 bg-[#101511]/95 px-6 py-5 text-center shadow-[0_18px_44px_rgba(0,0,0,.42)]">
+        <div className="mx-auto mb-3 h-1.5 w-32 overflow-hidden rounded-full bg-lime-100/10">
+          <div className="h-full w-2/3 animate-pulse rounded-full bg-[#9bcf82]" />
+        </div>
+        <strong className="block text-sm text-lime-50">Loading {label}</strong>
+        <span className="mt-1 block text-xs text-slate-400">Preparing the simulation environment...</span>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
   const [climate, setClimate] = useState(defaultClimate)
@@ -51,9 +73,12 @@ function App() {
   const [actionMessage, setActionMessage] = useState('')
   const [activePage, setActivePage] = useState('lab')
   const [growingMode, setGrowingMode] = useState(null)
+  const [modeLoading, setModeLoading] = useState(false)
+  const [selectedPlant, setSelectedPlant] = useState(null)
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
   const [simulationVisual, setSimulationVisual] = useState(defaultSimulationVisual)
   const [growthTrack, setGrowthTrack] = useState(initialGrowthTrack)
+  const lastGrowthAtRef = useRef(0)
   const [user, setUser] = useState(null)
   const [authMode, setAuthMode] = useState('login')
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
@@ -131,55 +156,68 @@ function App() {
   }, [growingMode])
 
   useEffect(() => {
-    if (!growingMode) return undefined
+    if (!growingMode || !selectedPlant || modeLoading) return undefined
 
-    let frameId = 0
-    let previousTime = window.performance.now()
-    let updateElapsed = 0
     let historyElapsed = 0
+    lastGrowthAtRef.current = Date.now()
 
-    function animateGrowth(now) {
-      const deltaSeconds = Math.min(0.2, (now - previousTime) / 1000)
-      previousTime = now
-      updateElapsed += deltaSeconds
-      historyElapsed += deltaSeconds
+    function advanceGrowth() {
+      const now = Date.now()
+      const elapsed = Math.min(3600, Math.max(0, (now - lastGrowthAtRef.current) / 1000))
+      lastGrowthAtRef.current = now
+      historyElapsed += elapsed
 
-      if (updateElapsed >= 0.08) {
-        const factors = buildSimulationFactors(climate, outdoorWeather)
-        const evaluation = evaluateLocalSimulation(factors)
-        const cycleGrowth = Math.max(0, Number(evaluation.growth_point) || 0)
-        const elapsed = updateElapsed
-        const shouldRecordHistory = historyElapsed >= 0.6
-        updateElapsed = 0
-        if (shouldRecordHistory) historyElapsed = 0
+      const factors = buildSimulationFactors(climate, outdoorWeather)
+      const evaluation = evaluateLocalSimulation(factors)
+      const cycleGrowth = Math.max(0, Number(evaluation.growth_point) || 0)
+      const shouldRecordHistory = historyElapsed >= 0.6
+      if (shouldRecordHistory) historyElapsed = 0
 
-        setGrowthTrack((current) => {
-          const nextProgress =
-            current.progress >= 100 || cycleGrowth <= 0
-              ? current.progress
-              : Math.min(100, current.progress + (cycleGrowth / growthAnimationScale) * elapsed)
-          const roundedProgress = Number(nextProgress.toFixed(2))
-          const nextHistory = shouldRecordHistory ? [...current.history.slice(1), roundedProgress] : current.history
+      setGrowthTrack((current) => {
+        const nextProgress =
+          current.progress >= 100 || cycleGrowth <= 0
+            ? current.progress
+            : Math.min(100, current.progress + (cycleGrowth / growthAnimationScale) * elapsed)
+        const roundedProgress = Number(nextProgress.toFixed(2))
+        const nextHistory = shouldRecordHistory ? [...current.history.slice(1), roundedProgress] : current.history
 
-          if (roundedProgress === current.progress && nextHistory === current.history) return current
+        if (roundedProgress === current.progress && nextHistory === current.history) return current
 
-          return {
-            progress: roundedProgress,
-            history: nextHistory,
-          }
-        })
-      }
-
-      frameId = window.requestAnimationFrame(animateGrowth)
+        return {
+          progress: roundedProgress,
+          history: nextHistory,
+        }
+      })
     }
 
-    frameId = window.requestAnimationFrame(animateGrowth)
+    const interval = window.setInterval(advanceGrowth, 160)
 
-    return () => window.cancelAnimationFrame(frameId)
-  }, [climate, growingMode, outdoorWeather])
+    function catchUpGrowth() {
+      advanceGrowth()
+    }
+
+    document.addEventListener('visibilitychange', catchUpGrowth)
+    window.addEventListener('focus', catchUpGrowth)
+    window.addEventListener('pageshow', catchUpGrowth)
+
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', catchUpGrowth)
+      window.removeEventListener('focus', catchUpGrowth)
+      window.removeEventListener('pageshow', catchUpGrowth)
+    }
+  }, [climate, growingMode, modeLoading, outdoorWeather, selectedPlant])
 
   const previewSimulationVisual = useMemo(() => {
-    if (!growingMode) return { ...simulationVisual, growth_history: growthTrack.history }
+    if (!growingMode || !selectedPlant) {
+      return {
+        ...defaultSimulationVisual,
+        growth_history: growthTrack.history,
+        growth_rate: 0,
+        current_stage: { stage_no: 0, stage_name: 'No plant', required_growth_point: 0 },
+        active_pests: [],
+      }
+    }
 
     const factors = buildSimulationFactors(climate, outdoorWeather)
     const preview = evaluateLocalSimulation(factors)
@@ -197,7 +235,7 @@ function App() {
       active_pests: preview.active_pests,
       current_model_url: simulationVisual.current_model_url ?? preview.current_model_url,
     }
-  }, [climate, growingMode, growthTrack, outdoorWeather, simulationVisual])
+  }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual])
   function openWindow(id) {
     setWindows((value) => {
       if (id === 'friends') {
@@ -223,10 +261,20 @@ function App() {
 
   function applyLabAsset(asset) {
     setAppliedAsset(asset)
+
+    if (asset.type === 'plant') {
+      setSelectedPlant(asset)
+      setSimulationVisual(defaultSimulationVisual)
+      setGrowthTrack(initialGrowthTrack)
+      setActionMessage(`${asset.name} selected`)
+    }
   }
 
   async function chooseGrowingMode(mode) {
+    const loadingStartedAt = Date.now()
+    setModeLoading(true)
     setGrowingMode(mode)
+    setSelectedPlant(null)
     setGrowthTrack(initialGrowthTrack)
 
     if (mode === 'outdoor') {
@@ -261,6 +309,11 @@ function App() {
         window.localStorage.removeItem('plant_game_simulator_id')
       }
     }
+
+    const remainingLoadingTime = 800 - (Date.now() - loadingStartedAt)
+    if (remainingLoadingTime > 0) await wait(remainingLoadingTime)
+    setModeLoading(false)
+    setActionMessage('Select a plant to load the model')
   }
 
   async function saveSimulation() {
@@ -285,10 +338,15 @@ function App() {
           savedAt: new Date().toISOString(),
         }),
       )
-      setActionMessage(nextVisual.visual_state ? `Plant state: ${nextVisual.visual_state}` : 'Scenario saved')
+      setSimulationVisual(defaultSimulationVisual)
+      setGrowthTrack(initialGrowthTrack)
+      setSelectedPlant(null)
+      setActionMessage('Scenario saved. Select a plant to continue.')
     } catch {
-      setSimulationVisual(nextVisual)
-      setActionMessage('Saved locally')
+      setSimulationVisual(defaultSimulationVisual)
+      setGrowthTrack(initialGrowthTrack)
+      setSelectedPlant(null)
+      setActionMessage('Saved locally. Select a plant to continue.')
     }
   }
 
@@ -301,7 +359,8 @@ function App() {
     setAppliedAsset(labLibrary.Items[0])
     setSimulationVisual(defaultSimulationVisual)
     setGrowthTrack(initialGrowthTrack)
-    setActionMessage('Simulation reset')
+    setSelectedPlant(null)
+    setActionMessage('Simulation reset. Select a plant to begin.')
   }
 
   function dropLabAsset(event) {
@@ -353,6 +412,8 @@ function App() {
     setActivePage('lab')
   }
 
+  const labReady = Boolean(growingMode && !modeLoading)
+
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
@@ -375,22 +436,35 @@ function App() {
         <ShopPage />
       ) : (
         <>
-          <LibrarySidebar sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
-          <SimulationStage actionMessage={actionMessage} dropLabAsset={dropLabAsset} mode={growingMode ?? 'greenhouse'} resetSimulation={resetSimulation} saveSimulation={saveSimulation} simulationVisual={previewSimulationVisual} />
+          {labReady && (
+            <>
+              <LibrarySidebar sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
+              <SimulationStage
+                actionMessage={actionMessage}
+                dropLabAsset={dropLabAsset}
+                mode={growingMode}
+                plantSelected={Boolean(selectedPlant)}
+                resetSimulation={resetSimulation}
+                saveSimulation={saveSimulation}
+                simulationVisual={previewSimulationVisual}
+              />
 
-          <PlantMonitorPanel windows={windows} setWindows={setWindows} simulationVisual={previewSimulationVisual} />
-          <EnvironmentPanel
-            climate={climate}
-            setClimate={setClimate}
-            windows={windows}
-            setWindows={setWindows}
-            mode={growingMode ?? 'greenhouse'}
-            outdoorWeather={outdoorWeather}
-          />
-          <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} />
-          <CommentsPanel windows={windows} setWindows={setWindows} />
+              <PlantMonitorPanel windows={windows} setWindows={setWindows} simulationVisual={previewSimulationVisual} />
+              <EnvironmentPanel
+                climate={climate}
+                setClimate={setClimate}
+                windows={windows}
+                setWindows={setWindows}
+                mode={growingMode}
+                outdoorWeather={outdoorWeather}
+              />
+              <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} />
+              <CommentsPanel windows={windows} setWindows={setWindows} />
+            </>
+          )}
 
           {!growingMode && <GrowingModePicker onSelect={chooseGrowingMode} />}
+          {modeLoading && <ModeLoadingOverlay mode={growingMode} />}
         </>
       )}
     </main>

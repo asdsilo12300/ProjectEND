@@ -5,7 +5,7 @@ import { AppIcon } from '../icons/IconifyIcon'
 import { Loading, PestModel, PlantModel } from './PlantModel'
 import { SceneEnvironment } from './SceneEnvironment'
 
-export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhouse', resetSimulation, saveSimulation, simulationVisual }) {
+export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhouse', plantSelected = false, resetSimulation, saveSimulation, simulationVisual }) {
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
@@ -29,12 +29,22 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
           <pointLight position={[4, 1, -3]} intensity={0.75} color="#7fb069" />
           <Suspense fallback={<Loading />}>
             <SceneEnvironment mode={mode} />
-            <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
-            {pests.map((pest, index) => <PestModel key={`${pest.pest?.name_en ?? 'pest'}-${pest.id ?? index}`} pest={pest} index={index} />)}
+            {plantSelected && (
+              <>
+                <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
+                {pests.map((pest, index) => <PestModel key={`${pest.pest?.name_en ?? 'pest'}-${pest.id ?? index}`} pest={pest} index={index} />)}
+              </>
+            )}
             <Environment preset="city" />
           </Suspense>
           <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, -0.32, 0]} minDistance={2.8} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />
         </Canvas>
+        {!plantSelected && (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,.35)]">
+            <strong className="block text-sm text-lime-50">Select a plant to begin</strong>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">Choose Sprout from Lab assets to load the plant model.</span>
+          </div>
+        )}
         {actionMessage && (
           <div className="pointer-events-none absolute bottom-32 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs font-semibold text-lime-50 shadow-[0_8px_18px_rgba(0,0,0,.32)]">
             <span className="grid h-6 w-6 place-items-center rounded-md bg-[#9bcf82] text-[#101511]">
