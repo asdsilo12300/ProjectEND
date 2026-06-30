@@ -1,8 +1,10 @@
-﻿import { useMemo } from 'react'
+import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
+import { resolveAssetUrl } from '../../lib/api'
 
-function DirtGround() {
-  const { scene } = useGLTF('/dirt.gltf')
+function DirtGround({ modelUrl = '/dirt.gltf' }) {
+  const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/dirt.gltf'
+  const { scene } = useGLTF(resolvedModelUrl)
   const clonedScene = useMemo(() => scene.clone(true), [scene])
 
   return (
@@ -12,11 +14,8 @@ function DirtGround() {
   )
 }
 
-export function SceneEnvironment() {
-  return <DirtGround />
+export function SceneEnvironment({ dirtModelUrl }) {
+  return <DirtGround modelUrl={dirtModelUrl} />
 }
 
 useGLTF.preload('/dirt.gltf')
-
-
-

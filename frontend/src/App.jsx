@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { defaultClimate, labLibrary } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
@@ -11,7 +11,7 @@ import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { SimulationStage } from './game/scene/SimulationStage'
 import { ShopPage } from './game/shop/ShopPage'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, getMe, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, tickSimulator } from './lib/api'
+import { clearToken, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -30,6 +30,7 @@ const initialGrowthTrack = {
 }
 
 const growthAnimationScale = 100
+const autosaveIntervalMs = 5000
 
 function getStageForGrowth(progress) {
   if (progress >= 100) return { stage_no: 4, stage_name: 'Mature', required_growth_point: 100 }
@@ -75,10 +76,14 @@ function App() {
   const [growingMode, setGrowingMode] = useState(null)
   const [modeLoading, setModeLoading] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
+  const [plantCatalog, setPlantCatalog] = useState([])
+  const [modelAssets, setModelAssets] = useState({})
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
   const [simulationVisual, setSimulationVisual] = useState(defaultSimulationVisual)
   const [growthTrack, setGrowthTrack] = useState(initialGrowthTrack)
   const lastGrowthAtRef = useRef(0)
+  const latestSaveLoadedRef = useRef(false)
+  const autosaveStateRef = useRef({})
   const [user, setUser] = useState(null)
   const [authMode, setAuthMode] = useState('login')
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
@@ -149,6 +154,30 @@ function App() {
     }
 
     syncOutdoorWeather()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [growingMode])
+
+  useEffect(() => {
+    if (!growingMode) return undefined
+
+    let isCancelled = false
+
+    async function syncModelAssets() {
+      try {
+        const payload = await getModelAssets()
+        const assets = payload.data ?? payload
+        if (!isCancelled) {
+          setModelAssets(Object.fromEntries(assets.map((asset) => [asset.asset_key, asset])))
+        }
+      } catch {
+        if (!isCancelled) setModelAssets({})
+      }
+    }
+
+    syncModelAssets()
 
     return () => {
       isCancelled = true
@@ -236,6 +265,140 @@ function App() {
       current_model_url: simulationVisual.current_model_url ?? preview.current_model_url,
     }
   }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual])
+  useEffect(() => {
+    autosaveStateRef.current = {
+      climate,
+      growingMode,
+      growthTrack,
+      outdoorWeather,
+      previewSimulationVisual,
+      selectedPlant,
+    }
+  })
+  const applySimulatorSnapshot = useCallback((simulator, options = {}) => {
+    if (!simulator) return
+
+    const restoredProgress = clampSimulationProgress(simulator.growth_point ?? 0)
+    const restoredMode = simulator.mode ?? 'greenhouse'
+    const restoredPlant = labLibrary.Plants.find((plant) => plant.id === 'sprout') ?? labLibrary.Plants[0]
+
+    window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
+    setGrowingMode(restoredMode)
+    setModeLoading(false)
+    setAppliedAsset(restoredPlant)
+    if (simulator.plant) {
+      setPlantCatalog((current) => current.some((plant) => plant.id === simulator.plant.id) ? current : [simulator.plant, ...current])
+    }
+    setSelectedPlant(options.selectPlant === false ? null : restoredPlant)
+    setClimate({
+      water: Number(simulator.water ?? defaultClimate.water),
+      light: Number(simulator.light ?? defaultClimate.light),
+      fertilizer: Number(simulator.fertilizer ?? defaultClimate.fertilizer),
+      soil: Number(simulator.soil_humidity ?? defaultClimate.soil),
+      air: Number(simulator.air_humidity ?? defaultClimate.air),
+      temp: Number(simulator.air_temp ?? defaultClimate.temp),
+    })
+    setGrowthTrack({
+      progress: restoredProgress,
+      history: [0, 0, 0, 0, 0, 0, restoredProgress],
+    })
+    setSimulationVisual({
+      ...defaultSimulationVisual,
+      ...simulator,
+      growth_point: restoredProgress,
+      current_model_url: simulator.current_model_url ?? defaultSimulationVisual.current_model_url,
+    })
+  }, [])
+
+  const buildSaveSnapshot = useCallback(() => {
+    const state = autosaveStateRef.current
+    const factors = buildSimulationFactors(state.climate ?? defaultClimate, state.outdoorWeather ?? initialOutdoorWeather)
+    const visual = state.previewSimulationVisual ?? defaultSimulationVisual
+    const track = state.growthTrack ?? initialGrowthTrack
+
+    return {
+      ...factors,
+      growth_point: clampSimulationProgress(visual.growth_point ?? track.progress),
+      health: Math.round(Number(visual.health ?? 100)),
+      visual_state: visual.visual_state ?? 'healthy',
+      visual_overrides: visual.visual_overrides ?? {},
+      analysis_result: visual.analysis_result ?? 'Current simulation state saved.',
+      direction: visual.direction ?? 'Continue from the latest saved state.',
+    }
+  }, [])
+
+  const persistCurrentSimulation = useCallback(async (options = {}) => {
+    const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+    const state = autosaveStateRef.current
+
+    if (!simulatorId || !getToken() || !state.selectedPlant || !state.growingMode) {
+      return null
+    }
+
+    const payload = await syncSimulatorSnapshot(simulatorId, buildSaveSnapshot(), { keepalive: options.keepalive })
+    const simulator = payload.data ?? payload
+
+    if (!options.silent && simulator) {
+      setSimulationVisual({
+        ...defaultSimulationVisual,
+        ...simulator,
+        current_model_url: simulator.current_model_url ?? autosaveStateRef.current.previewSimulationVisual?.current_model_url ?? defaultSimulationVisual.current_model_url,
+      })
+    }
+
+    return simulator
+  }, [buildSaveSnapshot])
+
+  useEffect(() => {
+    if (!user || latestSaveLoadedRef.current) return undefined
+
+    let isCancelled = false
+    latestSaveLoadedRef.current = true
+
+    async function restoreLatestSave() {
+      try {
+        const payload = await getLatestSimulator()
+        const simulator = payload.data ?? null
+
+        if (!isCancelled && simulator) {
+          applySimulatorSnapshot(simulator)
+          setActionMessage('Latest simulation restored')
+        }
+      } catch {
+        latestSaveLoadedRef.current = false
+      }
+    }
+
+    restoreLatestSave()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [applySimulatorSnapshot, user])
+
+  useEffect(() => {
+    if (!selectedPlant || !growingMode || !getToken()) return undefined
+
+    const interval = window.setInterval(() => {
+      persistCurrentSimulation({ silent: true }).catch(() => {})
+    }, autosaveIntervalMs)
+
+    return () => window.clearInterval(interval)
+  }, [growingMode, persistCurrentSimulation, selectedPlant])
+
+  useEffect(() => {
+    function saveBeforeLeaving() {
+      persistCurrentSimulation({ silent: true, keepalive: true }).catch(() => {})
+    }
+
+    window.addEventListener('pagehide', saveBeforeLeaving)
+    window.addEventListener('beforeunload', saveBeforeLeaving)
+
+    return () => {
+      window.removeEventListener('pagehide', saveBeforeLeaving)
+      window.removeEventListener('beforeunload', saveBeforeLeaving)
+    }
+  }, [persistCurrentSimulation])
   function openWindow(id) {
     setWindows((value) => {
       if (id === 'friends') {
@@ -259,14 +422,45 @@ function App() {
     setOpenSections((value) => ({ ...value, [section]: !value[section] }))
   }
 
-  function applyLabAsset(asset) {
+  async function applyLabAsset(asset) {
     setAppliedAsset(asset)
 
     if (asset.type === 'plant') {
+      const apiPlant = plantCatalog.find((plant) => plant.name_en === 'Simulation Sprout') ?? plantCatalog[0] ?? null
+      const fallbackModelUrl = apiPlant?.base_model_url ?? modelAssets['plant.original']?.url ?? defaultSimulationVisual.current_model_url
+
       setSelectedPlant(asset)
-      setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
-      setActionMessage(`${asset.name} selected`)
+      setSimulationVisual({
+        ...defaultSimulationVisual,
+        current_model_url: fallbackModelUrl,
+      })
+      setActionMessage('Creating simulation save...')
+
+      if (getToken() && apiPlant && growingMode) {
+        try {
+          const simulatorPayload = await startSimulator(apiPlant.id, growingMode, {
+            location_name: outdoorWeather.addressLabel || undefined,
+            latitude: outdoorWeather.location?.latitude,
+            longitude: outdoorWeather.location?.longitude,
+          })
+          const simulator = simulatorPayload.data ?? simulatorPayload
+          window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
+          setSimulationVisual({
+            ...defaultSimulationVisual,
+            ...simulator,
+            current_model_url: simulator.current_model_url ?? fallbackModelUrl,
+          })
+          setGrowthTrack({ progress: clampSimulationProgress(simulator.growth_point ?? 0), history: [0, 0, 0, 0, 0, 0, clampSimulationProgress(simulator.growth_point ?? 0)] })
+          setActionMessage(`${asset.name} saved to your account`)
+        } catch {
+          window.localStorage.removeItem('plant_game_simulator_id')
+          setActionMessage(`${asset.name} selected locally`)
+        }
+      } else {
+        window.localStorage.removeItem('plant_game_simulator_id')
+        setActionMessage(`${asset.name} selected locally`)
+      }
     }
   }
 
@@ -291,23 +485,14 @@ function App() {
       setOutdoorWeather(initialOutdoorWeather)
     }
 
-    if (getToken()) {
-      try {
-        const payload = await getPlants()
-        const plants = payload.data ?? payload
-        const simulationPlant = plants.find((plant) => plant.name_en === 'Simulation Sprout' || plant.name_th === 'à¸•à¹‰à¸™à¸­à¹ˆà¸­à¸™à¸ˆà¸³à¸¥à¸­à¸‡')
-        if (simulationPlant) {
-          const simulatorPayload = await startSimulator(simulationPlant.id, mode)
-          const simulator = simulatorPayload.data ?? simulatorPayload
-          window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
-          setSimulationVisual({ ...defaultSimulationVisual, current_model_url: simulator.current_model_url ?? defaultSimulationVisual.current_model_url })
-        } else {
-          window.localStorage.removeItem('plant_game_simulator_id')
-          setSimulationVisual(defaultSimulationVisual)
-        }
-      } catch {
-        window.localStorage.removeItem('plant_game_simulator_id')
-      }
+    try {
+      const payload = await getPlants()
+      const plants = payload.data ?? payload
+      setPlantCatalog(plants)
+      setSimulationVisual(defaultSimulationVisual)
+      window.localStorage.removeItem('plant_game_simulator_id')
+    } catch {
+      window.localStorage.removeItem('plant_game_simulator_id')
     }
 
     const remainingLoadingTime = 800 - (Date.now() - loadingStartedAt)
@@ -317,17 +502,10 @@ function App() {
   }
 
   async function saveSimulation() {
-    const factors = buildSimulationFactors(climate, outdoorWeather)
-    const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
-    let nextVisual = evaluateLocalSimulation(factors)
-
     try {
-      if (simulatorId && getToken()) {
-        const payload = await tickSimulator(simulatorId, factors)
-        nextVisual = payload.data ?? payload
-      }
+      const simulator = await persistCurrentSimulation({ silent: false })
+      const nextVisual = simulator ?? previewSimulationVisual
 
-      setSimulationVisual(nextVisual)
       window.localStorage.setItem(
         'plantsim-scenario',
         JSON.stringify({
@@ -338,11 +516,13 @@ function App() {
           savedAt: new Date().toISOString(),
         }),
       )
+      window.localStorage.removeItem('plant_game_simulator_id')
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
       setSelectedPlant(null)
       setActionMessage('Scenario saved. Select a plant to continue.')
     } catch {
+      window.localStorage.removeItem('plant_game_simulator_id')
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
       setSelectedPlant(null)
@@ -351,6 +531,7 @@ function App() {
   }
 
   function resetSimulation() {
+    window.localStorage.removeItem('plant_game_simulator_id')
     setClimate(
       growingMode === 'outdoor' && outdoorWeather.forecast
         ? climateFromForecast({ ...defaultClimate }, outdoorWeather.forecast)
@@ -405,6 +586,7 @@ function App() {
   }
 
   function logoutUser() {
+    latestSaveLoadedRef.current = false
     clearToken()
     window.localStorage.removeItem('plant_game_simulator_id')
     setUser(null)
@@ -446,6 +628,7 @@ function App() {
                 plantSelected={Boolean(selectedPlant)}
                 resetSimulation={resetSimulation}
                 saveSimulation={saveSimulation}
+                sceneAssets={modelAssets}
                 simulationVisual={previewSimulationVisual}
               />
 

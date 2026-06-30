@@ -5,7 +5,6 @@ namespace App\Http\Resources;
 use App\Models\Pest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class SimulatorResource extends JsonResource
@@ -134,7 +133,7 @@ class SimulatorResource extends JsonResource
             return $path;
         }
 
-        return Storage::disk('public')->url($path);
+        return '/storage/' . ltrim($path, '/');
     }
 }
 

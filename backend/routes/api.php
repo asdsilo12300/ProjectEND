@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\GameProgressController;
+use App\Http\Controllers\Api\ModelAssetController;
 use App\Http\Controllers\Api\PlantController;
 use App\Http\Controllers\Api\PlantHistoryController;
 use App\Http\Controllers\Api\PostController;
@@ -24,6 +25,8 @@ Route::get('/plants/{plant}/stages', [PlantController::class, 'stages']);
 Route::get('/contents/{slug}', [ContentController::class, 'show']);
 Route::get('/shop/items', [ShopController::class, 'index']);
 Route::get('/posts', [PostController::class, 'index']);
+Route::get('/model-assets', [ModelAssetController::class, 'index']);
+Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
 
 // Dev-only test upload route (no auth) â€” only enabled when APP_DEBUG is true
 if (env('APP_DEBUG', false)) {
@@ -38,10 +41,12 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/friends/{friendship}/accept', [FriendController::class, 'accept']);
 
     Route::get('/simulators', [SimulatorController::class, 'index']);
+    Route::get('/simulators/latest', [SimulatorController::class, 'latest']);
     Route::post('/simulators', [SimulatorController::class, 'store']);
     Route::get('/simulators/{simulator}', [SimulatorController::class, 'show']);
     Route::post('/simulators/{simulator}/logs', [SimulatorController::class, 'storeLog']);
     Route::post('/simulators/{simulator}/tick', [SimulatorController::class, 'tick']);
+    Route::post('/simulators/{simulator}/sync', [SimulatorController::class, 'sync']);
     Route::post('/simulators/{simulator}/use-item', [SimulatorController::class, 'useItem']);
 
     Route::get('/inventory', [ShopController::class, 'inventory']);

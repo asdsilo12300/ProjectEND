@@ -8,6 +8,7 @@ use App\Models\Plant;
 use App\Models\PlantConditionRule;
 use App\Models\PlantGrowthStage;
 use App\Models\PlantVisualVariant;
+use App\Models\ModelAsset;
 use Illuminate\Database\Seeder;
 
 class GameSimulationSeeder extends Seeder
@@ -17,11 +18,11 @@ class GameSimulationSeeder extends Seeder
         $plant = Plant::query()->updateOrCreate(
             ['name_en' => 'Simulation Sprout'],
             [
-                'name_th' => 'ต้นหูช้าง',
+                'name_th' => 'à¸•à¹‰à¸™à¸«à¸¹à¸Šà¹‰à¸²à¸‡',
                 'name_en' => 'Simulation Sprout',
                 'description' => 'Starter plant for learning how environment factors affect growth and visual state.',
                 'base_image_url' => null,
-                'base_model_url' => '/plant.gltf',
+                'base_model_url' => 'models/plant.gltf',
                 'water_min' => 40,
                 'water_max' => 75,
                 'light_min' => 45,
@@ -40,9 +41,9 @@ class GameSimulationSeeder extends Seeder
         );
 
         $stages = [
-            ['stage_no' => 1, 'stage_name' => 'Seedling', 'required_growth_point' => 0, 'description' => 'Early stage', 'model_url' => '/plant.gltf'],
-            ['stage_no' => 2, 'stage_name' => 'Sprout', 'required_growth_point' => 40, 'description' => 'Visible sprout', 'model_url' => '/plant.gltf'],
-            ['stage_no' => 3, 'stage_name' => 'Young Plant', 'required_growth_point' => 100, 'description' => 'Stable young plant', 'model_url' => '/plant.gltf'],
+            ['stage_no' => 1, 'stage_name' => 'Seedling', 'required_growth_point' => 0, 'description' => 'Early stage', 'model_url' => 'models/plant.gltf'],
+            ['stage_no' => 2, 'stage_name' => 'Sprout', 'required_growth_point' => 40, 'description' => 'Visible sprout', 'model_url' => 'models/plant.gltf'],
+            ['stage_no' => 3, 'stage_name' => 'Young Plant', 'required_growth_point' => 100, 'description' => 'Stable young plant', 'model_url' => 'models/plant.gltf'],
         ];
 
         foreach ($stages as $stage) {
@@ -88,9 +89,9 @@ class GameSimulationSeeder extends Seeder
         }
 
         $pests = [
-            ['name_th' => 'เพลี้ย', 'name_en' => 'aphid', 'model_url' => '/aphid.gltf', 'base_chance' => 0, 'damage_per_turn' => 5, 'behavior' => 'More likely in dry and hot air.'],
-            ['name_th' => 'หอยทาก', 'name_en' => 'snail', 'model_url' => '/snails.gltf', 'base_chance' => 0, 'damage_per_turn' => 6, 'behavior' => 'More likely when soil is wet or rain is present.'],
-            ['name_th' => 'เชื้อรา', 'name_en' => 'fungus', 'model_url' => null, 'base_chance' => 0, 'damage_per_turn' => 7, 'behavior' => 'More likely with high humidity and wet soil.'],
+            ['name_th' => 'à¹€à¸žà¸¥à¸µà¹‰à¸¢', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'base_chance' => 0, 'damage_per_turn' => 5, 'behavior' => 'More likely in dry and hot air.'],
+            ['name_th' => 'à¸«à¸­à¸¢à¸—à¸²à¸', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'base_chance' => 0, 'damage_per_turn' => 6, 'behavior' => 'More likely when soil is wet or rain is present.'],
+            ['name_th' => 'à¹€à¸Šà¸·à¹‰à¸­à¸£à¸²', 'name_en' => 'fungus', 'model_url' => null, 'base_chance' => 0, 'damage_per_turn' => 7, 'behavior' => 'More likely with high humidity and wet soil.'],
         ];
 
         foreach ($pests as $pestData) {
@@ -130,5 +131,20 @@ class GameSimulationSeeder extends Seeder
                 ]
             );
         }
+
+        $assets = [
+            ['asset_key' => 'plant.original', 'label' => 'Original plant model', 'type' => 'plant', 'url' => 'models/plant.gltf'],
+            ['asset_key' => 'ground.dirt', 'label' => 'Dirt ground model', 'type' => 'scene', 'url' => 'models/dirt.gltf'],
+            ['asset_key' => 'pest.aphid', 'label' => 'Aphid pest model', 'type' => 'pest', 'url' => 'models/aphid.gltf'],
+            ['asset_key' => 'pest.snail', 'label' => 'Snail pest model', 'type' => 'pest', 'url' => 'models/snails.gltf'],
+        ];
+
+        foreach ($assets as $asset) {
+            ModelAsset::query()->updateOrCreate(
+                ['asset_key' => $asset['asset_key']],
+                $asset + ['metadata' => ['source' => 'frontend-public-import']]
+            );
+        }
     }
 }
+

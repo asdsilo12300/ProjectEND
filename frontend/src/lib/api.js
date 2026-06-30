@@ -1,5 +1,4 @@
-﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
-const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '')
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
 
 export function getToken() {
   return window.localStorage.getItem('plant_game_token')
@@ -20,7 +19,7 @@ export function clearToken() {
 export function resolveAssetUrl(path) {
   if (!path) return null
   if (path.startsWith('http://') || path.startsWith('https://')) return path
-  if (path.startsWith('/storage/')) return `${API_ORIGIN}${path}`
+  if (path.startsWith('/storage/')) return path
   return path
 }
 
@@ -48,6 +47,10 @@ export async function apiFetch(path, options = {}) {
 
 export async function getPlants() {
   return apiFetch('/plants')
+}
+
+export async function getModelAssets() {
+  return apiFetch('/model-assets')
 }
 
 export async function getPlant(id) {
@@ -99,6 +102,10 @@ export async function acceptFriend(friendshipId) {
   })
 }
 
+export async function getLatestSimulator() {
+  return apiFetch('/simulators/latest')
+}
+
 export async function startSimulator(plantId, mode = 'greenhouse', options = {}) {
   return apiFetch('/simulators', {
     method: 'POST',
@@ -110,5 +117,12 @@ export async function tickSimulator(simulatorId, factors) {
   return apiFetch(`/simulators/${simulatorId}/tick`, {
     method: 'POST',
     body: JSON.stringify(factors),
+  })
+}
+export async function syncSimulatorSnapshot(simulatorId, snapshot, options = {}) {
+  return apiFetch(`/simulators/${simulatorId}/sync`, {
+    method: 'POST',
+    body: JSON.stringify(snapshot),
+    keepalive: options.keepalive ?? false,
   })
 }

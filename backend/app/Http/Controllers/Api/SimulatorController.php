@@ -29,6 +29,22 @@ class SimulatorController extends Controller
         );
     }
 
+    public function latest(Request $request)
+    {
+        $simulator = Simulator::query()
+            ->with(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
+            ->where('user_id', $request->user()->id)
+            ->where('status', 'active')
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+
+        if (! $simulator) {
+            return response()->json(['data' => null]);
+        }
+
+        return new SimulatorResource($simulator);
+    }
     public function store(Request $request): SimulatorResource
     {
         $data = $request->validate([
@@ -82,6 +98,63 @@ class SimulatorController extends Controller
         return new SimulatorResource($engine->tick($simulator, $factors));
     }
 
+    public function sync(Request $request, Simulator $simulator): SimulatorResource
+    {
+        abort_unless($simulator->user_id === $request->user()->id, 403);
+
+        $data = $request->validate([
+            'growth_point' => ['required', 'numeric', 'min:0'],
+            'health' => ['required', 'integer', 'min:0', 'max:100'],
+            'water' => ['required', 'integer', 'min:0', 'max:100'],
+            'light' => ['required', 'integer', 'min:0', 'max:100'],
+            'fertilizer' => ['required', 'integer', 'min:0', 'max:100'],
+            'soil_humidity' => ['required', 'integer', 'min:0', 'max:100'],
+            'air_humidity' => ['required', 'integer', 'min:0', 'max:100'],
+            'soil_temp' => ['required', 'numeric', 'min:-20', 'max:80'],
+            'air_temp' => ['required', 'numeric', 'min:-20', 'max:80'],
+            'visual_state' => ['nullable', 'string', 'max:80'],
+            'visual_overrides' => ['nullable', 'array'],
+            'analysis_result' => ['nullable', 'string'],
+            'direction' => ['nullable', 'string'],
+        ]);
+
+        $growthPoint = (int) round((float) $data['growth_point']);
+        $stage = $simulator->plant
+            ->stages()
+            ->where('required_growth_point', '<=', $growthPoint)
+            ->orderByDesc('required_growth_point')
+            ->first();
+
+        $state = [
+            'growth_point' => $growthPoint,
+            'current_stage_id' => $stage?->id ?? $simulator->current_stage_id,
+            'health' => $data['health'],
+            'visual_state' => $data['visual_state'] ?? $simulator->visual_state ?? 'healthy',
+            'visual_overrides' => $data['visual_overrides'] ?? $simulator->visual_overrides ?? [],
+            'water' => $data['water'],
+            'light' => $data['light'],
+            'fertilizer' => $data['fertilizer'],
+            'soil_humidity' => $data['soil_humidity'],
+            'air_humidity' => $data['air_humidity'],
+            'soil_temp' => $data['soil_temp'],
+            'air_temp' => $data['air_temp'],
+            'status' => 'active',
+        ];
+
+        DB::transaction(function () use ($data, $simulator, $state): void {
+            $simulator->update($state);
+
+            SimulationLog::query()->create($state + [
+                'simulator_id' => $simulator->id,
+                'day_no' => ((int) $simulator->logs()->max('day_no')) + 1,
+                'score' => max(0, (int) $state['growth_point'] + (int) $state['health']),
+                'analysis_result' => $data['analysis_result'] ?? 'Current simulation state saved.',
+                'direction' => $data['direction'] ?? 'Continue from the latest saved state.',
+            ]);
+        });
+
+        return new SimulatorResource($simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
+    }
     public function storeLog(Request $request, Simulator $simulator): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);

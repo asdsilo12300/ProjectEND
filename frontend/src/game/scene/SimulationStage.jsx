@@ -1,11 +1,36 @@
-﻿import { Suspense } from 'react'
+import { Component, Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, OrbitControls } from '@react-three/drei'
 import { AppIcon } from '../icons/IconifyIcon'
 import { Loading, PestModel, PlantModel } from './PlantModel'
 import { SceneEnvironment } from './SceneEnvironment'
 
-export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhouse', plantSelected = false, resetSimulation, saveSimulation, simulationVisual }) {
+class SceneErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="absolute inset-0 grid place-items-center bg-[#080b09]">
+          <div className="max-w-[280px] rounded-lg border border-red-200/20 bg-[#151110]/92 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,.35)]">
+            <strong className="block text-sm text-red-100">Model could not load</strong>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">Check the model file path and its linked texture or bin files.</span>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhouse', plantSelected = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual }) {
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
@@ -21,6 +46,7 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
         onDrop={dropLabAsset}
         aria-label="Plant simulation stage"
       >
+        <SceneErrorBoundary key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}>
         <Canvas camera={{ position: [0.75, 0.85, 4.2], fov: 32 }}>
           <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#080b09']} />
           <ambientLight intensity={0.85} />
@@ -28,7 +54,7 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
           <pointLight position={[-3, 2, 3]} intensity={1.15} color="#9bcf82" />
           <pointLight position={[4, 1, -3]} intensity={0.75} color="#7fb069" />
           <Suspense fallback={<Loading />}>
-            <SceneEnvironment mode={mode} />
+            <SceneEnvironment dirtModelUrl={sceneAssets['ground.dirt']?.url} mode={mode} />
             {plantSelected && (
               <>
                 <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
@@ -39,6 +65,7 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
           </Suspense>
           <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, -0.32, 0]} minDistance={2.8} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />
         </Canvas>
+        </SceneErrorBoundary>
         {!plantSelected && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,.35)]">
             <strong className="block text-sm text-lime-50">Select a plant to begin</strong>

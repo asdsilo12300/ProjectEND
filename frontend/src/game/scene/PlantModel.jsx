@@ -79,7 +79,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isM
   if (isBasePlantModel(resolvedModelUrl)) {
     return (
       <group position={PLANT_ORIGIN} scale={scale} rotation={[0, 0, lean]} {...props}>
-        <GltfPlant visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
+        <GltfPlant modelUrl={resolvedModelUrl} visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
       </group>
     )
   }

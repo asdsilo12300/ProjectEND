@@ -17,9 +17,9 @@ function clonePlantMaterials(materials) {
   return cloned
 }
 
-export function GltfPlant({ visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
-  const { scene, animations } = useGLTF('/plant.gltf')
+  const { scene, animations } = useGLTF(modelUrl)
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene])
   const { nodes, materials } = useGraph(clone)
   const plantMaterials = useMemo(() => clonePlantMaterials(materials), [materials])

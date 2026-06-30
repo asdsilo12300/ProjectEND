@@ -4,7 +4,6 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class PlantResource extends JsonResource
@@ -37,10 +36,10 @@ class PlantResource extends JsonResource
             return null;
         }
 
-        if (Str::startsWith($path, ['http://', 'https://'])) {
+        if (Str::startsWith($path, ['http://', 'https://', '/'])) {
             return $path;
         }
 
-        return Storage::disk('public')->url($path);
+        return '/storage/' . ltrim($path, '/');
     }
 }
