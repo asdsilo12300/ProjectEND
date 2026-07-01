@@ -11,7 +11,7 @@ import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { SimulationStage } from './game/scene/SimulationStage'
 import { ShopPage } from './game/shop/ShopPage'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot } from './lib/api'
+import { clearToken, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -31,6 +31,7 @@ const initialGrowthTrack = {
 
 const growthAnimationScale = 100
 const autosaveIntervalMs = 5000
+const resetMarkerKey = 'plant_game_reset_marker'
 
 function getStageForGrowth(progress) {
   if (progress >= 100) return { stage_no: 4, stage_name: 'Mature', required_growth_point: 100 }
@@ -50,7 +51,7 @@ function wait(ms) {
 }
 
 function ModeLoadingOverlay({ mode }) {
-  const label = mode === 'outdoor' ? 'outdoor field' : 'greenhouse lab'
+  const label = !mode ? 'saved simulation' : mode === 'outdoor' ? 'outdoor field' : 'greenhouse lab'
 
   return (
     <div className="absolute inset-0 z-[90] grid place-items-center bg-black/55 px-4 backdrop-blur-md">
@@ -73,8 +74,11 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [activePage, setActivePage] = useState('lab')
+  const [visitingFriend, setVisitingFriend] = useState(null)
   const [growingMode, setGrowingMode] = useState(null)
   const [modeLoading, setModeLoading] = useState(false)
+  const [saveHydrated, setSaveHydrated] = useState(() => !getToken())
+  const [resetPending, setResetPending] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
   const [plantCatalog, setPlantCatalog] = useState([])
   const [modelAssets, setModelAssets] = useState({})
@@ -84,6 +88,8 @@ function App() {
   const lastGrowthAtRef = useRef(0)
   const latestSaveLoadedRef = useRef(false)
   const autosaveStateRef = useRef({})
+  const isResettingRef = useRef(false)
+  const ownGardenSnapshotRef = useRef(null)
   const [user, setUser] = useState(null)
   const [authMode, setAuthMode] = useState('login')
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
@@ -101,7 +107,10 @@ function App() {
         if (!isCancelled) setUser(payload.data ?? payload.user ?? payload)
       } catch {
         clearToken()
-        if (!isCancelled) setUser(null)
+        if (!isCancelled) {
+          setUser(null)
+          setSaveHydrated(true)
+        }
       }
     }
 
@@ -282,7 +291,10 @@ function App() {
     const restoredMode = simulator.mode ?? 'greenhouse'
     const restoredPlant = labLibrary.Plants.find((plant) => plant.id === 'sprout') ?? labLibrary.Plants[0]
 
-    window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
+    if (options.persistLocalId !== false) {
+      window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
+    }
+    setResetPending(false)
     setGrowingMode(restoredMode)
     setModeLoading(false)
     setAppliedAsset(restoredPlant)
@@ -331,7 +343,7 @@ function App() {
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
     const state = autosaveStateRef.current
 
-    if (!simulatorId || !getToken() || !state.selectedPlant || !state.growingMode) {
+    if (visitingFriend || isResettingRef.current || window.localStorage.getItem(resetMarkerKey) || !simulatorId || !getToken() || !state.selectedPlant || !state.growingMode) {
       return null
     }
 
@@ -347,7 +359,7 @@ function App() {
     }
 
     return simulator
-  }, [buildSaveSnapshot])
+  }, [buildSaveSnapshot, visitingFriend])
 
   useEffect(() => {
     if (!user || latestSaveLoadedRef.current) return undefined
@@ -359,13 +371,30 @@ function App() {
       try {
         const payload = await getLatestSimulator()
         const simulator = payload.data ?? null
+        const resetMarked = Boolean(window.localStorage.getItem(resetMarkerKey))
+
+        if (!isCancelled && resetMarked) {
+          if (simulator?.id) {
+            finishSimulator(simulator.id).catch(() => {})
+          }
+          window.localStorage.removeItem('plant_game_simulator_id')
+          setGrowingMode(null)
+          setSelectedPlant(null)
+          setSimulationVisual(defaultSimulationVisual)
+          setGrowthTrack(initialGrowthTrack)
+          setActionMessage('Reset complete. Choose a growing mode.')
+          setSaveHydrated(true)
+          return
+        }
 
         if (!isCancelled && simulator) {
           applySimulatorSnapshot(simulator)
           setActionMessage('Latest simulation restored')
         }
+        if (!isCancelled) setSaveHydrated(true)
       } catch {
         latestSaveLoadedRef.current = false
+        if (!isCancelled) setSaveHydrated(true)
       }
     }
 
@@ -426,9 +455,15 @@ function App() {
     setAppliedAsset(asset)
 
     if (asset.type === 'plant') {
+      if (selectedPlant) {
+        setActionMessage('A plant is already growing. Reset before planting again.')
+        return
+      }
+
       const apiPlant = plantCatalog.find((plant) => plant.name_en === 'Simulation Sprout') ?? plantCatalog[0] ?? null
       const fallbackModelUrl = apiPlant?.base_model_url ?? modelAssets['plant.original']?.url ?? defaultSimulationVisual.current_model_url
 
+      setResetPending(false)
       setSelectedPlant(asset)
       setGrowthTrack(initialGrowthTrack)
       setSimulationVisual({
@@ -445,6 +480,7 @@ function App() {
             longitude: outdoorWeather.location?.longitude,
           })
           const simulator = simulatorPayload.data ?? simulatorPayload
+          window.localStorage.removeItem(resetMarkerKey)
           window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
           setSimulationVisual({
             ...defaultSimulationVisual,
@@ -467,6 +503,7 @@ function App() {
   async function chooseGrowingMode(mode) {
     const loadingStartedAt = Date.now()
     setModeLoading(true)
+    setResetPending(false)
     setGrowingMode(mode)
     setSelectedPlant(null)
     setGrowthTrack(initialGrowthTrack)
@@ -502,6 +539,31 @@ function App() {
   }
 
   async function saveSimulation() {
+    const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+
+    if (resetPending) {
+      try {
+        if (simulatorId && getToken()) {
+          await finishSimulator(simulatorId)
+        }
+      } finally {
+        window.localStorage.removeItem('plant_game_simulator_id')
+        latestSaveLoadedRef.current = false
+        setResetPending(false)
+        setGrowingMode(null)
+        setModeLoading(false)
+        setSaveHydrated(true)
+        setClimate({ ...defaultClimate })
+        setOutdoorWeather(initialOutdoorWeather)
+        setAppliedAsset(labLibrary.Items[0])
+        setSimulationVisual(defaultSimulationVisual)
+        setGrowthTrack(initialGrowthTrack)
+        setSelectedPlant(null)
+        setActionMessage('Reset saved. Choose a new growing mode.')
+      }
+      return
+    }
+
     try {
       const simulator = await persistCurrentSimulation({ silent: false })
       const nextVisual = simulator ?? previewSimulationVisual
@@ -516,32 +578,46 @@ function App() {
           savedAt: new Date().toISOString(),
         }),
       )
-      window.localStorage.removeItem('plant_game_simulator_id')
-      setSimulationVisual(defaultSimulationVisual)
-      setGrowthTrack(initialGrowthTrack)
-      setSelectedPlant(null)
-      setActionMessage('Scenario saved. Select a plant to continue.')
+      setResetPending(false)
+      setActionMessage('Scenario saved')
     } catch {
-      window.localStorage.removeItem('plant_game_simulator_id')
-      setSimulationVisual(defaultSimulationVisual)
-      setGrowthTrack(initialGrowthTrack)
-      setSelectedPlant(null)
-      setActionMessage('Saved locally. Select a plant to continue.')
+      setActionMessage('Saved locally')
     }
   }
 
-  function resetSimulation() {
+  async function resetSimulation() {
+    const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+
+    isResettingRef.current = true
+    window.localStorage.setItem(resetMarkerKey, String(Date.now()))
     window.localStorage.removeItem('plant_game_simulator_id')
-    setClimate(
-      growingMode === 'outdoor' && outdoorWeather.forecast
-        ? climateFromForecast({ ...defaultClimate }, outdoorWeather.forecast)
-        : { ...defaultClimate },
-    )
-    setAppliedAsset(labLibrary.Items[0])
-    setSimulationVisual(defaultSimulationVisual)
-    setGrowthTrack(initialGrowthTrack)
+    autosaveStateRef.current = {
+      ...autosaveStateRef.current,
+      selectedPlant: null,
+    }
+    setResetPending(false)
     setSelectedPlant(null)
-    setActionMessage('Simulation reset. Select a plant to begin.')
+    setActionMessage('Resetting simulation...')
+
+    try {
+      if (simulatorId && getToken()) {
+        await finishSimulator(simulatorId)
+      }
+    } catch {
+      setActionMessage('Reset locally. The previous save will stay hidden until the server responds.')
+    } finally {
+      latestSaveLoadedRef.current = true
+      setClimate(
+        growingMode === 'outdoor' && outdoorWeather.forecast
+          ? climateFromForecast({ ...defaultClimate }, outdoorWeather.forecast)
+          : { ...defaultClimate },
+      )
+      setAppliedAsset(labLibrary.Items[0])
+      setSimulationVisual(defaultSimulationVisual)
+      setGrowthTrack(initialGrowthTrack)
+      setActionMessage('Reset complete. Select a plant to start again.')
+      isResettingRef.current = false
+    }
   }
 
   function dropLabAsset(event) {
@@ -575,6 +651,8 @@ function App() {
         ? await registerUser(authForm.username.trim(), authForm.email.trim(), authForm.password)
         : await loginUser(authForm.email.trim(), authForm.password)
 
+      setSaveHydrated(false)
+      latestSaveLoadedRef.current = false
       setUser(payload.user ?? payload.data ?? null)
       setAuthStatus('idle')
       setAuthForm({ username: '', email: '', password: '' })
@@ -585,6 +663,69 @@ function App() {
     }
   }
 
+  async function viewFriendGarden(friend) {
+    ownGardenSnapshotRef.current = {
+      appliedAsset,
+      climate,
+      growingMode,
+      growthTrack,
+      selectedPlant,
+      simulationVisual,
+    }
+    setVisitingFriend(friend)
+    setActivePage('lab')
+    setWindows((value) => ({
+      ...value,
+      comments: { ...value.comments, visible: true, collapsed: false },
+      monitor: { ...value.monitor, visible: true, collapsed: false },
+      climate: { ...value.climate, visible: false },
+      friends: { ...value.friends, visible: false },
+    }))
+    setActionMessage(`Loading ${friend?.user?.username ?? 'friend'}'s plant...`)
+
+    try {
+      const cachedSimulator = friend.latest_simulator ?? null
+      const payload = cachedSimulator ? { data: cachedSimulator } : await getFriendLatestSimulator(friend.id)
+      const simulator = payload.data ?? null
+
+      if (simulator) {
+        applySimulatorSnapshot(simulator, { persistLocalId: false })
+        setActionMessage(`Viewing ${friend?.user?.username ?? 'friend'}'s plant`)
+      } else {
+        setSelectedPlant(null)
+        setSimulationVisual(defaultSimulationVisual)
+        setGrowthTrack(initialGrowthTrack)
+        setActionMessage(`${friend?.user?.username ?? 'Friend'} has no active plant yet`)
+      }
+    } catch (error) {
+      setSelectedPlant(null)
+      setSimulationVisual(defaultSimulationVisual)
+      setGrowthTrack(initialGrowthTrack)
+      setActionMessage(error.message || 'Unable to load this friend plant')
+    }
+  }
+
+  function leaveFriendGarden() {
+    const snapshot = ownGardenSnapshotRef.current
+    setVisitingFriend(null)
+
+    if (snapshot) {
+      setAppliedAsset(snapshot.appliedAsset)
+      setClimate(snapshot.climate)
+      setGrowingMode(snapshot.growingMode)
+      setGrowthTrack(snapshot.growthTrack)
+      setSelectedPlant(snapshot.selectedPlant)
+      setSimulationVisual(snapshot.simulationVisual)
+    }
+
+    ownGardenSnapshotRef.current = null
+    setWindows((value) => ({
+      ...value,
+      climate: { ...value.climate, visible: true },
+      friends: { ...value.friends, visible: true },
+    }))
+    setActionMessage('Back to your garden')
+  }
   function logoutUser() {
     latestSaveLoadedRef.current = false
     clearToken()
@@ -594,7 +735,8 @@ function App() {
     setActivePage('lab')
   }
 
-  const labReady = Boolean(growingMode && !modeLoading)
+  const labReady = Boolean(saveHydrated && growingMode && !modeLoading)
+  const visitorName = visitingFriend?.user?.username ?? visitingFriend?.user?.email?.split('@')[0] ?? 'Friend'
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100">
@@ -620,34 +762,51 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
+              <LibrarySidebar plantLocked={Boolean(selectedPlant) || Boolean(visitingFriend)} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
               <SimulationStage
                 actionMessage={actionMessage}
                 dropLabAsset={dropLabAsset}
                 mode={growingMode}
                 plantSelected={Boolean(selectedPlant)}
+                readOnly={Boolean(visitingFriend)}
                 resetSimulation={resetSimulation}
                 saveSimulation={saveSimulation}
                 sceneAssets={modelAssets}
                 simulationVisual={previewSimulationVisual}
               />
 
+              {visitingFriend && (
+                <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]">
+                  <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
+                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> · view only</span>
+                  <button
+                    className="rounded-md border border-lime-100/15 bg-white/[0.055] px-2 py-1 font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+                    type="button"
+                    onClick={leaveFriendGarden}
+                  >
+                    Back to my garden
+                  </button>
+                </div>
+              )}
+
               <PlantMonitorPanel windows={windows} setWindows={setWindows} simulationVisual={previewSimulationVisual} />
-              <EnvironmentPanel
-                climate={climate}
-                setClimate={setClimate}
-                windows={windows}
-                setWindows={setWindows}
-                mode={growingMode}
-                outdoorWeather={outdoorWeather}
-              />
-              <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} />
-              <CommentsPanel windows={windows} setWindows={setWindows} />
+              {!visitingFriend && (
+                <EnvironmentPanel
+                  climate={climate}
+                  setClimate={setClimate}
+                  windows={windows}
+                  setWindows={setWindows}
+                  mode={growingMode}
+                  outdoorWeather={outdoorWeather}
+                />
+              )}
+              {!visitingFriend && <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} />}
+              <CommentsPanel currentUser={user} onAuthRequired={openAuth} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Class comments'} subtitle={visitingFriend ? `${visitorName} garden discussion` : 'student teacher discussion'} />
             </>
           )}
 
-          {!growingMode && <GrowingModePicker onSelect={chooseGrowingMode} />}
-          {modeLoading && <ModeLoadingOverlay mode={growingMode} />}
+          {saveHydrated && !growingMode && <GrowingModePicker onSelect={chooseGrowingMode} />}
+          {(!saveHydrated || modeLoading) && <ModeLoadingOverlay mode={growingMode} />}
         </>
       )}
     </main>

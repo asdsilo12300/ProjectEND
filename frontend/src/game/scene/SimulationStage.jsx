@@ -30,7 +30,7 @@ class SceneErrorBoundary extends Component {
     return this.props.children
   }
 }
-export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhouse', plantSelected = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual }) {
+export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual }) {
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
@@ -42,8 +42,10 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
   return (
       <section
         className="three-stage absolute inset-0 z-10"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={dropLabAsset}
+        onDragOver={(event) => {
+          if (!readOnly) event.preventDefault()
+        }}
+        onDrop={readOnly ? undefined : dropLabAsset}
         aria-label="Plant simulation stage"
       >
         <SceneErrorBoundary key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}>
@@ -80,7 +82,7 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
             {actionMessage}
           </div>
         )}
-        <div className="absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/88 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" aria-label="Simulation actions">
+        {!readOnly && <div className="absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/88 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" aria-label="Simulation actions">
           <button
             className="inline-flex h-8 items-center gap-2 rounded-md border border-lime-100/15 bg-white/[0.035] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.075] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
             type="button"
@@ -97,7 +99,7 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
             <AppIcon className="h-4 w-4" name="save" />
             Save
           </button>
-        </div>
+        </div>}
       </section>
   )
 }

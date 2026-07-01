@@ -39,6 +39,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/users/search', [FriendController::class, 'search']);
     Route::post('/friends/invite', [FriendController::class, 'invite']);
     Route::post('/friends/{friendship}/accept', [FriendController::class, 'accept']);
+    Route::get('/friends/{friendship}/simulator/latest', [FriendController::class, 'latestSimulator']);
 
     Route::get('/simulators', [SimulatorController::class, 'index']);
     Route::get('/simulators/latest', [SimulatorController::class, 'latest']);
@@ -47,6 +48,9 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/simulators/{simulator}/logs', [SimulatorController::class, 'storeLog']);
     Route::post('/simulators/{simulator}/tick', [SimulatorController::class, 'tick']);
     Route::post('/simulators/{simulator}/sync', [SimulatorController::class, 'sync']);
+    Route::get('/simulators/{simulator}/comments', [SimulatorController::class, 'comments']);
+    Route::post('/simulators/{simulator}/comments', [SimulatorController::class, 'storeComment']);
+    Route::post('/simulators/{simulator}/finish', [SimulatorController::class, 'finish']);
     Route::post('/simulators/{simulator}/use-item', [SimulatorController::class, 'useItem']);
 
     Route::get('/inventory', [ShopController::class, 'inventory']);

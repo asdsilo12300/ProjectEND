@@ -102,6 +102,9 @@ export async function acceptFriend(friendshipId) {
   })
 }
 
+export async function getFriendLatestSimulator(friendshipId) {
+  return apiFetch(`/friends/${friendshipId}/simulator/latest`)
+}
 export async function getLatestSimulator() {
   return apiFetch('/simulators/latest')
 }
@@ -124,5 +127,21 @@ export async function syncSimulatorSnapshot(simulatorId, snapshot, options = {})
     method: 'POST',
     body: JSON.stringify(snapshot),
     keepalive: options.keepalive ?? false,
+  })
+}
+
+export async function getSimulatorComments(simulatorId) {
+  return apiFetch(`/simulators/${simulatorId}/comments`)
+}
+
+export async function createSimulatorComment(simulatorId, commentText) {
+  return apiFetch(`/simulators/${simulatorId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ comment_text: commentText }),
+  })
+}
+export async function finishSimulator(simulatorId) {
+  return apiFetch(`/simulators/${simulatorId}/finish`, {
+    method: 'POST',
   })
 }

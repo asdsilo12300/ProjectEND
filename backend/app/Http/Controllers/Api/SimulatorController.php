@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SimulatorResource;
+use App\Models\Friendship;
 use App\Models\ItemUsage;
 use App\Models\Plant;
 use App\Models\SimulationLog;
 use App\Models\Simulator;
+use App\Models\SimulatorComment;
 use App\Models\UserItem;
 use App\Services\PlantSimulationEngine;
 use Illuminate\Http\JsonResponse;
@@ -155,6 +157,17 @@ class SimulatorController extends Controller
 
         return new SimulatorResource($simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
     }
+    public function finish(Request $request, Simulator $simulator): JsonResponse
+    {
+        abort_unless($simulator->user_id === $request->user()->id, 403);
+
+        $simulator->update([
+            'status' => 'ended',
+            'ended_at' => now(),
+        ]);
+
+        return response()->json(['data' => ['id' => $simulator->id, 'status' => 'ended']]);
+    }
     public function storeLog(Request $request, Simulator $simulator): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
@@ -235,6 +248,80 @@ class SimulatorController extends Controller
         });
 
         return response()->json(['data' => $usage], 201);
+    }
+    public function comments(Request $request, Simulator $simulator): JsonResponse
+    {
+        $this->authorizeSimulatorConversation($request, $simulator);
+
+        $comments = SimulatorComment::query()
+            ->with('user')
+            ->where('simulator_id', $simulator->id)
+            ->where('status', 'visible')
+            ->oldest()
+            ->get()
+            ->map(fn (SimulatorComment $comment) => $this->commentPayload($comment))
+            ->values();
+
+        return response()->json(['data' => $comments]);
+    }
+
+    public function storeComment(Request $request, Simulator $simulator): JsonResponse
+    {
+        $this->authorizeSimulatorConversation($request, $simulator);
+
+        $data = $request->validate([
+            'comment_text' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $comment = SimulatorComment::query()->create([
+            'simulator_id' => $simulator->id,
+            'user_id' => $request->user()->id,
+            'comment_text' => trim($data['comment_text']),
+            'status' => 'visible',
+        ]);
+
+        return response()->json(['data' => $this->commentPayload($comment->load('user'))], 201);
+    }
+
+    private function authorizeSimulatorConversation(Request $request, Simulator $simulator): void
+    {
+        $userId = $request->user()->id;
+
+        if ($simulator->user_id === $userId) {
+            return;
+        }
+
+        $isAcceptedFriend = Friendship::query()
+            ->where('status', 'accepted')
+            ->where(function ($query) use ($userId, $simulator): void {
+                $query
+                    ->where(function ($inner) use ($userId, $simulator): void {
+                        $inner->where('requester_id', $userId)->where('addressee_id', $simulator->user_id);
+                    })
+                    ->orWhere(function ($inner) use ($userId, $simulator): void {
+                        $inner->where('requester_id', $simulator->user_id)->where('addressee_id', $userId);
+                    });
+            })
+            ->exists();
+
+        abort_unless($isAcceptedFriend, 403);
+    }
+
+    private function commentPayload(SimulatorComment $comment): array
+    {
+        return [
+            'id' => $comment->id,
+            'simulator_id' => $comment->simulator_id,
+            'comment_text' => $comment->comment_text,
+            'created_at' => $comment->created_at?->toISOString(),
+            'user' => [
+                'id' => $comment->user?->id,
+                'username' => $comment->user?->username,
+                'email' => $comment->user?->email,
+                'avatar_url' => $comment->user?->avatar_url,
+                'role' => $comment->user?->role,
+            ],
+        ];
     }
 }
 

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\SimulatorResource;
 use App\Models\Friendship;
+use App\Models\Simulator;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -122,6 +124,23 @@ class FriendController extends Controller
         ]);
     }
 
+
+    public function latestSimulator(Request $request, Friendship $friendship)
+    {
+        $user = $request->user();
+        $isParticipant = $friendship->requester_id === $user->id || $friendship->addressee_id === $user->id;
+
+        abort_unless($isParticipant && $friendship->status === 'accepted', 403);
+
+        $friendId = $friendship->requester_id === $user->id ? $friendship->addressee_id : $friendship->requester_id;
+        $simulator = $this->latestSimulatorForUser($friendId);
+
+        if (! $simulator) {
+            return response()->json(['data' => null]);
+        }
+
+        return new SimulatorResource($simulator);
+    }
     private function friendPayload(Friendship $friendship, int $currentUserId): array
     {
         $other = $friendship->requester_id === $currentUserId ? $friendship->addressee : $friendship->requester;
@@ -133,7 +152,29 @@ class FriendController extends Controller
             'direction' => $direction,
             'presence' => $this->presence($other),
             'user' => $this->userPayload($other),
+            'latest_simulator' => $friendship->status === 'accepted'
+                ? $this->latestSimulatorPayload($other->id)
+                : null,
         ];
+    }
+
+    private function latestSimulatorForUser(int $userId): ?Simulator
+    {
+        return Simulator::query()
+            ->with(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
+            ->where('user_id', $userId)
+            ->whereNull('deleted_at')
+            ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+    }
+
+    private function latestSimulatorPayload(int $userId): ?array
+    {
+        $simulator = $this->latestSimulatorForUser($userId);
+
+        return $simulator ? (new SimulatorResource($simulator))->resolve() : null;
     }
 
     private function userPayload(User $user, string $friendshipStatus = 'none'): array

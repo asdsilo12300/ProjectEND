@@ -20,7 +20,7 @@ function FriendAvatar({ user, presence, request = false }) {
   )
 }
 
-export function FriendsPanel({ windows, setWindows, user, onAuthRequired }) {
+export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onViewFriend }) {
   const [mode, setMode] = useState('list')
   const [friends, setFriends] = useState([])
   const [query, setQuery] = useState('')
@@ -32,10 +32,11 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired }) {
 
   const isLoggedIn = Boolean(user && getToken())
   const requests = useMemo(() => friends.filter((friend) => friend.status === 'pending' && friend.direction === 'incoming'), [friends])
-  const visibleFriends = useMemo(() => friends.filter((friend) => friend.status !== 'pending' || friend.direction !== 'incoming'), [friends])
+  const visibleFriends = useMemo(() => friends.filter((friend) => friend.status === 'accepted'), [friends])
+  const pendingOutgoing = useMemo(() => friends.filter((friend) => friend.status === 'pending' && friend.direction === 'outgoing'), [friends])
   const onlineFriends = useMemo(() => visibleFriends.filter((friend) => friend.presence === 'online'), [visibleFriends])
   const currentRows = useMemo(() => {
-    const source = mode === 'online' ? onlineFriends : mode === 'requests' ? requests : visibleFriends
+    const source = mode === 'online' ? onlineFriends : mode === 'requests' ? requests : [...visibleFriends, ...pendingOutgoing]
     const term = query.trim().toLowerCase()
 
     if (!term || mode === 'invite') return source
@@ -46,7 +47,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired }) {
       const email = String(friend.user?.email ?? '').toLowerCase()
       return name.includes(term) || handle.includes(term) || email.includes(term)
     })
-  }, [mode, onlineFriends, query, requests, visibleFriends])
+  }, [mode, onlineFriends, pendingOutgoing, query, requests, visibleFriends])
   const listTitle = useMemo(() => `${visibleFriends.length} classmates`, [visibleFriends.length])
   const activeNow = useMemo(() => visibleFriends.filter((friend) => friend.presence === 'online').length, [visibleFriends])
 
@@ -323,13 +324,16 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired }) {
                     >
                       {busy ? 'Accepting' : 'Accept'}
                     </button>
-                  ) : (
+                  ) : friend.status === 'accepted' ? (
                     <button
                       className="rounded-md border border-lime-100/10 bg-white/[0.055] px-2.5 py-1.5 text-[11px] font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                       type="button"
+                      onClick={() => onViewFriend?.(friend)}
                     >
                       View
                     </button>
+                  ) : (
+                    <span className="rounded-md bg-yellow-300/10 px-2.5 py-1.5 text-[11px] font-semibold text-yellow-100">Pending</span>
                   )}
                 </li>
               )
