@@ -1,4 +1,4 @@
-.three-stage canvas {
+﻿.three-stage canvas {
   width: 100vw;
   height: 100vh;
   display: block;
@@ -92,4 +92,55 @@
 .sim-range:focus-visible {
   outline: 2px solid #9bcf82;
   outline-offset: 4px;
+}
+
+@keyframes coin-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  14% {
+    opacity: 1;
+    transform: translate(-50%, -58%) scale(1);
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -118%) scale(1.04);
+  }
+}
+
+@keyframes coin-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+}
+
+.coin-burst {
+  animation: coin-burst 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.coin-pop {
+  animation: coin-pop 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coin-burst,
+  .coin-pop {
+    animation-duration: 0.01ms;
+  }
 }

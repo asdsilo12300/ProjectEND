@@ -35,6 +35,8 @@ class SimulatorResource extends JsonResource
             'soil_temp' => (float) $this->soil_temp,
             'air_temp' => (float) $this->air_temp,
             'status' => $this->status,
+            'maturity_reward_claimed_at' => $this->maturity_reward_claimed_at,
+            'maturity_reward_amount' => (int) ($this->maturity_reward_amount ?? 0),
             'current_stage' => $stage ? new PlantStageResource($stage) : null,
             'current_model_url' => $this->publicUrl($modelPath),
             'pest_risks' => $this->pestRisks(),
@@ -136,6 +138,7 @@ class SimulatorResource extends JsonResource
         return '/storage/' . ltrim($path, '/');
     }
 }
+
 
 
 

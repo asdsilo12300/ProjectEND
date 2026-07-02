@@ -35,6 +35,8 @@ class Simulator extends Model
         'status',
         'started_at',
         'ended_at',
+        'maturity_reward_claimed_at',
+        'maturity_reward_amount',
     ];
 
     protected function casts(): array
@@ -47,6 +49,8 @@ class Simulator extends Model
             'visual_overrides' => 'array',
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
+            'maturity_reward_claimed_at' => 'datetime',
+            'maturity_reward_amount' => 'integer',
         ];
     }
 
@@ -80,3 +84,4 @@ class Simulator extends Model
         return $this->hasMany(SimulationPest::class)->where('status', 'active')->with('pest');
     }
 }
+

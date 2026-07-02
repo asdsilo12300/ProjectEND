@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+const API_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, '')
 
 export function getToken() {
   return window.localStorage.getItem('plant_game_token')
@@ -19,8 +20,15 @@ export function clearToken() {
 export function resolveAssetUrl(path) {
   if (!path) return null
   if (path.startsWith('http://') || path.startsWith('https://')) return path
-  if (path.startsWith('/storage/')) return path
+  if (path.startsWith('/storage/')) return `${API_ROOT_URL}${path}`
   return path
+}
+
+export function storageAsset(path) {
+  if (!path) return null
+  const cleanPath = String(path).replace(/^\/+/, '')
+  const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/')
+  return resolveAssetUrl(`/storage/${encodedPath}`)
 }
 
 export async function apiFetch(path, options = {}) {
@@ -145,3 +153,16 @@ export async function finishSimulator(simulatorId) {
     method: 'POST',
   })
 }
+export async function claimMaturityReward(simulatorId) {
+  return apiFetch(`/simulators/${simulatorId}/claim-maturity-reward`, {
+    method: 'POST',
+  })
+}
+
+export async function applySimulatorItem(simulatorId, itemKey, quantity = 1) {
+  return apiFetch(`/simulators/${simulatorId}/use-item`, {
+    method: 'POST',
+    body: JSON.stringify({ item_key: itemKey, quantity }),
+  })
+}
+

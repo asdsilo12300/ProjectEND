@@ -72,17 +72,18 @@ function GenericPlantModel({ modelUrl, visualOverrides, scale, lean, isMature = 
 }
 
 export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
-  const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
   const scale = 1.1
   const lean = 0
 
-  if (isBasePlantModel(resolvedModelUrl)) {
+  if (isBasePlantModel(modelUrl)) {
     return (
       <group position={PLANT_ORIGIN} scale={scale} rotation={[0, 0, lean]} {...props}>
-        <GltfPlant modelUrl={resolvedModelUrl} visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
+        <GltfPlant modelUrl="/plant.gltf" visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
       </group>
     )
   }
+
+  const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
 
   return <GenericPlantModel modelUrl={resolvedModelUrl} visualOverrides={visualOverrides} scale={scale} lean={lean} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} {...props} />
 }
@@ -122,9 +123,10 @@ function getPestAnchor(name, index, id) {
 }
 
 export function PestModel({ pest, index = 0 }) {
-  const modelUrl = resolveAssetUrl(pest?.pest?.model_url)
   const name = pest?.pest?.name_en ?? 'fungus'
   const anchor = getPestAnchor(name, index, pest?.id)
+  const localModelUrl = name === 'aphid' ? '/aphid.gltf' : name === 'snail' ? '/snails.gltf' : null
+  const modelUrl = localModelUrl ?? resolveAssetUrl(pest?.pest?.model_url)
 
   if (!modelUrl) {
     return <FungusPlaceholder anchor={anchor} />

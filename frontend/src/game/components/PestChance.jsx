@@ -1,4 +1,4 @@
-﻿import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/IconifyIcon'
 
 const pestIconMap = {
   snail: 'snail',
@@ -6,12 +6,16 @@ const pestIconMap = {
   fungus: 'fungus',
 }
 
-export function PestChance({ label, value, icon, color }) {
+export function PestChance({ label, value, icon, color, imageUrl }) {
   return (
     <div className="min-w-0 rounded-md border border-lime-100/10 bg-white/[0.045] p-2">
       <div className="mb-2 flex items-center gap-2">
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#101511]" style={{ backgroundColor: color }}>
-          <AppIcon className="h-4 w-4" name={pestIconMap[icon] ?? 'pest'} />
+        <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-md text-[#101511]" style={{ backgroundColor: color }}>
+          {imageUrl ? (
+            <img className="h-full w-full object-contain p-0.5" src={imageUrl} alt="" draggable="false" />
+          ) : (
+            <AppIcon className="h-4 w-4" name={pestIconMap[icon] ?? 'pest'} />
+          )}
         </span>
         <span className="truncate text-[11px] font-semibold text-lime-50">{label}</span>
       </div>

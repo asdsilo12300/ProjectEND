@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SimulatorResource;
 use App\Models\Friendship;
+use App\Models\Item;
 use App\Models\ItemUsage;
 use App\Models\Plant;
 use App\Models\SimulationLog;
+use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Models\SimulatorComment;
 use App\Models\UserItem;
@@ -157,6 +159,56 @@ class SimulatorController extends Controller
 
         return new SimulatorResource($simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
     }
+    public function claimMaturityReward(Request $request, Simulator $simulator): JsonResponse
+    {
+        abort_unless($simulator->user_id === $request->user()->id, 403);
+
+        $result = DB::transaction(function () use ($request, $simulator): array {
+            $lockedSimulator = Simulator::query()
+                ->whereKey($simulator->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $user = $request->user()->refresh();
+            $currentCoin = (int) ($user->coin ?? 0);
+
+            if ((float) $lockedSimulator->growth_point < 100) {
+                return [
+                    'awarded' => false,
+                    'amount' => 0,
+                    'balance' => $currentCoin,
+                    'reason' => 'Plant is not fully grown yet.',
+                    'simulator' => (new SimulatorResource($lockedSimulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),
+                ];
+            }
+
+            if ($lockedSimulator->maturity_reward_claimed_at) {
+                return [
+                    'awarded' => false,
+                    'amount' => 0,
+                    'balance' => $currentCoin,
+                    'reason' => 'Maturity reward already claimed.',
+                    'simulator' => (new SimulatorResource($lockedSimulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),
+                ];
+            }
+
+            $amount = 100;
+            $user->forceFill(['coin' => $currentCoin + $amount])->save();
+            $lockedSimulator->forceFill([
+                'maturity_reward_claimed_at' => now(),
+                'maturity_reward_amount' => $amount,
+            ])->save();
+
+            return [
+                'awarded' => true,
+                'amount' => $amount,
+                'balance' => (int) $user->coin,
+                'simulator' => (new SimulatorResource($lockedSimulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),
+            ];
+        });
+
+        return response()->json(['data' => $result]);
+    }
     public function finish(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
@@ -222,32 +274,95 @@ class SimulatorController extends Controller
         abort_unless($simulator->user_id === $request->user()->id, 403);
 
         $data = $request->validate([
-            'item_id' => ['required', 'exists:items,id'],
+            'item_id' => ['nullable', 'integer', 'exists:items,id'],
+            'item_key' => ['nullable', 'string', 'max:120'],
             'quantity' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $quantity = $data['quantity'] ?? 1;
+        abort_if(empty($data['item_id']) && empty($data['item_key']), 422, 'Please choose an item.');
 
-        $userItem = UserItem::query()
-            ->where('user_id', $request->user()->id)
-            ->where('item_id', $data['item_id'])
+        $quantity = $data['quantity'] ?? 1;
+        $itemAliases = [
+            'hand-pick' => 'Hand Pick',
+            'insecticide-spray' => 'Insect Spray',
+            'antifungal-spray' => 'Fungus Spray',
+            'snail-trap' => 'Snail Trap',
+        ];
+
+        $item = Item::query()
+            ->where('is_active', true)
+            ->when(! empty($data['item_id']), fn ($query) => $query->where('id', $data['item_id']))
+            ->when(empty($data['item_id']), function ($query) use ($data, $itemAliases) {
+                $name = $itemAliases[$data['item_key']] ?? $data['item_key'];
+                $query->where('name', $name);
+            })
             ->firstOrFail();
+
+        $userItem = UserItem::query()->firstOrCreate(
+            ['user_id' => $request->user()->id, 'item_id' => $item->id],
+            ['quantity' => str_starts_with((string) $item->effect_type, 'pest_control') ? 5 : 0],
+        );
 
         abort_if($userItem->quantity < $quantity, 422, 'Not enough item quantity.');
 
-        $usage = DB::transaction(function () use ($data, $quantity, $request, $simulator, $userItem) {
+        $result = DB::transaction(function () use ($item, $quantity, $request, $simulator, $userItem) {
+            $effectType = strtolower((string) $item->effect_type);
+            $targetText = str_contains($effectType, ':') ? explode(':', $effectType, 2)[1] : '';
+            $targets = collect(explode(',', $targetText))
+                ->map(fn ($target) => trim($target))
+                ->filter()
+                ->values();
+
+            $removedPests = collect();
+
+            if (str_starts_with(strtolower((string) $item->effect_type), 'pest_control') && $targets->isNotEmpty()) {
+                $removedPests = SimulationPest::query()
+                    ->with('pest')
+                    ->where('simulator_id', $simulator->id)
+                    ->where('status', 'active')
+                    ->whereHas('pest', fn ($query) => $query->whereIn(DB::raw('LOWER(name_en)'), $targets->all()))
+                    ->get();
+
+                SimulationPest::query()
+                    ->whereIn('id', $removedPests->pluck('id'))
+                    ->update([
+                        'status' => 'treated',
+                        'treated_at' => now(),
+                    ]);
+            }
+
             $userItem->decrement('quantity', $quantity);
 
-            return ItemUsage::query()->create([
+            $targetNames = $targets->implode(', ');
+            $removedNames = $removedPests->map(fn (SimulationPest $pest) => $pest->pest?->name_en)->filter()->values();
+            $message = $removedNames->isNotEmpty()
+                ? $item->name . ' removed ' . $removedNames->implode(', ') . '.'
+                : ($targetNames ? $item->name . ' is ready for ' . $targetNames . ', but no active pest was found.' : $item->name . ' used successfully.');
+
+            $usage = ItemUsage::query()->create([
                 'user_id' => $request->user()->id,
-                'item_id' => $data['item_id'],
+                'item_id' => $item->id,
                 'simulator_id' => $simulator->id,
                 'quantity' => $quantity,
-                'effect_result' => 'Item used successfully.',
+                'effect_result' => $message,
             ]);
+
+            return [
+                'usage' => $usage,
+                'message' => $message,
+                'targets' => $targets,
+                'removed_pests' => $removedNames,
+            ];
         });
 
-        return response()->json(['data' => $usage], 201);
+        $freshSimulator = $simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']);
+
+        return response()->json([
+            'data' => [
+                ...$result,
+                'simulator' => new SimulatorResource($freshSimulator),
+            ],
+        ], 201);
     }
     public function comments(Request $request, Simulator $simulator): JsonResponse
     {
@@ -324,4 +439,5 @@ class SimulatorController extends Controller
         ];
     }
 }
+
 

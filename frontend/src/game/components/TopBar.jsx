@@ -1,12 +1,13 @@
-﻿import { navItems, navTargets } from '../data/gameData'
+﻿import { imageAssets, navItems, navTargets } from '../data/gameData'
 import { AppIcon } from '../icons/IconifyIcon'
 import { NavIcon } from '../icons/NavIcon'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 
-export function TopBar({ activePage = 'lab', onNavigate, openWindow, profileOpen, setProfileOpen, user, onAuthRequired, onLogout }) {
+export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, onNavigate, openWindow, profileOpen, setProfileOpen, user, onAuthRequired, onLogout }) {
   const displayName = user?.username ?? 'Learner'
   const learnerLevel = user?.level ?? 1
   const initial = displayName.slice(0, 1).toUpperCase()
+  const shownCoins = Number(user?.coin ?? coinBalance ?? 0).toLocaleString()
 
   function handleProfileClick() {
     if (!user) {
@@ -61,7 +62,19 @@ export function TopBar({ activePage = 'lab', onNavigate, openWindow, profileOpen
         </nav>
       </div>
 
-      <div className="relative flex items-center gap-3 text-sm">
+      <div className="relative flex items-center gap-2 text-sm">
+        {user && (
+          <div className="relative flex h-12 items-center gap-2 rounded-md border border-lime-100/10 bg-white/[0.04] px-3 shadow-[0_8px_18px_rgba(0,0,0,.18)]" aria-label="Coin balance">
+            <img className="h-7 w-7 shrink-0 object-contain" src={imageAssets.coin} alt="Coin" />
+            <span className="min-w-10 text-right text-sm font-black tabular-nums text-lime-50">{shownCoins}</span>
+            {coinDelta ? (
+              <span className="coin-pop pointer-events-none absolute -top-3 right-2 rounded-full border border-amber-100/25 bg-[#1b1a10] px-2 py-0.5 text-[11px] font-black text-amber-200 shadow-[0_8px_18px_rgba(0,0,0,.28)]">
+                +{coinDelta}
+              </span>
+            ) : null}
+          </div>
+        )}
+
         <button
           className="flex items-center gap-3 rounded-md bg-white/[0.045] px-3 py-2 text-left transition hover:bg-white/[0.075] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
           type="button"

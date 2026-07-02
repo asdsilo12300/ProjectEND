@@ -28,7 +28,7 @@ Route::get('/posts', [PostController::class, 'index']);
 Route::get('/model-assets', [ModelAssetController::class, 'index']);
 Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
 
-// Dev-only test upload route (no auth) â€” only enabled when APP_DEBUG is true
+// Dev-only test upload route (no auth) Ã¢â‚¬â€ only enabled when APP_DEBUG is true
 if (env('APP_DEBUG', false)) {
     Route::post('/dev/upload-model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadTest']);
 }
@@ -51,6 +51,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/simulators/{simulator}/comments', [SimulatorController::class, 'comments']);
     Route::post('/simulators/{simulator}/comments', [SimulatorController::class, 'storeComment']);
     Route::post('/simulators/{simulator}/finish', [SimulatorController::class, 'finish']);
+    Route::post('/simulators/{simulator}/claim-maturity-reward', [SimulatorController::class, 'claimMaturityReward']);
     Route::post('/simulators/{simulator}/use-item', [SimulatorController::class, 'useItem']);
 
     Route::get('/inventory', [ShopController::class, 'inventory']);
@@ -70,4 +71,5 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/plants/{plant}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadBaseModel']);
     Route::post('/plants/{plant}/stages/{stage}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadStageModel']);
 });
+
 

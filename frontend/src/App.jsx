@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { defaultClimate, labLibrary } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
@@ -11,7 +11,7 @@ import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { SimulationStage } from './game/scene/SimulationStage'
 import { ShopPage } from './game/shop/ShopPage'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot } from './lib/api'
+import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -80,6 +80,7 @@ function App() {
   const [saveHydrated, setSaveHydrated] = useState(() => !getToken())
   const [resetPending, setResetPending] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
+  const [suppressedPests, setSuppressedPests] = useState([])
   const [plantCatalog, setPlantCatalog] = useState([])
   const [modelAssets, setModelAssets] = useState({})
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
@@ -91,6 +92,9 @@ function App() {
   const isResettingRef = useRef(false)
   const ownGardenSnapshotRef = useRef(null)
   const [user, setUser] = useState(null)
+  const [coinDelta, setCoinDelta] = useState(null)
+  const [coinBurst, setCoinBurst] = useState(null)
+  const rewardClaimingRef = useRef(null)
   const [authMode, setAuthMode] = useState('login')
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
   const [authStatus, setAuthStatus] = useState('idle')
@@ -270,10 +274,10 @@ function App() {
       visual_state: preview.visual_state,
       visual_overrides: preview.visual_overrides,
       pest_risks: preview.pest_risks,
-      active_pests: preview.active_pests,
+      active_pests: preview.active_pests.filter((item) => !suppressedPests.includes(item.pest?.name_en)),
       current_model_url: simulationVisual.current_model_url ?? preview.current_model_url,
     }
-  }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual])
+  }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual, suppressedPests])
   useEffect(() => {
     autosaveStateRef.current = {
       climate,
@@ -302,6 +306,7 @@ function App() {
       setPlantCatalog((current) => current.some((plant) => plant.id === simulator.plant.id) ? current : [simulator.plant, ...current])
     }
     setSelectedPlant(options.selectPlant === false ? null : restoredPlant)
+    setSuppressedPests([])
     setClimate({
       water: Number(simulator.water ?? defaultClimate.water),
       light: Number(simulator.light ?? defaultClimate.light),
@@ -361,6 +366,71 @@ function App() {
     return simulator
   }, [buildSaveSnapshot, visitingFriend])
 
+  useEffect(() => {
+    const simulatorId = previewSimulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
+    const isFullyGrown = selectedPlant && Number(previewSimulationVisual?.growth_point ?? 0) >= 100
+    const rewardAlreadyClaimed = Boolean(previewSimulationVisual?.maturity_reward_claimed_at)
+
+    if (!user || visitingFriend || !simulatorId || !isFullyGrown || rewardAlreadyClaimed || rewardClaimingRef.current === simulatorId) {
+      return undefined
+    }
+
+    let isCancelled = false
+    rewardClaimingRef.current = simulatorId
+
+    async function claimReward() {
+      try {
+        const savedSimulator = await persistCurrentSimulation({ silent: true })
+        const savedGrowth = Number(savedSimulator?.growth_point ?? previewSimulationVisual?.growth_point ?? 0)
+        const savedAlreadyClaimed = Boolean(savedSimulator?.maturity_reward_claimed_at ?? previewSimulationVisual?.maturity_reward_claimed_at)
+
+        if (isCancelled || savedGrowth < 100 || savedAlreadyClaimed) return
+
+        const payload = await claimMaturityReward(simulatorId)
+        const reward = payload.data ?? payload
+        const amount = Number(reward.amount ?? 0)
+
+        if (reward.simulator) {
+          setSimulationVisual((current) => ({
+            ...current,
+            ...reward.simulator,
+            current_model_url: reward.simulator.current_model_url ?? current.current_model_url ?? defaultSimulationVisual.current_model_url,
+          }))
+        }
+
+        if (typeof reward.balance === 'number') {
+          setUser((current) => current ? { ...current, coin: reward.balance } : current)
+        }
+
+        if (!isCancelled && reward.awarded && amount > 0) {
+          const burstId = Date.now()
+          const offsetX = `${Math.round(Math.random() * 72 - 36)}px`
+          const offsetY = `${Math.round(Math.random() * 36 - 18)}px`
+
+          setCoinDelta(amount)
+          setCoinBurst({ id: burstId, amount, offsetX, offsetY })
+          setActionMessage(`Maturity reward +${amount} coin`)
+
+          window.setTimeout(() => {
+            setCoinBurst((current) => current?.id === burstId ? null : current)
+          }, 2000)
+          window.setTimeout(() => setCoinDelta(null), 1500)
+        }
+      } catch (error) {
+        console.warn('Unable to claim maturity reward', error)
+      } finally {
+        if (rewardClaimingRef.current === simulatorId) {
+          rewardClaimingRef.current = null
+        }
+      }
+    }
+
+    claimReward()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [persistCurrentSimulation, previewSimulationVisual?.growth_point, previewSimulationVisual?.id, previewSimulationVisual?.maturity_reward_claimed_at, selectedPlant, user, visitingFriend])
   useEffect(() => {
     if (!user || latestSaveLoadedRef.current) return undefined
 
@@ -452,6 +522,58 @@ function App() {
   }
 
   async function applyLabAsset(asset) {
+    if (asset.type === 'item') {
+      setAppliedAsset(asset)
+
+      if (visitingFriend) {
+        setActionMessage('Friend items are mock tools for now')
+        return
+      }
+
+      if (!selectedPlant) {
+        setActionMessage('Select a plant before using an item')
+        return
+      }
+
+      if (!getToken()) {
+        setActionMessage('Log in before using lab items')
+        openAuth('login')
+        return
+      }
+
+      const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+      if (!simulatorId) {
+        setActionMessage('Save or plant first, then use items')
+        return
+      }
+
+      setActionMessage(`Using ${asset.name}...`)
+
+      try {
+        const payload = await applySimulatorItem(simulatorId, asset.itemKey ?? asset.id)
+        const result = payload.data ?? payload
+        const simulator = result.simulator ?? null
+        const targets = result.targets ?? []
+
+        if (targets.length) {
+          setSuppressedPests((current) => [...new Set([...current, ...targets])])
+        }
+
+        if (simulator) {
+          setSimulationVisual({
+            ...defaultSimulationVisual,
+            ...simulator,
+            current_model_url: simulator.current_model_url ?? simulationVisual.current_model_url ?? defaultSimulationVisual.current_model_url,
+          })
+        }
+
+        setActionMessage(result.message ?? `${asset.name} applied`)
+      } catch (error) {
+        setActionMessage(error.message || 'Unable to use this item')
+      }
+      return
+    }
+
     setAppliedAsset(asset)
 
     if (asset.type === 'plant') {
@@ -464,6 +586,7 @@ function App() {
       const fallbackModelUrl = apiPlant?.base_model_url ?? modelAssets['plant.original']?.url ?? defaultSimulationVisual.current_model_url
 
       setResetPending(false)
+      setSuppressedPests([])
       setSelectedPlant(asset)
       setGrowthTrack(initialGrowthTrack)
       setSimulationVisual({
@@ -556,6 +679,7 @@ function App() {
         setClimate({ ...defaultClimate })
         setOutdoorWeather(initialOutdoorWeather)
         setAppliedAsset(labLibrary.Items[0])
+        setSuppressedPests([])
         setSimulationVisual(defaultSimulationVisual)
         setGrowthTrack(initialGrowthTrack)
         setSelectedPlant(null)
@@ -613,6 +737,7 @@ function App() {
           : { ...defaultClimate },
       )
       setAppliedAsset(labLibrary.Items[0])
+      setSuppressedPests([])
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
       setActionMessage('Reset complete. Select a plant to start again.')
@@ -743,7 +868,7 @@ function App() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
-      <TopBar activePage={activePage} onNavigate={setActivePage} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} onNavigate={setActivePage} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
 
       {activePage === 'auth' ? (
         <LoginPage
@@ -765,6 +890,7 @@ function App() {
               <LibrarySidebar plantLocked={Boolean(selectedPlant) || Boolean(visitingFriend)} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
               <SimulationStage
                 actionMessage={actionMessage}
+                coinBurst={coinBurst}
                 dropLabAsset={dropLabAsset}
                 mode={growingMode}
                 plantSelected={Boolean(selectedPlant)}
@@ -778,7 +904,7 @@ function App() {
               {visitingFriend && (
                 <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
-                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> · view only</span>
+                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> Ãƒâ€š- view only</span>
                   <button
                     className="rounded-md border border-lime-100/15 bg-white/[0.055] px-2 py-1 font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                     type="button"
@@ -814,3 +940,6 @@ function App() {
 }
 
 export default App
+
+
+

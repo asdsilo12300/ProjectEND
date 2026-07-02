@@ -1,3 +1,21 @@
+﻿import { storageAsset } from '../../lib/api'
+
+export const imageAssets = {
+  plant: storageAsset('icon picture/Elephant Ear-Photoroom.png'),
+  hand: storageAsset('icon picture/hand-Photoroom.png'),
+  insecticide: storageAsset('icon picture/Insecticide spray-Photoroom.png'),
+  antifungal: storageAsset('icon picture/Antifungal spray-Photoroom.png'),
+  water: storageAsset('icon picture/waterS-Photoroom.png'),
+  light: storageAsset('icon picture/light-Photoroom.png'),
+  fertilizer: storageAsset('icon picture/fertilizer-Photoroom.png'),
+  soil: storageAsset('icon picture/Soil moisture-Photoroom.png'),
+  air: storageAsset('icon picture/Air humidity-Photoroom.png'),
+  temp: storageAsset('icon picture/temp-Photoroom.png'),
+  aphid: storageAsset('icon picture/aphid-Photoroom.png'),
+  snail: storageAsset('icon picture/snails-Photoroom.png'),
+  fungus: storageAsset('icon picture/fungus-Photoroom.png'),
+  coin: storageAsset('icon picture/coin.png'),
+}
 export const navItems = ['Plant Lab', 'Shop', 'History', 'Community']
 export const navTargets = {
   'Plant Lab': 'monitor',
@@ -45,32 +63,32 @@ export const plantStats = [
 ]
 
 export const pestChances = [
-  { label: 'หอยทาก', value: 18, icon: 'snail', color: '#b58a5a' },
-  { label: 'เพลี้ย', value: 24, icon: 'aphid', color: '#f29b72' },
-  { label: 'เชื้อรา', value: 9, icon: 'fungus', color: '#c48bf2' },
+  { label: 'Snail', value: 18, icon: 'snail', color: '#b58a5a', imageUrl: imageAssets.snail },
+  { label: 'Aphid', value: 24, icon: 'aphid', color: '#f29b72', imageUrl: imageAssets.aphid },
+  { label: 'Fungus', value: 9, icon: 'fungus', color: '#c48bf2', imageUrl: imageAssets.fungus },
 ]
 
 export const climateIcons = {
-  water: { icon: 'drop', color: '#67d5cf' },
-  light: { icon: 'bolt', color: '#f7d35c' },
-  fertilizer: { icon: 'plus', color: '#9bcf82' },
-  soil: { icon: 'soil', color: '#b58a5a' },
-  air: { icon: 'wind', color: '#9fd7ff' },
-  temp: { icon: 'temp', color: '#f29b72' },
+  water: { icon: 'drop', color: '#67d5cf', imageUrl: imageAssets.water },
+  light: { icon: 'bolt', color: '#f7d35c', imageUrl: imageAssets.light },
+  fertilizer: { icon: 'plus', color: '#9bcf82', imageUrl: imageAssets.fertilizer },
+  soil: { icon: 'soil', color: '#b58a5a', imageUrl: imageAssets.soil },
+  air: { icon: 'wind', color: '#9fd7ff', imageUrl: imageAssets.air },
+  temp: { icon: 'temp', color: '#f29b72', imageUrl: imageAssets.temp },
 }
 
 export const labLibrary = {
   Plants: [
-    { id: 'sprout', name: 'Sprout', detail: 'Early stage', color: '#9bcf82', type: 'plant', icon: 'sprout', planted: true },
-    { id: 'pea', name: 'Pea Shoot', detail: 'Climber', color: '#7fb069', type: 'plant', icon: 'vine', planted: false },
-    { id: 'basil', name: 'Basil', detail: 'Herb sample', color: '#b8dea2', type: 'plant', icon: 'leaf', planted: false },
-    { id: 'fern', name: 'Fern', detail: 'Shade tolerant', color: '#87b978', type: 'plant', icon: 'fern', planted: true },
+    { id: 'sprout', name: 'Sprout', detail: 'Early stage', color: '#9bcf82', type: 'plant', icon: 'sprout', imageUrl: imageAssets.plant, planted: true },
+    { id: 'pea', name: 'Pea Shoot', detail: 'Climber', color: '#7fb069', type: 'plant', icon: 'vine', imageUrl: imageAssets.plant, planted: false },
+    { id: 'basil', name: 'Basil', detail: 'Herb sample', color: '#b8dea2', type: 'plant', icon: 'leaf', imageUrl: imageAssets.plant, planted: false },
+    { id: 'fern', name: 'Fern', detail: 'Shade tolerant', color: '#87b978', type: 'plant', icon: 'fern', imageUrl: imageAssets.plant, planted: true },
   ],
   Items: [
-    { id: 'water', name: 'Water', detail: '+ moisture', color: '#67d5cf', type: 'item', icon: 'drop' },
-    { id: 'lamp', name: 'Lamp', detail: '+ light', color: '#f7d35c', type: 'item', icon: 'bolt' },
-    { id: 'nutrient', name: 'Nutrient', detail: '+ growth', color: '#9bcf82', type: 'item', icon: 'plus' },
-    { id: 'soil-kit', name: 'Soil Kit', detail: '+ roots', color: '#b58a5a', type: 'item', icon: 'soil' },
+    { id: 'hand-pick', itemKey: 'hand-pick', name: 'Hand Pick', detail: 'aphid + snail', color: '#9bcf82', type: 'item', icon: 'hand', imageUrl: imageAssets.hand },
+    { id: 'insecticide-spray', itemKey: 'insecticide-spray', name: 'Insect Spray', detail: 'clears aphids', color: '#67d5cf', type: 'item', icon: 'hand', imageUrl: imageAssets.insecticide },
+    { id: 'antifungal-spray', itemKey: 'antifungal-spray', name: 'Fungus Spray', detail: 'clears fungus', color: '#c48bf2', type: 'item', icon: 'hand', imageUrl: imageAssets.antifungal },
+    { id: 'snail-trap', itemKey: 'snail-trap', name: 'Snail Trap', detail: 'clears snails', color: '#b58a5a', type: 'item', icon: 'hand', imageUrl: imageAssets.hand },
   ],
 }
 

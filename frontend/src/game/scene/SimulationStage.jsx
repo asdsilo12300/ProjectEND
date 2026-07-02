@@ -1,6 +1,7 @@
-import { Component, Suspense } from 'react'
+﻿import { Component, Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, OrbitControls } from '@react-three/drei'
+import { imageAssets } from '../data/gameData'
 import { AppIcon } from '../icons/IconifyIcon'
 import { Loading, PestModel, PlantModel } from './PlantModel'
 import { SceneEnvironment } from './SceneEnvironment'
@@ -30,7 +31,8 @@ class SceneErrorBoundary extends Component {
     return this.props.children
   }
 }
-export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual }) {
+
+export function SimulationStage({ actionMessage, coinBurst = null, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual }) {
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
@@ -68,6 +70,15 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
           <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, -0.32, 0]} minDistance={2.8} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />
         </Canvas>
         </SceneErrorBoundary>
+        {coinBurst && (
+          <div
+            className="coin-burst pointer-events-none absolute left-1/2 top-[42%] z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-amber-100/25 bg-[#14170f]/90 px-3 py-2 text-sm font-black text-amber-100 shadow-[0_14px_32px_rgba(0,0,0,.35)]"
+            style={{ marginLeft: coinBurst.offsetX, marginTop: coinBurst.offsetY }}
+          >
+            <img className="h-7 w-7 object-contain" src={imageAssets.coin} alt="" />
+            +{coinBurst.amount} coin
+          </div>
+        )}
         {!plantSelected && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,.35)]">
             <strong className="block text-sm text-lime-50">Select a plant to begin</strong>
@@ -103,7 +114,3 @@ export function SimulationStage({ actionMessage, dropLabAsset, mode = 'greenhous
       </section>
   )
 }
-
-
-
-
