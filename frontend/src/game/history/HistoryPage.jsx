@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getPlantHistories, getToken, resolveAssetUrl } from '../../lib/api'
+import { deletePlantHistory, getPlantHistories, getToken, resolveAssetUrl } from '../../lib/api'
 import { AppIcon } from '../icons/IconifyIcon'
 
 const fallbackSaves = [
@@ -35,7 +35,7 @@ function saveSubtitle(save) {
   return `${saveStage(save)} - ${days} day${days > 1 ? 's' : ''}`
 }
 
-function PreviewScene({ score = 0, stage, imageUrl }) {
+function PreviewScene({ imageUrl, score = 0, stage }) {
   if (imageUrl) {
     return (
       <div className="relative h-32 overflow-hidden rounded-t-xl border-b border-[#24335d] bg-[#080b09]">
@@ -72,34 +72,67 @@ function PreviewScene({ score = 0, stage, imageUrl }) {
   )
 }
 
-function SaveCard({ save, onOpen }) {
+function SaveCard({ onDelete, onOpen, save }) {
   const score = Math.min(100, Math.max(0, Number(save.total_score ?? save.growth_point) || 0))
   const health = Math.min(100, Math.max(0, Number(save.final_health ?? save.health) || 0))
 
   return (
-    <button className="overflow-hidden rounded-2xl bg-[#172344] text-left shadow-[0_18px_36px_rgba(0,0,0,.24)] ring-1 ring-[#304066] transition hover:-translate-y-0.5 hover:ring-[#8fbf78]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" type="button" onClick={() => onOpen(save)}>
-      <PreviewScene score={score} stage={saveStage(save)} imageUrl={save.snapshot_image_url} />
-      <div className="px-3 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-black text-slate-100">{saveTitle(save)}</h2>
-            <p className="mt-0.5 truncate text-xs text-slate-400">{saveSubtitle(save)}</p>
-            <p className="mt-1 text-[11px] text-slate-500">{formatDate(save.created_at || save.updated_at || save.started_at)}</p>
+    <article className="group relative overflow-hidden rounded-2xl bg-[#172344] text-left shadow-[0_18px_36px_rgba(0,0,0,.24)] ring-1 ring-[#304066] transition hover:-translate-y-0.5 hover:ring-[#8fbf78]/60">
+      <button className="block w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" type="button" onClick={() => onOpen(save)}>
+        <PreviewScene score={score} stage={saveStage(save)} imageUrl={save.snapshot_image_url} />
+        <div className="px-3 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-black text-slate-100">{saveTitle(save)}</h2>
+              <p className="mt-0.5 truncate text-xs text-slate-400">{saveSubtitle(save)}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{formatDate(save.created_at || save.updated_at || save.started_at)}</p>
+            </div>
+            <div className="shrink-0 pt-7 text-right text-[11px] font-bold text-rose-400">
+              <span>Sc.{score.toFixed(0)}</span>
+              <span className="mx-1 text-slate-500">|</span>
+              <span>Hp.{health.toFixed(0)}</span>
+            </div>
           </div>
-          <div className="shrink-0 pt-7 text-right text-[11px] font-bold text-rose-400">
-            <span>Sc.{score.toFixed(0)}</span>
-            <span className="mx-1 text-slate-500">|</span>
-            <span>Hp.{health.toFixed(0)}</span>
-          </div>
+          <p className="mt-3 line-clamp-2 min-h-[32px] text-xs leading-4 text-slate-300">{save.analysis_result || 'No analysis recorded yet.'}</p>
+          <p className="mt-1 truncate pr-10 text-[11px] font-semibold text-[#bdeaa5]">{save.direction || 'Continue observing the next cycle.'}</p>
         </div>
-        <p className="mt-3 line-clamp-2 min-h-[32px] text-xs leading-4 text-slate-300">{save.analysis_result || 'No analysis recorded yet.'}</p>
-        <p className="mt-1 truncate text-[11px] font-semibold text-[#bdeaa5]">{save.direction || 'Continue observing the next cycle.'}</p>
-      </div>
-    </button>
+      </button>
+      <button
+        className="absolute bottom-3 right-3 z-20 grid h-8 w-8 place-items-center rounded-md border border-red-200/20 bg-black/35 text-red-100 opacity-75 transition hover:bg-red-500/20 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-200 group-hover:opacity-100"
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          onDelete(save)
+        }}
+        aria-label="Delete save history"
+      >
+        <AppIcon className="h-4 w-4" name="trash" />
+      </button>
+    </article>
   )
 }
 
-function HistoryDetailModal({ save, onClose }) {
+function DeleteConfirmModal({ onCancel, onConfirm, save, status }) {
+  if (!save) return null
+
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/55 px-4 backdrop-blur-sm" onMouseDown={onCancel}>
+      <div className="animate-[saveModalIn_.2s_ease-out] w-full max-w-[380px] rounded-xl border border-red-200/20 bg-[#151110] p-5 text-center text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.55)]" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-red-500/18 text-red-100">
+          <AppIcon className="h-5 w-5" name="trash" />
+        </div>
+        <h2 className="mt-3 text-lg font-black text-red-50">Delete this save?</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">{saveTitle(save)} will be removed from your history.</p>
+        <div className="mt-5 flex justify-center gap-2">
+          <button className="h-9 rounded-md border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08]" type="button" onClick={onCancel} disabled={status === 'deleting'}>Cancel</button>
+          <button className="h-9 rounded-md bg-red-500 px-4 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onConfirm} disabled={status === 'deleting'}>{status === 'deleting' ? 'Deleting...' : 'Delete'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HistoryDetailModal({ onClose, onDelete, save }) {
   if (!save) return null
 
   const score = Number(save.total_score ?? 0)
@@ -114,6 +147,9 @@ function HistoryDetailModal({ save, onClose }) {
           ) : (
             <PreviewScene score={score} stage={saveStage(save)} />
           )}
+          <button className="absolute right-14 top-4 grid h-8 w-8 place-items-center rounded-md border border-red-200/20 bg-black/45 text-red-100 hover:bg-red-500/20" type="button" onClick={() => onDelete(save)} aria-label="Delete save history">
+            <AppIcon className="h-4 w-4" name="trash" />
+          </button>
           <button className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-white/10 bg-black/45 text-slate-100 hover:bg-black/65" type="button" onClick={onClose} aria-label="Close history details">
             <AppIcon className="h-4 w-4" name="close" />
           </button>
@@ -149,6 +185,8 @@ export function HistoryPage() {
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('idle')
   const [selectedSave, setSelectedSave] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteStatus, setDeleteStatus] = useState('idle')
   const pageSize = 6
 
   useEffect(() => {
@@ -186,6 +224,22 @@ export function HistoryPage() {
   const currentPage = Math.min(page, pageCount)
   const visibleSaves = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
+  async function confirmDelete() {
+    if (!deleteTarget) return
+
+    setDeleteStatus('deleting')
+    try {
+      if (getToken() && !String(deleteTarget.id).startsWith('demo-')) {
+        await deletePlantHistory(deleteTarget.id)
+      }
+      setSaves((current) => current.filter((save) => save.id !== deleteTarget.id))
+      setSelectedSave((current) => (current?.id === deleteTarget.id ? null : current))
+      setDeleteTarget(null)
+    } finally {
+      setDeleteStatus('idle')
+    }
+  }
+
   return (
     <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#1b1a2b] px-8 py-7 text-slate-100">
       <div className="mx-auto max-w-[1120px]">
@@ -212,7 +266,7 @@ export function HistoryPage() {
         ) : visibleSaves.length ? (
           <div className="grid grid-cols-3 gap-x-6 gap-y-8 max-lg:grid-cols-2 max-sm:grid-cols-1">
             {visibleSaves.map((save) => (
-              <SaveCard key={save.id} save={save} onOpen={setSelectedSave} />
+              <SaveCard key={save.id} save={save} onDelete={setDeleteTarget} onOpen={setSelectedSave} />
             ))}
           </div>
         ) : (
@@ -234,7 +288,8 @@ export function HistoryPage() {
           ))}
         </div>
       </div>
-      <HistoryDetailModal save={selectedSave} onClose={() => setSelectedSave(null)} />
+      <HistoryDetailModal save={selectedSave} onClose={() => setSelectedSave(null)} onDelete={setDeleteTarget} />
+      <DeleteConfirmModal save={deleteTarget} status={deleteStatus} onCancel={() => deleteStatus === 'idle' && setDeleteTarget(null)} onConfirm={confirmDelete} />
     </section>
   )
 }

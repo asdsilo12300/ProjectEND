@@ -81,6 +81,14 @@ class PlantHistoryController extends Controller
         return new PlantHistoryResource($history->load(['plant.stages', 'finalStage']));
     }
 
+    public function destroy(Request $request, PlantHistory $history): JsonResponse
+    {
+        abort_unless($history->user_id === $request->user()->id, 403);
+
+        $history->delete();
+
+        return response()->json(['data' => ['id' => $history->id, 'deleted' => true]]);
+    }
     public function publish(Request $request, PlantHistory $history): JsonResponse
     {
         abort_unless($history->user_id === $request->user()->id, 403);

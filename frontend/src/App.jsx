@@ -107,9 +107,11 @@ function App() {
   const ownGardenSnapshotRef = useRef(null)
   const stageSnapshotRef = useRef(null)
   const [saveCompleteHistory, setSaveCompleteHistory] = useState(null)
+  const [saveReadyForNewPlant, setSaveReadyForNewPlant] = useState(false)
   const [user, setUser] = useState(null)
   const [coinDelta, setCoinDelta] = useState(null)
   const [coinBurst, setCoinBurst] = useState(null)
+  const [expBurst, setExpBurst] = useState(null)
   const rewardClaimingRef = useRef(null)
   const [authMode, setAuthMode] = useState('login')
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
@@ -423,21 +425,31 @@ function App() {
           }))
         }
 
-        if (typeof reward.balance === 'number') {
+        if (reward.user) {
+          setUser((current) => current ? { ...current, ...reward.user } : reward.user)
+        } else if (typeof reward.balance === 'number') {
           setUser((current) => current ? { ...current, coin: reward.balance } : current)
         }
 
         if (!isCancelled && reward.awarded && amount > 0) {
+          const expAmount = Number(reward.experience_amount ?? 0)
+          const leveledUp = Boolean(reward.experience_reward?.leveled_up)
           const burstId = Date.now()
           const offsetX = `${Math.round(Math.random() * 72 - 36)}px`
           const offsetY = `${Math.round(Math.random() * 36 - 18)}px`
+          const expOffsetX = `${Math.round(Math.random() * 84 - 42)}px`
+          const expOffsetY = `${Math.round(Math.random() * 36 + 18)}px`
 
           setCoinDelta(amount)
           setCoinBurst({ id: burstId, amount, offsetX, offsetY })
-          setActionMessage(`Maturity reward +${amount} coin`)
+          if (expAmount > 0) {
+            setExpBurst({ id: burstId, amount: expAmount, leveledUp, offsetX: expOffsetX, offsetY: expOffsetY })
+          }
+          setActionMessage(`Maturity reward +${amount} coin${expAmount > 0 ? `, +${expAmount} EXP` : ''}${leveledUp ? ' - Level up!' : ''}`)
 
           window.setTimeout(() => {
             setCoinBurst((current) => current?.id === burstId ? null : current)
+            setExpBurst((current) => current?.id === burstId ? null : current)
           }, 2000)
           window.setTimeout(() => setCoinDelta(null), 1500)
         }
@@ -736,16 +748,7 @@ function App() {
         window.localStorage.removeItem('plantsim-scenario')
         latestSaveLoadedRef.current = false
         setResetPending(false)
-        setGrowingMode(null)
-        setModeLoading(false)
-        setSaveHydrated(true)
-        setClimate({ ...defaultClimate })
-        setOutdoorWeather(initialOutdoorWeather)
-        setAppliedAsset(labLibrary.Items[0])
-        setSuppressedPests([])
-        setSimulationVisual(defaultSimulationVisual)
-        setGrowthTrack(initialGrowthTrack)
-        setSelectedPlant(null)
+        setSaveReadyForNewPlant(true)
         setSaveCompleteHistory(history)
         setActionMessage('Saved to history')
       } else {
@@ -757,6 +760,26 @@ function App() {
       setActionMessage(error.message || 'Unable to save history')
     }
   }
+
+  function closeSaveCompleteModal() {
+    setSaveCompleteHistory(null)
+
+    if (!saveReadyForNewPlant) return
+
+    setSaveReadyForNewPlant(false)
+    setGrowingMode(null)
+    setModeLoading(false)
+    setSaveHydrated(true)
+    setClimate({ ...defaultClimate })
+    setOutdoorWeather(initialOutdoorWeather)
+    setAppliedAsset(labLibrary.Items[0])
+    setSuppressedPests([])
+    setSimulationVisual(defaultSimulationVisual)
+    setGrowthTrack(initialGrowthTrack)
+    setSelectedPlant(null)
+    setActionMessage('Choose a new growing mode.')
+  }
+
   async function resetSimulation() {
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
 
@@ -941,7 +964,7 @@ function App() {
               <button
                 className="mt-5 h-9 rounded-md bg-[#9bcf82] px-5 text-sm font-bold text-[#101511] transition hover:bg-[#addf96] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                 type="button"
-                onClick={() => setSaveCompleteHistory(null)}
+                onClick={closeSaveCompleteModal}
               >
                 OK
               </button>
@@ -975,6 +998,7 @@ function App() {
               <SimulationStage
                 actionMessage={actionMessage}
                 coinBurst={coinBurst}
+                expBurst={expBurst}
                 dropLabAsset={dropLabAsset}
                 mode={growingMode}
                 plantSelected={Boolean(selectedPlant)}

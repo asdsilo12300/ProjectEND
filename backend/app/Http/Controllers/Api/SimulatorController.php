@@ -176,7 +176,9 @@ class SimulatorController extends Controller
                 return [
                     'awarded' => false,
                     'amount' => 0,
+                    'experience_amount' => 0,
                     'balance' => $currentCoin,
+                    'user' => $this->userRewardPayload($user),
                     'reason' => 'Plant is not fully grown yet.',
                     'simulator' => (new SimulatorResource($lockedSimulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),
                 ];
@@ -186,14 +188,19 @@ class SimulatorController extends Controller
                 return [
                     'awarded' => false,
                     'amount' => 0,
+                    'experience_amount' => 0,
                     'balance' => $currentCoin,
+                    'user' => $this->userRewardPayload($user),
                     'reason' => 'Maturity reward already claimed.',
                     'simulator' => (new SimulatorResource($lockedSimulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),
                 ];
             }
 
             $amount = 100;
+            $experienceAmount = 50;
             $user->forceFill(['coin' => $currentCoin + $amount])->save();
+            $experienceReward = $user->addExperience($experienceAmount);
+            $user->refresh();
             $lockedSimulator->forceFill([
                 'maturity_reward_claimed_at' => now(),
                 'maturity_reward_amount' => $amount,
@@ -202,7 +209,10 @@ class SimulatorController extends Controller
             return [
                 'awarded' => true,
                 'amount' => $amount,
+                'experience_amount' => $experienceAmount,
+                'experience_reward' => $experienceReward,
                 'balance' => (int) $user->coin,
+                'user' => $this->userRewardPayload($user),
                 'simulator' => (new SimulatorResource($lockedSimulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),
             ];
         });
@@ -436,6 +446,23 @@ class SimulatorController extends Controller
                 'avatar_url' => $comment->user?->avatar_url,
                 'role' => $comment->user?->role,
             ],
+        ];
+    }
+
+    private function userRewardPayload($user): array
+    {
+        return [
+            'id' => $user->id,
+            'username' => $user->username,
+            'email' => $user->email,
+            'avatar_url' => $user->avatar_url,
+            'role' => $user->role,
+            'level' => $user->level,
+            'experience' => $user->experience,
+            'level_progress' => $user->levelProgress(),
+            'coin' => $user->coin,
+            'gem' => $user->gem,
+            'status' => $user->status,
         ];
     }
 }

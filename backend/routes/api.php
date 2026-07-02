@@ -64,6 +64,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/plant-histories', [PlantHistoryController::class, 'index']);
     Route::post('/simulators/{simulator}/histories', [PlantHistoryController::class, 'storeForSimulator']);
     Route::post('/plant-histories/{history}/publish', [PlantHistoryController::class, 'publish']);
+    Route::delete('/plant-histories/{history}', [PlantHistoryController::class, 'destroy']);
 
     Route::post('/posts', [PostController::class, 'store']);
     Route::post('/posts/{post}/comments', [PostController::class, 'comment']);

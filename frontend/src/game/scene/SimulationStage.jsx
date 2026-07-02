@@ -32,7 +32,7 @@ class SceneErrorBoundary extends Component {
   }
 }
 
-export function SimulationStage({ actionMessage, coinBurst = null, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual, snapshotRef = null }) {
+export function SimulationStage({ actionMessage, coinBurst = null, expBurst = null, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual, snapshotRef = null }) {
   const canvasRef = useRef(null)
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
@@ -91,6 +91,18 @@ export function SimulationStage({ actionMessage, coinBurst = null, dropLabAsset,
           >
             <img className="h-7 w-7 object-contain" src={imageAssets.coin} alt="" />
             +{coinBurst.amount} coin
+          </div>
+        )}
+        {expBurst && (
+          <div
+            className="coin-burst pointer-events-none absolute left-1/2 top-[42%] z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-cyan-100/25 bg-[#071b1a]/90 px-3 py-2 text-sm font-black text-cyan-100 shadow-[0_14px_32px_rgba(0,0,0,.35),0_0_22px_rgba(16,216,210,.22)]"
+            style={{ marginLeft: expBurst.offsetX, marginTop: expBurst.offsetY }}
+          >
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-[#05b7ff] via-[#12d8e6] to-[#16f4be] text-[10px] font-black text-[#07110b] shadow-[0_0_16px_rgba(18,216,230,.45)]">
+              XP
+            </span>
+            <span>+{expBurst.amount} EXP</span>
+            {expBurst.leveledUp && <span className="rounded-full bg-lime-200 px-2 py-0.5 text-[10px] text-[#101511]">LEVEL UP</span>}
           </div>
         )}
         {!plantSelected && (

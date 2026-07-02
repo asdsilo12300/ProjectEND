@@ -3,9 +3,18 @@ import { AppIcon } from '../icons/IconifyIcon'
 import { NavIcon } from '../icons/NavIcon'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 
+function nextLevelExperience(level) {
+  const currentLevel = Math.max(1, Number(level) || 1)
+
+  return 100 + ((currentLevel - 1) * 50)
+}
+
 export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, onNavigate, openWindow, profileOpen, setProfileOpen, user, onAuthRequired, onLogout }) {
   const displayName = user?.username ?? 'Learner'
   const learnerLevel = user?.level ?? 1
+  const learnerExperience = Number(user?.experience ?? user?.level_progress?.experience ?? 0)
+  const learnerNextExperience = Number(user?.level_progress?.next_level_experience ?? nextLevelExperience(learnerLevel))
+  const learnerExpPercent = Math.max(0, Math.min(100, Number(user?.level_progress?.percent ?? ((learnerExperience / learnerNextExperience) * 100)) || 0))
   const initial = displayName.slice(0, 1).toUpperCase()
   const shownCoins = Number(user?.coin ?? coinBalance ?? 0).toLocaleString()
 
@@ -99,10 +108,34 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         </button>
 
         {profileOpen && user && (
-          <div className="absolute right-0 top-12 z-[70] w-56 overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511] shadow-[0_12px_28px_rgba(0,0,0,.38)]" role="menu">
+          <div className="absolute right-0 top-12 z-[70] w-64 overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511] shadow-[0_12px_28px_rgba(0,0,0,.38)]" role="menu">
             <div className="border-b border-lime-100/10 px-3 py-3">
               <strong className="block truncate text-sm text-lime-50">{displayName} Lv.{learnerLevel}</strong>
               <span className="truncate text-[11px] text-slate-400">{user.email}</span>
+              <div className="mt-3 rounded-md border border-cyan-200/10 bg-[#0b1020]/65 px-2.5 py-2 shadow-[inset_0_0_18px_rgba(0,214,255,.08)]">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="font-mono text-[13px] font-black tabular-nums text-cyan-300">{learnerExpPercent.toFixed(0)}%</span>
+                  <span className="text-[10px] font-semibold text-slate-400">
+                    EXP {learnerExperience}/{learnerNextExperience}
+                  </span>
+                </div>
+                <div className="relative h-5 overflow-hidden rounded-full border border-cyan-200/10 bg-[#050712]">
+                  <div
+                    className="relative h-full min-w-5 overflow-hidden rounded-full bg-gradient-to-r from-[#05b7ff] via-[#12d8e6] to-[#16f4be] shadow-[0_0_18px_rgba(12,216,230,.55)] transition-[width] duration-700 ease-out"
+                    style={{ width: `${learnerExpPercent}%` }}
+                    aria-hidden="true"
+                  >
+                    <span className="absolute inset-y-1 left-3 right-7 rounded-full bg-white/15" />
+                    <span className="absolute left-8 top-1.5 h-1.5 w-1.5 rounded-full bg-white/25" />
+                    <span className="absolute left-16 top-3 h-1 w-1 rounded-full bg-white/20" />
+                    <span className="absolute right-4 top-1 h-1.5 w-1.5 rounded-full bg-white/20" />
+                  </div>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500">
+                  <span>Lv.{learnerLevel}</span>
+                  <span>Lv.{Number(learnerLevel) + 1}</span>
+                </div>
+              </div>
             </div>
             <button
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"

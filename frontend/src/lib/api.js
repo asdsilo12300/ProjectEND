@@ -138,6 +138,11 @@ export async function savePlantHistory(simulatorId, options = {}) {
     body: JSON.stringify(options),
   })
 }
+export async function deletePlantHistory(historyId) {
+  return apiFetch(`/plant-histories/${historyId}`, {
+    method: 'DELETE',
+  })
+}
 export async function startSimulator(plantId, mode = 'greenhouse', options = {}) {
   return apiFetch('/simulators', {
     method: 'POST',

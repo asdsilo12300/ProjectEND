@@ -1,4 +1,4 @@
-import RepeatIcon from '@iconify-react/material-symbols/repeat'
+﻿import RepeatIcon from '@iconify-react/material-symbols/repeat'
 import NotificationsIcon from '@iconify-react/material-symbols/notifications'
 import MoreHorizIcon from '@iconify-react/material-symbols/more-horiz'
 import HomeIcon from '@iconify-react/material-symbols/home'
@@ -65,6 +65,7 @@ const iconMap = {
   controller: StadiaControllerIcon,
   crown: CrownIcon,
   delete: DeleteIcon,
+  trash: DeleteIcon,
   drop: WaterDropIcon,
   eco: EcoIcon,
   fern: PsychiatryIcon,

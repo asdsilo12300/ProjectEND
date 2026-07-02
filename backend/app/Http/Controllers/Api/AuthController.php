@@ -76,6 +76,7 @@ class AuthController extends Controller
             'role' => $user->role,
             'level' => $user->level,
             'experience' => $user->experience,
+            'level_progress' => $user->levelProgress(),
             'coin' => $user->coin,
             'gem' => $user->gem,
             'status' => $user->status,
