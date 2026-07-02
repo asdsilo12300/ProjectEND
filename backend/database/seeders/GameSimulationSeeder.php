@@ -18,7 +18,7 @@ class GameSimulationSeeder extends Seeder
         $plant = Plant::query()->updateOrCreate(
             ['name_en' => 'Simulation Sprout'],
             [
-                'name_th' => 'à¸•à¹‰à¸™à¸«à¸¹à¸Šà¹‰à¸²à¸‡',
+                'name_th' => 'ต้นหูช้าง',
                 'name_en' => 'Simulation Sprout',
                 'description' => 'Starter plant for learning how environment factors affect growth and visual state.',
                 'base_image_url' => null,
@@ -89,9 +89,9 @@ class GameSimulationSeeder extends Seeder
         }
 
         $pests = [
-            ['name_th' => 'à¹€à¸žà¸¥à¸µà¹‰à¸¢', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'base_chance' => 0, 'damage_per_turn' => 5, 'behavior' => 'More likely in dry and hot air.'],
-            ['name_th' => 'à¸«à¸­à¸¢à¸—à¸²à¸', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'base_chance' => 0, 'damage_per_turn' => 6, 'behavior' => 'More likely when soil is wet or rain is present.'],
-            ['name_th' => 'à¹€à¸Šà¸·à¹‰à¸­à¸£à¸²', 'name_en' => 'fungus', 'model_url' => null, 'base_chance' => 0, 'damage_per_turn' => 7, 'behavior' => 'More likely with high humidity and wet soil.'],
+            ['name_th' => 'เพลี้ย', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'base_chance' => 0, 'damage_per_turn' => 5, 'behavior' => 'More likely in dry and hot air.'],
+            ['name_th' => 'หอยทาก', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'base_chance' => 0, 'damage_per_turn' => 6, 'behavior' => 'More likely when soil is wet or rain is present.'],
+            ['name_th' => 'เชื้อรา', 'name_en' => 'fungus', 'model_url' => null, 'base_chance' => 0, 'damage_per_turn' => 7, 'behavior' => 'More likely with high humidity and wet soil.'],
         ];
 
         foreach ($pests as $pestData) {

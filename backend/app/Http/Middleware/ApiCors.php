@@ -16,13 +16,15 @@ class ApiCors
             $response = $next($request);
         }
 
-        $origin = $request->headers->get('Origin', '*');
-        $allowedOrigin = env('FRONTEND_URL', $origin);
+        $origin = $request->headers->get('Origin');
+        $configuredOrigin = env('FRONTEND_URL', 'http://localhost:5173');
+        $allowedOrigin = $origin ?: $configuredOrigin;
 
-        $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin ?: '*');
+        $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        $response->headers->set('Access-Control-Allow-Headers', 'Accept, Content-Type, Authorization, X-Requested-With');
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
+        $response->headers->set('Vary', 'Origin');
 
         return $response;
     }

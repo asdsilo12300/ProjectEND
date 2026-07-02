@@ -1,9 +1,62 @@
-﻿import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/IconifyIcon'
 
 export function Panel({ id, title, subtitle, windows, setWindows, children, className = '', headerActions = null }) {
   const current = windows[id]
 
   if (!current.visible) return null
+
+  const canDrag = id === 'climate'
+
+  function clampPanelPosition(x, y) {
+    return {
+      x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - 96)),
+      y: Math.min(Math.max(70, y), Math.max(70, window.innerHeight - 56)),
+    }
+  }
+
+  function startDrag(event) {
+    if (!canDrag || event.button !== 0) return
+    if (event.target.closest('button, a, input, textarea, select')) return
+
+    event.preventDefault()
+
+    const startX = event.clientX
+    const startY = event.clientY
+    const startPanelX = current.x
+    const startPanelY = current.y
+    let frame = 0
+
+    function movePanel(moveEvent) {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const next = clampPanelPosition(
+          startPanelX + moveEvent.clientX - startX,
+          startPanelY + moveEvent.clientY - startY,
+        )
+
+        setWindows((value) => ({
+          ...value,
+          [id]: {
+            ...value[id],
+            x: next.x,
+            y: next.y,
+            expandedY: next.y,
+          },
+        }))
+      })
+    }
+
+    function stopDrag() {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('pointermove', movePanel)
+      window.removeEventListener('pointerup', stopDrag)
+      window.removeEventListener('pointercancel', stopDrag)
+    }
+
+    window.addEventListener('pointermove', movePanel)
+    window.addEventListener('pointerup', stopDrag, { once: true })
+    window.addEventListener('pointercancel', stopDrag, { once: true })
+  }
 
   function toggleCollapse(event) {
     event.stopPropagation()
@@ -46,7 +99,7 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
       className={`absolute left-0 top-0 z-30 w-[320px] overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511]/92 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.36)] ${className}`}
       style={{ transform: `translate(${current.x}px, ${current.y}px)` }}
     >
-      <header className="flex h-11 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3">
+      <header className={`flex h-11 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3 ${canDrag ? 'cursor-grab select-none active:cursor-grabbing' : ''}`} onPointerDown={startDrag}>
         <span className="h-6 w-1.5 rounded-full bg-[#9bcf82]" />
         <span className="min-w-0 flex-1 leading-none">
           <strong className="block truncate text-sm font-bold text-lime-50">{title}</strong>

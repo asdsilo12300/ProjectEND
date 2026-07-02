@@ -125,6 +125,18 @@ class FriendController extends Controller
     }
 
 
+    public function destroy(Request $request, Friendship $friendship): JsonResponse
+    {
+        $user = $request->user();
+        $isParticipant = $friendship->requester_id === $user->id || $friendship->addressee_id === $user->id;
+
+        abort_unless($isParticipant, 403);
+
+        $friendship->delete();
+
+        return response()->json(['message' => 'Friend removed.']);
+    }
+
     public function latestSimulator(Request $request, Friendship $friendship)
     {
         $user = $request->user();
@@ -196,3 +208,5 @@ class FriendController extends Controller
         return $user->last_login_at && $user->last_login_at->greaterThan(now()->subMinutes(15)) ? 'online' : 'offline';
     }
 }
+
+

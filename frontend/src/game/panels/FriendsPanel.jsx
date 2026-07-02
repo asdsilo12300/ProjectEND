@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Panel } from '../components/Panel'
 import { AppIcon } from '../icons/IconifyIcon'
-import { acceptFriend, getFriends, getToken, inviteFriend, searchUsers } from '../../lib/api'
+import { acceptFriend, deleteFriend, getFriends, getToken, inviteFriend, searchUsers } from '../../lib/api'
 
 function avatarLabel(user) {
   return (user?.username ?? user?.email ?? '?').slice(0, 1).toUpperCase()
@@ -29,6 +29,8 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
   const [error, setError] = useState('')
   const [inviteId, setInviteId] = useState(null)
   const [acceptId, setAcceptId] = useState(null)
+  const [removeCandidate, setRemoveCandidate] = useState(null)
+  const [removeId, setRemoveId] = useState(null)
 
   const isLoggedIn = Boolean(user && getToken())
   const requests = useMemo(() => friends.filter((friend) => friend.status === 'pending' && friend.direction === 'incoming'), [friends])
@@ -146,6 +148,23 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
       setError(acceptError.message || 'Accept failed')
     } finally {
       setAcceptId(null)
+    }
+  }
+
+  async function removeFriend() {
+    if (!removeCandidate) return
+
+    setRemoveId(removeCandidate.id)
+    setError('')
+
+    try {
+      await deleteFriend(removeCandidate.id)
+      setFriends((value) => value.filter((friend) => friend.id !== removeCandidate.id))
+      setRemoveCandidate(null)
+    } catch (removeError) {
+      setError(removeError.message || 'Remove friend failed')
+    } finally {
+      setRemoveId(null)
     }
   }
 
@@ -325,13 +344,23 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                       {busy ? 'Accepting' : 'Accept'}
                     </button>
                   ) : friend.status === 'accepted' ? (
-                    <button
-                      className="rounded-md border border-lime-100/10 bg-white/[0.055] px-2.5 py-1.5 text-[11px] font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
-                      type="button"
-                      onClick={() => onViewFriend?.(friend)}
-                    >
-                      View
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        className="rounded-md border border-lime-100/10 bg-white/[0.055] px-2.5 py-1.5 text-[11px] font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+                        type="button"
+                        onClick={() => onViewFriend?.(friend)}
+                      >
+                        View
+                      </button>
+                      <button
+                        className="grid h-8 w-8 place-items-center rounded-md border border-red-300/15 bg-red-400/10 text-red-100 transition hover:border-red-300/35 hover:bg-red-400/18 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-200"
+                        type="button"
+                        aria-label={`Remove ${displayName(friend.user)}`}
+                        onClick={() => setRemoveCandidate(friend)}
+                      >
+                        <AppIcon className="h-4 w-4" name="delete" />
+                      </button>
+                    </div>
                   ) : (
                     <span className="rounded-md bg-yellow-300/10 px-2.5 py-1.5 text-[11px] font-semibold text-yellow-100">Pending</span>
                   )}
@@ -348,6 +377,47 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
           )}
         </div>
       )}
+      {removeCandidate && (
+        <div className="fixed inset-0 z-[120] grid place-items-center bg-black/50 px-4 backdrop-blur-sm motion-safe:animate-[friendOverlayIn_160ms_ease-out]" role="presentation">
+          <div
+            className="w-full max-w-[310px] rounded-lg border border-red-200/15 bg-[#111712] p-4 shadow-[0_18px_42px_rgba(0,0,0,.46)] motion-safe:animate-[friendDialogIn_190ms_cubic-bezier(.16,1,.3,1)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-friend-title"
+          >
+            <div className="mb-3 flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-red-400/16 text-red-100">
+                <AppIcon className="h-5 w-5" name="delete" />
+              </span>
+              <div className="min-w-0">
+                <h3 id="remove-friend-title" className="text-sm font-black text-lime-50">Remove friend?</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-300">
+                  {displayName(removeCandidate.user)} will be removed from your classmates list.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                className="rounded-md border border-lime-100/10 bg-white/[0.045] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+                type="button"
+                onClick={() => setRemoveCandidate(null)}
+                disabled={removeId === removeCandidate.id}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-md bg-red-300 px-3 py-2 text-xs font-black text-[#170b0b] transition hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-100"
+                type="button"
+                onClick={removeFriend}
+                disabled={removeId === removeCandidate.id}
+              >
+                {removeId === removeCandidate.id ? 'Removing' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Panel>
   )
 }
+

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { pestChances } from '../data/gameData'
 import { IconBar } from '../components/IconBar'
 import { Panel } from '../components/Panel'
@@ -23,6 +24,46 @@ const visualStateLabels = {
 
 function clampPercent(value) {
   return Number(Math.min(100, Math.max(0, Number(value) || 0)).toFixed(1))
+}
+
+function hasBrokenEncoding(value) {
+  const text = String(value ?? '')
+  return text.includes('\u00c3') || text.includes('\u00c2') || text.includes('\u00e0') || text.includes('\ufffd')
+}
+
+function readablePlantName(value) {
+  const text = String(value ?? '').trim()
+  if (!text || hasBrokenEncoding(text)) return '\u0e15\u0e49\u0e19\u0e2b\u0e39\u0e0a\u0e49\u0e32\u0e07'
+  return text
+}
+
+function useSoftNumber(target, speed = 0.045) {
+  const [value, setValue] = useState(() => Number(target) || 0)
+
+  useEffect(() => {
+    let frame = 0
+    let active = true
+    const nextTarget = Number(target) || 0
+
+    function step() {
+      setValue((current) => {
+        const delta = nextTarget - current
+        if (Math.abs(delta) < 0.08) return nextTarget
+        return current + delta * speed
+      })
+
+      if (active) frame = window.requestAnimationFrame(step)
+    }
+
+    frame = window.requestAnimationFrame(step)
+
+    return () => {
+      active = false
+      window.cancelAnimationFrame(frame)
+    }
+  }, [speed, target])
+
+  return clampPercent(value)
 }
 
 function buildPestChances(simulationVisual) {
@@ -81,7 +122,7 @@ function GrowthTimeline({ progress, history, pace, rate }) {
         <div>
           <strong className="text-xs text-lime-50">Growth timeline</strong>
           <p className="text-[10px] text-slate-400">
-            {pace.detail} · +{Math.round(rate || 0)} pts/cycle
+            {pace.detail} - +{Math.round(rate || 0)} pts/cycle
           </p>
         </div>
         <span className="rounded bg-[#9bcf82]/12 px-2 py-1 text-[10px] font-bold text-lime-100">{pace.label}</span>
@@ -116,12 +157,17 @@ function GrowthTimeline({ progress, history, pace, rate }) {
 
 export function PlantMonitorPanel({ windows, setWindows, simulationVisual }) {
   const visiblePestChances = buildPestChances(simulationVisual)
-  const growthProgress = getGrowthProgress(simulationVisual)
-  const health = getHealth(simulationVisual)
+  const targetGrowthProgress = getGrowthProgress(simulationVisual)
+  const targetHealth = getHealth(simulationVisual)
   const growthRate = Number(simulationVisual?.growth_rate ?? 0)
-  const pace = getGrowthPace(simulationVisual, health, growthProgress, growthRate)
+  const targetPace = getGrowthPace(simulationVisual, targetHealth, targetGrowthProgress, growthRate)
+  const growthProgress = useSoftNumber(targetGrowthProgress, 0.014)
+  const health = useSoftNumber(targetHealth, 0.014)
+  const paceValue = useSoftNumber(targetPace.value, 0.012)
+  const pace = { ...targetPace, value: paceValue }
   const growthHistory = simulationVisual?.growth_history ?? [growthProgress]
-  const stageName = simulationVisual?.current_stage?.stage_name ?? 'Sprout'
+  const stageName = simulationVisual?.current_stage?.stage_name ?? 'Seedling'
+  const plantName = readablePlantName(simulationVisual?.plant?.name_th)
   const visualState = simulationVisual?.visual_state ?? 'healthy'
   const statusLabel = visualStateLabels[visualState] ?? 'Monitoring'
   const stats = [
@@ -131,41 +177,45 @@ export function PlantMonitorPanel({ windows, setWindows, simulationVisual }) {
   ]
 
   return (
-    <Panel id="monitor" title="Plant monitor" subtitle="growth and status" windows={windows} setWindows={setWindows} className="w-[360px]">
-      <div className="mb-3 flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-md bg-[#9bcf82] text-base font-black text-[#101511]">
-            {stageName.charAt(0)}
-          </span>
-          <div>
-            <strong className="block text-sm text-white">{stageName}</strong>
-            <span className="text-xs text-slate-300">
-              {statusLabel} - {growthProgress.toFixed(1)}% grown
+    <Panel id="monitor" title="Plant monitor" subtitle="growth and status" windows={windows} setWindows={setWindows} className="w-[360px] max-w-[calc(100vw-32px)]">
+      <div className="max-h-[348px] overflow-y-auto pr-1 sm:max-h-none sm:overflow-visible sm:pr-0">
+        <div className="mb-3 flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-md bg-[#9bcf82] text-base font-black text-[#101511]">
+              {plantName.charAt(0)}
             </span>
+            <div>
+              <strong className="block text-sm text-white">{plantName}</strong>
+              <span className="text-xs text-slate-300">
+                {stageName} - {statusLabel} - {growthProgress.toFixed(1)}% grown
+              </span>
+            </div>
           </div>
+          <div className="flex items-center rounded-md bg-[#9bcf82]/12 px-2 py-1 text-xs font-semibold text-lime-100">{pace.label}</div>
         </div>
-        <div className="flex items-center rounded-md bg-[#9bcf82]/12 px-2 py-1 text-xs font-semibold text-lime-100">{pace.label}</div>
-      </div>
 
-      <GrowthTimeline progress={growthProgress} history={growthHistory} pace={pace} rate={growthRate} />
+        <GrowthTimeline progress={growthProgress} history={growthHistory} pace={pace} rate={growthRate} />
 
-      <div className="mt-3 grid gap-2.5 border-t border-lime-100/10 pt-3">
-        {stats.map((stat) => (
-          <IconBar key={stat.label} {...stat} compact />
-        ))}
-      </div>
-
-      <div className="mt-3 border-t border-lime-100/10 pt-3">
-        <div className="mb-2 flex items-center justify-between">
-          <strong className="text-xs text-lime-50">Pest chance</strong>
-          <span className="text-[10px] text-slate-400">next cycle</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {visiblePestChances.map((pest) => (
-            <PestChance key={pest.label} {...pest} />
+        <div className="mt-3 grid gap-2.5 border-t border-lime-100/10 pt-3">
+          {stats.map((stat) => (
+            <IconBar key={stat.label} {...stat} compact />
           ))}
+        </div>
+
+        <div className="mt-3 border-t border-lime-100/10 pt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <strong className="text-xs text-lime-50">Pest chance</strong>
+            <span className="text-[10px] text-slate-400">next cycle</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {visiblePestChances.map((pest) => (
+              <PestChance key={pest.label} {...pest} />
+            ))}
+          </div>
         </div>
       </div>
     </Panel>
   )
 }
+
+

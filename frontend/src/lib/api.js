@@ -110,6 +110,12 @@ export async function acceptFriend(friendshipId) {
   })
 }
 
+export async function deleteFriend(friendshipId) {
+  return apiFetch(`/friends/${friendshipId}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function getFriendLatestSimulator(friendshipId) {
   return apiFetch(`/friends/${friendshipId}/simulator/latest`)
 }
@@ -165,4 +171,5 @@ export async function applySimulatorItem(simulatorId, itemKey, quantity = 1) {
     body: JSON.stringify({ item_key: itemKey, quantity }),
   })
 }
+
 

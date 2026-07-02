@@ -79,7 +79,7 @@ export const climateIcons = {
 
 export const labLibrary = {
   Plants: [
-    { id: 'sprout', name: 'Sprout', detail: 'Early stage', color: '#9bcf82', type: 'plant', icon: 'sprout', imageUrl: imageAssets.plant, planted: true },
+    { id: 'sprout', name: 'ต้นหูช้าง', detail: 'Elephant ear', color: '#9bcf82', type: 'plant', icon: 'sprout', imageUrl: imageAssets.plant, planted: true },
     { id: 'pea', name: 'Pea Shoot', detail: 'Climber', color: '#7fb069', type: 'plant', icon: 'vine', imageUrl: imageAssets.plant, planted: false },
     { id: 'basil', name: 'Basil', detail: 'Herb sample', color: '#b8dea2', type: 'plant', icon: 'leaf', imageUrl: imageAssets.plant, planted: false },
     { id: 'fern', name: 'Fern', detail: 'Shade tolerant', color: '#87b978', type: 'plant', icon: 'fern', imageUrl: imageAssets.plant, planted: true },
@@ -88,7 +88,6 @@ export const labLibrary = {
     { id: 'hand-pick', itemKey: 'hand-pick', name: 'Hand Pick', detail: 'aphid + snail', color: '#9bcf82', type: 'item', icon: 'hand', imageUrl: imageAssets.hand },
     { id: 'insecticide-spray', itemKey: 'insecticide-spray', name: 'Insect Spray', detail: 'clears aphids', color: '#67d5cf', type: 'item', icon: 'hand', imageUrl: imageAssets.insecticide },
     { id: 'antifungal-spray', itemKey: 'antifungal-spray', name: 'Fungus Spray', detail: 'clears fungus', color: '#c48bf2', type: 'item', icon: 'hand', imageUrl: imageAssets.antifungal },
-    { id: 'snail-trap', itemKey: 'snail-trap', name: 'Snail Trap', detail: 'clears snails', color: '#b58a5a', type: 'item', icon: 'hand', imageUrl: imageAssets.hand },
   ],
 }
 
@@ -100,4 +99,6 @@ export const defaultClimate = {
   air: 58,
   temp: 29,
 }
+
+
 

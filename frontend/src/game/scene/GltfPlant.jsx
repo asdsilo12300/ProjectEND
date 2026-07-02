@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+﻿import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useGraph } from '@react-three/fiber'
 import { useAnimations, useGLTF } from '@react-three/drei'
 import { Color, LoopOnce } from 'three'
@@ -35,9 +35,9 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
       const material = plantMaterials[name]
       if (!material) return
 
-      material.color.lerp(targetLeafColor, 0.045)
-      material.emissive?.lerp?.(targetLeafColor, 0.035)
-      material.emissiveIntensity += ((isStressed ? 0.035 : 0) - material.emissiveIntensity) * 0.05
+      material.color.lerp(targetLeafColor, 0.0035)
+      material.emissive?.lerp?.(targetLeafColor, 0.003)
+      material.emissiveIntensity += ((isStressed ? 0.025 : 0) - material.emissiveIntensity) * 0.008
     })
   })
 
@@ -140,3 +140,5 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
 }
 
 useGLTF.preload('/plant.gltf')
+
+

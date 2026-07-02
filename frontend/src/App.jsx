@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { defaultClimate, labLibrary } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
@@ -50,6 +50,18 @@ function wait(ms) {
   })
 }
 
+function outdoorClimateWindow(currentWindows = {}) {
+  const isCompactOutdoor = window.innerWidth < 640
+  const monitorY = Number(currentWindows.monitor?.y ?? defaultWindows.monitor.y)
+  const monitorHeight = isCompactOutdoor ? 430 : 470
+
+  return {
+    x: isCompactOutdoor ? 16 : 258,
+    y: Math.max(76, monitorY + monitorHeight + 6),
+    visible: true,
+    collapsed: false,
+  }
+}
 function ModeLoadingOverlay({ mode }) {
   const label = !mode ? 'saved simulation' : mode === 'outdoor' ? 'outdoor field' : 'greenhouse lab'
 
@@ -300,6 +312,15 @@ function App() {
     }
     setResetPending(false)
     setGrowingMode(restoredMode)
+    if (restoredMode === 'outdoor') {
+      setWindows((value) => ({
+        ...value,
+        climate: {
+          ...value.climate,
+          ...outdoorClimateWindow(value),
+        },
+      }))
+    }
     setModeLoading(false)
     setAppliedAsset(restoredPlant)
     if (simulator.plant) {
@@ -636,9 +657,7 @@ function App() {
         ...value,
         climate: {
           ...value.climate,
-          y: Math.min(value.climate.y, Math.max(76, window.innerHeight - 332)),
-          visible: true,
-          collapsed: false,
+          ...outdoorClimateWindow(value),
         },
       }))
     } else {
@@ -736,11 +755,16 @@ function App() {
           ? climateFromForecast({ ...defaultClimate }, outdoorWeather.forecast)
           : { ...defaultClimate },
       )
+      setGrowingMode(null)
+      setModeLoading(false)
+      setSaveHydrated(true)
+      setOutdoorWeather(initialOutdoorWeather)
       setAppliedAsset(labLibrary.Items[0])
       setSuppressedPests([])
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
-      setActionMessage('Reset complete. Select a plant to start again.')
+      setSelectedPlant(null)
+      setActionMessage('Reset complete. Choose a growing mode.')
       isResettingRef.current = false
     }
   }
@@ -904,7 +928,7 @@ function App() {
               {visitingFriend && (
                 <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
-                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> Ãƒâ€š- view only</span>
+                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> ÃƒÆ’Ã¢â‚¬Å¡- view only</span>
                   <button
                     className="rounded-md border border-lime-100/15 bg-white/[0.055] px-2 py-1 font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                     type="button"
@@ -940,6 +964,9 @@ function App() {
 }
 
 export default App
+
+
+
 
 
 

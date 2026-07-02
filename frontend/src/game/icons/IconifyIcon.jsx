@@ -7,6 +7,7 @@ import CheckIcon from '@iconify-react/material-symbols/check'
 import CompostIcon from '@iconify-react/material-symbols/compost'
 import ConstructionIcon from '@iconify-react/material-symbols/construction'
 import CrownIcon from '@iconify-react/material-symbols/crown'
+import DeleteIcon from '@iconify-react/material-symbols/delete'
 import DeviceThermostatIcon from '@iconify-react/material-symbols/device-thermostat'
 import EcoIcon from '@iconify-react/material-symbols/eco'
 import FavoriteIcon from '@iconify-react/material-symbols/favorite'
@@ -51,6 +52,7 @@ const iconMap = {
   check: CheckIcon,
   controller: StadiaControllerIcon,
   crown: CrownIcon,
+  delete: DeleteIcon,
   drop: WaterDropIcon,
   eco: EcoIcon,
   fern: PsychiatryIcon,
@@ -107,4 +109,5 @@ export function AppIcon({ name, className = '', label, ...props }) {
     />
   )
 }
+
 

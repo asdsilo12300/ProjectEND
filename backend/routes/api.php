@@ -28,7 +28,7 @@ Route::get('/posts', [PostController::class, 'index']);
 Route::get('/model-assets', [ModelAssetController::class, 'index']);
 Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
 
-// Dev-only test upload route (no auth) Ã¢â‚¬â€ only enabled when APP_DEBUG is true
+// Dev-only test upload route (no auth) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only enabled when APP_DEBUG is true
 if (env('APP_DEBUG', false)) {
     Route::post('/dev/upload-model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadTest']);
 }
@@ -39,6 +39,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/users/search', [FriendController::class, 'search']);
     Route::post('/friends/invite', [FriendController::class, 'invite']);
     Route::post('/friends/{friendship}/accept', [FriendController::class, 'accept']);
+    Route::delete('/friends/{friendship}', [FriendController::class, 'destroy']);
     Route::get('/friends/{friendship}/simulator/latest', [FriendController::class, 'latestSimulator']);
 
     Route::get('/simulators', [SimulatorController::class, 'index']);
@@ -71,5 +72,6 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/plants/{plant}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadBaseModel']);
     Route::post('/plants/{plant}/stages/{stage}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadStageModel']);
 });
+
 
 

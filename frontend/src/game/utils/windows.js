@@ -1,4 +1,4 @@
-﻿export function defaultWindows() {
+export function defaultWindows() {
   const width = typeof window === 'undefined' ? 1440 : window.innerWidth
   const height = typeof window === 'undefined' ? 800 : window.innerHeight
   const hasLowerDockSpace = height >= 820
