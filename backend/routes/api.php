@@ -61,6 +61,8 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/achievements', [GameProgressController::class, 'achievements']);
     Route::post('/daily-login', [GameProgressController::class, 'dailyLogin']);
 
+    Route::get('/plant-histories', [PlantHistoryController::class, 'index']);
+    Route::post('/simulators/{simulator}/histories', [PlantHistoryController::class, 'storeForSimulator']);
     Route::post('/plant-histories/{history}/publish', [PlantHistoryController::class, 'publish']);
 
     Route::post('/posts', [PostController::class, 'store']);

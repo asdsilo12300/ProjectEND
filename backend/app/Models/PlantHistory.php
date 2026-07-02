@@ -35,4 +35,9 @@ class PlantHistory extends Model
     {
         return $this->belongsTo(Plant::class);
     }
+
+    public function finalStage(): BelongsTo
+    {
+        return $this->belongsTo(PlantGrowthStage::class, 'final_stage_id');
+    }
 }

@@ -99,13 +99,24 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
       className={`absolute left-0 top-0 z-30 w-[320px] overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511]/92 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.36)] ${className}`}
       style={{ transform: `translate(${current.x}px, ${current.y}px)` }}
     >
-      <header className={`flex h-11 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3 ${canDrag ? 'cursor-grab select-none active:cursor-grabbing' : ''}`} onPointerDown={startDrag}>
+      <header className={`group flex h-11 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3 ${canDrag ? 'cursor-grab select-none active:cursor-grabbing' : ''}`} onPointerDown={startDrag}>
         <span className="h-6 w-1.5 rounded-full bg-[#9bcf82]" />
         <span className="min-w-0 flex-1 leading-none">
           <strong className="block truncate text-sm font-bold text-lime-50">{title}</strong>
           <small className="mt-1 block truncate text-[11px] text-slate-300">{subtitle}</small>
         </span>
         {headerActions && <div className="mr-1 flex items-center gap-1">{headerActions}</div>}
+        {canDrag && (
+          <span
+            className="mr-1 grid h-6 w-6 grid-cols-2 place-items-center gap-x-0.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-1 py-1 text-lime-100/70 transition group-hover:text-lime-100"
+            aria-label={`Drag ${title} panel`}
+            title="Drag to move"
+          >
+            {Array.from({ length: 6 }, (_, index) => (
+              <span key={index} className="h-1 w-1 rounded-full bg-current" />
+            ))}
+          </span>
+        )}
         <button
           type="button"
           className="grid h-6 w-6 place-items-center rounded-md border border-lime-100/15 bg-white/5 text-slate-200 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200"

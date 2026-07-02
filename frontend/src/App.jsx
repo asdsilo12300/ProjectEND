@@ -9,9 +9,11 @@ import { EnvironmentPanel } from './game/panels/EnvironmentPanel'
 import { FriendsPanel } from './game/panels/FriendsPanel'
 import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { SimulationStage } from './game/scene/SimulationStage'
+import { CommunityPage } from './game/community/CommunityPage'
+import { HistoryPage } from './game/history/HistoryPage'
 import { ShopPage } from './game/shop/ShopPage'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem } from './lib/api'
+import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -103,6 +105,8 @@ function App() {
   const autosaveStateRef = useRef({})
   const isResettingRef = useRef(false)
   const ownGardenSnapshotRef = useRef(null)
+  const stageSnapshotRef = useRef(null)
+  const [saveCompleteHistory, setSaveCompleteHistory] = useState(null)
   const [user, setUser] = useState(null)
   const [coinDelta, setCoinDelta] = useState(null)
   const [coinBurst, setCoinBurst] = useState(null)
@@ -708,8 +712,10 @@ function App() {
     }
 
     try {
+      const snapshotImageData = stageSnapshotRef.current?.capture?.() ?? null
       const simulator = await persistCurrentSimulation({ silent: false })
       const nextVisual = simulator ?? previewSimulationVisual
+      const historySimulatorId = simulator?.id ?? simulatorId
 
       window.localStorage.setItem(
         'plantsim-scenario',
@@ -721,13 +727,36 @@ function App() {
           savedAt: new Date().toISOString(),
         }),
       )
+
+      if (historySimulatorId && getToken() && selectedPlant) {
+        const payload = await savePlantHistory(historySimulatorId, { visibility: 'private', snapshot_image_data: snapshotImageData })
+        const history = payload.data ?? payload
+        await finishSimulator(historySimulatorId)
+        window.localStorage.removeItem('plant_game_simulator_id')
+        window.localStorage.removeItem('plantsim-scenario')
+        latestSaveLoadedRef.current = false
+        setResetPending(false)
+        setGrowingMode(null)
+        setModeLoading(false)
+        setSaveHydrated(true)
+        setClimate({ ...defaultClimate })
+        setOutdoorWeather(initialOutdoorWeather)
+        setAppliedAsset(labLibrary.Items[0])
+        setSuppressedPests([])
+        setSimulationVisual(defaultSimulationVisual)
+        setGrowthTrack(initialGrowthTrack)
+        setSelectedPlant(null)
+        setSaveCompleteHistory(history)
+        setActionMessage('Saved to history')
+      } else {
+        setActionMessage('Saved locally')
+      }
+
       setResetPending(false)
-      setActionMessage('Scenario saved')
-    } catch {
-      setActionMessage('Saved locally')
+    } catch (error) {
+      setActionMessage(error.message || 'Unable to save history')
     }
   }
-
   async function resetSimulation() {
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
 
@@ -893,6 +922,33 @@ function App() {
       <div className="soft-grid absolute inset-0 opacity-55" />
 
       <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} onNavigate={setActivePage} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      {saveCompleteHistory && (
+        <div className="absolute inset-0 z-50 grid place-items-center bg-black/45 px-4 backdrop-blur-sm">
+          <div className="animate-[saveModalIn_.24s_ease-out] w-full max-w-[420px] overflow-hidden rounded-xl border border-lime-100/20 bg-[#101511]/96 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.5)]">
+            {saveCompleteHistory.snapshot_image_url && (
+              <img className="h-48 w-full bg-[#080b09] object-cover" src={resolveAssetUrl(saveCompleteHistory.snapshot_image_url)} alt="Saved plant snapshot" />
+            )}
+            <div className="p-5 text-center">
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-[#9bcf82] text-[#101511]">
+                <span className="text-xl font-black">✓</span>
+              </div>
+              <h2 className="text-lg font-black text-lime-50">{`\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e2a\u0e34\u0e49\u0e19`}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{`\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e1b\u0e25\u0e39\u0e01\u0e15\u0e49\u0e19\u0e43\u0e2b\u0e21\u0e48`}</p>
+              <div className="mt-4 rounded-lg border border-lime-100/10 bg-white/[0.04] p-3 text-left text-xs text-slate-300">
+                <div className="flex justify-between gap-3"><span>Score</span><strong className="text-lime-100">{saveCompleteHistory.total_score ?? 0}</strong></div>
+                <div className="mt-1 flex justify-between gap-3"><span>Health</span><strong className="text-lime-100">{saveCompleteHistory.final_health ?? saveCompleteHistory.health ?? 0}%</strong></div>
+              </div>
+              <button
+                className="mt-5 h-9 rounded-md bg-[#9bcf82] px-5 text-sm font-bold text-[#101511] transition hover:bg-[#addf96] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+                type="button"
+                onClick={() => setSaveCompleteHistory(null)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activePage === 'auth' ? (
         <LoginPage
@@ -907,6 +963,10 @@ function App() {
         />
       ) : activePage === 'shop' ? (
         <ShopPage />
+      ) : activePage === 'history' ? (
+        <HistoryPage />
+      ) : activePage === 'community' ? (
+        <CommunityPage />
       ) : (
         <>
           {labReady && (
@@ -923,12 +983,13 @@ function App() {
                 saveSimulation={saveSimulation}
                 sceneAssets={modelAssets}
                 simulationVisual={previewSimulationVisual}
+                snapshotRef={stageSnapshotRef}
               />
 
               {visitingFriend && (
                 <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
-                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> ÃƒÆ’Ã¢â‚¬Å¡- view only</span>
+                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> - view only</span>
                   <button
                     className="rounded-md border border-lime-100/15 bg-white/[0.055] px-2 py-1 font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                     type="button"

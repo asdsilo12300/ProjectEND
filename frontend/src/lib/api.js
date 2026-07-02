@@ -1,4 +1,4 @@
-﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
 const API_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, '')
 
 export function getToken() {
@@ -123,6 +123,21 @@ export async function getLatestSimulator() {
   return apiFetch('/simulators/latest')
 }
 
+export async function getSimulators() {
+  return apiFetch('/simulators')
+}
+
+export async function getPlantHistories(query = '') {
+  const suffix = query ? `?q=${encodeURIComponent(query)}` : ''
+  return apiFetch(`/plant-histories${suffix}`)
+}
+
+export async function savePlantHistory(simulatorId, options = {}) {
+  return apiFetch(`/simulators/${simulatorId}/histories`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}
 export async function startSimulator(plantId, mode = 'greenhouse', options = {}) {
   return apiFetch('/simulators', {
     method: 'POST',

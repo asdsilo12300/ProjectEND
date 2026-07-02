@@ -1,4 +1,4 @@
-﻿import { Component, Suspense } from 'react'
+import { Component, Suspense, useImperativeHandle, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, OrbitControls } from '@react-three/drei'
 import { imageAssets } from '../data/gameData'
@@ -32,7 +32,8 @@ class SceneErrorBoundary extends Component {
   }
 }
 
-export function SimulationStage({ actionMessage, coinBurst = null, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual }) {
+export function SimulationStage({ actionMessage, coinBurst = null, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual, snapshotRef = null }) {
+  const canvasRef = useRef(null)
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
@@ -40,6 +41,19 @@ export function SimulationStage({ actionMessage, coinBurst = null, dropLabAsset,
   const isMature = currentStageNo >= 3 || growthPoint >= 100
   const isPaused = growthRate <= 0 && !isMature
   const growthProgress = Math.min(1, Math.max(0, growthPoint / 100))
+
+  useImperativeHandle(snapshotRef, () => ({
+    capture() {
+      const canvas = canvasRef.current
+      if (!canvas || !plantSelected) return null
+
+      try {
+        return canvas.toDataURL('image/png', 0.92)
+      } catch {
+        return null
+      }
+    },
+  }), [plantSelected])
 
   return (
       <section
@@ -51,7 +65,7 @@ export function SimulationStage({ actionMessage, coinBurst = null, dropLabAsset,
         aria-label="Plant simulation stage"
       >
         <SceneErrorBoundary key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}>
-        <Canvas camera={{ position: [0.75, 0.85, 4.2], fov: 32 }}>
+        <Canvas camera={{ position: [0.75, 0.85, 4.2], fov: 32 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
           <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#080b09']} />
           <ambientLight intensity={0.85} />
           <directionalLight position={[3, 5, 4]} intensity={2.9} color="#d7fff0" />

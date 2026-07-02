@@ -1,4 +1,4 @@
-﻿import { imageAssets, navItems, navTargets } from '../data/gameData'
+import { imageAssets, navItems, navTargets } from '../data/gameData'
 import { AppIcon } from '../icons/IconifyIcon'
 import { NavIcon } from '../icons/NavIcon'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
@@ -31,7 +31,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         <nav className="flex h-16 min-w-0 items-end overflow-x-auto" aria-label="Primary">
           <ul className="flex min-w-max flex-wrap text-center text-sm font-medium text-slate-300">
             {navItems.map((item, index) => {
-              const active = item === 'Shop' ? activePage === 'shop' : activePage === 'lab' && index === 0
+              const active = item === 'Shop' ? activePage === 'shop' : item === 'History' ? activePage === 'history' : item === 'Community' ? activePage === 'community' : activePage === 'lab' && index === 0
 
               return (
                 <li className="me-2" key={item}>
@@ -46,6 +46,14 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                     onClick={() => {
                       if (item === 'Shop') {
                         onNavigate?.('shop')
+                        return
+                      }
+                      if (item === 'History') {
+                        onNavigate?.('history')
+                        return
+                      }
+                      if (item === 'Community') {
+                        onNavigate?.('community')
                         return
                       }
                       onNavigate?.('lab')

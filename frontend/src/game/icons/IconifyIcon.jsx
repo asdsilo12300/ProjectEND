@@ -1,4 +1,10 @@
-﻿import AddIcon from '@iconify-react/material-symbols/add'
+import RepeatIcon from '@iconify-react/material-symbols/repeat'
+import NotificationsIcon from '@iconify-react/material-symbols/notifications'
+import MoreHorizIcon from '@iconify-react/material-symbols/more-horiz'
+import HomeIcon from '@iconify-react/material-symbols/home'
+import ChatBubbleIcon from '@iconify-react/material-symbols/chat-bubble-outline'
+import BookmarkIcon from '@iconify-react/material-symbols/bookmark'
+import AddIcon from '@iconify-react/material-symbols/add'
 import AirIcon from '@iconify-react/material-symbols/air'
 import ArrowForwardIcon from '@iconify-react/material-symbols/arrow-forward-ios'
 import BoltIcon from '@iconify-react/material-symbols/bolt'
@@ -43,6 +49,12 @@ import ThumbUpIcon from '@iconify-react/material-symbols/thumb-up'
 import WaterDropIcon from '@iconify-react/material-symbols/water-drop'
 
 const iconMap = {
+  repeat: RepeatIcon,
+  notifications: NotificationsIcon,
+  more: MoreHorizIcon,
+  home: HomeIcon,
+  chat: ChatBubbleIcon,
+  bookmark: BookmarkIcon,
   add: AddIcon,
   air: AirIcon,
   aphid: BugReportIcon,

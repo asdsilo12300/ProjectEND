@@ -214,11 +214,11 @@ class SimulatorController extends Controller
         abort_unless($simulator->user_id === $request->user()->id, 403);
 
         $simulator->update([
-            'status' => 'ended',
+            'status' => 'completed',
             'ended_at' => now(),
         ]);
 
-        return response()->json(['data' => ['id' => $simulator->id, 'status' => 'ended']]);
+        return response()->json(['data' => ['id' => $simulator->id, 'status' => 'completed']]);
     }
     public function storeLog(Request $request, Simulator $simulator): SimulatorResource
     {
