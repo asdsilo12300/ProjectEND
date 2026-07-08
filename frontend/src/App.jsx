@@ -989,7 +989,7 @@ function App() {
       ) : activePage === 'history' ? (
         <HistoryPage />
       ) : activePage === 'community' ? (
-        <CommunityPage />
+        <CommunityPage currentUser={user} onUserChange={setUser} />
       ) : (
         <>
           {labReady && (

@@ -6,6 +6,7 @@ import ChatBubbleIcon from '@iconify-react/material-symbols/chat-bubble-outline'
 import BookmarkIcon from '@iconify-react/material-symbols/bookmark'
 import AddIcon from '@iconify-react/material-symbols/add'
 import AirIcon from '@iconify-react/material-symbols/air'
+import ArrowBackIcon from '@iconify-react/material-symbols/arrow-back-ios-new'
 import ArrowForwardIcon from '@iconify-react/material-symbols/arrow-forward-ios'
 import BoltIcon from '@iconify-react/material-symbols/bolt'
 import BugReportIcon from '@iconify-react/material-symbols/bug-report'
@@ -30,6 +31,7 @@ import MicrobiologyIcon from '@iconify-react/material-symbols/microbiology'
 import MilitaryTechIcon from '@iconify-react/material-symbols/military-tech'
 import MouseIcon from '@iconify-react/material-symbols/mouse'
 import PestControlIcon from '@iconify-react/material-symbols/pest-control'
+import PhotoCameraIcon from '@iconify-react/material-symbols/photo-camera'
 import PersonIcon from '@iconify-react/material-symbols/person'
 import PrecisionManufacturingIcon from '@iconify-react/material-symbols/precision-manufacturing'
 import PsychiatryIcon from '@iconify-react/material-symbols/psychiatry'
@@ -58,9 +60,11 @@ const iconMap = {
   add: AddIcon,
   air: AirIcon,
   aphid: BugReportIcon,
+  arrowBack: ArrowBackIcon,
   arrowForward: ArrowForwardIcon,
   bolt: BoltIcon,
   bug: BugReportIcon,
+  camera: PhotoCameraIcon,
   check: CheckIcon,
   controller: StadiaControllerIcon,
   crown: CrownIcon,

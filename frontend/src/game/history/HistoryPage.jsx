@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { deletePlantHistory, getPlantHistories, getToken, resolveAssetUrl } from '../../lib/api'
+import { deletePlantHistory, getPlantHistories, getToken, resolveAssetUrl, updatePlantHistoryVisibility } from '../../lib/api'
 import { AppIcon } from '../icons/IconifyIcon'
-
-const fallbackSaves = [
-  { id: 'demo-1', plant: { name_en: 'Elephant Ear' }, final_stage: { stage_name: 'Young Plant' }, created_at: '2026-07-02T14:32:00.000Z', total_score: 88, final_health: 96, duration_days: 3, analysis_result: 'Environment is stable and the plant is growing well.', direction: 'Keep the current care pattern.' },
-  { id: 'demo-2', plant: { name_en: 'Elephant Ear' }, final_stage: { stage_name: 'Sprout' }, created_at: '2026-07-01T09:15:00.000Z', total_score: 64, final_health: 74, duration_days: 2, analysis_result: 'High soil moisture slowed growth.', direction: 'Control moisture before the next cycle.' },
-  { id: 'demo-3', plant: { name_en: 'Elephant Ear' }, final_stage: { stage_name: 'Seedling' }, created_at: '2026-06-30T21:08:00.000Z', total_score: 52, final_health: 61, duration_days: 1, analysis_result: 'Low water caused plant stress.', direction: 'Add a small amount of water.' },
-]
 
 function formatDate(value) {
   if (!value) return 'Not saved yet'
@@ -35,12 +29,11 @@ function saveSubtitle(save) {
   return `${saveStage(save)} - ${days} day${days > 1 ? 's' : ''}`
 }
 
-function PreviewScene({ imageUrl, score = 0, stage }) {
+function PreviewScene({ imageUrl, score = 0 }) {
   if (imageUrl) {
     return (
       <div className="relative h-32 overflow-hidden rounded-t-xl border-b border-[#24335d] bg-[#080b09]">
         <img className="h-full w-full object-cover" src={resolveAssetUrl(imageUrl)} alt="Saved plant snapshot" />
-        <span className="absolute right-3 top-3 rounded-md bg-[#172344]/80 px-2 py-1 text-[10px] font-bold text-slate-200">{stage}</span>
       </div>
     )
   }
@@ -67,20 +60,48 @@ function PreviewScene({ imageUrl, score = 0, stage }) {
         <div className="absolute left-1/2 top-2 h-7 w-11 -translate-x-1/2 -rotate-12 rounded-[70%_20%_70%_20%] bg-[#5ea43f] shadow-[inset_0_0_0_2px_rgba(216,243,201,.24)]" />
         <div className="absolute left-1/2 top-7 h-6 w-10 -translate-x-[80%] rotate-12 rounded-[70%_20%_70%_20%] bg-[#78bd58] shadow-[inset_0_0_0_2px_rgba(216,243,201,.22)]" />
       </div>
-      <span className="absolute right-3 top-3 rounded-md bg-[#172344]/70 px-2 py-1 text-[10px] font-bold text-slate-200">{stage}</span>
     </div>
   )
 }
 
-function SaveCard({ onDelete, onOpen, save }) {
+function ShareToggle({ checked, disabled = false, onChange }) {
+  return (
+    <label
+      className={`inline-flex h-8 items-center rounded-md border px-2 text-[11px] font-bold transition ${
+        checked
+          ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100'
+          : 'border-white/10 bg-black/20 text-slate-300'
+      } ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer hover:bg-white/[0.06]'}`}
+      onClick={(event) => event.stopPropagation()}
+      title={checked ? 'Shared to Community' : 'Private save'}
+    >
+      <AppIcon className={`h-4 w-4 ${checked ? 'text-[#9bcf82]' : 'text-slate-400'}`} name={checked ? 'groups' : 'shield'} />
+      <input
+        type="checkbox"
+        className="sr-only peer"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <div className="relative mx-2 h-5 w-9 rounded-full bg-slate-700/80 transition peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#9bcf82]/35 peer-checked:bg-[#9bcf82]">
+        <span className={`absolute start-[2px] top-[2px] h-4 w-4 rounded-full bg-white transition ${checked ? 'translate-x-full' : ''}`} />
+      </div>
+      <AppIcon className={`h-4 w-4 ${checked ? 'text-[#9bcf82]' : 'text-slate-500'}`} name="groups" />
+      <span className="ml-2">{checked ? 'Shared' : 'Private'}</span>
+    </label>
+  )
+}
+
+function SaveCard({ onDelete, onOpen, onToggleVisibility, save, visibilityBusy = false }) {
   const score = Math.min(100, Math.max(0, Number(save.total_score ?? save.growth_point) || 0))
   const health = Math.min(100, Math.max(0, Number(save.final_health ?? save.health) || 0))
+  const isShared = save.visibility === 'public'
 
   return (
     <article className="group relative overflow-hidden rounded-2xl bg-[#172344] text-left shadow-[0_18px_36px_rgba(0,0,0,.24)] ring-1 ring-[#304066] transition hover:-translate-y-0.5 hover:ring-[#8fbf78]/60">
       <button className="block w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" type="button" onClick={() => onOpen(save)}>
-        <PreviewScene score={score} stage={saveStage(save)} imageUrl={save.snapshot_image_url} />
-        <div className="px-3 py-3">
+        <PreviewScene score={score} imageUrl={save.snapshot_image_url} />
+        <div className="px-3 pb-14 pt-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="truncate text-sm font-black text-slate-100">{saveTitle(save)}</h2>
@@ -94,11 +115,11 @@ function SaveCard({ onDelete, onOpen, save }) {
             </div>
           </div>
           <p className="mt-3 line-clamp-2 min-h-[32px] text-xs leading-4 text-slate-300">{save.analysis_result || 'No analysis recorded yet.'}</p>
-          <p className="mt-1 truncate pr-10 text-[11px] font-semibold text-[#bdeaa5]">{save.direction || 'Continue observing the next cycle.'}</p>
+          <p className="mt-1 truncate text-[11px] font-semibold text-[#bdeaa5]">{save.direction || 'Continue observing the next cycle.'}</p>
         </div>
       </button>
       <button
-        className="absolute bottom-3 right-3 z-20 grid h-8 w-8 place-items-center rounded-md border border-red-200/20 bg-black/35 text-red-100 opacity-75 transition hover:bg-red-500/20 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-200 group-hover:opacity-100"
+        className="absolute right-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-md border border-red-200/30 bg-[#1b1114]/90 text-red-100 transition hover:border-red-200/55 hover:bg-red-500/24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-200"
         type="button"
         onClick={(event) => {
           event.stopPropagation()
@@ -108,6 +129,9 @@ function SaveCard({ onDelete, onOpen, save }) {
       >
         <AppIcon className="h-4 w-4" name="trash" />
       </button>
+      <div className="absolute bottom-3 right-3 z-20">
+        <ShareToggle checked={isShared} disabled={visibilityBusy} onChange={(nextChecked) => onToggleVisibility(save, nextChecked ? 'public' : 'private')} />
+      </div>
     </article>
   )
 }
@@ -180,28 +204,36 @@ function HistoryDetailModal({ onClose, onDelete, save }) {
 }
 
 export function HistoryPage() {
-  const [saves, setSaves] = useState(() => (getToken() ? [] : fallbackSaves))
+  const [saves, setSaves] = useState([])
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('idle')
+  const [errorMessage, setErrorMessage] = useState('')
   const [selectedSave, setSelectedSave] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState('idle')
+  const [visibilityBusyId, setVisibilityBusyId] = useState(null)
   const pageSize = 6
 
   useEffect(() => {
-    if (!getToken()) return undefined
+    if (!getToken()) {
+      return undefined
+    }
 
     let cancelled = false
 
     async function loadSaves() {
       setStatus('loading')
+      setErrorMessage('')
       try {
         const payload = await getPlantHistories()
         if (cancelled) return
         setSaves(payload.data ?? [])
       } catch {
-        if (!cancelled) setSaves(fallbackSaves)
+        if (!cancelled) {
+          setSaves([])
+          setErrorMessage('Could not load your save history.')
+        }
       } finally {
         if (!cancelled) setStatus('idle')
       }
@@ -229,7 +261,7 @@ export function HistoryPage() {
 
     setDeleteStatus('deleting')
     try {
-      if (getToken() && !String(deleteTarget.id).startsWith('demo-')) {
+      if (getToken()) {
         await deletePlantHistory(deleteTarget.id)
       }
       setSaves((current) => current.filter((save) => save.id !== deleteTarget.id))
@@ -237,6 +269,28 @@ export function HistoryPage() {
       setDeleteTarget(null)
     } finally {
       setDeleteStatus('idle')
+    }
+  }
+
+  async function toggleVisibility(save, visibility) {
+    const previousVisibility = save.visibility ?? 'private'
+
+    setVisibilityBusyId(save.id)
+    setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, visibility } : item)))
+    setSelectedSave((current) => (current?.id === save.id ? { ...current, visibility } : current))
+
+    try {
+      if (getToken()) {
+        const payload = await updatePlantHistoryVisibility(save.id, visibility)
+        const updated = payload.data ?? payload
+        setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, ...updated } : item)))
+        setSelectedSave((current) => (current?.id === save.id ? { ...current, ...updated } : current))
+      }
+    } catch {
+      setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, visibility: previousVisibility } : item)))
+      setSelectedSave((current) => (current?.id === save.id ? { ...current, visibility: previousVisibility } : current))
+    } finally {
+      setVisibilityBusyId(null)
     }
   }
 
@@ -266,11 +320,20 @@ export function HistoryPage() {
         ) : visibleSaves.length ? (
           <div className="grid grid-cols-3 gap-x-6 gap-y-8 max-lg:grid-cols-2 max-sm:grid-cols-1">
             {visibleSaves.map((save) => (
-              <SaveCard key={save.id} save={save} onDelete={setDeleteTarget} onOpen={setSelectedSave} />
+              <SaveCard
+                key={save.id}
+                save={save}
+                visibilityBusy={visibilityBusyId === save.id}
+                onDelete={setDeleteTarget}
+                onOpen={setSelectedSave}
+                onToggleVisibility={toggleVisibility}
+              />
             ))}
           </div>
         ) : (
-          <div className="grid min-h-[420px] place-items-center rounded-2xl border border-white/10 bg-white/[0.03] text-sm text-slate-300">No saved simulations found.</div>
+          <div className="grid min-h-[420px] place-items-center rounded-2xl border border-white/10 bg-white/[0.03] px-6 text-center text-sm text-slate-300">
+            {errorMessage || (getToken() ? 'No saved simulations found.' : 'Log in to view your saved plant history.')}
+          </div>
         )}
 
         <div className="mt-10 flex justify-center gap-2">

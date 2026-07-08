@@ -89,6 +89,39 @@ export async function getMe() {
   return apiFetch('/me')
 }
 
+export async function updateMe(profile) {
+  const token = getToken()
+  const form = new FormData()
+  form.append('username', profile.username ?? '')
+  form.append('bio', profile.bio ?? '')
+
+  if (profile.avatar instanceof File) {
+    form.append('avatar', profile.avatar)
+  }
+
+  if (profile.cover instanceof File) {
+    form.append('cover', profile.cover)
+  }
+
+  const response = await fetch(`${API_BASE_URL}/me/profile`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
+    throw new Error(validationMessage || payload.message || 'Could not update profile')
+  }
+
+  return payload
+}
+
 export async function getFriends() {
   return apiFetch('/friends')
 }
@@ -132,6 +165,60 @@ export async function getPlantHistories(query = '') {
   return apiFetch(`/plant-histories${suffix}`)
 }
 
+export async function getPosts() {
+  return apiFetch('/posts')
+}
+
+export async function getFriendPosts() {
+  return apiFetch('/posts/friends')
+}
+
+export async function getCommunityLeaderboard() {
+  return apiFetch('/community/leaderboard')
+}
+
+export async function getPostComments(postId) {
+  return apiFetch(`/posts/${postId}/comments`)
+}
+
+export async function createPostComment(postId, commentText) {
+  return apiFetch(`/posts/${postId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ comment_text: commentText }),
+  })
+}
+
+export async function createPostCommentReply(postId, commentId, commentText) {
+  return apiFetch(`/posts/${postId}/comments/${commentId}/replies`, {
+    method: 'POST',
+    body: JSON.stringify({ comment_text: commentText }),
+  })
+}
+
+export async function likePostComment(postId, commentId) {
+  return apiFetch(`/posts/${postId}/comments/${commentId}/likes`, {
+    method: 'POST',
+  })
+}
+
+export async function unlikePostComment(postId, commentId) {
+  return apiFetch(`/posts/${postId}/comments/${commentId}/likes`, {
+    method: 'DELETE',
+  })
+}
+
+export async function likePost(postId) {
+  return apiFetch(`/posts/${postId}/likes`, {
+    method: 'POST',
+  })
+}
+
+export async function unlikePost(postId) {
+  return apiFetch(`/posts/${postId}/likes`, {
+    method: 'DELETE',
+  })
+}
+
 export async function savePlantHistory(simulatorId, options = {}) {
   return apiFetch(`/simulators/${simulatorId}/histories`, {
     method: 'POST',
@@ -141,6 +228,12 @@ export async function savePlantHistory(simulatorId, options = {}) {
 export async function deletePlantHistory(historyId) {
   return apiFetch(`/plant-histories/${historyId}`, {
     method: 'DELETE',
+  })
+}
+export async function updatePlantHistoryVisibility(historyId, visibility) {
+  return apiFetch(`/plant-histories/${historyId}/visibility`, {
+    method: 'POST',
+    body: JSON.stringify({ visibility }),
   })
 }
 export async function startSimulator(plantId, mode = 'greenhouse', options = {}) {

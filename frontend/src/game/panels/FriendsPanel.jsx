@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Panel } from '../components/Panel'
 import { AppIcon } from '../icons/IconifyIcon'
-import { acceptFriend, deleteFriend, getFriends, getToken, inviteFriend, searchUsers } from '../../lib/api'
+import { acceptFriend, deleteFriend, getFriends, getToken, inviteFriend, resolveAssetUrl, searchUsers } from '../../lib/api'
 
 function avatarLabel(user) {
   return (user?.username ?? user?.email ?? '?').slice(0, 1).toUpperCase()
@@ -14,7 +14,7 @@ function displayName(user) {
 function FriendAvatar({ user, presence, request = false }) {
   return (
     <span className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#9bcf82] text-xs font-black text-[#101511]">
-      {user?.avatar_url ? <img className="h-full w-full rounded-full object-cover" src={user.avatar_url} alt="" /> : avatarLabel(user)}
+      {user?.avatar_url ? <img className="h-full w-full rounded-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" /> : avatarLabel(user)}
       <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-[#101511] ${request ? 'bg-red-400' : presence === 'online' ? 'bg-[#9bcf82]' : 'bg-red-400'}`} />
     </span>
   )

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Friendship;
 use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -66,6 +69,47 @@ class AuthController extends Controller
         return response()->json(['data' => $this->userPayload($request->user())]);
     }
 
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $data = $request->validate([
+            'username' => ['required', 'string', 'max:80', Rule::unique('users', 'username')->ignore($user->id)],
+            'bio' => ['nullable', 'string', 'max:500'],
+            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ]);
+
+        $avatarUrl = $user->avatar_url;
+        $coverUrl = $user->cover_url;
+
+        if ($request->hasFile('avatar')) {
+            if ($avatarUrl && str_starts_with($avatarUrl, '/storage/profile-avatars/')) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $avatarUrl));
+            }
+
+            $path = $request->file('avatar')->store('profile-avatars', 'public');
+            $avatarUrl = Storage::url($path);
+        }
+
+        if ($request->hasFile('cover')) {
+            if ($coverUrl && str_starts_with($coverUrl, '/storage/profile-covers/')) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $coverUrl));
+            }
+
+            $path = $request->file('cover')->store('profile-covers', 'public');
+            $coverUrl = Storage::url($path);
+        }
+
+        $user->forceFill([
+            'username' => $data['username'],
+            'bio' => $data['bio'] ?? null,
+            'avatar_url' => $avatarUrl,
+            'cover_url' => $coverUrl,
+        ])->save();
+
+        return response()->json(['data' => $this->userPayload($user->fresh())]);
+    }
+
     private function userPayload(User $user): array
     {
         return [
@@ -73,13 +117,30 @@ class AuthController extends Controller
             'username' => $user->username,
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
+            'cover_url' => $user->cover_url,
+            'bio' => $user->bio,
             'role' => $user->role,
             'level' => $user->level,
             'experience' => $user->experience,
             'level_progress' => $user->levelProgress(),
+            'friends_count' => $this->acceptedFriendsCount($user),
+            'plant_histories_count' => $user->plantHistories()->count(),
+            'plants_count' => $user->plantHistories()->count(),
             'coin' => $user->coin,
             'gem' => $user->gem,
             'status' => $user->status,
         ];
+    }
+
+    private function acceptedFriendsCount(User $user): int
+    {
+        return Friendship::query()
+            ->where('status', 'accepted')
+            ->where(function ($query) use ($user): void {
+                $query
+                    ->where('requester_id', $user->id)
+                    ->orWhere('addressee_id', $user->id);
+            })
+            ->count();
     }
 }

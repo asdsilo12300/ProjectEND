@@ -2,6 +2,21 @@ import { imageAssets, navItems, navTargets } from '../data/gameData'
 import { AppIcon } from '../icons/IconifyIcon'
 import { NavIcon } from '../icons/NavIcon'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
+import { resolveAssetUrl } from '../../lib/api'
+
+function ProfileAvatar({ user, initial, size = 'sm' }) {
+  const sizeClass = size === 'md' ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-sm'
+
+  return (
+    <span className={`${sizeClass} grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#9bcf82] font-black text-[#101511]`}>
+      {user?.avatar_url ? (
+        <img className="h-full w-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" />
+      ) : user ? initial : (
+        <AppIcon className="h-4 w-4" name="profile" />
+      )}
+    </span>
+  )
+}
 
 function nextLevelExperience(level) {
   const currentLevel = Math.max(1, Number(level) || 1)
@@ -99,7 +114,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           aria-expanded={user ? profileOpen : undefined}
           onClick={handleProfileClick}
         >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#9bcf82] text-sm font-black text-[#101511]">{user ? initial : <AppIcon className="h-4 w-4" name="profile" />}</span>
+          <ProfileAvatar user={user} initial={initial} />
           <span className="hidden leading-none sm:block">
             <strong className="block text-xs text-lime-50">{user ? `${displayName} Lv.${learnerLevel}` : 'Sign in'}</strong>
             <small className="mt-1 block text-[10px] text-slate-400">{user ? 'Student profile' : 'Login or create account'}</small>
@@ -110,8 +125,13 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         {profileOpen && user && (
           <div className="absolute right-0 top-12 z-[70] w-64 overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511] shadow-[0_12px_28px_rgba(0,0,0,.38)]" role="menu">
             <div className="border-b border-lime-100/10 px-3 py-3">
-              <strong className="block truncate text-sm text-lime-50">{displayName} Lv.{learnerLevel}</strong>
-              <span className="truncate text-[11px] text-slate-400">{user.email}</span>
+              <div className="mb-3 flex items-center gap-3">
+                <ProfileAvatar user={user} initial={initial} size="md" />
+                <div className="min-w-0">
+                  <strong className="block truncate text-sm text-lime-50">{displayName} Lv.{learnerLevel}</strong>
+                  <span className="truncate text-[11px] text-slate-400">{user.email}</span>
+                </div>
+              </div>
               <div className="mt-3 rounded-md border border-cyan-200/10 bg-[#0b1020]/65 px-2.5 py-2 shadow-[inset_0_0_18px_rgba(0,214,255,.08)]">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <span className="font-mono text-[13px] font-black tabular-nums text-cyan-300">{learnerExpPercent.toFixed(0)}%</span>

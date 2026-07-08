@@ -100,14 +100,53 @@ class PlantHistoryController extends Controller
 
         $history->update(['visibility' => $data['visibility'] ?? 'public']);
 
-        $post = Post::query()->create([
-            'user_id' => $request->user()->id,
-            'plant_history_id' => $history->id,
-            'caption' => $data['caption'] ?? null,
-            'visibility' => $data['visibility'] ?? 'public',
-        ]);
+        $post = Post::query()->updateOrCreate(
+            [
+                'user_id' => $request->user()->id,
+                'plant_history_id' => $history->id,
+            ],
+            [
+                'caption' => $data['caption'] ?? $history->analysis_result,
+                'visibility' => $data['visibility'] ?? 'public',
+            ],
+        );
 
         return response()->json(['data' => $post], 201);
+    }
+
+    public function updateVisibility(Request $request, PlantHistory $history): JsonResponse
+    {
+        abort_unless($history->user_id === $request->user()->id, 403);
+
+        $data = $request->validate([
+            'visibility' => ['required', Rule::in(['private', 'friends', 'public'])],
+            'caption' => ['nullable', 'string'],
+        ]);
+
+        $visibility = $data['visibility'];
+        $history->update(['visibility' => $visibility]);
+
+        if ($visibility === 'private') {
+            Post::query()
+                ->where('user_id', $request->user()->id)
+                ->where('plant_history_id', $history->id)
+                ->update(['visibility' => 'private']);
+        } else {
+            Post::query()->updateOrCreate(
+                [
+                    'user_id' => $request->user()->id,
+                    'plant_history_id' => $history->id,
+                ],
+                [
+                    'caption' => $data['caption'] ?? $history->analysis_result,
+                    'visibility' => $visibility,
+                ],
+            );
+        }
+
+        return response()->json([
+            'data' => new PlantHistoryResource($history->fresh(['plant.stages', 'finalStage'])),
+        ]);
     }
 
     private function storeSnapshotImage(?string $imageData, int $simulatorId): ?string

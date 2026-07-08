@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\GameProgressController;
@@ -28,19 +29,23 @@ Route::get('/posts', [PostController::class, 'index']);
 Route::get('/model-assets', [ModelAssetController::class, 'index']);
 Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
 
-// Dev-only test upload route (no auth) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only enabled when APP_DEBUG is true
+// Dev-only test upload route (no auth) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â only enabled when APP_DEBUG is true
 if (env('APP_DEBUG', false)) {
     Route::post('/dev/upload-model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadTest']);
 }
 
 Route::middleware('jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
+    Route::patch('/me', [AuthController::class, 'updateProfile']);
+    Route::post('/me/profile', [AuthController::class, 'updateProfile']);
     Route::get('/friends', [FriendController::class, 'index']);
     Route::get('/users/search', [FriendController::class, 'search']);
     Route::post('/friends/invite', [FriendController::class, 'invite']);
     Route::post('/friends/{friendship}/accept', [FriendController::class, 'accept']);
     Route::delete('/friends/{friendship}', [FriendController::class, 'destroy']);
     Route::get('/friends/{friendship}/simulator/latest', [FriendController::class, 'latestSimulator']);
+    Route::get('/posts/friends', [PostController::class, 'friends']);
+    Route::get('/community/leaderboard', [CommunityController::class, 'leaderboard']);
 
     Route::get('/simulators', [SimulatorController::class, 'index']);
     Route::get('/simulators/latest', [SimulatorController::class, 'latest']);
@@ -63,11 +68,16 @@ Route::middleware('jwt')->group(function (): void {
 
     Route::get('/plant-histories', [PlantHistoryController::class, 'index']);
     Route::post('/simulators/{simulator}/histories', [PlantHistoryController::class, 'storeForSimulator']);
+    Route::post('/plant-histories/{history}/visibility', [PlantHistoryController::class, 'updateVisibility']);
     Route::post('/plant-histories/{history}/publish', [PlantHistoryController::class, 'publish']);
     Route::delete('/plant-histories/{history}', [PlantHistoryController::class, 'destroy']);
 
     Route::post('/posts', [PostController::class, 'store']);
+    Route::get('/posts/{post}/comments', [PostController::class, 'comments']);
     Route::post('/posts/{post}/comments', [PostController::class, 'comment']);
+    Route::post('/posts/{post}/comments/{comment}/replies', [PostController::class, 'reply']);
+    Route::post('/posts/{post}/comments/{comment}/likes', [PostController::class, 'likeComment']);
+    Route::delete('/posts/{post}/comments/{comment}/likes', [PostController::class, 'unlikeComment']);
     Route::post('/posts/{post}/likes', [PostController::class, 'like']);
     Route::delete('/posts/{post}/likes', [PostController::class, 'unlike']);
 
@@ -75,6 +85,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/plants/{plant}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadBaseModel']);
     Route::post('/plants/{plant}/stages/{stage}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadStageModel']);
 });
+
 
 
 

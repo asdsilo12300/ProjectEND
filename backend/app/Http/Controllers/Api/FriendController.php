@@ -196,11 +196,30 @@ class FriendController extends Controller
             'username' => $user->username,
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
+            'cover_url' => $user->cover_url,
+            'bio' => $user->bio,
             'role' => $user->role,
             'level' => $user->level,
+            'experience' => $user->experience,
+            'level_progress' => $user->levelProgress(),
+            'friends_count' => $this->acceptedFriendsCount($user),
+            'plant_histories_count' => $user->plantHistories()->count(),
+            'plants_count' => $user->plantHistories()->count(),
             'presence' => $this->presence($user),
             'friendship_status' => $friendshipStatus,
         ];
+    }
+
+    private function acceptedFriendsCount(User $user): int
+    {
+        return Friendship::query()
+            ->where('status', 'accepted')
+            ->where(function ($query) use ($user): void {
+                $query
+                    ->where('requester_id', $user->id)
+                    ->orWhere('addressee_id', $user->id);
+            })
+            ->count();
     }
 
     private function presence(User $user): string
