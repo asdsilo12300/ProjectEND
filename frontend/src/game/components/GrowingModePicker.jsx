@@ -3,7 +3,7 @@
 const modeOptions = [
   {
     id: 'greenhouse',
-    title: 'Greenhouse',
+    title: 'Environment Control Mode',
     subtitle: 'Full lab controls',
     detail: 'Tune water, light, fertilizer, soil, air, and temperature inside the controlled simulator.',
     icon: 'plant',

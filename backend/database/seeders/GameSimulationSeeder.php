@@ -9,6 +9,8 @@ use App\Models\PlantConditionRule;
 use App\Models\PlantGrowthStage;
 use App\Models\PlantVisualVariant;
 use App\Models\ModelAsset;
+use App\Models\Item;
+use App\Models\ShopItem;
 use Illuminate\Database\Seeder;
 
 class GameSimulationSeeder extends Seeder
@@ -18,7 +20,7 @@ class GameSimulationSeeder extends Seeder
         $plant = Plant::query()->updateOrCreate(
             ['name_en' => 'Simulation Sprout'],
             [
-                'name_th' => 'ต้นหูช้าง',
+                'name_th' => 'Ã Â¸â€¢Ã Â¹â€°Ã Â¸â„¢Ã Â¸Â«Ã Â¸Â¹Ã Â¸Å Ã Â¹â€°Ã Â¸Â²Ã Â¸â€¡',
                 'name_en' => 'Simulation Sprout',
                 'description' => 'Starter plant for learning how environment factors affect growth and visual state.',
                 'base_image_url' => null,
@@ -89,9 +91,9 @@ class GameSimulationSeeder extends Seeder
         }
 
         $pests = [
-            ['name_th' => 'เพลี้ย', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'base_chance' => 0, 'damage_per_turn' => 5, 'behavior' => 'More likely in dry and hot air.'],
-            ['name_th' => 'หอยทาก', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'base_chance' => 0, 'damage_per_turn' => 6, 'behavior' => 'More likely when soil is wet or rain is present.'],
-            ['name_th' => 'เชื้อรา', 'name_en' => 'fungus', 'model_url' => null, 'base_chance' => 0, 'damage_per_turn' => 7, 'behavior' => 'More likely with high humidity and wet soil.'],
+            ['name_th' => 'Ã Â¹â‚¬Ã Â¸Å¾Ã Â¸Â¥Ã Â¸ÂµÃ Â¹â€°Ã Â¸Â¢', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'base_chance' => 0, 'damage_per_turn' => 5, 'behavior' => 'More likely in dry and hot air.'],
+            ['name_th' => 'Ã Â¸Â«Ã Â¸Â­Ã Â¸Â¢Ã Â¸â€”Ã Â¸Â²Ã Â¸Â', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'base_chance' => 0, 'damage_per_turn' => 6, 'behavior' => 'More likely when soil is wet or rain is present.'],
+            ['name_th' => 'Ã Â¹â‚¬Ã Â¸Å Ã Â¸Â·Ã Â¹â€°Ã Â¸Â­Ã Â¸Â£Ã Â¸Â²', 'name_en' => 'fungus', 'model_url' => null, 'base_chance' => 0, 'damage_per_turn' => 7, 'behavior' => 'More likely with high humidity and wet soil.'],
         ];
 
         foreach ($pests as $pestData) {
@@ -131,6 +133,77 @@ class GameSimulationSeeder extends Seeder
                 ]
             );
         }
+        $items = [
+            [
+                'name' => 'Hand Pick',
+                'type' => 'pesticide',
+                'description' => 'Manual removal. Aphid success 40%, snail success 80%. Does not consume inventory.',
+                'image_url' => '/storage/icon%20picture/hand-Photoroom.png',
+                'effect_type' => 'manual_pest_control:aphid,snail',
+                'effect_value' => 0,
+                'rarity' => 'common',
+                'is_active' => true,
+                'price_coin' => null,
+            ],
+            [
+                'name' => 'Insect Spray',
+                'type' => 'pesticide',
+                'description' => 'Clears aphids with 100% success.',
+                'image_url' => '/storage/icon%20picture/Insecticide%20spray-Photoroom.png',
+                'effect_type' => 'pest_control:aphid',
+                'effect_value' => 100,
+                'rarity' => 'common',
+                'is_active' => true,
+                'price_coin' => 50,
+            ],
+            [
+                'name' => 'Snail Spray',
+                'type' => 'pesticide',
+                'description' => 'Clears snails with 100% success.',
+                'image_url' => '/storage/icon%20picture/snail%20spray.png',
+                'effect_type' => 'pest_control:snail',
+                'effect_value' => 100,
+                'rarity' => 'common',
+                'is_active' => true,
+                'price_coin' => 25,
+            ],
+            [
+                'name' => 'Fungus Spray',
+                'type' => 'pesticide',
+                'description' => 'Clears fungus with 100% success.',
+                'image_url' => '/storage/icon%20picture/Antifungal%20spray-Photoroom.png',
+                'effect_type' => 'pest_control:fungus',
+                'effect_value' => 100,
+                'rarity' => 'common',
+                'is_active' => true,
+                'price_coin' => 50,
+            ],
+        ];
+
+        foreach ($items as $itemData) {
+            $priceCoin = $itemData['price_coin'];
+            unset($itemData['price_coin']);
+
+            $item = Item::query()->updateOrCreate(
+                ['name' => $itemData['name']],
+                $itemData,
+            );
+
+            if ($priceCoin !== null) {
+                ShopItem::query()->updateOrCreate(
+                    ['item_id' => $item->id],
+                    [
+                        'price_coin' => $priceCoin,
+                        'price_gem' => 0,
+                        'stock_limit' => null,
+                        'is_active' => true,
+                        'starts_at' => null,
+                        'ends_at' => null,
+                    ],
+                );
+            }
+        }
+
 
         $assets = [
             ['asset_key' => 'plant.original', 'label' => 'Original plant model', 'type' => 'plant', 'url' => 'models/plant.gltf'],

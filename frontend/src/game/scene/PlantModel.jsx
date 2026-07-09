@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef } from 'react'
 import { Html, useAnimations, useGLTF } from '@react-three/drei'
 import { Box3, Color, DoubleSide, Vector3 } from 'three'
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { resolveAssetUrl } from '../../lib/api'
 import { GltfPlant } from './GltfPlant'
 
@@ -90,20 +91,24 @@ export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isM
 
 const pestAnchors = {
   aphid: [
-    { position: [0.02, 1.34, 0.08], rotation: [0.2, -0.45, 0.15], size: 0.007 },
-    { position: [-0.18, 1.04, -0.06], rotation: [0.12, 0.85, -0.12], size: 0.0065 },
-    { position: [0.16, 0.72, 0.1], rotation: [0.18, -0.1, 0.2], size: 0.006 },
+    { position: [0.24, 1.88, 0.34], rotation: [-0.34, -0.38, 0.08], size: 0.046, modelRotation: [0, 0, 0], modelOffset: [0, -0.035, 0] },
+    { position: [-0.18, 1.74, 0.36], rotation: [-0.30, 0.46, -0.08], size: 0.044, modelRotation: [0, 0, 0], modelOffset: [0, -0.034, 0] },
+    { position: [0.38, 2.04, 0.30], rotation: [-0.38, -0.62, 0.06], size: 0.044, modelRotation: [0, 0, 0], modelOffset: [0, -0.034, 0] },
+    { position: [-0.30, 2.02, 0.30], rotation: [-0.34, 0.70, -0.06], size: 0.042, modelRotation: [0, 0, 0], modelOffset: [0, -0.032, 0] },
+    { position: [0.08, 2.22, 0.26], rotation: [-0.42, -0.04, 0.08], size: 0.04, modelRotation: [0, 0, 0], modelOffset: [0, -0.03, 0] },
   ],
   snail: [
-    { position: [0.2, 0.84, 0.1], rotation: [0.1, 0.7, -0.1], size: 0.038 },
-    { position: [-0.16, 0.52, -0.08], rotation: [0.12, -0.55, 0.08], size: 0.034 },
-    { position: [0.05, 0.18, 0.12], rotation: [0, 0.25, 0], size: 0.04 },
+    { position: [0.18, 1.20, 0.22], rotation: [-0.16, 0.58, 0.02], size: 0.08, modelRotation: [0, 0, 0], modelOffset: [0, -0.025, 0] },
+    { position: [-0.16, 1.38, 0.18], rotation: [-0.14, -0.46, -0.04], size: 0.074, modelRotation: [0, 0, 0], modelOffset: [0, -0.024, 0] },
+    { position: [0.08, 1.60, 0.20], rotation: [-0.14, 0.12, 0.04], size: 0.072, modelRotation: [0, 0, 0], modelOffset: [0, -0.023, 0] },
   ],
   fungus: [
-    { position: [0.12, 0.72, -0.04], rotation: [0.05, 0.25, 0.1], scale: 0.08 },
-    { position: [-0.08, 0.38, 0.08], rotation: [-0.1, -0.2, 0], scale: 0.07 },
+    { position: [0.16, 2.28, 0.1], rotation: [-0.26, 0.25, 0.1], scale: 0.055 },
+    { position: [-0.12, 1.84, 0.08], rotation: [-0.2, -0.2, 0], scale: 0.052 },
+    { position: [0.0, 1.48, 0.04], rotation: [-0.08, 0.18, 0.04], scale: 0.05 },
   ],
 }
+
 
 function stableIndex(seed, length) {
   const text = String(seed ?? '')
@@ -122,28 +127,59 @@ function getPestAnchor(name, index, id) {
   return anchors[stableIndex(`${name}-${id ?? index}`, anchors.length)]
 }
 
+function getVisiblePestAnchors(name, riskChance = 0, seed = '') {
+  const anchors = pestAnchors[name] ?? pestAnchors.fungus
+  const risk = Number(riskChance) || 0
+  const count = risk >= 75 ? 3 : risk >= 45 ? 2 : 1
+  const start = stableIndex(`${name}-${seed}-${Math.round(risk)}`, anchors.length)
+
+  return Array.from({ length: Math.min(count, anchors.length) }, (_, index) => anchors[(start + index) % anchors.length])
+}
+
+function normalizePestName(pest) {
+  const rawName = String(
+    pest?.pest?.name_en
+      ?? pest?.name_en
+      ?? pest?.pest?.type
+      ?? pest?.type
+      ?? pest?.pest_type
+      ?? pest?.pest?.name
+      ?? pest?.name
+      ?? 'fungus',
+  ).toLowerCase()
+
+  if (rawName.includes('aphid') || rawName.includes('เพลี้ย')) return 'aphid'
+  if (rawName.includes('snail') || rawName.includes('หอย')) return 'snail'
+  if (rawName.includes('fungus') || rawName.includes('เชื้อ')) return 'fungus'
+
+  return rawName
+}
+
+function pestModelUrl(name, pest) {
+  if (name === 'aphid') return '/aphid.gltf'
+  if (name === 'snail') return '/snails.gltf'
+  return resolveAssetUrl(pest?.pest?.model_url ?? pest?.model_url)
+}
+
 export function PestModel({ pest, index = 0 }) {
-  const name = String(pest?.pest?.name_en ?? 'fungus').toLowerCase()
-  const anchor = getPestAnchor(name, index, pest?.id)
-
-  if (name === 'aphid') {
-    return <AphidPlaceholder anchor={anchor} />
-  }
-
-  const localModelUrl = name === 'snail' ? '/snails.gltf' : null
-  const modelUrl = localModelUrl ?? resolveAssetUrl(pest?.pest?.model_url)
+  const name = normalizePestName(pest)
+  const modelUrl = pestModelUrl(name, pest)
+  const risk = Number(pest?.risk_chance) || 0
+  const randomSeed = `${name}-${index}-${pest?.id ?? ''}-${Math.round(risk)}-${pest?.updated_at ?? pest?.created_at ?? ''}`
 
   if (!modelUrl) {
+    const anchor = getPestAnchor(name, index, randomSeed)
     return <FungusPlaceholder anchor={anchor} />
   }
 
-  return <LoadedPest modelUrl={modelUrl} anchor={anchor} />
+  return getVisiblePestAnchors(name, risk, randomSeed).map((anchor, anchorIndex) => (
+    <LoadedPest key={`${name}-${index}-${anchorIndex}-${randomSeed}`} modelUrl={modelUrl} anchor={anchor} />
+  ))
 }
-
 function LoadedPest({ modelUrl, anchor }) {
   const { scene } = useGLTF(modelUrl)
   const normalizedAsset = useMemo(() => {
-    const clone = scene.clone(true)
+    const clone = cloneSkeleton(scene)
     const box = new Box3().setFromObject(clone)
     const size = new Vector3()
     const center = new Vector3()
@@ -163,54 +199,26 @@ function LoadedPest({ modelUrl, anchor }) {
     })
 
     const maxDimension = Math.max(size.x, size.y, size.z) || 1
-    const targetSize = anchor.size ?? 0.038
+    const targetSize = anchor.size ?? 0.12
     const scale = targetSize / maxDimension
-    clone.position.copy(center.multiplyScalar(-1))
+    clone.position.set(-center.x * scale, -center.y * scale, -center.z * scale)
     clone.scale.setScalar(scale)
     clone.updateMatrixWorld(true)
 
-    return {
-      scene: clone,
-    }
+    return { scene: clone }
   }, [anchor.size, scene])
 
   return (
     <group position={PLANT_ORIGIN}>
       <group position={anchor.position} rotation={anchor.rotation}>
-        <primitive object={normalizedAsset.scene} />
+        <group position={anchor.modelOffset ?? [0, 0, 0]} rotation={anchor.modelRotation ?? [0, 0, 0]}>
+          <primitive object={normalizedAsset.scene} />
+        </group>
       </group>
     </group>
   )
 }
 
-function AphidPlaceholder({ anchor }) {
-  return (
-    <group position={PLANT_ORIGIN}>
-      <group position={anchor.position} rotation={anchor.rotation} scale={anchor.size ?? 0.007}>
-        <mesh position={[0, 0.018, 0]} scale={[1.55, 0.78, 0.95]}>
-          <sphereGeometry args={[1, 18, 12]} />
-          <meshStandardMaterial color="#6f8f35" roughness={0.72} metalness={0.03} />
-        </mesh>
-        <mesh position={[1.15, 0.02, 0]} scale={[0.78, 0.58, 0.68]}>
-          <sphereGeometry args={[1, 16, 10]} />
-          <meshStandardMaterial color="#85a944" roughness={0.7} />
-        </mesh>
-        {[-0.62, 0, 0.62].map((x) => (
-          <group key={x} position={[x, -0.02, 0]}>
-            <mesh position={[0, 0, 0.85]} rotation={[0.9, 0, 0.38]} scale={[0.12, 0.12, 0.86]}>
-              <capsuleGeometry args={[0.22, 1.05, 5, 8]} />
-              <meshStandardMaterial color="#5f7f2c" roughness={0.78} />
-            </mesh>
-            <mesh position={[0, 0, -0.85]} rotation={[-0.9, 0, -0.38]} scale={[0.12, 0.12, 0.86]}>
-              <capsuleGeometry args={[0.22, 1.05, 5, 8]} />
-              <meshStandardMaterial color="#5f7f2c" roughness={0.78} />
-            </mesh>
-          </group>
-        ))}
-      </group>
-    </group>
-  )
-}
 function FungusPlaceholder({ anchor }) {
   return (
     <group position={PLANT_ORIGIN}>
@@ -243,7 +251,12 @@ export function Loading() {
 }
 
 useGLTF.preload('/plant.gltf')
+useGLTF.preload('/aphid.gltf')
 useGLTF.preload('/snails.gltf')
+
+
+
+
 
 
 

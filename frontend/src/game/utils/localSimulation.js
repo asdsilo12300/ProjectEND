@@ -43,9 +43,6 @@ function clampChance(value) {
   return Math.min(100, Math.max(0, Math.round(value)))
 }
 
-function roll(chance) {
-  return chance >= 100 || Math.random() * 100 <= chance
-}
 
 export function buildSimulationFactors(climate, outdoorWeather) {
   const current = outdoorWeather?.forecast?.current
@@ -109,9 +106,9 @@ export function evaluateLocalSimulation(factors) {
   }
   const activePests = []
 
-  if (roll(pestRisks.aphid)) activePests.push(pest(1, 'aphid', 'Aphid', '/aphid.gltf', pestRisks.aphid))
-  if (roll(pestRisks.snail)) activePests.push(pest(2, 'snail', 'Snail', '/snails.gltf', pestRisks.snail))
-  if (roll(pestRisks.fungus)) activePests.push(pest(3, 'fungus', 'Fungus', null, pestRisks.fungus))
+  if (pestRisks.aphid > 0) activePests.push(pest(1, 'aphid', 'Aphid', '/storage/models/aphid.gltf', pestRisks.aphid))
+  if (pestRisks.snail > 0) activePests.push(pest(2, 'snail', 'Snail', '/storage/models/snails.gltf', pestRisks.snail))
+  if (pestRisks.fungus > 0) activePests.push(pest(3, 'fungus', 'Fungus', null, pestRisks.fungus))
 
   return {
     growth_point: growthPoint,

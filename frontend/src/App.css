@@ -1,4 +1,4 @@
-﻿.three-stage canvas {
+.three-stage canvas {
   width: 100vw;
   height: 100vh;
   display: block;
@@ -170,4 +170,120 @@
     animation-duration: 0.01ms !important;
   }
 }
+.comments-panel {
+  border-color: rgba(125, 211, 252, 0.24);
+  background:
+    linear-gradient(180deg, rgba(16, 29, 35, 0.96), rgba(10, 18, 21, 0.94));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(125, 211, 252, 0.08);
+}
 
+.comments-panel > header {
+  border-bottom-color: rgba(125, 211, 252, 0.16);
+  background: rgba(20, 36, 43, 0.76);
+}
+
+.comments-panel > header > span:first-child {
+  background: #8fc7d9;
+}
+
+.comments-panel > header strong {
+  color: #eefaff;
+}
+
+.comments-panel > div {
+  background: radial-gradient(circle at 18% 0%, rgba(125, 211, 252, 0.08), transparent 42%);
+}
+
+.plantsim-shop-alert {
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid rgba(155, 207, 130, 0.22);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(155, 207, 130, 0.12), transparent 44%),
+    #101511 !important;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.52);
+}
+
+.plantsim-shop-alert__title {
+  padding-top: 22px;
+  color: #f0ffe8;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.plantsim-shop-confirm {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: #a9b9ca;
+}
+
+.plantsim-shop-confirm__item {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  padding: 10px;
+  border: 1px solid rgba(155, 207, 130, 0.14);
+  border-radius: 8px;
+  background: rgba(4, 8, 6, 0.32);
+}
+
+.plantsim-shop-confirm__price {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(155, 207, 130, 0.2);
+  border-radius: 8px;
+  background: rgba(155, 207, 130, 0.1);
+  color: #dfffd0;
+}
+
+.plantsim-shop-confirm__price img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.plantsim-shop-confirm p {
+  margin: 0;
+  color: #9fb0c2;
+  font-size: 13px;
+}
+
+.plantsim-shop-alert__actions {
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.plantsim-shop-alert__confirm,
+.plantsim-shop-alert__cancel {
+  min-width: 86px;
+  border: 1px solid rgba(155, 207, 130, 0.16);
+  border-radius: 8px;
+  padding: 9px 15px;
+  font-size: 13px;
+  font-weight: 900;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.plantsim-shop-alert__confirm {
+  background: #9bcf82;
+  color: #101511;
+}
+
+.plantsim-shop-alert__cancel {
+  background: rgba(255, 255, 255, 0.055);
+  color: #d7e6d2;
+}
+
+.plantsim-shop-alert__confirm:hover,
+.plantsim-shop-alert__cancel:hover {
+  transform: translateY(-1px);
+}
+
+.plantsim-shop-alert__confirm:focus-visible,
+.plantsim-shop-alert__cancel:focus-visible {
+  outline: 2px solid #d8f3c9;
+  outline-offset: 3px;
+}

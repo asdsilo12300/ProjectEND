@@ -53,6 +53,20 @@ export async function apiFetch(path, options = {}) {
   return payload
 }
 
+export async function getShopItems() {
+  return apiFetch('/shop/items')
+}
+
+export async function getInventory() {
+  return apiFetch('/inventory')
+}
+
+export async function buyShopItem(shopItemId, quantity = 1) {
+  return apiFetch(`/shop/items/${shopItemId}/buy`, {
+    method: 'POST',
+    body: JSON.stringify({ quantity }),
+  })
+}
 export async function getPlants() {
   return apiFetch('/plants')
 }

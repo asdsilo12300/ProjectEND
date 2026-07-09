@@ -83,6 +83,9 @@ class ShopController extends Controller
             return $inventory->load('item');
         });
 
-        return response()->json(['data' => $inventory], 201);
+        return response()->json([
+            'data' => $inventory,
+            'user' => $user->refresh(),
+        ], 201);
     }
 }

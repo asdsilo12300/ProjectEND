@@ -13,8 +13,14 @@ function displayName(user) {
 
 function FriendAvatar({ user, presence, request = false }) {
   return (
-    <span className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#9bcf82] text-xs font-black text-[#101511]">
-      {user?.avatar_url ? <img className="h-full w-full rounded-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" /> : avatarLabel(user)}
+    <span className="relative block h-8 w-8 shrink-0">
+      <span className="grid h-8 w-8 overflow-hidden rounded-full bg-[#9bcf82] text-xs font-black text-[#101511]">
+        {user?.avatar_url ? (
+          <img className="block h-full w-full rounded-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" />
+        ) : (
+          <span className="grid h-full w-full place-items-center">{avatarLabel(user)}</span>
+        )}
+      </span>
       <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-[#101511] ${request ? 'bg-red-400' : presence === 'online' ? 'bg-[#9bcf82]' : 'bg-red-400'}`} />
     </span>
   )
@@ -188,7 +194,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
     <Panel
       id="friends"
       title={mode === 'requests' ? 'Requests' : mode === 'online' ? 'Online' : 'Friends'}
-      subtitle={mode === 'invite' ? 'invite classmates' : 'lab partners'}
+      subtitle={mode === 'invite' ? 'invite friends' : 'friend list'}
       windows={windows}
       setWindows={setWindows}
       className="w-[330px]"
@@ -420,4 +426,3 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
     </Panel>
   )
 }
-

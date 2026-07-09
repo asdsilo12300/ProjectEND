@@ -25,7 +25,7 @@ function postedLabel(value) {
   })
 }
 
-export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, windows, setWindows, title = 'Class comments', subtitle = 'student teacher discussion' }) {
+export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, windows, setWindows, title = 'Comments' }) {
   const [comments, setComments] = useState([])
   const [draft, setDraft] = useState('')
   const [status, setStatus] = useState('idle')
@@ -90,22 +90,22 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
   }
 
   return (
-      <Panel id="comments" title={title} subtitle={subtitle} windows={windows} setWindows={setWindows} className="w-[370px]">
+      <Panel id="comments" title={title} windows={windows} setWindows={setWindows} className="comments-panel w-[370px]">
         <div className="grid max-h-56 gap-2.5 overflow-y-auto pr-1">
           {!simulatorId && (
-            <div className="rounded-md border border-lime-100/10 bg-white/[0.035] px-3 py-4 text-center text-xs text-slate-400">
+            <div className="rounded-md border border-sky-200/15 bg-[#132026]/78 px-3 py-4 text-center text-xs text-slate-300">
               Select a planted simulation to open comments.
             </div>
           )}
 
           {simulatorId && status === 'loading' && (
-            <div className="rounded-md border border-lime-100/10 bg-white/[0.035] px-3 py-4 text-center text-xs text-slate-400">
+            <div className="rounded-md border border-sky-200/15 bg-[#132026]/78 px-3 py-4 text-center text-xs text-slate-300">
               Loading comments...
             </div>
           )}
 
           {simulatorId && status !== 'loading' && visibleComments.length === 0 && !error && (
-            <div className="rounded-md border border-lime-100/10 bg-white/[0.035] px-3 py-4 text-center text-xs text-slate-400">
+            <div className="rounded-md border border-sky-200/15 bg-[#132026]/78 px-3 py-4 text-center text-xs text-slate-300">
               No observations yet. Start the discussion.
             </div>
           )}
@@ -114,9 +114,9 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
             const author = comment.user ?? {}
 
             return (
-              <article className="rounded-md border border-lime-100/10 bg-white/[0.045] p-2.5" key={comment.id}>
+              <article className="rounded-md border border-sky-200/15 bg-[#132026]/82 p-2.5" key={comment.id}>
                 <div className="mb-2 flex items-center gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#9bcf82] text-sm font-bold text-[#101511]">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#8fc7d9] text-sm font-bold text-[#071013]">
                     {avatarLabel(author)}
                   </span>
                   <div className="min-w-0">
@@ -132,14 +132,14 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
 
         {error && <p className="mt-2 rounded-md border border-red-300/20 bg-red-400/10 px-3 py-2 text-[11px] text-red-100">{error}</p>}
 
-        <form className="mt-3 flex items-end gap-2.5 rounded-lg border border-lime-100/10 bg-white/[0.045] p-2.5" onSubmit={submitComment}>
-          <span className="mb-1 grid h-8 w-8 shrink-0 place-items-center rounded-full border border-lime-100/20 bg-[#9bcf82] text-sm font-bold text-[#101511]" aria-hidden="true">
+        <form className="mt-3 flex items-end gap-2.5 rounded-lg border border-sky-200/15 bg-[#122026]/86 p-2.5" onSubmit={submitComment}>
+          <span className="mb-1 grid h-8 w-8 shrink-0 place-items-center rounded-full border border-sky-100/25 bg-[#8fc7d9] text-sm font-bold text-[#071013]" aria-hidden="true">
             {avatarLabel(avatarUser)}
           </span>
           <label className="min-w-0 flex-1">
             <span className="sr-only">Comment</span>
             <textarea
-              className="min-h-10 w-full resize-none rounded-lg border border-lime-100/10 bg-black/25 px-3 py-2 text-xs leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 disabled:cursor-not-allowed disabled:opacity-55"
+              className="min-h-10 w-full resize-none rounded-lg border border-sky-200/15 bg-[#071013]/75 px-3 py-2 text-xs leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-55"
               disabled={!simulatorId || status === 'posting'}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={simulatorId ? 'Write a public observation...' : 'Select a planted simulation first'}
@@ -147,7 +147,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
             />
           </label>
           <button
-            className="mb-1 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#9bcf82] text-[#101511] transition hover:bg-[#addf96] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mb-1 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#8fc7d9] text-[#071013] transition hover:bg-[#a8d5e3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
             type="submit"
             disabled={!simulatorId || !draft.trim() || status === 'posting'}
             aria-label="Send comment"

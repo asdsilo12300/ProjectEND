@@ -683,7 +683,7 @@ function SearchCenter({ query, results, loading, onQueryChange, onSelectUser }) 
       </div>
       <div className="divide-y divide-lime-100/10">
         {loading ? (
-          <div className="px-8 py-8 text-sm text-slate-400">Searching learners...</div>
+          <div className="px-8 py-8 text-sm text-slate-400">Searching ...</div>
         ) : results.length ? (
           results.map((result) => <UserSearchRow key={result.id} onSelect={onSelectUser} user={result} />)
         ) : (
@@ -740,7 +740,7 @@ function RightDashboard({ leaderboard, onOpenSearch }) {
         <LeaderboardCard
           icon="trophy"
           metric={(user) => `Lv.${user.level ?? 1}`}
-          subtitle="top 10 learners"
+          subtitle="top 10 Levels"
           title="Level ranking"
           users={leaderboard.levels}
         />

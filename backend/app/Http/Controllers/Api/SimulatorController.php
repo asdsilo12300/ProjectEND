@@ -295,8 +295,8 @@ class SimulatorController extends Controller
         $itemAliases = [
             'hand-pick' => 'Hand Pick',
             'insecticide-spray' => 'Insect Spray',
+            'snail-spray' => 'Snail Spray',
             'antifungal-spray' => 'Fungus Spray',
-            'snail-trap' => 'Snail Trap',
         ];
 
         $item = Item::query()
@@ -308,52 +308,86 @@ class SimulatorController extends Controller
             })
             ->firstOrFail();
 
-        $userItem = UserItem::query()->firstOrCreate(
-            ['user_id' => $request->user()->id, 'item_id' => $item->id],
-            ['quantity' => str_starts_with((string) $item->effect_type, 'pest_control') ? 5 : 0],
-        );
+        $effectType = strtolower((string) $item->effect_type);
+        $isHandPick = ($data['item_key'] ?? null) === 'hand-pick'
+            || strtolower($item->name) === 'hand pick'
+            || str_starts_with($effectType, 'manual_pest_control');
 
-        abort_if($userItem->quantity < $quantity, 422, 'Not enough item quantity.');
+        $userItem = null;
 
-        $result = DB::transaction(function () use ($item, $quantity, $request, $simulator, $userItem) {
+        if (! $isHandPick) {
+            $userItem = UserItem::query()->firstOrCreate(
+                ['user_id' => $request->user()->id, 'item_id' => $item->id],
+                ['quantity' => 0],
+            );
+
+            abort_if($userItem->quantity < $quantity, 422, 'Not enough item quantity.');
+        }
+
+        $result = DB::transaction(function () use ($data, $isHandPick, $item, $quantity, $request, $simulator, $userItem) {
             $effectType = strtolower((string) $item->effect_type);
             $targetText = str_contains($effectType, ':') ? explode(':', $effectType, 2)[1] : '';
+
+            if ($isHandPick && $targetText === '') {
+                $targetText = 'aphid,snail';
+            }
+
             $targets = collect(explode(',', $targetText))
-                ->map(fn ($target) => trim($target))
+                ->map(fn ($target) => trim(strtolower($target)))
                 ->filter()
                 ->values();
 
+            $matchedPests = collect();
             $removedPests = collect();
+            $failedPests = collect();
 
-            if (str_starts_with(strtolower((string) $item->effect_type), 'pest_control') && $targets->isNotEmpty()) {
-                $removedPests = SimulationPest::query()
+            if ($targets->isNotEmpty()) {
+                $matchedPests = SimulationPest::query()
                     ->with('pest')
                     ->where('simulator_id', $simulator->id)
                     ->where('status', 'active')
                     ->whereHas('pest', fn ($query) => $query->whereIn(DB::raw('LOWER(name_en)'), $targets->all()))
                     ->get();
 
-                SimulationPest::query()
-                    ->whereIn('id', $removedPests->pluck('id'))
-                    ->update([
-                        'status' => 'treated',
-                        'treated_at' => now(),
-                    ]);
+                foreach ($matchedPests as $pest) {
+                    $pestName = strtolower((string) $pest->pest?->name_en);
+                    $successRate = $this->itemSuccessRate($item, $pestName, $isHandPick);
+
+                    if (random_int(1, 100) <= $successRate) {
+                        $pest->forceFill([
+                            'status' => 'treated',
+                            'treated_at' => now(),
+                        ])->save();
+
+                        $removedPests->push($pest);
+                    } else {
+                        $failedPests->push($pest);
+                    }
+                }
             }
 
-            $userItem->decrement('quantity', $quantity);
+            if (! $isHandPick && $matchedPests->isNotEmpty()) {
+                $userItem->decrement('quantity', $quantity);
+                $userItem->refresh()->load('item');
+            }
 
             $targetNames = $targets->implode(', ');
             $removedNames = $removedPests->map(fn (SimulationPest $pest) => $pest->pest?->name_en)->filter()->values();
-            $message = $removedNames->isNotEmpty()
-                ? $item->name . ' removed ' . $removedNames->implode(', ') . '.'
-                : ($targetNames ? $item->name . ' is ready for ' . $targetNames . ', but no active pest was found.' : $item->name . ' used successfully.');
+            $failedNames = $failedPests->map(fn (SimulationPest $pest) => $pest->pest?->name_en)->filter()->values();
+
+            $message = match (true) {
+                $removedNames->isNotEmpty() && $failedNames->isNotEmpty() => $item->name . ' removed ' . $removedNames->implode(', ') . ', but missed ' . $failedNames->implode(', ') . '.',
+                $removedNames->isNotEmpty() => $item->name . ' removed ' . $removedNames->implode(', ') . '.',
+                $failedNames->isNotEmpty() => $item->name . ' missed ' . $failedNames->implode(', ') . '. Try again.',
+                $matchedPests->isEmpty() && $targetNames => $item->name . ' targets ' . $targetNames . ', but no active pest was found.',
+                default => $item->name . ' used successfully.',
+            };
 
             $usage = ItemUsage::query()->create([
                 'user_id' => $request->user()->id,
                 'item_id' => $item->id,
                 'simulator_id' => $simulator->id,
-                'quantity' => $quantity,
+                'quantity' => $isHandPick ? 0 : ($matchedPests->isNotEmpty() ? $quantity : 0),
                 'effect_result' => $message,
             ]);
 
@@ -362,6 +396,9 @@ class SimulatorController extends Controller
                 'message' => $message,
                 'targets' => $targets,
                 'removed_pests' => $removedNames,
+                'failed_pests' => $failedNames,
+                'success' => $removedNames->isNotEmpty(),
+                'inventory' => $userItem?->loadMissing('item'),
             ];
         });
 
@@ -374,6 +411,20 @@ class SimulatorController extends Controller
             ],
         ], 201);
     }
+
+    private function itemSuccessRate(Item $item, string $target, bool $isHandPick): int
+    {
+        if ($isHandPick) {
+            return match ($target) {
+                'aphid' => 40,
+                'snail' => 80,
+                default => 50,
+            };
+        }
+
+        return str_starts_with(strtolower((string) $item->effect_type), 'pest_control') ? 100 : 0;
+    }
+
     public function comments(Request $request, Simulator $simulator): JsonResponse
     {
         $this->authorizeSimulatorConversation($request, $simulator);

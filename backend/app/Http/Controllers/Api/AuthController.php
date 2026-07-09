@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Friendship;
+use App\Models\Item;
 use App\Models\User;
+use App\Models\UserItem;
 use App\Services\JwtService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -27,13 +30,19 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8'],
         ]);
 
-        $user = User::query()->create([
-            'username' => $data['username'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role' => 'member',
-            'status' => 'active',
-        ]);
+        $user = DB::transaction(function () use ($data): User {
+            $user = User::query()->create([
+                'username' => $data['username'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'role' => 'member',
+                'status' => 'active',
+            ]);
+
+            $this->grantStarterSprays($user);
+
+            return $user;
+        });
 
         return response()->json([
             'token' => $this->jwt->issue($user),
@@ -110,6 +119,22 @@ class AuthController extends Controller
         return response()->json(['data' => $this->userPayload($user->fresh())]);
     }
 
+    private function grantStarterSprays(User $user): void
+    {
+        Item::query()
+            ->where('is_active', true)
+            ->whereIn('name', ['Insect Spray', 'Snail Spray', 'Fungus Spray'])
+            ->get()
+            ->each(function (Item $item) use ($user): void {
+                $inventory = UserItem::query()->firstOrNew([
+                    'user_id' => $user->id,
+                    'item_id' => $item->id,
+                ]);
+
+                $inventory->quantity = max(7, (int) ($inventory->quantity ?? 0));
+                $inventory->save();
+            });
+    }
     private function userPayload(User $user): array
     {
         return [

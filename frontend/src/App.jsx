@@ -13,7 +13,7 @@ import { CommunityPage } from './game/community/CommunityPage'
 import { HistoryPage } from './game/history/HistoryPage'
 import { ShopPage } from './game/shop/ShopPage'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl } from './lib/api'
+import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -34,6 +34,18 @@ const initialGrowthTrack = {
 const growthAnimationScale = 100
 const autosaveIntervalMs = 5000
 const resetMarkerKey = 'plant_game_reset_marker'
+
+const itemNameToKey = {
+  'Hand Pick': 'hand-pick',
+  'Insect Spray': 'insecticide-spray',
+  'Snail Spray': 'snail-spray',
+  'Fungus Spray': 'antifungal-spray',
+}
+
+function inventoryItemKey(entry) {
+  const item = entry?.item ?? entry
+  return itemNameToKey[item?.name] ?? String(item?.name ?? '').toLowerCase().replace(/\s+/g, '-')
+}
 
 function getStageForGrowth(progress) {
   if (progress >= 100) return { stage_no: 4, stage_name: 'Mature', required_growth_point: 100 }
@@ -84,7 +96,7 @@ function App() {
   const [windows, setWindows] = useState(defaultWindows)
   const [climate, setClimate] = useState(defaultClimate)
   const [openSections, setOpenSections] = useState({ Plants: true, Items: true })
-  const [appliedAsset, setAppliedAsset] = useState(labLibrary.Items[0])
+  const [appliedAsset, setAppliedAsset] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [activePage, setActivePage] = useState('lab')
@@ -94,7 +106,7 @@ function App() {
   const [saveHydrated, setSaveHydrated] = useState(() => !getToken())
   const [resetPending, setResetPending] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
-  const [suppressedPests, setSuppressedPests] = useState([])
+  const [, setSuppressedPests] = useState([])
   const [plantCatalog, setPlantCatalog] = useState([])
   const [modelAssets, setModelAssets] = useState({})
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
@@ -117,6 +129,7 @@ function App() {
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
   const [authStatus, setAuthStatus] = useState('idle')
   const [authError, setAuthError] = useState('')
+  const [inventoryItems, setInventoryItems] = useState([])
 
   useEffect(() => {
     if (!getToken()) return undefined
@@ -292,10 +305,10 @@ function App() {
       visual_state: preview.visual_state,
       visual_overrides: preview.visual_overrides,
       pest_risks: preview.pest_risks,
-      active_pests: preview.active_pests.filter((item) => !suppressedPests.includes(item.pest?.name_en)),
+      active_pests: preview.active_pests,
       current_model_url: simulationVisual.current_model_url ?? preview.current_model_url,
     }
-  }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual, suppressedPests])
+  }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual])
   useEffect(() => {
     autosaveStateRef.current = {
       climate,
@@ -306,6 +319,45 @@ function App() {
       selectedPlant,
     }
   })
+  const inventoryMap = useMemo(() => {
+    return inventoryItems.reduce((map, entry) => {
+      const key = inventoryItemKey(entry)
+      if (key) map[key] = Number(entry.quantity ?? 0)
+      return map
+    }, {})
+  }, [inventoryItems])
+
+  function upsertInventoryItem(entry) {
+    if (!entry?.item_id && !entry?.item?.id) return
+
+    const itemId = entry.item_id ?? entry.item?.id
+    setInventoryItems((current) => {
+      const next = current.filter((item) => (item.item_id ?? item.item?.id) !== itemId)
+      return [...next, entry]
+    })
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!user || !getToken()) {
+      return undefined
+    }
+
+    getInventory()
+      .then((payload) => {
+        if (!cancelled) setInventoryItems(payload.data ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setInventoryItems([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  const selectedItemCursorUrl = appliedAsset?.type === 'item' && !visitingFriend ? appliedAsset.imageUrl : null
   const applySimulatorSnapshot = useCallback((simulator, options = {}) => {
     if (!simulator) return
 
@@ -558,8 +610,71 @@ function App() {
     setOpenSections((value) => ({ ...value, [section]: !value[section] }))
   }
 
+  async function applySelectedItem() {
+    const asset = appliedAsset?.type === 'item' ? appliedAsset : null
+    if (!asset) return
+
+    if (visitingFriend) {
+      setActionMessage('Friend items are mock tools for now')
+      return
+    }
+
+    if (!selectedPlant) {
+      setActionMessage('Select a plant before using an item')
+      return
+    }
+
+    if (!getToken()) {
+      setActionMessage('Log in before using lab items')
+      openAuth('login')
+      return
+    }
+
+    const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+    if (!simulatorId) {
+      setActionMessage('Save or plant first, then use items')
+      return
+    }
+
+    setActionMessage(`Using ${asset.name}...`)
+
+    try {
+      const payload = await applySimulatorItem(simulatorId, asset.itemKey ?? asset.id)
+      const result = payload.data ?? payload
+      const simulator = result.simulator ?? null
+      const targets = result.removed_pests ?? []
+
+      if (result.inventory) {
+        upsertInventoryItem(result.inventory)
+      }
+
+      if (targets.length) {
+        setSuppressedPests((current) => [...new Set([...current, ...targets])])
+      }
+
+      if (simulator) {
+        setSimulationVisual({
+          ...defaultSimulationVisual,
+          ...simulator,
+          current_model_url: simulator.current_model_url ?? simulationVisual.current_model_url ?? defaultSimulationVisual.current_model_url,
+        })
+      }
+
+      setAppliedAsset(null)
+      setActionMessage(result.message ?? `${asset.name} applied`)
+    } catch (error) {
+      setActionMessage(error.message || 'Unable to use this item')
+    }
+  }
+
   async function applyLabAsset(asset) {
     if (asset.type === 'item') {
+      if (appliedAsset?.type === 'item' && appliedAsset.id === asset.id) {
+        setAppliedAsset(null)
+        setActionMessage(`${asset.name} cancelled`)
+        return
+      }
+
       setAppliedAsset(asset)
 
       if (visitingFriend) {
@@ -567,47 +682,7 @@ function App() {
         return
       }
 
-      if (!selectedPlant) {
-        setActionMessage('Select a plant before using an item')
-        return
-      }
-
-      if (!getToken()) {
-        setActionMessage('Log in before using lab items')
-        openAuth('login')
-        return
-      }
-
-      const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
-      if (!simulatorId) {
-        setActionMessage('Save or plant first, then use items')
-        return
-      }
-
-      setActionMessage(`Using ${asset.name}...`)
-
-      try {
-        const payload = await applySimulatorItem(simulatorId, asset.itemKey ?? asset.id)
-        const result = payload.data ?? payload
-        const simulator = result.simulator ?? null
-        const targets = result.targets ?? []
-
-        if (targets.length) {
-          setSuppressedPests((current) => [...new Set([...current, ...targets])])
-        }
-
-        if (simulator) {
-          setSimulationVisual({
-            ...defaultSimulationVisual,
-            ...simulator,
-            current_model_url: simulator.current_model_url ?? simulationVisual.current_model_url ?? defaultSimulationVisual.current_model_url,
-          })
-        }
-
-        setActionMessage(result.message ?? `${asset.name} applied`)
-      } catch (error) {
-        setActionMessage(error.message || 'Unable to use this item')
-      }
+      setActionMessage(`Selected ${asset.name}. Click a pest to use it.`)
       return
     }
 
@@ -713,7 +788,7 @@ function App() {
         setSaveHydrated(true)
         setClimate({ ...defaultClimate })
         setOutdoorWeather(initialOutdoorWeather)
-        setAppliedAsset(labLibrary.Items[0])
+        setAppliedAsset(null)
         setSuppressedPests([])
         setSimulationVisual(defaultSimulationVisual)
         setGrowthTrack(initialGrowthTrack)
@@ -772,7 +847,7 @@ function App() {
     setSaveHydrated(true)
     setClimate({ ...defaultClimate })
     setOutdoorWeather(initialOutdoorWeather)
-    setAppliedAsset(labLibrary.Items[0])
+    setAppliedAsset(null)
     setSuppressedPests([])
     setSimulationVisual(defaultSimulationVisual)
     setGrowthTrack(initialGrowthTrack)
@@ -811,7 +886,7 @@ function App() {
       setModeLoading(false)
       setSaveHydrated(true)
       setOutdoorWeather(initialOutdoorWeather)
-      setAppliedAsset(labLibrary.Items[0])
+      setAppliedAsset(null)
       setSuppressedPests([])
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
@@ -821,18 +896,6 @@ function App() {
     }
   }
 
-  function dropLabAsset(event) {
-    event.preventDefault()
-
-    const payload = event.dataTransfer.getData('application/x-lab-asset')
-    if (!payload) return
-
-    try {
-      applyLabAsset(JSON.parse(payload))
-    } catch {
-      return
-    }
-  }
 
   function openAuth(mode = 'login') {
     setAuthMode(mode)
@@ -953,7 +1016,7 @@ function App() {
             )}
             <div className="p-5 text-center">
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-[#9bcf82] text-[#101511]">
-                <span className="text-xl font-black">✓</span>
+                <span className="text-sm font-black">OK</span>
               </div>
               <h2 className="text-lg font-black text-lime-50">{`\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e2a\u0e34\u0e49\u0e19`}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-300">{`\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e1b\u0e25\u0e39\u0e01\u0e15\u0e49\u0e19\u0e43\u0e2b\u0e21\u0e48`}</p>
@@ -985,7 +1048,7 @@ function App() {
           onBack={() => setActivePage('lab')}
         />
       ) : activePage === 'shop' ? (
-        <ShopPage />
+        <ShopPage onInventoryItemChange={upsertInventoryItem} onUserUpdate={setUser} />
       ) : activePage === 'history' ? (
         <HistoryPage />
       ) : activePage === 'community' ? (
@@ -994,14 +1057,15 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar plantLocked={Boolean(selectedPlant) || Boolean(visitingFriend)} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
+              <LibrarySidebar plantLocked={Boolean(selectedPlant) || Boolean(visitingFriend)} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
               <SimulationStage
                 actionMessage={actionMessage}
                 coinBurst={coinBurst}
                 expBurst={expBurst}
-                dropLabAsset={dropLabAsset}
                 mode={growingMode}
                 plantSelected={Boolean(selectedPlant)}
+                selectedItemCursorUrl={selectedItemCursorUrl}
+                onUseSelectedItem={applySelectedItem}
                 readOnly={Boolean(visitingFriend)}
                 resetSimulation={resetSimulation}
                 saveSimulation={saveSimulation}
@@ -1036,7 +1100,7 @@ function App() {
                 />
               )}
               {!visitingFriend && <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} />}
-              <CommentsPanel currentUser={user} onAuthRequired={openAuth} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Class comments'} subtitle={visitingFriend ? `${visitorName} garden discussion` : 'student teacher discussion'} />
+              <CommentsPanel currentUser={user} onAuthRequired={openAuth} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
             </>
           )}
 

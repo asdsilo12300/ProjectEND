@@ -1,4 +1,4 @@
-import { imageAssets, navItems, navTargets } from '../data/gameData'
+﻿import { imageAssets, navItems, navTargets } from '../data/gameData'
 import { AppIcon } from '../icons/IconifyIcon'
 import { NavIcon } from '../icons/NavIcon'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
@@ -117,7 +117,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           <ProfileAvatar user={user} initial={initial} />
           <span className="hidden leading-none sm:block">
             <strong className="block text-xs text-lime-50">{user ? `${displayName} Lv.${learnerLevel}` : 'Sign in'}</strong>
-            <small className="mt-1 block text-[10px] text-slate-400">{user ? 'Student profile' : 'Login or create account'}</small>
+            <small className="mt-1 block text-[10px] text-slate-400">{user ? 'profile' : 'Login or create account'}</small>
           </span>
           <AppIcon className={`h-4 w-4 text-slate-300 transition ${profileOpen && user ? 'rotate-180' : ''}`} name="arrowDown" />
         </button>

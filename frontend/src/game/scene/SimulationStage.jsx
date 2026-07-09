@@ -1,4 +1,4 @@
-import { Component, Suspense, useImperativeHandle, useRef } from 'react'
+import { Component, Suspense, useImperativeHandle, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, OrbitControls } from '@react-three/drei'
 import { imageAssets } from '../data/gameData'
@@ -31,9 +31,27 @@ class SceneErrorBoundary extends Component {
     return this.props.children
   }
 }
+class PestErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
 
-export function SimulationStage({ actionMessage, coinBurst = null, expBurst = null, dropLabAsset, mode = 'greenhouse', plantSelected = false, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual, snapshotRef = null }) {
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (this.state.hasError) return null
+
+    return this.props.children
+  }
+}
+
+export function SimulationStage({ actionMessage, coinBurst = null, expBurst = null, mode = 'greenhouse', plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual, snapshotRef = null }) {
   const canvasRef = useRef(null)
+  const stageRef = useRef(null)
+  const [itemCursorPoint, setItemCursorPoint] = useState(null)
   const pests = simulationVisual?.active_pests ?? []
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
@@ -41,6 +59,22 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
   const isMature = currentStageNo >= 3 || growthPoint >= 100
   const isPaused = growthRate <= 0 && !isMature
   const growthProgress = Math.min(1, Math.max(0, growthPoint / 100))
+  const hasSelectedItem = Boolean(selectedItemCursorUrl) && !readOnly
+  const itemCursorStyle = hasSelectedItem ? { cursor: 'none' } : undefined
+
+  function moveItemCursor(event) {
+    if (!hasSelectedItem || !stageRef.current) return
+
+    const bounds = stageRef.current.getBoundingClientRect()
+    setItemCursorPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+  }
+
+  function useItemFromStage(event) {
+    if (!hasSelectedItem) return
+    const target = event.target
+    if (target?.closest?.('button, a, input, textarea, select, [data-ignore-item-click="true"]')) return
+    onUseSelectedItem?.()
+  }
 
   useImperativeHandle(snapshotRef, () => ({
     capture() {
@@ -57,12 +91,13 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
 
   return (
       <section
+        ref={stageRef}
         className="three-stage absolute inset-0 z-10"
-        onDragOver={(event) => {
-          if (!readOnly) event.preventDefault()
-        }}
-        onDrop={readOnly ? undefined : dropLabAsset}
+        style={itemCursorStyle}
         aria-label="Plant simulation stage"
+        onClick={useItemFromStage}
+        onPointerMove={moveItemCursor}
+        onPointerLeave={() => setItemCursorPoint(null)}
       >
         <SceneErrorBoundary key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}>
         <Canvas camera={{ position: [0.75, 0.85, 4.2], fov: 32 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
@@ -76,7 +111,15 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
             {plantSelected && (
               <>
                 <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
-                {pests.map((pest, index) => <PestModel key={`${pest.pest?.name_en ?? 'pest'}-${pest.id ?? index}`} pest={pest} index={index} />)}
+                {pests.map((pest, index) => {
+                  const pestKey = `${pest.pest?.name_en ?? pest.name_en ?? pest.type ?? 'pest'}-${pest.id ?? index}`
+
+                  return (
+                    <PestErrorBoundary key={pestKey}>
+                      <PestModel pest={pest} index={index} />
+                    </PestErrorBoundary>
+                  )
+                })}
               </>
             )}
             <Environment preset="city" />
@@ -104,6 +147,15 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
             <span>+{expBurst.amount} EXP</span>
             {expBurst.leveledUp && <span className="rounded-full bg-lime-200 px-2 py-0.5 text-[10px] text-[#101511]">LEVEL UP</span>}
           </div>
+        )}
+        {hasSelectedItem && itemCursorPoint && (
+          <img
+            className="pointer-events-none absolute z-40 h-14 w-14 -translate-x-3 -translate-y-3 select-none object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,.38)]"
+            src={selectedItemCursorUrl}
+            alt=""
+            style={{ left: itemCursorPoint.x, top: itemCursorPoint.y }}
+            aria-hidden="true"
+          />
         )}
         {!plantSelected && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,.35)]">
@@ -140,3 +192,7 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
       </section>
   )
 }
+
+
+
+
