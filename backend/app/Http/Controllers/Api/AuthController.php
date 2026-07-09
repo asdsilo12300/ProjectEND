@@ -39,7 +39,7 @@ class AuthController extends Controller
                 'status' => 'active',
             ]);
 
-            $this->grantStarterSprays($user);
+            $this->grantStarterItems($user);
 
             return $user;
         });
@@ -66,6 +66,7 @@ class AuthController extends Controller
         }
 
         $user->forceFill(['last_login_at' => now()])->save();
+        $this->grantStarterItems($user);
 
         return response()->json([
             'token' => $this->jwt->issue($user),
@@ -75,6 +76,8 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $this->grantStarterItems($request->user());
+
         return response()->json(['data' => $this->userPayload($request->user())]);
     }
 
@@ -119,19 +122,26 @@ class AuthController extends Controller
         return response()->json(['data' => $this->userPayload($user->fresh())]);
     }
 
-    private function grantStarterSprays(User $user): void
+    private function grantStarterItems(User $user): void
     {
+        $starterQuantities = [
+            'Hand Pick' => 10,
+            'Insect Spray' => 7,
+            'Snail Spray' => 7,
+            'Fungus Spray' => 7,
+        ];
+
         Item::query()
             ->where('is_active', true)
-            ->whereIn('name', ['Insect Spray', 'Snail Spray', 'Fungus Spray'])
+            ->whereIn('name', array_keys($starterQuantities))
             ->get()
-            ->each(function (Item $item) use ($user): void {
+            ->each(function (Item $item) use ($starterQuantities, $user): void {
                 $inventory = UserItem::query()->firstOrNew([
                     'user_id' => $user->id,
                     'item_id' => $item->id,
                 ]);
 
-                $inventory->quantity = max(7, (int) ($inventory->quantity ?? 0));
+                $inventory->quantity = max($starterQuantities[$item->name] ?? 0, (int) ($inventory->quantity ?? 0));
                 $inventory->save();
             });
     }

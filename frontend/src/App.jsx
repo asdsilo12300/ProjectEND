@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
-import { defaultClimate, labLibrary } from './game/data/gameData'
+import { defaultClimate, imageAssets } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
 import { LibrarySidebar } from './game/components/LibrarySidebar'
 import { TopBar } from './game/components/TopBar'
@@ -13,7 +13,7 @@ import { CommunityPage } from './game/community/CommunityPage'
 import { HistoryPage } from './game/history/HistoryPage'
 import { ShopPage } from './game/shop/ShopPage'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl } from './lib/api'
+import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -42,9 +42,94 @@ const itemNameToKey = {
   'Fungus Spray': 'antifungal-spray',
 }
 
+const itemImageByKey = {
+  'hand-pick': imageAssets.hand,
+  'insecticide-spray': imageAssets.insecticide,
+  'snail-spray': imageAssets.snailSpray,
+  'antifungal-spray': imageAssets.antifungal,
+}
+
+const itemTargetsByKey = {
+  'hand-pick': [{ label: 'Aphid', imageUrl: imageAssets.aphid }, { label: 'Snail', imageUrl: imageAssets.snail }],
+  'insecticide-spray': [{ label: 'Aphid', imageUrl: imageAssets.aphid }],
+  'snail-spray': [{ label: 'Snail', imageUrl: imageAssets.snail }],
+  'antifungal-spray': [{ label: 'Fungus', imageUrl: imageAssets.fungus }],
+}
+
+const itemMetaByKey = {
+  'hand-pick': {
+    detail: 'aphid + snail',
+    successText: 'Aphid 40% / Snail 80%',
+    failText: 'Aphid fail 60% / Snail fail 20%',
+    help: 'Manual removal: aphids succeed 40% and snails succeed 80%.',
+  },
+  'insecticide-spray': {
+    detail: 'clears aphids',
+    successText: 'Success 100%',
+    failText: 'Fail 0%',
+    help: 'Spray for aphids. Removes active aphids with 100% success.',
+  },
+  'snail-spray': {
+    detail: 'clears snails',
+    successText: 'Success 100%',
+    failText: 'Fail 0%',
+    help: 'Spray for snails. Removes active snails with 100% success.',
+  },
+  'antifungal-spray': {
+    detail: 'clears fungus',
+    successText: 'Success 100%',
+    failText: 'Fail 0%',
+    help: 'Spray for fungus. Removes active fungus with 100% success.',
+  },
+}
+
 function inventoryItemKey(entry) {
   const item = entry?.item ?? entry
   return itemNameToKey[item?.name] ?? String(item?.name ?? '').toLowerCase().replace(/\s+/g, '-')
+}
+
+function readablePlantName(plant) {
+  const name = String(plant?.name_en ?? plant?.name_th ?? '').trim()
+  if (!name || name === 'Simulation Sprout' || name === 'Sprout') return 'Elephant Ear'
+  return name
+}
+
+function plantAssetFromApi(plant, planted = false) {
+  return {
+    id: `plant-${plant.id}`,
+    backendId: plant.id,
+    name: readablePlantName(plant),
+    detail: plant.description ? 'Database plant' : 'Plant',
+    color: '#9bcf82',
+    type: 'plant',
+    icon: 'sprout',
+    imageUrl: resolveAssetUrl(plant.base_image_url) ?? imageAssets.plant,
+    modelUrl: plant.base_model_url,
+    planted,
+  }
+}
+
+function itemAssetFromApi(entry, quantity = null) {
+  const item = entry?.item ?? entry
+  const itemKey = inventoryItemKey(item)
+  const meta = itemMetaByKey[itemKey] ?? {}
+
+  return {
+    id: itemKey,
+    itemKey,
+    backendId: item?.id,
+    name: item?.name ?? 'Lab item',
+    detail: meta.detail ?? item?.description ?? 'lab item',
+    color: '#9bcf82',
+    type: 'item',
+    icon: 'hand',
+    imageUrl: resolveAssetUrl(item?.image_url) ?? itemImageByKey[itemKey],
+    targetImages: itemTargetsByKey[itemKey] ?? [],
+    quantityLabel: Number.isFinite(Number(quantity)) ? `x${quantity}` : 'x0',
+    successText: meta.successText,
+    failText: meta.failText,
+    help: meta.help ?? item?.description,
+  }
 }
 
 function getStageForGrowth(progress) {
@@ -130,6 +215,7 @@ function App() {
   const [authStatus, setAuthStatus] = useState('idle')
   const [authError, setAuthError] = useState('')
   const [inventoryItems, setInventoryItems] = useState([])
+  const [shopCatalog, setShopCatalog] = useState([])
 
   useEffect(() => {
     if (!getToken()) return undefined
@@ -327,6 +413,27 @@ function App() {
     }, {})
   }, [inventoryItems])
 
+  const labSections = useMemo(() => {
+    const plantedPlantId = selectedPlant?.backendId ?? simulationVisual?.plant?.id ?? null
+    const plants = plantCatalog.map((plant) => plantAssetFromApi(plant, plantedPlantId === plant.id))
+    const inventoryItemsByKey = new Map(inventoryItems.map((entry) => [inventoryItemKey(entry), entry]))
+    const itemSource = [
+      ...shopCatalog.map((shopItem) => shopItem.item).filter(Boolean),
+      ...inventoryItems.map((entry) => entry.item).filter(Boolean),
+    ]
+    const uniqueItems = Array.from(new Map(itemSource.map((item) => [inventoryItemKey(item), item])).values())
+    const items = uniqueItems.map((item) => {
+      const key = inventoryItemKey(item)
+      const inventoryEntry = inventoryItemsByKey.get(key)
+      return itemAssetFromApi(item, inventoryEntry?.quantity ?? 0)
+    })
+
+    return {
+      Plants: plants,
+      Items: items,
+    }
+  }, [inventoryItems, plantCatalog, selectedPlant, shopCatalog, simulationVisual?.plant?.id])
+
   function upsertInventoryItem(entry) {
     if (!entry?.item_id && !entry?.item?.id) return
 
@@ -357,13 +464,29 @@ function App() {
     }
   }, [user])
 
+  useEffect(() => {
+    let cancelled = false
+
+    getShopItems()
+      .then((payload) => {
+        if (!cancelled) setShopCatalog(payload.data ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setShopCatalog([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const selectedItemCursorUrl = appliedAsset?.type === 'item' && !visitingFriend ? appliedAsset.imageUrl : null
   const applySimulatorSnapshot = useCallback((simulator, options = {}) => {
     if (!simulator) return
 
     const restoredProgress = clampSimulationProgress(simulator.growth_point ?? 0)
     const restoredMode = simulator.mode ?? 'greenhouse'
-    const restoredPlant = labLibrary.Plants.find((plant) => plant.id === 'sprout') ?? labLibrary.Plants[0]
+    const restoredPlant = simulator.plant ? plantAssetFromApi(simulator.plant, true) : null
 
     if (options.persistLocalId !== false) {
       window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
@@ -615,7 +738,7 @@ function App() {
     if (!asset) return
 
     if (visitingFriend) {
-      setActionMessage('Friend items are mock tools for now')
+      setActionMessage('Friend tools are view-only for now')
       return
     }
 
@@ -678,7 +801,7 @@ function App() {
       setAppliedAsset(asset)
 
       if (visitingFriend) {
-        setActionMessage('Friend items are mock tools for now')
+        setActionMessage('Friend tools are view-only for now')
         return
       }
 
@@ -694,8 +817,13 @@ function App() {
         return
       }
 
-      const apiPlant = plantCatalog.find((plant) => plant.name_en === 'Simulation Sprout') ?? plantCatalog[0] ?? null
+      const apiPlant = plantCatalog.find((plant) => plant.id === asset.backendId) ?? null
       const fallbackModelUrl = apiPlant?.base_model_url ?? modelAssets['plant.original']?.url ?? defaultSimulationVisual.current_model_url
+
+      if (!apiPlant) {
+        setActionMessage('Plant data is missing from the database. Please seed plants first.')
+        return
+      }
 
       setResetPending(false)
       setSuppressedPests([])
@@ -707,7 +835,7 @@ function App() {
       })
       setActionMessage('Creating simulation save...')
 
-      if (getToken() && apiPlant && growingMode) {
+      if (getToken() && growingMode) {
         try {
           const simulatorPayload = await startSimulator(apiPlant.id, growingMode, {
             location_name: outdoorWeather.addressLabel || undefined,
@@ -1018,8 +1146,8 @@ function App() {
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-[#9bcf82] text-[#101511]">
                 <span className="text-sm font-black">OK</span>
               </div>
-              <h2 className="text-lg font-black text-lime-50">{`\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e2a\u0e34\u0e49\u0e19`}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{`\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e1b\u0e25\u0e39\u0e01\u0e15\u0e49\u0e19\u0e43\u0e2b\u0e21\u0e48`}</p>
+              <h2 className="text-lg font-black text-lime-50">Harvest complete</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">Ready to grow a new plant.</p>
               <div className="mt-4 rounded-lg border border-lime-100/10 bg-white/[0.04] p-3 text-left text-xs text-slate-300">
                 <div className="flex justify-between gap-3"><span>Score</span><strong className="text-lime-100">{saveCompleteHistory.total_score ?? 0}</strong></div>
                 <div className="mt-1 flex justify-between gap-3"><span>Health</span><strong className="text-lime-100">{saveCompleteHistory.final_health ?? saveCompleteHistory.health ?? 0}%</strong></div>
@@ -1057,7 +1185,7 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar plantLocked={Boolean(selectedPlant) || Boolean(visitingFriend)} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labLibrary} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
+              <LibrarySidebar plantLocked={Boolean(selectedPlant) || Boolean(visitingFriend)} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
               <SimulationStage
                 actionMessage={actionMessage}
                 coinBurst={coinBurst}

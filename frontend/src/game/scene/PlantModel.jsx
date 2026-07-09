@@ -148,9 +148,9 @@ function normalizePestName(pest) {
       ?? 'fungus',
   ).toLowerCase()
 
-  if (rawName.includes('aphid') || rawName.includes('เพลี้ย')) return 'aphid'
-  if (rawName.includes('snail') || rawName.includes('หอย')) return 'snail'
-  if (rawName.includes('fungus') || rawName.includes('เชื้อ')) return 'fungus'
+  if (rawName.includes('aphid')) return 'aphid'
+  if (rawName.includes('snail')) return 'snail'
+  if (rawName.includes('fungus')) return 'fungus'
 
   return rawName
 }

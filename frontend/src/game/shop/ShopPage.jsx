@@ -3,7 +3,7 @@ import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { buyShopItem, getShopItems, resolveAssetUrl } from '../../lib/api'
 import { imageAssets } from '../data/gameData'
-import { priceRange, shopItems } from './data/shopItems'
+import { shopItems } from './data/shopItems'
 import { ProductGrid } from './components/ProductGrid'
 import { ShopPagination } from './components/ShopPagination'
 import { ShopSidebar } from './components/ShopSidebar'
@@ -12,6 +12,7 @@ import { ShopToolbar } from './components/ShopToolbar'
 const fallbackByName = new Map(shopItems.map((item) => [item.name, item]))
 const recentPurchasesKey = 'plantsim-shop-latest-purchases'
 const itemsPerPage = 8
+const defaultPriceRange = { min: 0, max: 100 }
 
 function mapApiShopItem(shopItem) {
   const item = shopItem.item ?? {}
@@ -34,7 +35,7 @@ function mapApiShopItem(shopItem) {
 
 export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
   const [selectedCategory, setSelectedCategory] = useState(null)
-  const [maxPrice, setMaxPrice] = useState(priceRange.max)
+  const [maxPrice, setMaxPrice] = useState(defaultPriceRange.max)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortMode, setSortMode] = useState('default')
   const [currentPage, setCurrentPage] = useState(1)
@@ -66,7 +67,22 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
     }
   }, [])
 
-  const products = apiItems.length ? apiItems : shopItems
+  const products = apiItems
+
+  const priceBounds = useMemo(() => {
+    if (!products.length) return defaultPriceRange
+
+    const prices = products.map((item) => Number(item.price ?? 0))
+    const min = Math.min(...prices)
+    const max = Math.max(...prices)
+
+    return {
+      min: Math.max(0, min),
+      max: Math.max(min, max),
+    }
+  }, [products])
+
+  const effectiveMaxPrice = Math.min(Math.max(maxPrice, priceBounds.min), priceBounds.max)
 
   const categories = useMemo(() => {
     const counts = products.reduce((map, item) => {
@@ -83,7 +99,7 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
     return products
       .filter((item) => {
         const matchesCategory = !selectedCategory || item.category.toLowerCase() === selectedCategory.toLowerCase()
-        const matchesPrice = item.price >= priceRange.min && item.price <= maxPrice
+        const matchesPrice = item.price >= priceBounds.min && item.price <= effectiveMaxPrice
         const searchableText = `${item.name} ${item.category} ${item.description ?? ''}`.toLowerCase()
         const matchesSearch = !query || searchableText.includes(query)
 
@@ -101,7 +117,7 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
         if (leftFavorite === rightFavorite) return 0
         return leftFavorite ? -1 : 1
       })
-  }, [favoriteIds, maxPrice, products, searchQuery, selectedCategory, sortMode])
+  }, [effectiveMaxPrice, favoriteIds, priceBounds.min, products, searchQuery, selectedCategory, sortMode])
 
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / itemsPerPage))
   const safeCurrentPage = Math.min(currentPage, pageCount)
@@ -224,8 +240,9 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
         <ShopSidebar
           categories={categories}
           latestItems={latestPurchases}
-          maxPrice={maxPrice}
+          maxPrice={effectiveMaxPrice}
           onPriceChange={updateMaxPrice}
+          priceRange={priceBounds}
           searchQuery={searchQuery}
           selectedCategory={selectedCategory}
           onSearchChange={updateSearchQuery}

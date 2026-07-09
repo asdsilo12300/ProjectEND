@@ -116,9 +116,9 @@ class ImportModels extends Command
         );
 
         if ($basename === 'plant.gltf') {
-            Plant::query()->where('name_en', 'Simulation Sprout')->update(['base_model_url' => $storagePath]);
+            Plant::query()->whereIn('name_en', ['Elephant Ear', 'Simulation Sprout'])->update(['base_model_url' => $storagePath]);
             PlantGrowthStage::query()
-                ->whereHas('plant', fn ($query) => $query->where('name_en', 'Simulation Sprout'))
+                ->whereHas('plant', fn ($query) => $query->whereIn('name_en', ['Elephant Ear', 'Simulation Sprout']))
                 ->update(['model_url' => $storagePath]);
         }
 

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { pestChances } from '../data/gameData'
-import { IconBar } from '../components/IconBar'
+import { imageAssets, pestChances } from '../data/gameData'
 import { Panel } from '../components/Panel'
 import { PestChance } from '../components/PestChance'
+import { resolveAssetUrl } from '../../lib/api'
 
 const stageStops = [
   { label: 'Seed', value: 0 },
@@ -33,7 +33,9 @@ function hasBrokenEncoding(value) {
 
 function readablePlantName(value) {
   const text = String(value ?? '').trim()
-  if (!text || hasBrokenEncoding(text)) return '\u0e15\u0e49\u0e19\u0e2b\u0e39\u0e0a\u0e49\u0e32\u0e07'
+  if (!text || hasBrokenEncoding(text)) return 'Elephant Ear'
+  const normalized = text.toLowerCase()
+  if (normalized === 'simulation sprout' || normalized === 'sprout') return 'Elephant Ear'
   return text
 }
 
@@ -162,31 +164,26 @@ export function PlantMonitorPanel({ windows, setWindows, simulationVisual }) {
   const growthRate = Number(simulationVisual?.growth_rate ?? 0)
   const targetPace = getGrowthPace(simulationVisual, targetHealth, targetGrowthProgress, growthRate)
   const growthProgress = useSoftNumber(targetGrowthProgress, 0.014)
-  const health = useSoftNumber(targetHealth, 0.014)
   const paceValue = useSoftNumber(targetPace.value, 0.012)
   const pace = { ...targetPace, value: paceValue }
   const growthHistory = simulationVisual?.growth_history ?? [growthProgress]
   const stageName = simulationVisual?.current_stage?.stage_name ?? 'Seedling'
-  const plantName = readablePlantName(simulationVisual?.plant?.name_th)
+  const plantName = readablePlantName(simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th)
+  const plantImageUrl = resolveAssetUrl(simulationVisual?.plant?.image_url ?? simulationVisual?.plant?.icon_url) ?? imageAssets.plant
   const visualState = simulationVisual?.visual_state ?? 'healthy'
   const statusLabel = visualStateLabels[visualState] ?? 'Monitoring'
-  const stats = [
-    { label: 'Health', value: health, icon: 'heart', color: health < 70 ? '#f29b72' : '#ef6f61' },
-    { label: 'Growth', value: growthProgress, icon: 'leaf', color: '#9bcf82' },
-    { label: 'Pace', value: pace.value, icon: 'leaf', color: pace.color },
-  ]
 
   return (
     <Panel id="monitor" title="Plant monitor" subtitle="growth and status" windows={windows} setWindows={setWindows} className="w-[360px] max-w-[calc(100vw-32px)]">
       <div className="max-h-[348px] overflow-y-auto pr-1 sm:max-h-none sm:overflow-visible sm:pr-0">
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-md bg-[#9bcf82] text-base font-black text-[#101511]">
-              {plantName.charAt(0)}
+            <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-lime-100/15 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.08)]">
+              <img className="h-full w-full object-cover object-center" src={plantImageUrl} alt="" draggable="false" />
             </span>
             <div>
-              <strong className="block text-sm text-white">{plantName}</strong>
-              <span className="text-xs text-slate-300">
+              <strong className="block text-[15px] font-black leading-5 text-lime-50">{plantName}</strong>
+              <span className="text-xs leading-5 text-slate-300">
                 {stageName} - {statusLabel} - {growthProgress.toFixed(1)}% grown
               </span>
             </div>
@@ -195,12 +192,6 @@ export function PlantMonitorPanel({ windows, setWindows, simulationVisual }) {
         </div>
 
         <GrowthTimeline progress={growthProgress} history={growthHistory} pace={pace} rate={growthRate} />
-
-        <div className="mt-3 grid gap-2.5 border-t border-lime-100/10 pt-3">
-          {stats.map((stat) => (
-            <IconBar key={stat.label} {...stat} compact />
-          ))}
-        </div>
 
         <div className="mt-3 border-t border-lime-100/10 pt-3">
           <div className="mb-2 flex items-center justify-between">

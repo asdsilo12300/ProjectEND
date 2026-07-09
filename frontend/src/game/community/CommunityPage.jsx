@@ -599,8 +599,8 @@ function EditProfileModal({ error, onClose, onSave, saving, user }) {
       <form className="w-full max-w-xl overflow-hidden rounded-xl border border-lime-100/10 bg-[#101312] shadow-[0_18px_50px_rgba(0,0,0,0.42)]" onSubmit={(event) => { event.preventDefault(); onSave(form) }}>
         <div className="flex items-center justify-between border-b border-lime-100/10 px-4 py-3">
           <button className="grid h-8 w-8 place-items-center rounded-md text-slate-400 transition hover:bg-white/[0.04] hover:text-lime-100" onClick={onClose} type="button" aria-label="Close edit profile"><span className="text-xl leading-none">&times;</span></button>
-          <h2 className="text-base font-black text-lime-50">แก้ไขข้อมูลส่วนตัว</h2>
-          <button className="h-8 rounded-full bg-sky-100 px-5 text-xs font-black text-sky-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving || !form.username.trim()} type="submit">{saving ? 'Saving...' : 'บันทึก'}</button>
+          <h2 className="text-base font-black text-lime-50">Edit profile</h2>
+          <button className="h-8 rounded-full bg-sky-100 px-5 text-xs font-black text-sky-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving || !form.username.trim()} type="submit">{saving ? 'Saving...' : 'Save'}</button>
         </div>
         <div className="relative z-0 h-48 overflow-hidden bg-[#080b09]">
           <CoverImage preview={form.coverPreview} user={user} />
@@ -617,19 +617,19 @@ function EditProfileModal({ error, onClose, onSave, saving, user }) {
             <div className="mb-2 min-w-0 flex-1 rounded-lg bg-[#181d1c] px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-black text-lime-50"><AppIcon className="h-4 w-4" name="camera" />แก้ไขรูปภาพของคุณ</div>
-                  <p className="mt-1 text-xs text-slate-500">อัปโหลด JPG, PNG หรือ WebP ขนาดไม่เกิน 2MB</p>
+                  <div className="flex items-center gap-2 text-sm font-black text-lime-50"><AppIcon className="h-4 w-4" name="camera" />Update your profile photo</div>
+                  <p className="mt-1 text-xs text-slate-500">Upload JPG, PNG, or WebP up to 2MB.</p>
                 </div>
                 <label className="shrink-0 cursor-pointer rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-lime-50 transition hover:bg-white/[0.12]">
                   <input accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleAvatarChange} type="file" />
-                  แก้ไขรูปภาพของคุณ
+                  Change photo
                 </label>
               </div>
             </div>
           </div>
           <div className="mt-4 space-y-4">
-            <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-400">ชื่อ</span><input className="h-14 w-full rounded-md border border-lime-100/15 bg-[#121514] px-3 text-sm text-lime-50 outline-none transition placeholder:text-slate-500 focus:border-[#8fbf78]" maxLength={80} onChange={(event) => updateField('username', event.target.value)} value={form.username} /></label>
-            <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-400">ประวัติ</span><textarea className="min-h-24 w-full resize-none rounded-md border border-lime-100/15 bg-[#121514] px-3 py-3 text-sm leading-6 text-lime-50 outline-none transition placeholder:text-slate-500 focus:border-[#8fbf78]" maxLength={500} onChange={(event) => updateField('bio', event.target.value)} placeholder="เล่าเกี่ยวกับการปลูกพืชหรือบทบาทของคุณในห้องเรียน" value={form.bio} /></label>
+            <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-400">Name</span><input className="h-14 w-full rounded-md border border-lime-100/15 bg-[#121514] px-3 text-sm text-lime-50 outline-none transition placeholder:text-slate-500 focus:border-[#8fbf78]" maxLength={80} onChange={(event) => updateField('username', event.target.value)} value={form.username} /></label>
+            <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-400">Bio</span><textarea className="min-h-24 w-full resize-none rounded-md border border-lime-100/15 bg-[#121514] px-3 py-3 text-sm leading-6 text-lime-50 outline-none transition placeholder:text-slate-500 focus:border-[#8fbf78]" maxLength={500} onChange={(event) => updateField('bio', event.target.value)} placeholder="Share your plant growing role, lesson focus, or classroom goal." value={form.bio} /></label>
             {error ? <div className="rounded-md border border-rose-300/20 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
           </div>
         </div>
@@ -675,7 +675,7 @@ function SearchCenter({ query, results, loading, onQueryChange, onSelectUser }) 
             className="h-11 w-full rounded-full border border-lime-100/10 bg-[#080b09] pl-11 pr-4 text-sm text-lime-50 outline-none transition placeholder:text-slate-500 focus:border-[#8fbf78]"
             onChange={(event) => onQueryChange(event.target.value)}
             autoComplete="off"
-            placeholder="ค้นหา"
+            placeholder="Search"
             type="search"
             value={query}
           />
@@ -789,15 +789,15 @@ function NotificationsCenter({ items, onOpenPost, onSelectUser }) {
     <main className="min-w-0 overflow-y-auto bg-[#141817]">
       <header className="sticky top-0 z-10 border-b border-lime-100/10 bg-[#141817]/95 backdrop-blur">
         <div className="flex h-14 items-center justify-between px-5">
-          <h1 className="text-xl font-black text-lime-50">การแจ้งเตือน</h1>
+          <h1 className="text-xl font-black text-lime-50">Notifications</h1>
           <button className="grid h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-white/[0.04] hover:text-lime-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" type="button" aria-label="Notification settings">
             <AppIcon className="h-5 w-5" name="settings" />
           </button>
         </div>
         <div className="grid grid-cols-2 text-sm font-bold">
           {[
-            { id: 'all', label: 'ทั้งหมด' },
-            { id: 'mentions', label: 'การพูดถึง' },
+            { id: 'all', label: 'All' },
+            { id: 'mentions', label: 'Mentions' },
           ].map((nextTab) => (
             <button
               key={nextTab.id}
@@ -820,8 +820,8 @@ function NotificationsCenter({ items, onOpenPost, onSelectUser }) {
         </div>
       ) : (
         <section className="mx-auto max-w-md px-8 pt-10 text-left">
-          <h2 className="text-3xl font-black leading-tight text-lime-50">ยังไม่มีอะไรให้ดูที่นี่</h2>
-          <p className="mt-3 text-sm leading-6 text-[#8fa38a]">เมื่อมีคำขอเป็นเพื่อน ไลก์ หรือคอมเมนต์ในโพสต์ของคุณ กิจกรรมจะแสดงที่นี่</p>
+          <h2 className="text-3xl font-black leading-tight text-lime-50">Nothing to see here yet</h2>
+          <p className="mt-3 text-sm leading-6 text-[#8fa38a]">Friend requests, likes, and comments on your posts will appear here.</p>
         </section>
       )}
     </main>
@@ -981,9 +981,9 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
         kind: 'friend',
         icon: 'groups',
         title: displayName(friend.user),
-        body: 'ส่งคำขอเป็นเพื่อนถึงคุณ',
-        hint: 'ไปที่แผง Friends เพื่อตอบรับคำขอ',
-        time: 'เมื่อสักครู่',
+        body: 'sent you a friend request',
+        hint: 'Open the Friends panel to respond.',
+        time: 'just now',
         user: friend.user,
       }))
 
@@ -996,8 +996,8 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
         icon: 'chat',
         tone: 'comment',
         title: post.replies + ' comments',
-        body: 'มีคอมเมนต์ในโพสต์บันทึกพืชของคุณ',
-        hint: 'คลิกเพื่อเปิดโพสต์',
+        body: 'commented on your saved plant post',
+        hint: 'Click to open the post.',
         time: formatTime(post.created_at),
         post,
         user: post.user,
@@ -1011,8 +1011,8 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
         icon: 'heart',
         tone: 'heart',
         title: post.likes + ' likes',
-        body: 'มีคนกดใจโพสต์บันทึกพืชของคุณ',
-        hint: 'คลิกเพื่อเปิดโพสต์',
+        body: 'liked your saved plant post',
+        hint: 'Click to open the post.',
         time: formatTime(post.created_at),
         post,
         user: post.user,
@@ -1317,7 +1317,6 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
     </section>
   )
 }
-
 
 
 

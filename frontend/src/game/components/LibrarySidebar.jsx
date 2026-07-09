@@ -1,6 +1,17 @@
 import { AppIcon } from '../icons/IconifyIcon'
 import { LibraryThumb } from './LibraryThumb'
 
+function hasBrokenEncoding(value) {
+  const text = String(value ?? '')
+  return text.includes('\u00c3') || text.includes('\u00c2') || text.includes('\u00e0') || text.includes('\ufffd')
+}
+
+function readableItemName(item) {
+  const name = String(item?.name ?? '').trim()
+  if (item?.id === 'sprout' && (!name || hasBrokenEncoding(name))) return 'Elephant Ear'
+  return name || 'Plant'
+}
+
 export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply }) {
   return (
     <aside className="absolute bottom-0 left-0 top-16 z-40 w-[244px] overflow-visible border-r border-lime-100/15 bg-[#101511]/95 text-slate-100" aria-label="Plant and item library">
@@ -29,12 +40,19 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
 
               {expanded && (
                 <div className={`mt-2 rounded-md border border-lime-100/10 bg-black/20 p-2 ${section === 'Plants' ? 'grid gap-1.5' : 'grid grid-cols-2 gap-2'}`}>
+                  {visibleItems.length === 0 && (
+                    <div className={`${section === 'Items' ? 'col-span-2' : ''} rounded-md border border-dashed border-lime-100/15 bg-[#101511]/70 px-3 py-3 text-center`}>
+                      <strong className="block text-[11px] text-lime-50">No {section.toLowerCase()} in database</strong>
+                      <span className="mt-0.5 block text-[10px] leading-relaxed text-slate-400">Run the seeder or add records to enable this section.</span>
+                    </div>
+                  )}
                   {visibleItems.map((item) => {
+                    const itemName = readableItemName(item)
                     const itemLocked = readOnly || (section === 'Plants' && plantLocked) || (section === 'Items' && mockItems)
                     const selected = selectedAsset?.id === item.id
                     const lockLabel = section === 'Plants'
                       ? readOnly ? 'Friend plant is view only' : 'A plant is already growing'
-                      : mockItems ? 'Coming soon: pest prank item' : undefined
+                      : mockItems ? 'Friend tools are view-only' : undefined
                     const itemQuantity = section === 'Items' ? inventoryMap[item.itemKey ?? item.id] : null
                     const hasInventoryQuantity = Number.isFinite(Number(itemQuantity))
                     const quantityBadge = section === 'Items'
@@ -64,12 +82,12 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                               <LibraryThumb item={item} />
                             </span>
                             <span className="min-w-0 flex-1">
-                              <strong className="block truncate text-[12px] text-lime-50">{item.name}</strong>
+                              <strong className="block truncate text-[12px] text-lime-50">{itemName}</strong>
                               <span className="block truncate text-[10px] text-slate-400">{readOnly ? 'Friend plant' : item.detail}</span>
                             </span>
                             <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-slate-400" aria-label={item.planted ? 'Planted' : 'Not planted'}>
                               <span className={`h-2.5 w-2.5 rounded-full ${item.planted ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.12)]' : 'bg-red-400 shadow-[0_0_0_3px_rgba(248,113,113,.12)]'}`} />
-                              {item.planted ? '\u0e1b\u0e25\u0e39\u0e01\u0e41\u0e25\u0e49\u0e27' : '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1b\u0e25\u0e39\u0e01'}
+                              {item.planted ? 'Planted' : 'Not planted'}
                             </span>
                           </>
                         ) : (
@@ -80,8 +98,8 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                                 {quantityBadge}
                               </span>
                             )}
-                            <strong className="mt-1.5 block truncate text-[11px] text-lime-50">{item.name}</strong>
-                            <span className="block truncate text-[10px] text-slate-400">{mockItems ? 'mock prank item' : item.detail}</span>
+                            <strong className="mt-1.5 block truncate text-[11px] text-lime-50">{itemName}</strong>
+                            <span className="block truncate text-[10px] text-slate-400">{mockItems ? 'Coming soon' : item.detail}</span>
                             {!mockItems && (item.successText || item.failText) && (
                               <span className="pointer-events-none absolute left-1.5 right-1.5 top-[54px] z-30 rounded-md border border-lime-100/15 bg-[#07100b]/95 p-2 text-[9px] leading-relaxed text-slate-200 opacity-0 shadow-[0_10px_22px_rgba(0,0,0,.42)] transition group-hover:opacity-100 group-focus-visible:opacity-100">
                                 <span className="block font-black text-lime-100">{item.successText}</span>

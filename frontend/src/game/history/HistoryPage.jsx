@@ -16,7 +16,7 @@ function formatDate(value) {
 }
 
 function saveTitle(save) {
-  return save.plant?.name_th || save.plant?.name_en || save.title || 'Plant Simulation'
+  return save.plant?.name_en || save.plant?.name_th || save.title || 'Plant Simulation'
 }
 
 function saveStage(save) {

@@ -1,9 +1,9 @@
 import { AppIcon } from '../../icons/IconifyIcon'
 import { imageAssets } from '../../data/gameData'
-import { priceRange } from '../data/shopItems'
 
-export function ShopSidebar({ categories = [], latestItems = [], maxPrice, onPriceChange, searchQuery = '', selectedCategory, onSearchChange, onSelectCategory }) {
+export function ShopSidebar({ categories = [], latestItems = [], maxPrice, onPriceChange, priceRange, searchQuery = '', selectedCategory, onSearchChange, onSelectCategory }) {
   const priceProgress = ((maxPrice - priceRange.min) / (priceRange.max - priceRange.min)) * 100
+  const safeProgress = Number.isFinite(priceProgress) ? priceProgress : 100
 
   return (
     <aside className="space-y-5 text-slate-300" aria-label="Shop filters">
@@ -37,11 +37,11 @@ export function ShopSidebar({ categories = [], latestItems = [], maxPrice, onPri
               <span className="pointer-events-none absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-700" />
               <span
                 className="pointer-events-none absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-[#34d981]"
-                style={{ width: `${priceProgress}%` }}
+                style={{ width: `${safeProgress}%` }}
               />
               <span
                 className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#34d981] ring-2 ring-[#111a20]"
-                style={{ left: `${priceProgress}%` }}
+                style={{ left: `${safeProgress}%` }}
                 aria-hidden="true"
               />
               <input
@@ -109,6 +109,12 @@ export function ShopSidebar({ categories = [], latestItems = [], maxPrice, onPri
           Categories
         </h2>
         <div className="rounded-sm bg-[#111a20] p-2 ring-1 ring-slate-700/50">
+          {categories.length === 0 && (
+            <div className="rounded-sm border border-dashed border-slate-700/60 px-3 py-4 text-center">
+              <strong className="block text-[11px] text-slate-300">No database categories</strong>
+              <span className="mt-1 block text-[10px] text-slate-500">Seed shop items to fill this list.</span>
+            </div>
+          )}
           {categories.map((category) => {
             const active = selectedCategory === category.label
 
