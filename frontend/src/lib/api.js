@@ -47,7 +47,10 @@ export async function apiFetch(path, options = {}) {
 
   if (!response.ok) {
     const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
-    throw new Error(validationMessage || payload.message || 'API request failed')
+    const error = new Error(validationMessage || payload.message || 'API request failed')
+    error.status = response.status
+    error.payload = payload
+    throw error
   }
 
   return payload
@@ -101,6 +104,28 @@ export async function register(username, email, password) {
 
 export async function getMe() {
   return apiFetch('/me')
+}
+
+export async function requestPasswordResetOtp() {
+  return apiFetch('/auth/password-reset/request', { method: 'POST' })
+}
+
+export async function verifyPasswordResetOtp(otp) {
+  return apiFetch('/auth/password-reset/verify', {
+    method: 'POST',
+    body: JSON.stringify({ otp }),
+  })
+}
+
+export async function completePasswordReset(resetToken, password, passwordConfirmation) {
+  return apiFetch('/auth/password-reset/complete', {
+    method: 'POST',
+    body: JSON.stringify({
+      reset_token: resetToken,
+      password,
+      password_confirmation: passwordConfirmation,
+    }),
+  })
 }
 
 export async function updateMe(profile) {
@@ -283,6 +308,32 @@ export async function createSimulatorComment(simulatorId, commentText) {
 }
 export async function finishSimulator(simulatorId) {
   return apiFetch(`/simulators/${simulatorId}/finish`, {
+    method: 'POST',
+  })
+}
+export async function uprootSimulator(simulatorId) {
+  return apiFetch(`/simulators/${simulatorId}/uproot`, {
+    method: 'POST',
+  })
+}
+
+export async function shareSimulator(simulatorId, visibility = 'public', caption = '', snapshotImageData = null) {
+  return apiFetch(`/simulators/${simulatorId}/share`, {
+    method: 'POST',
+    body: JSON.stringify({ visibility, caption: caption || undefined, snapshot_image_data: snapshotImageData || undefined }),
+  })
+}
+
+export async function getSpectatorSimulator(simulatorId) {
+  return apiFetch(`/spectator/simulators/${simulatorId}`)
+}
+
+export async function getNotifications() {
+  return apiFetch('/notifications')
+}
+
+export async function markNotificationRead(notificationId) {
+  return apiFetch(`/notifications/${notificationId}/read`, {
     method: 'POST',
   })
 }

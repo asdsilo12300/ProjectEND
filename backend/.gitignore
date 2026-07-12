@@ -20,6 +20,16 @@
 /public/storage
 /storage/*.key
 /storage/pail
+!/storage/app/
+!/storage/app/public/
+!/storage/app/public/icon picture/
+!/storage/app/public/icon picture/**
+!/storage/app/public/models/
+!/storage/app/public/models/**
+!/storage/app/public/profile-avatars
+!/storage/app/public/profile-avatars/**
+!/storage/app/public/profile-covers
+!/storage/app/public/profile-covers/**
 /vendor
 _ide_helper.php
 Homestead.json

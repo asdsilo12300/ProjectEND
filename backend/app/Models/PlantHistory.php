@@ -22,9 +22,15 @@ class PlantHistory extends Model
         'duration_days',
         'visibility',
         'snapshot_image_url',
+        'game_state',
         'analysis_result',
         'direction',
     ];
+
+    protected function casts(): array
+    {
+        return ['game_state' => 'array'];
+    }
 
     public function user(): BelongsTo
     {

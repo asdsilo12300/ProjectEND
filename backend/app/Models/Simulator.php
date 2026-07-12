@@ -33,6 +33,10 @@ class Simulator extends Model
         'soil_temp',
         'air_temp',
         'status',
+        'share_visibility',
+        'state_version',
+        'shared_at',
+        'live_snapshot_url',
         'started_at',
         'ended_at',
         'maturity_reward_claimed_at',
@@ -51,6 +55,8 @@ class Simulator extends Model
             'ended_at' => 'datetime',
             'maturity_reward_claimed_at' => 'datetime',
             'maturity_reward_amount' => 'integer',
+            'state_version' => 'integer',
+            'shared_at' => 'datetime',
         ];
     }
 
@@ -82,6 +88,11 @@ class Simulator extends Model
     public function activePests(): HasMany
     {
         return $this->hasMany(SimulationPest::class)->where('status', 'active')->with('pest');
+    }
+
+    public function posts(): HasMany
+    {
+        return $this->hasMany(Post::class);
     }
 }
 

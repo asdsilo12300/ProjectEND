@@ -64,6 +64,11 @@ class User extends Authenticatable
         return $this->hasMany(UserItem::class);
     }
 
+    public function socialNotifications(): HasMany
+    {
+        return $this->hasMany(SocialNotification::class, 'recipient_id');
+    }
+
     public function experienceRequiredForNextLevel(?int $level = null): int
     {
         $currentLevel = max(1, $level ?? (int) ($this->level ?? 1));

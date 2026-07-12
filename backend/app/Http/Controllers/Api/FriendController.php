@@ -173,10 +173,11 @@ class FriendController extends Controller
     private function latestSimulatorForUser(int $userId): ?Simulator
     {
         return Simulator::query()
-            ->with(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
+            ->with(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
             ->where('user_id', $userId)
             ->whereNull('deleted_at')
-            ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
+            ->where('status', 'active')
+            ->whereIn('share_visibility', ['friends', 'public'])
             ->latest('updated_at')
             ->latest('id')
             ->first();

@@ -11,7 +11,7 @@ class Post extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['user_id', 'plant_history_id', 'caption', 'visibility'];
+    protected $fillable = ['user_id', 'plant_history_id', 'simulator_id', 'caption', 'visibility'];
 
     public function user(): BelongsTo
     {
@@ -21,6 +21,11 @@ class Post extends Model
     public function plantHistory(): BelongsTo
     {
         return $this->belongsTo(PlantHistory::class);
+    }
+
+    public function simulator(): BelongsTo
+    {
+        return $this->belongsTo(Simulator::class);
     }
 
     public function comments(): HasMany

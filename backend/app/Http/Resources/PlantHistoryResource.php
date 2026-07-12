@@ -23,6 +23,7 @@ class PlantHistoryResource extends JsonResource
             'duration_days' => (int) $this->duration_days,
             'visibility' => $this->visibility,
             'snapshot_image_url' => $this->snapshot_image_url,
+            'game_state' => $this->game_state,
             'analysis_result' => $this->analysis_result,
             'direction' => $this->direction,
             'created_at' => $this->created_at?->toISOString(),

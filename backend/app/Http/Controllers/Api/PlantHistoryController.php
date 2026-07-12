@@ -74,11 +74,46 @@ class PlantHistoryController extends Controller
             'duration_days' => $this->durationDays($simulator),
             'visibility' => $data['visibility'] ?? 'private',
             'snapshot_image_url' => $snapshotImageUrl,
+            'game_state' => $this->gameState($simulator),
             'analysis_result' => $analysis,
             'direction' => $direction,
         ]);
 
+        if ($history->visibility !== 'private') {
+            $post = Post::query()->withTrashed()->where('simulator_id', $simulator->id)->first();
+
+            if ($post) {
+                $post->restore();
+                $post->forceFill([
+                    'plant_history_id' => $history->id,
+                    'simulator_id' => null,
+                    'visibility' => $history->visibility,
+                ])->save();
+            } else {
+                Post::query()->create([
+                    'user_id' => $request->user()->id,
+                    'plant_history_id' => $history->id,
+                    'simulator_id' => null,
+                    'caption' => 'Harvested a plant and saved the complete game state.',
+                    'visibility' => $history->visibility,
+                ]);
+            }
+        }
+
         return new PlantHistoryResource($history->load(['plant.stages', 'finalStage']));
+    }
+
+    private function gameState(Simulator $simulator): array
+    {
+        $resource = (new \App\Http\Resources\SimulatorResource(
+            $simulator->fresh(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
+        ))->resolve(request());
+
+        return [
+            'schema_version' => 1,
+            'captured_at' => now()->toISOString(),
+            'simulator' => $resource,
+        ];
     }
 
     public function destroy(Request $request, PlantHistory $history): JsonResponse

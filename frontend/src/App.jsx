@@ -12,8 +12,11 @@ import { SimulationStage } from './game/scene/SimulationStage'
 import { CommunityPage } from './game/community/CommunityPage'
 import { HistoryPage } from './game/history/HistoryPage'
 import { ShopPage } from './game/shop/ShopPage'
+import { SettingsPage } from './game/settings/SettingsPage'
+import { PasswordResetPage } from './game/settings/PasswordResetPage'
+import { applySettings, loadSettings } from './game/settings/settingsPreferences'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, login as loginUser, register as registerUser, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl } from './lib/api'
+import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -202,6 +205,8 @@ function App() {
   const autosaveStateRef = useRef({})
   const isResettingRef = useRef(false)
   const ownGardenSnapshotRef = useRef(null)
+  const spectatorRequestRef = useRef(0)
+  const accountSessionRef = useRef(0)
   const stageSnapshotRef = useRef(null)
   const [saveCompleteHistory, setSaveCompleteHistory] = useState(null)
   const [saveReadyForNewPlant, setSaveReadyForNewPlant] = useState(false)
@@ -216,6 +221,11 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [inventoryItems, setInventoryItems] = useState([])
   const [shopCatalog, setShopCatalog] = useState([])
+  const [shareBusy, setShareBusy] = useState(false)
+
+  useEffect(() => {
+    applySettings(loadSettings())
+  }, [])
 
   useEffect(() => {
     if (!getToken()) return undefined
@@ -549,12 +559,15 @@ function App() {
   const persistCurrentSimulation = useCallback(async (options = {}) => {
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
     const state = autosaveStateRef.current
+    const accountSession = accountSessionRef.current
 
     if (visitingFriend || isResettingRef.current || window.localStorage.getItem(resetMarkerKey) || !simulatorId || !getToken() || !state.selectedPlant || !state.growingMode) {
       return null
     }
 
     const payload = await syncSimulatorSnapshot(simulatorId, buildSaveSnapshot(), { keepalive: options.keepalive })
+    if (accountSession !== accountSessionRef.current || !getToken()) return null
+
     const simulator = payload.data ?? payload
 
     if (!options.silent && simulator) {
@@ -944,7 +957,10 @@ function App() {
       )
 
       if (historySimulatorId && getToken() && selectedPlant) {
-        const payload = await savePlantHistory(historySimulatorId, { visibility: 'private', snapshot_image_data: snapshotImageData })
+        const historyVisibility = nextVisual?.share_visibility && nextVisual.share_visibility !== 'private'
+          ? nextVisual.share_visibility
+          : 'private'
+        const payload = await savePlantHistory(historySimulatorId, { visibility: historyVisibility, snapshot_image_data: snapshotImageData })
         const history = payload.data ?? payload
         await finishSimulator(historySimulatorId)
         window.localStorage.removeItem('plant_game_simulator_id')
@@ -961,6 +977,29 @@ function App() {
       setResetPending(false)
     } catch (error) {
       setActionMessage(error.message || 'Unable to save history')
+    }
+  }
+
+  async function toggleLiveShare() {
+    const simulatorId = previewSimulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
+    if (!simulatorId || !selectedPlant || visitingFriend || shareBusy) return
+
+    const previousVisibility = previewSimulationVisual?.share_visibility ?? 'private'
+    const visibility = previousVisibility === 'private' ? 'public' : 'private'
+    setShareBusy(true)
+    setSimulationVisual((current) => ({ ...current, share_visibility: visibility }))
+
+    try {
+      const snapshotImageData = visibility === 'private' ? null : stageSnapshotRef.current?.capture?.() ?? null
+      const payload = await shareSimulator(simulatorId, visibility, '', snapshotImageData)
+      const simulator = payload.data ?? payload
+      setSimulationVisual((current) => ({ ...current, ...simulator, current_model_url: simulator.current_model_url ?? current.current_model_url }))
+      setActionMessage(visibility === 'private' ? 'Live sharing stopped' : 'Your live garden is now visible in Community')
+    } catch (error) {
+      setSimulationVisual((current) => ({ ...current, share_visibility: previousVisibility }))
+      setActionMessage(error.message || 'Unable to change live sharing')
+    } finally {
+      setShareBusy(false)
     }
   }
 
@@ -999,7 +1038,7 @@ function App() {
 
     try {
       if (simulatorId && getToken()) {
-        await finishSimulator(simulatorId)
+        await uprootSimulator(simulatorId)
       }
     } catch {
       setActionMessage('Reset locally. The previous save will stay hidden until the server responds.')
@@ -1033,6 +1072,42 @@ function App() {
     setActivePage('auth')
   }
 
+  function clearClientSimulationSession({ hydrated = true } = {}) {
+    accountSessionRef.current += 1
+    spectatorRequestRef.current += 1
+    latestSaveLoadedRef.current = false
+    autosaveStateRef.current = {}
+    isResettingRef.current = false
+    ownGardenSnapshotRef.current = null
+    rewardClaimingRef.current = null
+    lastGrowthAtRef.current = 0
+
+    window.localStorage.removeItem('plant_game_simulator_id')
+    window.localStorage.removeItem(resetMarkerKey)
+
+    setVisitingFriend(null)
+    setWindows(defaultWindows())
+    setClimate({ ...defaultClimate })
+    setGrowingMode(null)
+    setModeLoading(false)
+    setSaveHydrated(hydrated)
+    setResetPending(false)
+    setOutdoorWeather(initialOutdoorWeather)
+    setAppliedAsset(null)
+    setSuppressedPests([])
+    setSimulationVisual(defaultSimulationVisual)
+    setGrowthTrack(initialGrowthTrack)
+    setSelectedPlant(null)
+    setSaveCompleteHistory(null)
+    setSaveReadyForNewPlant(false)
+    setInventoryItems([])
+    setCoinDelta(null)
+    setCoinBurst(null)
+    setExpBurst(null)
+    setShareBusy(false)
+    setActionMessage('')
+  }
+
   async function submitAuth(event) {
     event.preventDefault()
     setAuthStatus('loading')
@@ -1043,8 +1118,7 @@ function App() {
         ? await registerUser(authForm.username.trim(), authForm.email.trim(), authForm.password)
         : await loginUser(authForm.email.trim(), authForm.password)
 
-      setSaveHydrated(false)
-      latestSaveLoadedRef.current = false
+      clearClientSimulationSession({ hydrated: false })
       setUser(payload.user ?? payload.data ?? null)
       setAuthStatus('idle')
       setAuthForm({ username: '', email: '', password: '' })
@@ -1056,6 +1130,8 @@ function App() {
   }
 
   async function viewFriendGarden(friend) {
+    const requestId = spectatorRequestRef.current + 1
+    spectatorRequestRef.current = requestId
     ownGardenSnapshotRef.current = {
       appliedAsset,
       climate,
@@ -1063,8 +1139,9 @@ function App() {
       growthTrack,
       selectedPlant,
       simulationVisual,
+      windows,
     }
-    setVisitingFriend(friend)
+    setVisitingFriend({ ...friend, simulatorId: friend.latest_simulator?.id ?? null })
     setActivePage('lab')
     setWindows((value) => ({
       ...value,
@@ -1078,9 +1155,14 @@ function App() {
     try {
       const cachedSimulator = friend.latest_simulator ?? null
       const payload = cachedSimulator ? { data: cachedSimulator } : await getFriendLatestSimulator(friend.id)
-      const simulator = payload.data ?? null
+      const candidate = payload.data ?? null
+      const livePayload = candidate?.id ? await getSpectatorSimulator(candidate.id) : null
+      const simulator = livePayload?.data ?? livePayload ?? null
+
+      if (spectatorRequestRef.current !== requestId) return
 
       if (simulator) {
+        setVisitingFriend((current) => ({ ...current, simulatorId: simulator.id }))
         applySimulatorSnapshot(simulator, { persistLocalId: false })
         setActionMessage(`Viewing ${friend?.user?.username ?? 'friend'}'s plant`)
       } else {
@@ -1090,6 +1172,7 @@ function App() {
         setActionMessage(`${friend?.user?.username ?? 'Friend'} has no active plant yet`)
       }
     } catch (error) {
+      if (spectatorRequestRef.current !== requestId) return
       setSelectedPlant(null)
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
@@ -1097,8 +1180,75 @@ function App() {
     }
   }
 
+  async function viewCommunityGame(post) {
+    const liveSimulator = post?.live_simulator
+    const savedSimulator = post?.plant_history?.game_state?.simulator
+    const owner = post?.user ?? null
+
+    if (!liveSimulator?.id && !savedSimulator) {
+      setActionMessage('This game state is not available.')
+      return
+    }
+
+    const requestId = spectatorRequestRef.current + 1
+    spectatorRequestRef.current = requestId
+
+    ownGardenSnapshotRef.current = {
+      appliedAsset,
+      climate,
+      growingMode,
+      growthTrack,
+      selectedPlant,
+      simulationVisual,
+      windows,
+    }
+    setActivePage('lab')
+    setWindows((value) => ({
+      ...value,
+      comments: { ...value.comments, visible: Boolean(liveSimulator), collapsed: false },
+      monitor: { ...value.monitor, visible: true, collapsed: false },
+      climate: { ...value.climate, visible: false },
+      friends: { ...value.friends, visible: false },
+    }))
+
+    if (liveSimulator?.id) {
+      setVisitingFriend({ user: owner, simulatorId: liveSimulator.id, source: 'community' })
+      setActionMessage('Connecting to the live garden...')
+      try {
+        const payload = await getSpectatorSimulator(liveSimulator.id)
+        if (spectatorRequestRef.current !== requestId) return
+        applySimulatorSnapshot(payload.data ?? payload, { persistLocalId: false })
+        setActionMessage(`Watching ${owner?.username ?? 'this learner'} live`)
+      } catch (error) {
+        if (spectatorRequestRef.current !== requestId) return
+        leaveFriendGarden()
+        setActionMessage(error.status === 410 ? 'This garden is no longer live.' : (error.message || 'Unable to open this live garden'))
+      }
+      return
+    }
+
+    if (savedSimulator) {
+      setVisitingFriend({ user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id })
+      applySimulatorSnapshot(savedSimulator, { persistLocalId: false })
+      setActionMessage('Viewing a saved game state')
+      return
+    }
+
+  }
+
+  function viewSavedGameState(save) {
+    const simulator = save?.game_state?.simulator
+    if (!simulator) {
+      setActionMessage('This older save does not contain a game state.')
+      return
+    }
+
+    viewCommunityGame({ plant_history: save, user })
+  }
+
   function leaveFriendGarden() {
     const snapshot = ownGardenSnapshotRef.current
+    spectatorRequestRef.current += 1
     setVisitingFriend(null)
 
     if (snapshot) {
@@ -1108,20 +1258,62 @@ function App() {
       setGrowthTrack(snapshot.growthTrack)
       setSelectedPlant(snapshot.selectedPlant)
       setSimulationVisual(snapshot.simulationVisual)
+      setWindows(snapshot.windows ?? defaultWindows())
+    } else {
+      setWindows((value) => ({
+        ...value,
+        monitor: { ...value.monitor, visible: true },
+        climate: { ...value.climate, visible: true },
+        friends: { ...value.friends, visible: true },
+        comments: { ...value.comments, visible: true },
+      }))
     }
 
     ownGardenSnapshotRef.current = null
-    setWindows((value) => ({
-      ...value,
-      climate: { ...value.climate, visible: true },
-      friends: { ...value.friends, visible: true },
-    }))
     setActionMessage('Back to your garden')
   }
+
+  useEffect(() => {
+    const simulatorId = visitingFriend?.simulatorId
+    if (!simulatorId || visitingFriend?.historyReplay) return undefined
+
+    let cancelled = false
+    let requestRunning = false
+
+    async function refreshSpectatorState() {
+      if (requestRunning) return
+      requestRunning = true
+      try {
+        const payload = await getSpectatorSimulator(simulatorId)
+        if (!cancelled) applySimulatorSnapshot(payload.data ?? payload, { persistLocalId: false })
+      } catch (error) {
+        if (!cancelled && (error.status === 410 || error.status === 403 || error.status === 404)) {
+          const ownerName = visitingFriend?.user?.username ?? 'The owner'
+          leaveFriendGarden()
+          setActionMessage(`${ownerName}'s live garden has ended.`)
+        }
+      } finally {
+        requestRunning = false
+      }
+    }
+
+    const interval = window.setInterval(refreshSpectatorState, 1500)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [applySimulatorSnapshot, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
+
+  function navigateToPage(page) {
+    if (visitingFriend) {
+      leaveFriendGarden()
+    }
+    setActivePage(page)
+  }
+
   function logoutUser() {
-    latestSaveLoadedRef.current = false
     clearToken()
-    window.localStorage.removeItem('plant_game_simulator_id')
+    clearClientSimulationSession()
     setUser(null)
     setProfileOpen(false)
     setActivePage('lab')
@@ -1135,7 +1327,7 @@ function App() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
-      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} onNavigate={setActivePage} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} onNavigate={navigateToPage} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
       {saveCompleteHistory && (
         <div className="absolute inset-0 z-50 grid place-items-center bg-black/45 px-4 backdrop-blur-sm">
           <div className="animate-[saveModalIn_.24s_ease-out] w-full max-w-[420px] overflow-hidden rounded-xl border border-lime-100/20 bg-[#101511]/96 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.5)]">
@@ -1178,9 +1370,13 @@ function App() {
       ) : activePage === 'shop' ? (
         <ShopPage onInventoryItemChange={upsertInventoryItem} onUserUpdate={setUser} />
       ) : activePage === 'history' ? (
-        <HistoryPage />
+        <HistoryPage onOpenGameState={viewSavedGameState} />
       ) : activePage === 'community' ? (
-        <CommunityPage currentUser={user} onUserChange={setUser} />
+        <CommunityPage currentUser={user} onOpenGame={viewCommunityGame} onUserChange={setUser} />
+      ) : activePage === 'settings' ? (
+        <SettingsPage user={user} onBack={() => navigateToPage('lab')} onResetPassword={() => navigateToPage('password-reset')} />
+      ) : activePage === 'password-reset' ? (
+        <PasswordResetPage user={user} onBack={() => navigateToPage('settings')} onDone={() => navigateToPage('settings')} />
       ) : (
         <>
           {labReady && (
@@ -1195,6 +1391,9 @@ function App() {
                 selectedItemCursorUrl={selectedItemCursorUrl}
                 onUseSelectedItem={applySelectedItem}
                 readOnly={Boolean(visitingFriend)}
+                shareBusy={shareBusy}
+                shareVisibility={previewSimulationVisual?.share_visibility ?? 'private'}
+                toggleLiveShare={toggleLiveShare}
                 resetSimulation={resetSimulation}
                 saveSimulation={saveSimulation}
                 sceneAssets={modelAssets}
@@ -1205,7 +1404,7 @@ function App() {
               {visitingFriend && (
                 <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
-                  <span><strong className="text-lime-50">{visitorName}'s plant</strong> - view only</span>
+                  <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved game state' : `${visitorName}'s plant`}</strong> - view only</span>
                   <button
                     className="rounded-md border border-lime-100/15 bg-white/[0.055] px-2 py-1 font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                     type="button"

@@ -8,6 +8,7 @@ use App\Models\Friendship;
 use App\Models\Item;
 use App\Models\ItemUsage;
 use App\Models\Plant;
+use App\Models\Post;
 use App\Models\SimulationLog;
 use App\Models\SimulationPest;
 use App\Models\Simulator;
@@ -18,6 +19,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class SimulatorController extends Controller
@@ -99,7 +102,10 @@ class SimulatorController extends Controller
             'rain' => ['nullable', 'numeric', 'min:0', 'max:500'],
         ]);
 
-        return new SimulatorResource($engine->tick($simulator, $factors));
+        $updated = $engine->tick($simulator, $factors);
+        $updated->increment('state_version');
+
+        return new SimulatorResource($updated->fresh(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
     }
 
     public function sync(Request $request, Simulator $simulator): SimulatorResource
@@ -143,6 +149,7 @@ class SimulatorController extends Controller
             'soil_temp' => $data['soil_temp'],
             'air_temp' => $data['air_temp'],
             'status' => 'active',
+            'state_version' => ((int) $simulator->state_version) + 1,
         ];
 
         DB::transaction(function () use ($data, $simulator, $state): void {
@@ -225,10 +232,120 @@ class SimulatorController extends Controller
 
         $simulator->update([
             'status' => 'completed',
+            'share_visibility' => 'private',
+            'state_version' => ((int) $simulator->state_version) + 1,
             'ended_at' => now(),
         ]);
 
+        Post::query()->where('simulator_id', $simulator->id)->delete();
+
         return response()->json(['data' => ['id' => $simulator->id, 'status' => 'completed']]);
+    }
+
+    public function uproot(Request $request, Simulator $simulator): JsonResponse
+    {
+        abort_unless($simulator->user_id === $request->user()->id, 403);
+
+        $simulator->forceFill([
+            'status' => 'cancelled',
+            'share_visibility' => 'private',
+            'ended_at' => now(),
+            'state_version' => ((int) $simulator->state_version) + 1,
+        ])->save();
+
+        Post::query()->where('simulator_id', $simulator->id)->delete();
+
+        return response()->json(['data' => ['id' => $simulator->id, 'status' => 'cancelled']]);
+    }
+
+    public function share(Request $request, Simulator $simulator): JsonResponse
+    {
+        abort_unless($simulator->user_id === $request->user()->id, 403);
+        abort_unless($simulator->status === 'active', 409, 'Only an active plant can be shared live.');
+
+        $data = $request->validate([
+            'visibility' => ['required', Rule::in(['private', 'friends', 'public'])],
+            'caption' => ['nullable', 'string', 'max:1200'],
+            'snapshot_image_data' => ['nullable', 'string'],
+        ]);
+
+        $liveSnapshotUrl = $simulator->live_snapshot_url;
+        if ($data['visibility'] !== 'private' && ! empty($data['snapshot_image_data'])) {
+            $liveSnapshotUrl = $this->storeLiveSnapshot($data['snapshot_image_data'], $simulator->id) ?? $liveSnapshotUrl;
+        }
+
+        $simulator->forceFill([
+            'share_visibility' => $data['visibility'],
+            'shared_at' => $data['visibility'] === 'private' ? null : now(),
+            'live_snapshot_url' => $liveSnapshotUrl,
+            'state_version' => ((int) $simulator->state_version) + 1,
+        ])->save();
+
+        $post = Post::query()->withTrashed()->firstOrNew([
+            'user_id' => $request->user()->id,
+            'simulator_id' => $simulator->id,
+        ]);
+
+        if ($data['visibility'] === 'private') {
+            if ($post->exists) {
+                $post->delete();
+            }
+        } else {
+            if ($post->exists && $post->trashed()) {
+                $post->restore();
+            }
+            $post->fill([
+                'plant_history_id' => null,
+                'caption' => $data['caption'] ?? 'My plant is growing live. Open the garden to watch its progress.',
+                'visibility' => $data['visibility'],
+            ])->save();
+        }
+
+        return response()->json([
+            'data' => (new SimulatorResource($simulator->fresh(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),
+        ]);
+    }
+
+    public function spectate(Request $request, Simulator $simulator): SimulatorResource
+    {
+        if ($simulator->status !== 'active' || $simulator->ended_at || ($simulator->share_visibility ?? 'private') === 'private') {
+            abort(410, 'This live garden is no longer available.');
+        }
+
+        $viewer = $request->user();
+        $isOwner = $simulator->user_id === $viewer->id;
+        $isFriend = Friendship::query()
+            ->where('status', 'accepted')
+            ->where(function ($query) use ($viewer, $simulator): void {
+                $query->where(function ($pair) use ($viewer, $simulator): void {
+                    $pair->where('requester_id', $viewer->id)->where('addressee_id', $simulator->user_id);
+                })->orWhere(function ($pair) use ($viewer, $simulator): void {
+                    $pair->where('requester_id', $simulator->user_id)->where('addressee_id', $viewer->id);
+                });
+            })
+            ->exists();
+
+        abort_unless($isOwner || $simulator->share_visibility === 'public' || ($simulator->share_visibility === 'friends' && $isFriend), 403);
+
+        return new SimulatorResource($simulator->load(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
+    }
+
+    private function storeLiveSnapshot(string $imageData, int $simulatorId): ?string
+    {
+        if (! preg_match('/^data:image\/(png|jpeg|webp);base64,(.+)$/s', $imageData, $matches)) {
+            return null;
+        }
+
+        $binary = base64_decode($matches[2], true);
+        if ($binary === false || strlen($binary) > 6 * 1024 * 1024) {
+            return null;
+        }
+
+        $extension = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
+        $path = 'live-snapshots/simulator-'.$simulatorId.'-'.Str::uuid().'.'.$extension;
+        Storage::disk('public')->put($path, $binary);
+
+        return $path;
     }
     public function storeLog(Request $request, Simulator $simulator): SimulatorResource
     {

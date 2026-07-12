@@ -95,7 +95,7 @@ function PlantStatusHud({ growthPoint = 0, growthRate = 0, health = 100 }) {
   )
 }
 
-export function SimulationStage({ actionMessage, coinBurst = null, expBurst = null, mode = 'greenhouse', plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, simulationVisual, snapshotRef = null }) {
+export function SimulationStage({ actionMessage, coinBurst = null, expBurst = null, mode = 'greenhouse', plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -211,6 +211,22 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
             <strong className="block text-sm text-lime-50">Select a plant to begin</strong>
             <span className="mt-1 block text-xs leading-5 text-slate-400">Choose Sprout from Lab assets to load the plant model.</span>
           </div>
+        )}
+        {!readOnly && plantSelected && (
+          <button
+            className={`absolute left-1/2 top-20 z-30 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border bg-[#101511]/94 px-4 py-2.5 text-sm font-semibold shadow-[0_8px_18px_rgba(0,0,0,.32)] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 ${shareVisibility === 'private' ? 'border-lime-100/15 text-slate-200 hover:bg-[#17201a]' : 'border-red-300/35 text-lime-50 hover:bg-[#1b1e18]'}`}
+            type="button"
+            onClick={toggleLiveShare}
+            disabled={shareBusy}
+            aria-label={shareVisibility === 'private' ? 'Start live sharing' : 'Stop live sharing'}
+            aria-pressed={shareVisibility !== 'private'}
+          >
+            <span className="relative grid h-5 w-5 place-items-center">
+              <AppIcon className={`h-5 w-5 ${shareBusy ? 'animate-pulse' : ''}`} name="live" />
+              <span className={`absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-[#101511] ${shareVisibility === 'private' ? 'bg-slate-500' : 'bg-red-500'}`} aria-hidden="true" />
+            </span>
+            <span>{shareBusy ? 'Updating...' : 'Live'}</span>
+          </button>
         )}
         {actionMessage && (
           <div className="pointer-events-none absolute bottom-32 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs font-semibold text-lime-50 shadow-[0_8px_18px_rgba(0,0,0,.32)]">

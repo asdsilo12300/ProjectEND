@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPostComment, createPostCommentReply, getCommunityLeaderboard, getFriendPosts, getFriends, getMe, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
+import { createPostComment, createPostCommentReply, getCommunityLeaderboard, getFriendPosts, getFriends, getMe, getNotifications, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, markNotificationRead, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
 import { AppIcon } from '../icons/IconifyIcon'
 
 function displayName(user) {
@@ -36,6 +36,17 @@ function formatTime(value) {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 }
 
+function formatNotificationTime(value) {
+  const time = new Date(value).getTime()
+  if (!Number.isFinite(time)) return 'just now'
+  const seconds = Math.max(0, Math.round((Date.now() - time) / 1000))
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d`
+  return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
+
 function looksLikeBrokenThai(value) {
   return /(?:Ã|Â|à[¸¹]|â(?:€|„|¢|¹|¸))/u.test(String(value ?? ''))
 }
@@ -68,6 +79,7 @@ function normalizeUser(user) {
 function mapPost(post) {
   const user = post.user ?? {}
   const history = post.plant_history ?? null
+  const liveSimulator = post.live_simulator ?? null
   const name = post.author ?? displayName(user)
 
   return {
@@ -82,10 +94,11 @@ function mapPost(post) {
     likedByMe: Boolean(post.liked_by_me ?? post.likedByMe),
     level: user.level ?? post.level ?? null,
     history,
+    liveSimulator,
   }
 }
 
-function LeftNavItem({ active = false, icon, label, onClick }) {
+function LeftNavItem({ active = false, badge = 0, icon, label, onClick }) {
   return (
     <button
       type="button"
@@ -94,7 +107,14 @@ function LeftNavItem({ active = false, icon, label, onClick }) {
       }`}
       onClick={onClick}
     >
-      <AppIcon className={`h-4 w-4 ${active ? 'text-lime-100' : 'text-slate-400'}`} name={icon} />
+      <span className="relative shrink-0">
+        <AppIcon className={`h-4 w-4 ${active ? 'text-lime-100' : 'text-slate-400'}`} name={icon} />
+        {badge > 0 ? (
+          <span className="absolute -right-2 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-black leading-none text-white ring-2 ring-[#151817]">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ) : null}
+      </span>
       {label}
     </button>
   )
@@ -143,8 +163,17 @@ function CommunityMotionStyles() {
         18% { opacity: 1; transform: translate(-50%, -2px) scale(1.12); filter: blur(0); }
         100% { opacity: 0; transform: translate(-50%, -22px) scale(.88); filter: blur(0); }
       }
+      @keyframes pg-eye-focus {
+        0% { opacity: 0; transform: scale(.72); }
+        65% { opacity: 1; transform: scale(1.08); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      .game-preview:hover .game-preview-eye,
+      .game-preview:focus-visible .game-preview-eye { animation: pg-eye-focus 260ms cubic-bezier(.16,1,.3,1) both; }
       @media (prefers-reduced-motion: reduce) {
         [style*='pg-heart-pop'] { animation-duration: 1ms !important; }
+        .game-preview:hover .game-preview-eye,
+        .game-preview:focus-visible .game-preview-eye { animation-duration: 1ms !important; }
       }
     `}</style>
   )
@@ -174,26 +203,50 @@ function addReplyToTree(comments, parentId, reply) {
   })
 }
 
-function HistoryPreview({ history }) {
-  if (!history) return null
+function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
+  if (!history && !liveSimulator) return null
 
-  const score = Number(history.total_score ?? 0)
-  const health = Number(history.final_health ?? history.health ?? 0)
+  const isLive = Boolean(liveSimulator && liveSimulator.status === 'active' && liveSimulator.share_visibility !== 'private')
+  const score = Number(history?.total_score ?? liveSimulator?.growth_point ?? 0)
+  const health = Number(history?.final_health ?? history?.health ?? liveSimulator?.health ?? 0)
+  const snapshotUrl = history?.snapshot_image_url || liveSimulator?.snapshot_image_url
+  const imageUrl = snapshotUrl || liveSimulator?.plant?.image_url
   return (
-    <div className="mt-3 overflow-hidden rounded-lg border border-lime-100/10 bg-[#172344]">
+    <button
+      className="game-preview group relative mt-3 block w-full overflow-hidden rounded-lg border border-lime-100/10 bg-[#172344] text-left transition hover:border-[#9bcf82]/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpenGame?.(post)
+      }}
+      aria-label={isLive ? 'Enter spectator mode' : 'Open saved game state'}
+    >
       <div className="relative h-48 bg-[#080b09]">
-        {history.snapshot_image_url ? (
-          <img className="h-full w-full object-cover" src={resolveAssetUrl(history.snapshot_image_url)} alt="Shared plant history" />
+        {imageUrl ? (
+          <img className={`h-full w-full transition duration-300 group-hover:scale-[1.015] ${snapshotUrl ? 'object-cover' : 'object-contain p-6'}`} src={resolveAssetUrl(imageUrl)} alt={isLive ? 'Live plant garden' : 'Saved plant game state'} />
         ) : (
-          <div className="grid h-full place-items-center text-sm text-slate-400">Shared plant snapshot</div>
+          <div className="grid h-full place-items-center text-sm text-slate-400">{isLive ? 'Live plant garden' : 'Saved game state'}</div>
         )}
+        <span className={`absolute left-3 top-3 inline-flex items-center gap-2 rounded-md px-2 py-1 text-[10px] font-black ${isLive ? 'bg-[#9bcf82] text-[#101511]' : 'bg-[#101511]/90 text-lime-100'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-[#101511]' : 'bg-slate-400'}`} />
+          {isLive ? 'LIVE GARDEN' : 'SAVED GAME STATE'}
+        </span>
+        <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/0 transition duration-200 group-hover:bg-black/35 group-focus-visible:bg-black/35">
+          <span className="game-preview-eye grid h-12 w-12 scale-75 place-items-center rounded-full border border-lime-100/25 bg-[#101511]/90 text-lime-100 opacity-0 shadow-[0_8px_18px_rgba(0,0,0,.3)] group-hover:opacity-100 group-focus-visible:opacity-100">
+            <AppIcon className="h-6 w-6" name="eye" />
+          </span>
+        </span>
       </div>
       <div className="grid grid-cols-3 gap-2 p-3 text-xs">
         <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">Score <strong className="text-lime-100">{score}</strong></span>
         <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">Health <strong className="text-lime-100">{health}%</strong></span>
-        <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">Days <strong className="text-lime-100">{history.duration_days ?? 1}</strong></span>
+        <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{isLive ? 'Growth' : 'Days'} <strong className="text-lime-100">{isLive ? `${Math.round(score)}%` : history?.duration_days ?? 1}</strong></span>
       </div>
-    </div>
+      <span className="flex w-full items-center justify-center gap-2 border-t border-lime-100/10 bg-[#9bcf82]/10 px-3 py-3 text-xs font-black text-lime-100 transition group-hover:bg-[#9bcf82]/18">
+        <AppIcon className="h-4 w-4" name="eye" />
+        {isLive ? 'Enter spectator mode' : 'Open saved game state'}
+      </span>
+    </button>
   )
 }
 
@@ -226,7 +279,7 @@ function ProfileHoverCard({ onSelectUser, user }) {
   )
 }
 
-function FeedPost({ onOpenPost, onSelectUser, onToggleLike, post, reactionBurstKey }) {
+function FeedPost({ onOpenGame, onOpenPost, onSelectUser, onToggleLike, post, reactionBurstKey }) {
   const postUser = post.user ?? { username: post.author, level: post.level }
 
   return (
@@ -268,7 +321,7 @@ function FeedPost({ onOpenPost, onSelectUser, onToggleLike, post, reactionBurstK
           </div>
           <div className="block w-full text-left">
             <p className="whitespace-pre-line text-sm leading-6 text-slate-100">{post.body}</p>
-            {post.history ? <HistoryPreview history={post.history} /> : null}
+            {post.history || post.liveSimulator ? <HistoryPreview history={post.history} liveSimulator={post.liveSimulator} onOpenGame={onOpenGame} post={post} /> : null}
           </div>
           <div className="mt-5 grid max-w-[180px] grid-cols-2 text-slate-400">
             <ActionButton active={post.likedByMe} burstKey={reactionBurstKey} icon="heart" label="Like post" onClick={() => onToggleLike(post)} value={post.likes} />
@@ -372,7 +425,7 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
     </div>
   )
 }
-function PostModal({ commentBurstKeys, commentDraft, comments, currentUser, onClose, onCommentDraftChange, onReplyDraftChange, onSelectUser, onStartReply, onSubmitComment, onSubmitReply, onToggleCommentLike, onToggleLike, post, postBurstKey, replyingToId, replyDrafts, submittingComment, submittingReply }) {
+function PostModal({ commentBurstKeys, commentDraft, comments, currentUser, onClose, onCommentDraftChange, onOpenGame, onReplyDraftChange, onSelectUser, onStartReply, onSubmitComment, onSubmitReply, onToggleCommentLike, onToggleLike, post, postBurstKey, replyingToId, replyDrafts, submittingComment, submittingReply }) {
   if (!post) return null
 
   const postUser = post.user ?? { username: post.author, level: post.level }
@@ -428,7 +481,7 @@ function PostModal({ commentBurstKeys, commentDraft, comments, currentUser, onCl
                 <ProfileHoverCard onSelectUser={selectProfile} user={postUser} />
               </div>
               <p className="whitespace-pre-line text-sm leading-6 text-slate-100">{post.body}</p>
-              {post.history ? <HistoryPreview history={post.history} /> : null}
+              {post.history || post.liveSimulator ? <HistoryPreview history={post.history} liveSimulator={post.liveSimulator} onOpenGame={onOpenGame} post={post} /> : null}
             </div>
           </div>
 
@@ -487,7 +540,7 @@ function PostModal({ commentBurstKeys, commentDraft, comments, currentUser, onCl
     </div>
   )
 }
-function ProfileCenter({ friendsCount, isOwnProfile = true, onAddFriend, onBack, onEditProfile, onOpenPost, onSelectUser, onToggleLike, posts, reactionBursts, user }) {
+function ProfileCenter({ friendsCount, isOwnProfile = true, onAddFriend, onBack, onEditProfile, onOpenGame, onOpenPost, onSelectUser, onToggleLike, posts, reactionBursts, user }) {
   const name = displayName(user)
   const handle = '@' + (user?.username ?? name.replace(/\s+/g, '').toLowerCase())
   const profilePosts = posts.filter((post) => {
@@ -560,7 +613,7 @@ function ProfileCenter({ friendsCount, isOwnProfile = true, onAddFriend, onBack,
       </section>
 
       {profilePosts.map((post) => (
-        <FeedPost key={post.id} onOpenPost={onOpenPost} onSelectUser={onSelectUser} onToggleLike={onToggleLike} post={post} reactionBurstKey={reactionBursts['post-' + post.id]} />
+        <FeedPost key={post.id} onOpenGame={onOpenGame} onOpenPost={onOpenPost} onSelectUser={onSelectUser} onToggleLike={onToggleLike} post={post} reactionBurstKey={reactionBursts['post-' + post.id]} />
       ))}
       {!profilePosts.length ? <div className="grid min-h-[320px] place-items-center border-t border-lime-100/10 px-8 text-center text-sm text-slate-400">Shared plant history posts will appear here.</div> : null}
     </main>
@@ -756,48 +809,52 @@ function RightDashboard({ leaderboard, onOpenSearch }) {
   )
 }
 
-function NotificationRow({ item, onOpenPost, onSelectUser }) {
-  const isPost = Boolean(item.post)
+function NotificationRow({ item, onOpen }) {
+  const actorName = displayName(item.actor)
+  const action = item.type === 'like'
+    ? 'liked your post'
+    : item.type === 'comment_like'
+      ? 'liked your comment'
+      : item.type === 'reply'
+        ? 'replied to your comment'
+        : 'commented on your post'
 
   return (
     <button
-      className="flex w-full gap-3 border-b border-lime-100/10 px-7 py-5 text-left transition hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
-      onClick={() => (isPost ? onOpenPost?.(item.post) : onSelectUser?.(item.user))}
+      className={`relative flex w-full gap-3 border-b border-lime-100/10 px-7 py-4 text-left transition hover:bg-white/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${item.is_read ? 'bg-transparent' : 'bg-[#9bcf82]/[0.055]'}`}
+      onClick={() => onOpen(item)}
       type="button"
     >
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${item.tone === 'heart' ? 'bg-[#263022] text-[#bfe8a9]' : item.tone === 'comment' ? 'bg-[#263022] text-[#bfe8a9]' : 'bg-[#263022] text-lime-100'}`}>
-        <AppIcon className="h-5 w-5" name={item.icon} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          {item.user ? <UserAvatar className="h-7 w-7 text-[11px]" fallback={avatarLabel(displayName(item.user))} user={item.user} /> : null}
-          <strong className="truncate text-sm text-lime-50">{item.title}</strong>
-          <span className="text-xs text-[#78906f]">{item.time}</span>
+      {!item.is_read ? <span className="absolute right-5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-red-500" aria-label="Unread" /> : null}
+      <UserAvatar className="h-11 w-11 text-xs" fallback={avatarLabel(actorName)} user={item.actor} />
+      <span className="min-w-0 flex-1 pr-7">
+        <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm leading-5">
+          <strong className="text-lime-50">{actorName}</strong>
+          <span className={item.is_read ? 'text-slate-400' : 'text-slate-200'}>{action}</span>
+          <span className="text-xs text-[#78906f]">{formatNotificationTime(item.created_at)}</span>
         </span>
-        <span className="mt-1 block text-sm leading-6 text-[#d7e3cf]">{item.body}</span>
-        <span className="mt-1 block text-xs text-[#8fa38a]">{item.hint}</span>
+        <span className="mt-1 block text-xs text-[#8fa38a]">On {item.plant_name || 'your plant update'}</span>
+        {item.excerpt ? <span className="mt-1 block truncate text-xs text-slate-300">“{item.excerpt}”</span> : null}
       </span>
     </button>
   )
 }
 
-function NotificationsCenter({ items, onOpenPost, onSelectUser }) {
+function NotificationsCenter({ items, onOpen }) {
   const [tab, setTab] = useState('all')
-  const visibleItems = tab === 'mentions' ? items.filter((item) => item.kind === 'mention') : items
+  const visibleItems = tab === 'unread' ? items.filter((item) => !item.is_read) : items
 
   return (
     <main className="min-w-0 overflow-y-auto bg-[#141817]">
       <header className="sticky top-0 z-10 border-b border-lime-100/10 bg-[#141817]/95 backdrop-blur">
         <div className="flex h-14 items-center justify-between px-5">
           <h1 className="text-xl font-black text-lime-50">Notifications</h1>
-          <button className="grid h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-white/[0.04] hover:text-lime-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" type="button" aria-label="Notification settings">
-            <AppIcon className="h-5 w-5" name="settings" />
-          </button>
+          <span className="text-xs text-[#8fa38a]">Updates appear automatically</span>
         </div>
         <div className="grid grid-cols-2 text-sm font-bold">
           {[
             { id: 'all', label: 'All' },
-            { id: 'mentions', label: 'Mentions' },
+            { id: 'unread', label: 'Unread' },
           ].map((nextTab) => (
             <button
               key={nextTab.id}
@@ -815,20 +872,20 @@ function NotificationsCenter({ items, onOpenPost, onSelectUser }) {
       {visibleItems.length ? (
         <div>
           {visibleItems.map((item) => (
-            <NotificationRow key={item.id} item={item} onOpenPost={onOpenPost} onSelectUser={onSelectUser} />
+            <NotificationRow key={item.id} item={item} onOpen={onOpen} />
           ))}
         </div>
       ) : (
         <section className="mx-auto max-w-md px-8 pt-10 text-left">
           <h2 className="text-3xl font-black leading-tight text-lime-50">Nothing to see here yet</h2>
-          <p className="mt-3 text-sm leading-6 text-[#8fa38a]">Friend requests, likes, and comments on your posts will appear here.</p>
+          <p className="mt-3 text-sm leading-6 text-[#8fa38a]">Likes, comments, and replies on your plant posts will appear here.</p>
         </section>
       )}
     </main>
   )
 }
 
-function FeedCenter({ posts, friendPosts, activeFeed, onFeedChange, onOpenPost, onSelectUser, onToggleLike, reactionBursts }) {
+function FeedCenter({ posts, friendPosts, activeFeed, onFeedChange, onOpenGame, onOpenPost, onSelectUser, onToggleLike, reactionBursts }) {
   const visiblePosts = activeFeed === 'friends' ? friendPosts : posts
 
   return (
@@ -852,7 +909,7 @@ function FeedCenter({ posts, friendPosts, activeFeed, onFeedChange, onOpenPost, 
         </button>
       </div>
       {visiblePosts.map((post) => (
-        <FeedPost key={post.id} onOpenPost={onOpenPost} onSelectUser={onSelectUser} onToggleLike={onToggleLike} post={post} reactionBurstKey={reactionBursts[`post-${post.id}`]} />
+        <FeedPost key={post.id} onOpenGame={onOpenGame} onOpenPost={onOpenPost} onSelectUser={onSelectUser} onToggleLike={onToggleLike} post={post} reactionBurstKey={reactionBursts[`post-${post.id}`]} />
       ))}
       {!visiblePosts.length ? (
         <div className="grid min-h-[420px] place-items-center px-8 text-center text-sm text-slate-400">
@@ -863,7 +920,7 @@ function FeedCenter({ posts, friendPosts, activeFeed, onFeedChange, onOpenPost, 
   )
 }
 
-export function CommunityPage({ currentUser = null, onUserChange } = {}) {
+export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } = {}) {
   const [activeView, setActiveView] = useState('home')
   const [activeFeed, setActiveFeed] = useState('for-you')
   const [posts, setPosts] = useState([])
@@ -871,7 +928,7 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
   const [user, setUser] = useState(currentUser)
   const [selectedProfile, setSelectedProfile] = useState(null)
   const [friendsCount, setFriendsCount] = useState(0)
-  const [friendRows, setFriendRows] = useState([])
+  const [, setFriendRows] = useState([])
   const [leaderboard, setLeaderboard] = useState({ levels: [], growers: [] })
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -887,6 +944,8 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
   const [editingProfile, setEditingProfile] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState('')
+  const [notificationItems, setNotificationItems] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -933,6 +992,33 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
   }, [])
 
   useEffect(() => {
+    if (!getToken()) return undefined
+    let cancelled = false
+
+    async function loadNotifications() {
+      try {
+        const payload = await getNotifications()
+        if (!cancelled) {
+          setNotificationItems(payload.data ?? [])
+          setUnreadCount(Number(payload.unread_count ?? 0))
+        }
+      } catch {
+        if (!cancelled) {
+          setNotificationItems([])
+          setUnreadCount(0)
+        }
+      }
+    }
+
+    loadNotifications()
+    const interval = window.setInterval(loadNotifications, 15000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [])
+
+  useEffect(() => {
     const query = searchQuery.trim()
     let cancelled = false
 
@@ -971,55 +1057,6 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
       return true
     })
   }, [friendPosts, posts])
-
-  const notificationItems = useMemo(() => {
-    const ownUserId = user?.id ? String(user.id) : null
-    const requests = friendRows
-      .filter((friend) => friend.status === 'pending' && friend.direction === 'incoming')
-      .map((friend) => ({
-        id: 'friend-' + friend.id,
-        kind: 'friend',
-        icon: 'groups',
-        title: displayName(friend.user),
-        body: 'sent you a friend request',
-        hint: 'Open the Friends panel to respond.',
-        time: 'just now',
-        user: friend.user,
-      }))
-
-    const ownPosts = combinedPosts.filter((post) => ownUserId && post.user?.id && String(post.user.id) === ownUserId)
-    const comments = ownPosts
-      .filter((post) => Number(post.replies ?? 0) > 0)
-      .map((post) => ({
-        id: 'comments-' + post.id,
-        kind: 'mention',
-        icon: 'chat',
-        tone: 'comment',
-        title: post.replies + ' comments',
-        body: 'commented on your saved plant post',
-        hint: 'Click to open the post.',
-        time: formatTime(post.created_at),
-        post,
-        user: post.user,
-      }))
-
-    const likes = ownPosts
-      .filter((post) => Number(post.likes ?? 0) > 0)
-      .map((post) => ({
-        id: 'likes-' + post.id,
-        kind: 'reaction',
-        icon: 'heart',
-        tone: 'heart',
-        title: post.likes + ' likes',
-        body: 'liked your saved plant post',
-        hint: 'Click to open the post.',
-        time: formatTime(post.created_at),
-        post,
-        user: post.user,
-      }))
-
-    return [...requests, ...comments, ...likes]
-  }, [combinedPosts, friendRows, user])
 
   const handleSaveProfile = useCallback(async (form) => {
     setProfileSaving(true)
@@ -1117,6 +1154,21 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
     setReplyingToId(null)
     setReplyDrafts({})
   }, [])
+
+  const handleOpenNotification = useCallback(async (notification) => {
+    if (!notification.is_read) {
+      setNotificationItems((current) => current.map((item) => String(item.id) === String(notification.id) ? { ...item, is_read: true, read_at: new Date().toISOString() } : item))
+      setUnreadCount((current) => Math.max(0, current - 1))
+      markNotificationRead(notification.id).catch(() => {})
+    }
+
+    const post = combinedPosts.find((item) => String(item.id) === String(notification.post_id))
+    if (post) {
+      handleOpenPost(post)
+    } else if (notification.actor) {
+      handleSelectUser(notification.actor)
+    }
+  }, [combinedPosts, handleOpenPost, handleSelectUser])
 
   const triggerReactionBurst = useCallback((key) => {
     setReactionBursts((current) => ({ ...current, [key]: (current[key] ?? 0) + 1 }))
@@ -1231,6 +1283,7 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
             setActiveView('home')
           }}
           onEditProfile={() => setEditingProfile(true)}
+          onOpenGame={onOpenGame}
           onOpenPost={handleOpenPost}
           onSelectUser={handleSelectUser}
           onToggleLike={handleToggleLike}
@@ -1244,8 +1297,7 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
       return (
         <NotificationsCenter
           items={notificationItems}
-          onOpenPost={handleOpenPost}
-          onSelectUser={handleSelectUser}
+          onOpen={handleOpenNotification}
         />
       )
     }
@@ -1261,8 +1313,8 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
       )
     }
 
-    return <FeedCenter activeFeed={activeFeed} friendPosts={friendPosts} onFeedChange={setActiveFeed} onOpenPost={handleOpenPost} onSelectUser={handleSelectUser} onToggleLike={handleToggleLike} posts={posts} reactionBursts={reactionBursts} />
-  }, [activeFeed, activeView, combinedPosts, friendPosts, friendsCount, handleAddFriend, handleOpenPost, handleSearchQueryChange, handleSelectUser, handleToggleLike, notificationItems, posts, profileUser, searchLoading, searchQuery, reactionBursts, searchResults, selectedProfile, user])
+    return <FeedCenter activeFeed={activeFeed} friendPosts={friendPosts} onFeedChange={setActiveFeed} onOpenGame={onOpenGame} onOpenPost={handleOpenPost} onSelectUser={handleSelectUser} onToggleLike={handleToggleLike} posts={posts} reactionBursts={reactionBursts} />
+  }, [activeFeed, activeView, combinedPosts, friendPosts, friendsCount, handleAddFriend, handleOpenNotification, handleOpenPost, handleSearchQueryChange, handleSelectUser, handleToggleLike, notificationItems, onOpenGame, posts, profileUser, searchLoading, searchQuery, reactionBursts, searchResults, selectedProfile, user])
 
   return (
     <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-hidden bg-[#111514] text-slate-100">
@@ -1272,7 +1324,7 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
             <LeftNavItem active={activeView === 'home'} icon="home" label="Home" onClick={() => setActiveView('home')} />
             <LeftNavItem active={activeView === 'profile' && !selectedProfile} icon="profile" label="Profile" onClick={handleOpenOwnProfile} />
             <LeftNavItem active={activeView === 'search'} icon="search" label="Search" onClick={handleOpenSearch} />
-            <LeftNavItem active={activeView === 'notifications'} icon="notifications" label="Notifications" onClick={() => setActiveView('notifications')} />
+            <LeftNavItem active={activeView === 'notifications'} badge={unreadCount} icon="notifications" label="Notifications" onClick={() => setActiveView('notifications')} />
           </nav>
         </aside>
 
@@ -1300,6 +1352,7 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
         currentUser={profileUser}
         onClose={handleClosePost}
         onCommentDraftChange={setCommentDraft}
+        onOpenGame={onOpenGame}
         onReplyDraftChange={handleReplyDraftChange}
         onSelectUser={handleSelectUser}
         onStartReply={handleStartReply}
@@ -1317,10 +1370,3 @@ export function CommunityPage({ currentUser = null, onUserChange } = {}) {
     </section>
   )
 }
-
-
-
-
-
-
-

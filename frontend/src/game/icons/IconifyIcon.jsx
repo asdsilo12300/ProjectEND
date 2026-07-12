@@ -49,6 +49,12 @@ import SportsEsportsIcon from '@iconify-react/material-symbols/sports-esports'
 import StadiaControllerIcon from '@iconify-react/material-symbols/stadia-controller'
 import ThumbUpIcon from '@iconify-react/material-symbols/thumb-up'
 import WaterDropIcon from '@iconify-react/material-symbols/water-drop'
+import VisibilityIcon from '@iconify-react/material-symbols/visibility'
+import ShareIcon from '@iconify-react/material-symbols/share'
+import SensorsIcon from '@iconify-react/material-symbols/sensors'
+import KeyIcon from '@iconify-react/material-symbols/key'
+import LockIcon from '@iconify-react/material-symbols/lock'
+import MailIcon from '@iconify-react/material-symbols/mail'
 
 const iconMap = {
   repeat: RepeatIcon,
@@ -106,7 +112,13 @@ const iconMap = {
   tool: ConstructionIcon,
   trophy: MilitaryTechIcon,
   vine: GrassIcon,
+  eye: VisibilityIcon,
+  share: ShareIcon,
+  live: SensorsIcon,
   wind: AirIcon,
+  key: KeyIcon,
+  lock: LockIcon,
+  mail: MailIcon,
   arrowDown: KeyboardArrowDownIcon,
   arrowUp: KeyboardArrowUpIcon,
   axe: ConstructionIcon,

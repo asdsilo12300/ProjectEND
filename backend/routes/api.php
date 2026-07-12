@@ -6,8 +6,10 @@ use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\GameProgressController;
 use App\Http\Controllers\Api\ModelAssetController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PlantController;
 use App\Http\Controllers\Api\PlantHistoryController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Api\SimulatorController;
 use App\Http\Controllers\Api\ShopController;
@@ -38,6 +40,9 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
     Route::patch('/me', [AuthController::class, 'updateProfile']);
     Route::post('/me/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/password-reset/request', [PasswordResetController::class, 'requestOtp'])->middleware('throttle:3,10');
+    Route::post('/auth/password-reset/verify', [PasswordResetController::class, 'verifyOtp'])->middleware('throttle:10,10');
+    Route::post('/auth/password-reset/complete', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:5,10');
     Route::get('/friends', [FriendController::class, 'index']);
     Route::get('/users/search', [FriendController::class, 'search']);
     Route::post('/friends/invite', [FriendController::class, 'invite']);
@@ -57,6 +62,9 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/simulators/{simulator}/comments', [SimulatorController::class, 'comments']);
     Route::post('/simulators/{simulator}/comments', [SimulatorController::class, 'storeComment']);
     Route::post('/simulators/{simulator}/finish', [SimulatorController::class, 'finish']);
+    Route::post('/simulators/{simulator}/uproot', [SimulatorController::class, 'uproot']);
+    Route::post('/simulators/{simulator}/share', [SimulatorController::class, 'share']);
+    Route::get('/spectator/simulators/{simulator}', [SimulatorController::class, 'spectate']);
     Route::post('/simulators/{simulator}/claim-maturity-reward', [SimulatorController::class, 'claimMaturityReward']);
     Route::post('/simulators/{simulator}/use-item', [SimulatorController::class, 'useItem']);
 
@@ -80,6 +88,9 @@ Route::middleware('jwt')->group(function (): void {
     Route::delete('/posts/{post}/comments/{comment}/likes', [PostController::class, 'unlikeComment']);
     Route::post('/posts/{post}/likes', [PostController::class, 'like']);
     Route::delete('/posts/{post}/likes', [PostController::class, 'unlike']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'read']);
 
     // Upload 3D model files (GLB) and save path to DB
     Route::post('/plants/{plant}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadBaseModel']);

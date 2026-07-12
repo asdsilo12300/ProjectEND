@@ -10,10 +10,12 @@ use App\Models\Friendship;
 use App\Models\PlantHistory;
 use App\Models\Post;
 use App\Models\PostLike;
+use App\Models\SocialNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class PostController extends Controller
 {
@@ -21,7 +23,7 @@ class PostController extends Controller
     {
         return PostResource::collection(
             Post::query()
-                ->with(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage'])
+                ->with(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage', 'simulator.plant'])
                 ->withCount(['comments', 'likes'])
                 ->where('visibility', 'public')
                 ->latest()
@@ -48,7 +50,7 @@ class PostController extends Controller
 
         return PostResource::collection(
             Post::query()
-                ->with(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage'])
+                ->with(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage', 'simulator.plant'])
                 ->withCount(['comments', 'likes'])
                 ->whereIn('user_id', $friendIds)
                 ->whereIn('visibility', ['public', 'friends'])
@@ -92,7 +94,7 @@ class PostController extends Controller
             ]);
         }
 
-        return new PostResource($post->load(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage']));
+        return new PostResource($post->load(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage', 'simulator.plant']));
     }
 
     public function comment(Request $request, Post $post): JsonResponse
@@ -107,6 +109,15 @@ class PostController extends Controller
             'comment_text' => $data['comment_text'],
             'status' => 'visible',
         ]);
+
+        $this->notify(
+            recipientId: (int) $post->user_id,
+            actorId: (int) $request->user()->id,
+            type: 'comment',
+            post: $post,
+            comment: $comment,
+            excerpt: $data['comment_text'],
+        );
 
         return response()->json([
             'data' => $this->commentPayload($comment->load(['user', 'likes', 'replies']), $request->user()->id),
@@ -129,6 +140,15 @@ class PostController extends Controller
             'comment_text' => $data['comment_text'],
             'status' => 'visible',
         ]);
+
+        $this->notify(
+            recipientId: (int) ($comment->user_id ?: $post->user_id),
+            actorId: (int) $request->user()->id,
+            type: 'reply',
+            post: $post,
+            comment: $reply,
+            excerpt: $data['comment_text'],
+        );
 
         return response()->json([
             'data' => $this->commentPayload($reply->load(['user', 'likes', 'replies']), $request->user()->id),
@@ -165,6 +185,15 @@ class PostController extends Controller
             'user_id' => $request->user()->id,
         ]);
 
+        if ($like->wasRecentlyCreated) {
+            $this->notify(
+                recipientId: (int) $post->user_id,
+                actorId: (int) $request->user()->id,
+                type: 'like',
+                post: $post,
+            );
+        }
+
         return response()->json([
             'data' => $like,
             'liked_by_me' => true,
@@ -177,6 +206,13 @@ class PostController extends Controller
         PostLike::query()
             ->where('post_id', $post->id)
             ->where('user_id', $request->user()->id)
+            ->delete();
+
+        SocialNotification::query()
+            ->where('recipient_id', $post->user_id)
+            ->where('actor_id', $request->user()->id)
+            ->where('post_id', $post->id)
+            ->where('type', 'like')
             ->delete();
 
         return response()->json([
@@ -195,6 +231,17 @@ class PostController extends Controller
             'user_id' => $request->user()->id,
         ]);
 
+        if ($like->wasRecentlyCreated) {
+            $this->notify(
+                recipientId: (int) $comment->user_id,
+                actorId: (int) $request->user()->id,
+                type: 'comment_like',
+                post: $post,
+                comment: $comment,
+                excerpt: $comment->comment_text,
+            );
+        }
+
         return response()->json([
             'data' => $like,
             'liked_by_me' => true,
@@ -209,6 +256,13 @@ class PostController extends Controller
         CommentLike::query()
             ->where('comment_id', $comment->id)
             ->where('user_id', $request->user()->id)
+            ->delete();
+
+        SocialNotification::query()
+            ->where('recipient_id', $comment->user_id)
+            ->where('actor_id', $request->user()->id)
+            ->where('comment_id', $comment->id)
+            ->where('type', 'comment_like')
             ->delete();
 
         return response()->json([
@@ -244,5 +298,21 @@ class PostController extends Controller
                 'level' => $comment->user?->level,
             ],
         ];
+    }
+
+    private function notify(int $recipientId, int $actorId, string $type, Post $post, ?Comment $comment = null, ?string $excerpt = null): void
+    {
+        if ($recipientId === $actorId) {
+            return;
+        }
+
+        SocialNotification::query()->create([
+            'recipient_id' => $recipientId,
+            'actor_id' => $actorId,
+            'post_id' => $post->id,
+            'comment_id' => $comment?->id,
+            'type' => $type,
+            'excerpt' => $excerpt ? Str::limit(trim($excerpt), 220) : null,
+        ]);
     }
 }

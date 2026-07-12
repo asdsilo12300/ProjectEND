@@ -156,7 +156,7 @@ function DeleteConfirmModal({ onCancel, onConfirm, save, status }) {
   )
 }
 
-function HistoryDetailModal({ onClose, onDelete, save }) {
+function HistoryDetailModal({ onClose, onDelete, onOpenGameState, save }) {
   if (!save) return null
 
   const score = Number(save.total_score ?? 0)
@@ -193,6 +193,16 @@ function HistoryDetailModal({ onClose, onDelete, save }) {
             </div>
           </div>
           <div className="grid content-start gap-3">
+            {save.game_state?.simulator ? (
+              <button
+                className="group inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-lime-100/20 bg-[#9bcf82] px-4 text-sm font-semibold text-[#101511] shadow-[0_8px_18px_rgba(0,0,0,.22)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#addf96] hover:shadow-[0_10px_22px_rgba(0,0,0,.3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50"
+                type="button"
+                onClick={() => onOpenGameState(save)}
+              >
+                <AppIcon className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" name="eye" />
+                View game
+              </button>
+            ) : null}
             <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">Score</span><strong className="mt-1 block text-2xl text-lime-100">{score}</strong></div>
             <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">Health</span><strong className="mt-1 block text-2xl text-lime-100">{health}%</strong></div>
             <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">Duration</span><strong className="mt-1 block text-2xl text-lime-100">{save.duration_days ?? 1}d</strong></div>
@@ -203,7 +213,7 @@ function HistoryDetailModal({ onClose, onDelete, save }) {
   )
 }
 
-export function HistoryPage() {
+export function HistoryPage({ onOpenGameState }) {
   const [saves, setSaves] = useState([])
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
@@ -351,7 +361,7 @@ export function HistoryPage() {
           ))}
         </div>
       </div>
-      <HistoryDetailModal save={selectedSave} onClose={() => setSelectedSave(null)} onDelete={setDeleteTarget} />
+      <HistoryDetailModal save={selectedSave} onClose={() => setSelectedSave(null)} onDelete={setDeleteTarget} onOpenGameState={onOpenGameState} />
       <DeleteConfirmModal save={deleteTarget} status={deleteStatus} onCancel={() => deleteStatus === 'idle' && setDeleteTarget(null)} onConfirm={confirmDelete} />
     </section>
   )

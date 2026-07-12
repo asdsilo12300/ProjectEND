@@ -169,6 +169,10 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"
               type="button"
               role="menuitem"
+              onClick={() => {
+                setProfileOpen(false)
+                onNavigate?.('settings')
+              }}
             >
               <AppIcon className="h-4 w-4 text-slate-400" name="settings" />
               Settings
