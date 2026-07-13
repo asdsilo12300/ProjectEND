@@ -46,6 +46,11 @@ export async function apiFetch(path, options = {}) {
   const payload = await response.json().catch(() => ({}))
 
   if (!response.ok) {
+    if (response.status === 401 && token) {
+      clearToken()
+      window.dispatchEvent(new Event('plant-game:session-expired'))
+    }
+
     const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
     const error = new Error(validationMessage || payload.message || 'API request failed')
     error.status = response.status
@@ -92,14 +97,87 @@ export async function login(email, password) {
   return payload
 }
 
-export async function register(username, email, password) {
+export async function register(username, email, password, passwordConfirmation) {
   const payload = await apiFetch('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ username, email, password }),
+    body: JSON.stringify({
+      username,
+      email,
+      password,
+      password_confirmation: passwordConfirmation,
+    }),
   })
 
   setToken(payload.token)
   return payload
+}
+
+export function loginWithGoogle() {
+  return new Promise((resolve, reject) => {
+    const popupWidth = 520
+    const popupHeight = 680
+    const popupLeft = Math.max(0, window.screenX + (window.outerWidth - popupWidth) / 2)
+    const popupTop = Math.max(0, window.screenY + (window.outerHeight - popupHeight) / 2)
+    const popup = window.open(
+      `${API_BASE_URL}/auth/google/redirect`,
+      'plant-growth-google-login',
+      `popup=yes,width=${popupWidth},height=${popupHeight},left=${popupLeft},top=${popupTop}`,
+    )
+
+    if (!popup) {
+      reject(new Error('Your browser blocked the Google sign-in window. Please allow popups and try again.'))
+      return
+    }
+
+    const expectedOrigin = new URL(API_ROOT_URL, window.location.href).origin
+    let settled = false
+    let closedTimer
+    let timeoutTimer
+
+    function cleanup() {
+      window.removeEventListener('message', handleMessage)
+      window.clearInterval(closedTimer)
+      window.clearTimeout(timeoutTimer)
+    }
+
+    function finish(callback) {
+      if (settled) return
+      settled = true
+      cleanup()
+      callback()
+    }
+
+    function handleMessage(event) {
+      if (event.origin !== expectedOrigin || event.source !== popup || event.data?.type !== 'plant-growth-google-auth') return
+
+      if (event.data.error) {
+        finish(() => reject(new Error(event.data.error)))
+        return
+      }
+
+      if (!event.data.token) {
+        finish(() => reject(new Error('Google sign-in did not return a session. Please try again.')))
+        return
+      }
+
+      setToken(event.data.token)
+      finish(() => resolve(event.data))
+    }
+
+    window.addEventListener('message', handleMessage)
+    popup.focus()
+
+    closedTimer = window.setInterval(() => {
+      if (popup.closed) {
+        finish(() => reject(new Error('Google sign-in was closed before it finished.')))
+      }
+    }, 400)
+
+    timeoutTimer = window.setTimeout(() => {
+      popup.close()
+      finish(() => reject(new Error('Google sign-in took too long. Please try again.')))
+    }, 120000)
+  })
 }
 
 export async function getMe() {

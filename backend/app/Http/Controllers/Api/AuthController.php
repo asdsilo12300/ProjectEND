@@ -27,7 +27,8 @@ class AuthController extends Controller
         $data = $request->validate([
             'username' => ['required', 'string', 'max:80', 'unique:users,username'],
             'email' => ['required', 'email', 'max:191', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password_confirmation' => ['required', 'string'],
         ]);
 
         $user = DB::transaction(function () use ($data): User {

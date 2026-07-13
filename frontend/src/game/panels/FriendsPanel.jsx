@@ -14,11 +14,10 @@ function displayName(user) {
 function FriendAvatar({ user, presence, request = false }) {
   return (
     <span className="relative block h-8 w-8 shrink-0">
-      <span className="grid h-8 w-8 overflow-hidden rounded-full bg-[#9bcf82] text-xs font-black text-[#101511]">
-        {user?.avatar_url ? (
-          <img className="block h-full w-full rounded-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" />
-        ) : (
-          <span className="grid h-full w-full place-items-center">{avatarLabel(user)}</span>
+      <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-[#9bcf82] text-xs font-black text-[#101511]">
+        <span className="grid h-full w-full place-items-center">{avatarLabel(user)}</span>
+        {user?.avatar_url && (
+          <img className="absolute inset-0 block h-full w-full rounded-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" onError={(event) => { event.currentTarget.hidden = true }} />
         )}
       </span>
       <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-[#101511] ${request ? 'bg-red-400' : presence === 'online' ? 'bg-[#9bcf82]' : 'bg-red-400'}`} />

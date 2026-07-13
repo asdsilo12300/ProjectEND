@@ -14,9 +14,8 @@ import { HistoryPage } from './game/history/HistoryPage'
 import { ShopPage } from './game/shop/ShopPage'
 import { SettingsPage } from './game/settings/SettingsPage'
 import { PasswordResetPage } from './game/settings/PasswordResetPage'
-import { applySettings, loadSettings } from './game/settings/settingsPreferences'
 import { LoginPage } from './auth/LoginPage'
-import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
+import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -180,6 +179,22 @@ function ModeLoadingOverlay({ mode }) {
   )
 }
 
+function SessionLoadingScreen() {
+  return (
+    <main className="relative grid h-screen w-screen place-items-center overflow-hidden bg-[#0b0f0c] px-5 text-slate-100">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
+      <div className="soft-grid absolute inset-0 opacity-55" />
+      <div className="relative w-full max-w-sm rounded-2xl border border-lime-100/15 bg-[#101511]/95 px-7 py-8 text-center shadow-[0_24px_70px_rgba(0,0,0,.45)]">
+        <div className="mx-auto mb-4 h-1.5 w-36 overflow-hidden rounded-full bg-lime-100/10">
+          <div className="h-full w-2/3 animate-pulse rounded-full bg-[#9bcf82]" />
+        </div>
+        <strong className="block text-sm text-lime-50">Checking your session</strong>
+        <span className="mt-1 block text-xs text-slate-400">Preparing your Plant Growth Academy account...</span>
+      </div>
+    </main>
+  )
+}
+
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
   const [climate, setClimate] = useState(defaultClimate)
@@ -211,21 +226,18 @@ function App() {
   const [saveCompleteHistory, setSaveCompleteHistory] = useState(null)
   const [saveReadyForNewPlant, setSaveReadyForNewPlant] = useState(false)
   const [user, setUser] = useState(null)
+  const [sessionStatus, setSessionStatus] = useState(() => getToken() ? 'checking' : 'guest')
   const [coinDelta, setCoinDelta] = useState(null)
   const [coinBurst, setCoinBurst] = useState(null)
   const [expBurst, setExpBurst] = useState(null)
   const rewardClaimingRef = useRef(null)
   const [authMode, setAuthMode] = useState('login')
-  const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' })
+  const [authForm, setAuthForm] = useState({ username: '', email: '', password: '', passwordConfirmation: '' })
   const [authStatus, setAuthStatus] = useState('idle')
   const [authError, setAuthError] = useState('')
   const [inventoryItems, setInventoryItems] = useState([])
   const [shopCatalog, setShopCatalog] = useState([])
   const [shareBusy, setShareBusy] = useState(false)
-
-  useEffect(() => {
-    applySettings(loadSettings())
-  }, [])
 
   useEffect(() => {
     if (!getToken()) return undefined
@@ -235,12 +247,19 @@ function App() {
     async function syncUser() {
       try {
         const payload = await getMe()
-        if (!isCancelled) setUser(payload.data ?? payload.user ?? payload)
+        const syncedUser = payload.data ?? payload.user ?? payload
+        if (!syncedUser?.id) throw new Error('The session did not return an account.')
+        if (!isCancelled) {
+          setUser(syncedUser)
+          setSessionStatus('authenticated')
+        }
       } catch {
         clearToken()
         if (!isCancelled) {
           setUser(null)
           setSaveHydrated(true)
+          setSessionStatus('guest')
+          setActivePage('auth')
         }
       }
     }
@@ -488,6 +507,27 @@ function App() {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    function handleExpiredSession() {
+      accountSessionRef.current += 1
+      spectatorRequestRef.current += 1
+      latestSaveLoadedRef.current = false
+      autosaveStateRef.current = {}
+      window.localStorage.removeItem('plant_game_simulator_id')
+      window.localStorage.removeItem(resetMarkerKey)
+      setUser(null)
+      setProfileOpen(false)
+      setSessionStatus('guest')
+      setActivePage('auth')
+      setAuthMode('login')
+      setAuthStatus('idle')
+      setAuthError('Your session expired. Please sign in again.')
+    }
+
+    window.addEventListener('plant-game:session-expired', handleExpiredSession)
+    return () => window.removeEventListener('plant-game:session-expired', handleExpiredSession)
   }, [])
 
   const selectedItemCursorUrl = appliedAsset?.type === 'item' && !visitingFriend ? appliedAsset.imageUrl : null
@@ -1113,19 +1153,56 @@ function App() {
     setAuthStatus('loading')
     setAuthError('')
 
+    if (authMode === 'register' && authForm.password !== authForm.passwordConfirmation) {
+      setAuthStatus('idle')
+      setAuthError('Passwords do not match. Please enter the same password twice.')
+      return
+    }
+
     try {
       const payload = authMode === 'register'
-        ? await registerUser(authForm.username.trim(), authForm.email.trim(), authForm.password)
+        ? await registerUser(authForm.username.trim(), authForm.email.trim(), authForm.password, authForm.passwordConfirmation)
         : await loginUser(authForm.email.trim(), authForm.password)
 
+      const signedInUser = payload.user ?? payload.data ?? null
+      if (!signedInUser?.id) {
+        clearToken()
+        throw new Error('The server did not return your account details.')
+      }
       clearClientSimulationSession({ hydrated: false })
-      setUser(payload.user ?? payload.data ?? null)
+      setUser(signedInUser)
+      setSessionStatus('authenticated')
       setAuthStatus('idle')
-      setAuthForm({ username: '', email: '', password: '' })
+      setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
       setActivePage('lab')
     } catch (error) {
       setAuthStatus('idle')
       setAuthError(error.message || 'Unable to sign in right now')
+    }
+  }
+
+  async function submitGoogleAuth() {
+    setAuthStatus('google-loading')
+    setAuthError('')
+    let receivedSession = false
+
+    try {
+      await loginWithGoogle()
+      receivedSession = true
+      const payload = await getMe()
+
+      const signedInUser = payload.data ?? payload.user ?? null
+      if (!signedInUser?.id) throw new Error('The server did not return your account details.')
+      clearClientSimulationSession({ hydrated: false })
+      setUser(signedInUser)
+      setSessionStatus('authenticated')
+      setAuthStatus('idle')
+      setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
+      setActivePage('lab')
+    } catch (error) {
+      if (receivedSession) clearToken()
+      setAuthStatus('idle')
+      setAuthError(error.message || 'Unable to sign in with Google right now')
     }
   }
 
@@ -1305,6 +1382,11 @@ function App() {
   }, [applySimulatorSnapshot, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
 
   function navigateToPage(page) {
+    if (sessionStatus !== 'authenticated' || !user) {
+      openAuth('login')
+      return
+    }
+
     if (visitingFriend) {
       leaveFriendGarden()
     }
@@ -1315,12 +1397,38 @@ function App() {
     clearToken()
     clearClientSimulationSession()
     setUser(null)
+    setSessionStatus('guest')
     setProfileOpen(false)
-    setActivePage('lab')
+    setAuthMode('login')
+    setAuthStatus('idle')
+    setAuthError('')
+    setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
+    setActivePage('auth')
   }
 
   const labReady = Boolean(saveHydrated && growingMode && !modeLoading)
   const visitorName = visitingFriend?.user?.username ?? visitingFriend?.user?.email?.split('@')[0] ?? 'Friend'
+
+  if (sessionStatus === 'checking') {
+    return <SessionLoadingScreen />
+  }
+
+  if (sessionStatus !== 'authenticated' || !user) {
+    return (
+      <main className="relative h-screen w-screen overflow-hidden bg-[#f7faf5] text-slate-100">
+        <LoginPage
+          mode={authMode}
+          setMode={setAuthMode}
+          form={authForm}
+          setForm={setAuthForm}
+          status={authStatus}
+          error={authError}
+          onSubmit={submitAuth}
+          onGoogleLogin={submitGoogleAuth}
+        />
+      </main>
+    )
+  }
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100">
@@ -1356,18 +1464,7 @@ function App() {
         </div>
       )}
 
-      {activePage === 'auth' ? (
-        <LoginPage
-          mode={authMode}
-          setMode={setAuthMode}
-          form={authForm}
-          setForm={setAuthForm}
-          status={authStatus}
-          error={authError}
-          onSubmit={submitAuth}
-          onBack={() => setActivePage('lab')}
-        />
-      ) : activePage === 'shop' ? (
+      {activePage === 'shop' ? (
         <ShopPage onInventoryItemChange={upsertInventoryItem} onUserUpdate={setUser} />
       ) : activePage === 'history' ? (
         <HistoryPage onOpenGameState={viewSavedGameState} />

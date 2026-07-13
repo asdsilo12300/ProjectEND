@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\GameProgressController;
+use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\ModelAssetController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PlantController;
@@ -20,6 +21,8 @@ Route::options('/{any}', fn () => response()->noContent())->where('any', '.*');
 Route::prefix('auth')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:20,1');
+    Route::get('/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:30,1');
 });
 
 Route::get('/plants', [PlantController::class, 'index']);

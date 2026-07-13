@@ -112,7 +112,7 @@ export function SettingsPage({ onBack, onResetPassword, user }) {
               </span>
               <div>
                 <h1 className="text-2xl font-black tracking-tight text-lime-50">Settings</h1>
-                <p className="mt-1 text-sm text-slate-400">Manage your account, display, and learning preferences.</p>
+                <p className="mt-1 text-sm text-slate-400">Manage your account, display, and Lab preferences.</p>
               </div>
             </div>
           </div>

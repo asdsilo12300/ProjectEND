@@ -8,11 +8,17 @@ function ProfileAvatar({ user, initial, size = 'sm' }) {
   const sizeClass = size === 'md' ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-sm'
 
   return (
-    <span className={`${sizeClass} grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#9bcf82] font-black text-[#101511]`}>
-      {user?.avatar_url ? (
-        <img className="h-full w-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" />
-      ) : user ? initial : (
+    <span className={`${sizeClass} relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#9bcf82] font-black text-[#101511]`}>
+      {user ? initial : (
         <AppIcon className="h-4 w-4" name="profile" />
+      )}
+      {user?.avatar_url && (
+        <img
+          className="absolute inset-0 h-full w-full object-cover object-center"
+          src={resolveAssetUrl(user.avatar_url)}
+          alt=""
+          onError={(event) => { event.currentTarget.hidden = true }}
+        />
       )}
     </span>
   )
@@ -157,14 +163,6 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 </div>
               </div>
             </div>
-            <button
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"
-              type="button"
-              role="menuitem"
-            >
-              <AppIcon className="h-4 w-4 text-slate-400" name="profile" />
-              Manage profile
-            </button>
             <button
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"
               type="button"

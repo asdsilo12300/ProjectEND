@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env(
+            'GOOGLE_REDIRECT_URI',
+            rtrim((string) env('APP_URL', 'http://localhost:8000'), '/').'/api/auth/google/callback'
+        ),
+        'frontend_origin' => rtrim((string) env('FRONTEND_URL', 'http://localhost:5173'), '/'),
+        'timeout' => (int) env('GOOGLE_OAUTH_TIMEOUT', 10),
+    ],
+
 ];

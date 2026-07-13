@@ -50,6 +50,7 @@ import StadiaControllerIcon from '@iconify-react/material-symbols/stadia-control
 import ThumbUpIcon from '@iconify-react/material-symbols/thumb-up'
 import WaterDropIcon from '@iconify-react/material-symbols/water-drop'
 import VisibilityIcon from '@iconify-react/material-symbols/visibility'
+import VisibilityOffIcon from '@iconify-react/material-symbols/visibility-off'
 import ShareIcon from '@iconify-react/material-symbols/share'
 import SensorsIcon from '@iconify-react/material-symbols/sensors'
 import KeyIcon from '@iconify-react/material-symbols/key'
@@ -113,6 +114,7 @@ const iconMap = {
   trophy: MilitaryTechIcon,
   vine: GrassIcon,
   eye: VisibilityIcon,
+  eyeOff: VisibilityOffIcon,
   share: ShareIcon,
   live: SensorsIcon,
   wind: AirIcon,

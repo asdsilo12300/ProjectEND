@@ -14,8 +14,9 @@ function UserAvatar({ user, fallback, className = '' }) {
   const label = fallback ?? avatarLabel(displayName(user))
 
   return (
-    <span className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#263022] font-black text-lime-100 ring-1 ring-lime-100/10 ${className}`}>
-      {user?.avatar_url ? <img className="h-full w-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" /> : label}
+    <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#263022] font-black text-lime-100 ring-1 ring-lime-100/10 ${className}`}>
+      {label}
+      {user?.avatar_url && <img className="absolute inset-0 h-full w-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" onError={(event) => { event.currentTarget.hidden = true }} />}
     </span>
   )
 }
@@ -259,9 +260,7 @@ function ProfileHoverCard({ onSelectUser, user }) {
   return (
     <div className="pointer-events-none absolute left-0 top-full z-30 mt-3 w-72 translate-y-1 rounded-xl border border-lime-100/10 bg-[#101312] p-4 text-left opacity-0 shadow-[0_14px_34px_rgba(0,0,0,0.36)] transition duration-200 group-hover/profile:pointer-events-auto group-hover/profile:translate-y-0 group-hover/profile:opacity-100 group-focus-within/profile:pointer-events-auto group-focus-within/profile:translate-y-0 group-focus-within/profile:opacity-100">
       <button className="flex w-full items-start gap-3 text-left" onClick={() => onSelectUser?.(user)} type="button">
-        <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-[#263022] text-base font-black text-lime-100 ring-1 ring-lime-100/10">
-          {user?.avatar_url ? <img className="h-full w-full object-cover" src={resolveAssetUrl(user.avatar_url)} alt="" /> : normalized.avatar}
-        </span>
+        <UserAvatar className="h-12 w-12 text-base" fallback={normalized.avatar} user={user} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <strong className="truncate text-sm text-lime-50">{normalized.name}</strong>
@@ -300,7 +299,7 @@ function FeedPost({ onOpenGame, onOpenPost, onSelectUser, onToggleLike, post, re
             type="button"
             aria-label={'Open ' + post.author + ' profile'}
           >
-            {postUser.avatar_url ? <img className="h-full w-full object-cover" src={resolveAssetUrl(postUser.avatar_url)} alt="" /> : post.avatar}
+            <UserAvatar className="h-full w-full text-sm ring-0" fallback={post.avatar} user={postUser} />
           </button>
           <ProfileHoverCard onSelectUser={onSelectUser} user={postUser} />
         </div>
