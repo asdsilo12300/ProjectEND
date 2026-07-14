@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import heroImage from '../assets/hero.png'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 import { AppIcon } from '../game/icons/IconifyIcon'
+import { getLearningContent, getLearningContents } from '../lib/api'
 import './LandingPage.css'
 
 const factors = [
@@ -18,6 +19,40 @@ const features = [
   { icon: 'history', title: 'Learn from every experiment', description: 'Save each growing session and compare results to improve the next attempt.' },
   { icon: 'groups', title: 'A connected learning community', description: 'Visit friends, exchange observations, and learn from other growers.' },
   { icon: 'shield', title: 'Progress tied to your account', description: 'Your plants, inventory, achievements, and history stay with your account.' },
+]
+
+const tourSteps = [
+  {
+    title: 'Choose a plant and prepare the lab',
+    description: 'Select a plant from your collection, inspect its profile, and start with a clear growing goal.',
+    focus: 'assets',
+  },
+  {
+    title: 'Tune the growing environment',
+    description: 'Balance water, light, fertilizer, soil, air, and temperature with responsive laboratory controls.',
+    focus: 'environment',
+  },
+  {
+    title: 'Observe, diagnose, and improve',
+    description: 'Watch the 3D plant respond, monitor health and growth, then use evidence to improve the next cycle.',
+    focus: 'plant',
+  },
+]
+
+const journeySteps = [
+  { icon: 'person', title: 'Create your learner profile', description: 'Sign in to keep every plant, item, achievement, and experiment connected to your account.' },
+  { icon: 'sprout', title: 'Select your first plant', description: 'Choose a plant, review its needs, and decide whether to grow in the controlled lab or outdoors.' },
+  { icon: 'controller', title: 'Run the experiment', description: 'Adjust environmental factors and observe cause and effect through the live 3D simulation.' },
+  { icon: 'history', title: 'Review and grow smarter', description: 'Harvest when ready, save the result, and compare your history before starting the next plant.' },
+]
+
+const gameSpaces = [
+  { page: 'lab', icon: 'controller', title: 'Plant Lab', eyebrow: 'Core experience', description: 'Grow a living 3D plant and control the conditions around it in real time.', preview: 'lab' },
+  { page: 'shop', icon: 'shop', title: 'Shop', eyebrow: 'Tools & supplies', description: 'Use earned coins to unlock practical tools for pests and plant care.', preview: 'shop' },
+  { page: 'history', icon: 'history', title: 'History', eyebrow: 'Experiment records', description: 'Revisit completed sessions, scores, conditions, and saved evidence.', preview: 'history' },
+  { page: 'community', icon: 'groups', title: 'Community', eyebrow: 'Learn together', description: 'Share observations, view live gardens, and learn from other growers.', preview: 'community' },
+  { page: 'learn', icon: 'bookmark', title: 'Knowledge Library', eyebrow: 'Research-backed lessons', description: 'Read focused lessons about plants, environmental factors, and photosynthesis.', preview: 'learn' },
+  { page: 'settings', icon: 'settings', title: 'Settings', eyebrow: 'Made for you', description: 'Choose your language and adjust display, accessibility, and account preferences.', preview: 'settings' },
 ]
 
 function HeroParticles() {
@@ -65,7 +100,7 @@ function LandingHeader({ page, user, onHome, onLearn, onStart, onSignIn }) {
         <BrandButton onClick={onHome} />
         <nav className={`landing-nav ${menuOpen ? 'landing-nav--open' : ''}`} aria-label="Main navigation">
           <button className={page === 'home' ? 'is-active' : ''} type="button" onClick={() => run(onHome)}>Home</button>
-          <button className={page === 'learn' ? 'is-active' : ''} type="button" onClick={() => run(onLearn)}>Learn about plants</button>
+          <button className={page === 'learn' ? 'is-active' : ''} type="button" onClick={() => run(onLearn)}>Learn about</button>
           {!user && <button type="button" onClick={() => run(onSignIn)}>Log in</button>}
           <button className="landing-nav__cta" type="button" onClick={() => run(onStart)}>
             <AppIcon name="sprout" />
@@ -88,16 +123,6 @@ function LandingHeader({ page, user, onHome, onLearn, onStart, onSignIn }) {
   )
 }
 
-function StatusChip({ icon, label, value }) {
-  return (
-    <div className="landing-status-chip">
-      <AppIcon name={icon} />
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
 function SectionEyebrow({ icon = 'eco', children }) {
   return (
     <div className="landing-eyebrow">
@@ -107,7 +132,75 @@ function SectionEyebrow({ icon = 'eco', children }) {
   )
 }
 
-function HomePage({ user, onStart, onLearn }) {
+function ProductTour() {
+  const [activeStep, setActiveStep] = useState(0)
+  const [playing, setPlaying] = useState(true)
+
+  useEffect(() => {
+    if (!playing || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
+    const interval = window.setInterval(() => {
+      setActiveStep((step) => (step + 1) % tourSteps.length)
+    }, 4600)
+    return () => window.clearInterval(interval)
+  }, [playing])
+
+  function selectStep(index) {
+    setActiveStep(index)
+    setPlaying(false)
+  }
+
+  return (
+    <section className="landing-section landing-product-tour" aria-labelledby="product-tour-title">
+      <div className="landing-container">
+        <div className="landing-section-heading landing-product-tour__heading" data-reveal="up">
+          <div>
+            <SectionEyebrow icon="live">A guided game preview</SectionEyebrow>
+            <h2 id="product-tour-title">See one growing cycle in under a minute.</h2>
+          </div>
+          <p>A short visual tour shows how each decision becomes an observable result inside the plant lab.</p>
+        </div>
+
+        <div className="product-tour-player" data-reveal="up">
+          <div className="product-tour-player__screen">
+            {tourSteps.map((step, index) => (
+              <div className={`product-tour-frame product-tour-frame--${step.focus} ${activeStep === index ? 'is-active' : ''}`} key={step.title} aria-hidden={activeStep !== index}>
+                <img src="/media/plant-lab-tour.png" alt="Plant Growth Academy game interface" />
+                <div className="product-tour-frame__shade" />
+              </div>
+            ))}
+            <div className="product-tour-player__chrome">
+              <span><i /> Plant Growth Academy</span>
+              <strong>GAME PREVIEW</strong>
+            </div>
+            <div className="product-tour-player__caption">
+              <span>0{activeStep + 1}</span>
+              <div>
+                <strong>{tourSteps[activeStep].title}</strong>
+                <p>{tourSteps[activeStep].description}</p>
+              </div>
+            </div>
+            <button className="product-tour-player__control" type="button" onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause game preview' : 'Play game preview'}>
+              <span className={playing ? 'is-pause' : 'is-play'} />
+              {playing ? 'Pause' : 'Play'}
+            </button>
+          </div>
+
+          <div className="product-tour-timeline" role="tablist" aria-label="Game preview steps">
+            {tourSteps.map((step, index) => (
+              <button className={activeStep === index ? 'is-active' : ''} type="button" role="tab" aria-selected={activeStep === index} onClick={() => selectStep(index)} key={step.title}>
+                <span className="product-tour-timeline__number">0{index + 1}</span>
+                <span><strong>{step.title}</strong><small>{step.description}</small></span>
+                <i><b /></i>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function HomePage({ user, onStart, onLearn, onOpenPage }) {
   return (
     <>
       <section className="landing-hero">
@@ -116,79 +209,71 @@ function HomePage({ user, onStart, onLearn }) {
         <HeroParticles />
         <div className="landing-hero__orb landing-hero__orb--one" />
         <div className="landing-hero__orb landing-hero__orb--two" />
-        <div className="landing-container landing-hero__content">
+        <div className="landing-container landing-hero__content landing-hero__content--product">
           <div className="landing-hero__copy">
-            <SectionEyebrow>Interactive plant learning simulation</SectionEyebrow>
-            <h1>Every seed has a story waiting to grow.</h1>
+            <SectionEyebrow>Plant science, made interactive</SectionEyebrow>
+            <h1>Grow a plant.<br />Understand the science.</h1>
             <p>
-              Explore plant science through a hands-on digital laboratory. Adjust the environment,
-              observe each response, and turn every experiment into practical knowledge.
+              Plant Growth Academy is a learning simulation where you shape a 3D plant's environment,
+              observe its response, and build real understanding through every growing cycle.
             </p>
-            <div className="landing-status-row" aria-label="Sample growing environment">
-              <StatusChip icon="bolt" label="Light" value="85%" />
-              <StatusChip icon="drop" label="Moisture" value="72%" />
-              <StatusChip icon="temp" label="Temperature" value="26°C" />
-            </div>
             <div className="landing-actions">
               <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
-                <AppIcon name="sprout" />
-                {user ? 'Enter the plant lab' : 'Start growing'}
+                <AppIcon name="controller" />
+                {user ? 'Continue your experiment' : 'Play the simulation'}
                 <AppIcon name="arrowForward" />
               </button>
-              <button className="landing-button landing-button--secondary" type="button" onClick={onLearn}>
-                <AppIcon name="history" />
-                Learn more
+              <button className="landing-button landing-button--secondary" type="button" onClick={() => document.querySelector('.landing-product-tour')?.scrollIntoView({ behavior: 'smooth' })}>
+                <AppIcon name="live" />
+                Watch game preview
               </button>
             </div>
-            <dl className="landing-stats">
-              <div><dt>6</dt><dd>environment factors</dd></div>
-              <div><dt>3D</dt><dd>interactive plant lab</dd></div>
-              <div><dt>100%</dt><dd>learning by doing</dd></div>
-            </dl>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section landing-section--intro" id="about">
-        <div className="landing-container landing-split">
-          <div data-reveal="left">
-            <SectionEyebrow icon="controller">About the academy</SectionEyebrow>
-            <h2>Learn plant science through a living simulation.</h2>
-            <p className="landing-lead">
-              Plant Growth Academy connects environmental science with an interactive growing experience.
-              Change water, light, soil, air, temperature, and nutrients—then watch the plant react in real time.
-            </p>
-            <button className="landing-text-link" type="button" onClick={onLearn}>
-              Explore the science
-              <AppIcon name="arrowForward" />
-            </button>
-          </div>
-          <div className="landing-lab-card" data-reveal="right">
-            <div className="landing-lab-card__header">
-              <span><AppIcon name="live" /> Live environment</span>
-              <strong>Healthy</strong>
+            <div className="landing-hero__proof">
+              <span><AppIcon name="check" /> Account-based progress</span>
+              <span><AppIcon name="check" /> Thai & English</span>
+              <span><AppIcon name="check" /> Research-backed learning</span>
             </div>
-            <div className="landing-lab-card__plant"><AppIcon name="sprout" /></div>
-            <div className="landing-lab-card__metrics">
-              <span><AppIcon name="heart" /> Health <strong>100</strong></span>
-              <span><AppIcon name="eco" /> Growth <strong>78</strong></span>
-              <span><AppIcon name="drop" /> Water <strong>72</strong></span>
+          </div>
+
+          <div className="landing-hero-product" aria-label="Plant Lab game preview">
+            <div className="landing-hero-product__topbar">
+              <span><i /><i /><i /></span>
+              <strong>PLANT LAB / LIVE SIMULATION</strong>
+              <AppIcon name="live" />
+            </div>
+            <div className="landing-hero-product__viewport">
+              <img src="/media/plant-lab-tour.png" alt="Plant Lab showing a 3D plant and environmental controls" />
+              <span className="landing-hero-product__hotspot landing-hero-product__hotspot--plant"><i />Live plant response</span>
+              <span className="landing-hero-product__hotspot landing-hero-product__hotspot--controls"><i />6 connected factors</span>
+            </div>
+            <div className="landing-hero-product__footer">
+              <span><AppIcon name="sprout" /> Interactive 3D laboratory</span>
+              <span>01:12</span>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="landing-section landing-section--features">
+      <section className="landing-game-summary" aria-label="Game highlights">
+        <div className="landing-container landing-game-summary__grid">
+          <div><strong>3D</strong><span>living plant simulation</span></div>
+          <div><strong>6</strong><span>connected growth factors</span></div>
+          <div><strong>2</strong><span>growing modes to explore</span></div>
+          <div><strong>∞</strong><span>experiments to compare</span></div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-game-intro" id="about">
         <div className="landing-container">
-          <div className="landing-section-heading" data-reveal="up">
-            <SectionEyebrow icon="plant">Designed for active learning</SectionEyebrow>
-            <h2>A plant laboratory that rewards curiosity.</h2>
-            <p>Experiment safely, understand cause and effect, and keep evidence from every growing session.</p>
+          <div className="landing-game-intro__copy" data-reveal="up">
+            <SectionEyebrow icon="eco">What kind of game is it?</SectionEyebrow>
+            <h2>A science learning game built around meaningful choices.</h2>
+            <p>Instead of memorizing plant facts, you investigate them. Every adjustment changes the simulation, giving you clear feedback to observe, question, and understand.</p>
           </div>
-          <div className="landing-feature-grid">
-            {features.map((feature, index) => (
-              <article className="landing-feature-card" data-reveal="up" key={feature.title} style={{ '--reveal-delay': `${index * 85}ms` }}>
-                <span className="landing-card-number">{String(index + 1).padStart(2, '0')}</span>
+          <div className="landing-game-intro__pillars">
+            {features.slice(0, 3).map((feature, index) => (
+              <article data-reveal="up" key={feature.title} style={{ '--reveal-delay': `${index * 90}ms` }}>
+                <span>0{index + 1}</span>
                 <div className="landing-icon-box"><AppIcon name={feature.icon} /></div>
                 <h3>{feature.title}</h3>
                 <p>{feature.description}</p>
@@ -198,21 +283,88 @@ function HomePage({ user, onStart, onLearn }) {
         </div>
       </section>
 
-      <section className="landing-section landing-section--factors" id="factors">
+      <ProductTour />
+
+      <section className="landing-section landing-journey" aria-labelledby="journey-title">
         <div className="landing-container">
           <div className="landing-section-heading landing-section-heading--center" data-reveal="up">
-            <SectionEyebrow icon="eco">Six connected factors</SectionEyebrow>
-            <h2>Build the right environment for growth.</h2>
-            <p>Each factor influences the others. Small adjustments can change the health and pace of your plant.</p>
+            <SectionEyebrow icon="sprout">Your first growing cycle</SectionEyebrow>
+            <h2 id="journey-title">From first login to your first harvest.</h2>
+            <p>Four clear steps help new players begin quickly while leaving room for deeper experimentation.</p>
           </div>
-          <div className="landing-factor-grid">
-            {factors.map((factor, index) => (
-              <article className="landing-factor-card" data-reveal="up" key={factor.title} style={{ '--reveal-delay': `${index * 65}ms` }}>
-                <div className="landing-icon-box"><AppIcon name={factor.icon} /></div>
-                <div className="landing-factor-card__title"><h3>{factor.title}</h3><strong>{factor.value}</strong></div>
-                <p>{factor.description}</p>
+          <div className="landing-journey__grid">
+            {journeySteps.map((step, index) => (
+              <article data-reveal="up" key={step.title} style={{ '--reveal-delay': `${index * 80}ms` }}>
+                <div className={`landing-journey__visual landing-journey__visual--${index + 1}`}>
+                  {index === 0
+                    ? <div className="landing-journey__profile"><AppIcon name="person" /><span /><span /><b>START</b></div>
+                    : <img src="/media/plant-lab-tour.png" alt="" />}
+                  <strong>0{index + 1}</strong>
+                </div>
+                <div className="landing-journey__content">
+                  <span><AppIcon name={step.icon} /></span>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                </div>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-spaces" aria-labelledby="spaces-title">
+        <div className="landing-container">
+          <div className="landing-section-heading landing-spaces__heading" data-reveal="up">
+            <div>
+              <SectionEyebrow icon="home">Explore the academy</SectionEyebrow>
+              <h2 id="spaces-title">Every page supports the next experiment.</h2>
+            </div>
+            <p>The lab, learning content, tools, records, and community work together as one connected experience.</p>
+          </div>
+          <div className="landing-spaces__grid">
+            {gameSpaces.map((space, index) => (
+              <article className={`landing-space-card landing-space-card--${space.preview}`} data-reveal="up" key={space.page} style={{ '--reveal-delay': `${(index % 3) * 80}ms` }}>
+                <div className="landing-space-card__preview">
+                  {space.preview === 'lab' && <img src="/media/plant-lab-tour.png" alt="Plant Lab interface" />}
+                  {space.preview === 'settings' && <img src="/media/settings-language.png" alt="Language settings interface" />}
+                  {space.preview !== 'lab' && space.preview !== 'settings' && (
+                    <div className="landing-space-card__mock">
+                      <span><AppIcon name={space.icon} /></span>
+                      <i /><i /><i />
+                    </div>
+                  )}
+                  <span className="landing-space-card__icon"><AppIcon name={space.icon} /></span>
+                </div>
+                <div className="landing-space-card__body">
+                  <small>{space.eyebrow}</small>
+                  <h3>{space.title}</h3>
+                  <p>{space.description}</p>
+                  <button type="button" onClick={() => space.page === 'learn' ? onLearn() : onOpenPage(space.page)}>
+                    Explore {space.title}<AppIcon name="arrowForward" />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-science-bridge">
+        <div className="landing-container landing-science-bridge__inner" data-reveal="up">
+          <div className="landing-science-bridge__visual">
+            <span><AppIcon name="bolt" />Light</span>
+            <i>+</i>
+            <span><AppIcon name="drop" />Water</span>
+            <i>+</i>
+            <span><AppIcon name="air" />CO₂</span>
+            <i>→</i>
+            <span><AppIcon name="eco" />Growth</span>
+          </div>
+          <div>
+            <SectionEyebrow icon="bookmark">Learn before you adjust</SectionEyebrow>
+            <h2>Every control connects to real plant science.</h2>
+            <p>Use the Knowledge Library to understand plant structures, environmental factors, and photosynthesis—then test those ideas in the simulation.</p>
+            <button className="landing-text-link" type="button" onClick={onLearn}>Open the Knowledge Library<AppIcon name="arrowForward" /></button>
           </div>
         </div>
       </section>
@@ -220,12 +372,12 @@ function HomePage({ user, onStart, onLearn }) {
       <section className="landing-section landing-final-cta">
         <div className="landing-container landing-final-cta__inner" data-reveal="up">
           <div className="landing-final-cta__icon"><AppIcon name="sprout" /></div>
-          <SectionEyebrow icon="bolt">Your experiment starts here</SectionEyebrow>
-          <h2>Ready to grow your first digital plant?</h2>
-          <p>Sign in to save your progress, build a plant collection, and learn with the community.</p>
+          <SectionEyebrow icon="bolt">Ready when you are</SectionEyebrow>
+          <h2>Start with one plant. Leave with a better question.</h2>
+          <p>Sign in to begin your first growing cycle and keep every result connected to your learner profile.</p>
           <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
             <AppIcon name="controller" />
-            {user ? 'Continue to the plant lab' : 'Log in and start growing'}
+            {user ? 'Continue your experiment' : 'Create an account and play'}
             <AppIcon name="arrowForward" />
           </button>
         </div>
@@ -234,7 +386,262 @@ function HomePage({ user, onStart, onLearn }) {
   )
 }
 
-function LearnPage({ user, onHome, onStart }) {
+function getContentLanguage() {
+  return document.documentElement.lang === 'th' ? 'th' : 'en'
+}
+
+function localizedContent(content, field, language) {
+  if (language === 'th' && content?.[`${field}_th`]) return content[`${field}_th`]
+  return content?.[field] ?? ''
+}
+
+function sanitizeArticleHtml(html) {
+  const documentFragment = new DOMParser().parseFromString(String(html ?? ''), 'text/html')
+  const allowedTags = new Set(['P', 'H2', 'H3', 'UL', 'OL', 'LI', 'STRONG', 'EM', 'DIV', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'A', 'BLOCKQUOTE', 'BR', 'SPAN'])
+  const allowedAttributes = new Set(['class', 'colspan', 'rowspan'])
+
+  documentFragment.body.querySelectorAll('*').forEach((element) => {
+    if (!allowedTags.has(element.tagName)) {
+      element.replaceWith(...element.childNodes)
+      return
+    }
+
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase()
+      if (allowedAttributes.has(name)) return
+      if (element.tagName === 'A' && name === 'href') {
+        try {
+          const url = new URL(attribute.value, window.location.origin)
+          if (url.protocol === 'http:' || url.protocol === 'https:') return
+        } catch {
+          // Invalid links are removed below.
+        }
+      }
+      element.removeAttribute(attribute.name)
+    })
+
+    if (element.tagName === 'A' && element.hasAttribute('href')) {
+      element.setAttribute('target', '_blank')
+      element.setAttribute('rel', 'noreferrer noopener')
+    }
+  })
+
+  return documentFragment.body.innerHTML
+}
+
+function LearningContentCard({ article, language, onOpen, index }) {
+  const title = localizedContent(article, 'title', language)
+  const summary = localizedContent(article, 'summary', language)
+  const imageAlt = localizedContent(article, 'cover_image_alt', language)
+
+  return (
+    <article className="learning-content-card" style={{ '--reveal-delay': `${index * 90}ms` }}>
+      <button type="button" onClick={() => onOpen(article.slug)} aria-label={`${language === 'th' ? 'เปิดบทความ' : 'Open article'}: ${title}`}>
+        <div className="learning-content-card__image">
+          {article.cover_image_url
+            ? <img src={article.cover_image_url} alt={imageAlt} />
+            : <div className="learning-content-card__placeholder"><AppIcon name={article.icon || 'eco'} /></div>}
+          <span className="learning-content-card__number">0{index + 1}</span>
+        </div>
+        <div className="learning-content-card__body">
+          <div className="learning-content-card__meta">
+            <span><AppIcon name={article.icon || 'eco'} />{localizedContent(article, 'eyebrow', language)}</span>
+            <span><AppIcon name="history" />{article.reading_minutes} {language === 'th' ? 'นาที' : 'min read'}</span>
+          </div>
+          <h2>{title}</h2>
+          <p>{summary}</p>
+          <span className="learning-content-card__link">
+            {language === 'th' ? 'อ่านเนื้อหา' : 'Read article'}
+            <AppIcon name="arrowForward" />
+          </span>
+        </div>
+      </button>
+    </article>
+  )
+}
+
+function LearningLibrary({ onOpenArticle }) {
+  const [articles, setArticles] = useState([])
+  const [status, setStatus] = useState('loading')
+  const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const language = getContentLanguage()
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadArticles() {
+      setStatus('loading')
+      setError('')
+      try {
+        const payload = await getLearningContents()
+        if (!cancelled) {
+          setArticles(payload.data ?? [])
+          setStatus('ready')
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError.message || 'Unable to load learning content')
+          setStatus('error')
+        }
+      }
+    }
+
+    loadArticles()
+    return () => { cancelled = true }
+  }, [reloadKey])
+
+  return (
+    <section className="landing-section learning-library" aria-labelledby="learning-library-title">
+      <div className="landing-container">
+        <div className="learning-library__heading" data-reveal="up">
+          <div>
+            <SectionEyebrow icon="history">Knowledge library</SectionEyebrow>
+            <h2 id="learning-library-title">Choose a topic and explore it in depth.</h2>
+          </div>
+          <p>Three focused lessons connect plant biology to the decisions you make inside the simulation.</p>
+        </div>
+
+        {status === 'loading' && (
+          <div className="learning-content-grid" aria-label="Loading learning content">
+            {[0, 1, 2].map((item) => <div className="learning-content-skeleton" key={item} />)}
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="learning-content-error" role="alert">
+            <AppIcon name="eco" />
+            <div><strong>Learning content is temporarily unavailable.</strong><span>{error}</span></div>
+            <button type="button" onClick={() => setReloadKey((key) => key + 1)}>Try again</button>
+          </div>
+        )}
+
+        {status === 'ready' && (
+          <div className="learning-content-grid">
+            {articles.map((article, index) => (
+              <LearningContentCard article={article} index={index} key={article.slug} language={language} onOpen={onOpenArticle} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function LearningArticlePage({ slug, user, onBack, onStart }) {
+  const [article, setArticle] = useState(null)
+  const [status, setStatus] = useState('loading')
+  const [error, setError] = useState('')
+  const language = getContentLanguage()
+
+  useEffect(() => {
+    let cancelled = false
+
+    getLearningContent(slug)
+      .then((payload) => {
+        if (!cancelled) {
+          setArticle(payload.data ?? payload)
+          setStatus('ready')
+        }
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setError(loadError.message || 'Unable to load this article')
+          setStatus('error')
+        }
+      })
+
+    return () => { cancelled = true }
+  }, [slug])
+
+  const safeHtml = useMemo(() => sanitizeArticleHtml(localizedContent(article, 'body_html', language)), [article, language])
+
+  if (status === 'loading') {
+    return (
+      <section className="learning-article-state" aria-label="Loading article">
+        <span className="learning-article-state__spinner" />
+        <strong>Preparing the lesson...</strong>
+      </section>
+    )
+  }
+
+  if (status === 'error' || !article) {
+    return (
+      <section className="learning-article-state">
+        <AppIcon name="eco" />
+        <h1>We could not open this lesson.</h1>
+        <p>{error}</p>
+        <button className="landing-button landing-button--secondary" type="button" onClick={onBack}>Back to learning library</button>
+      </section>
+    )
+  }
+
+  const title = localizedContent(article, 'title', language)
+  const summary = localizedContent(article, 'summary', language)
+  const imageAlt = localizedContent(article, 'cover_image_alt', language)
+
+  return (
+    <article className="learning-article">
+      <header className="learning-article-hero">
+        <div className="landing-container learning-article-hero__grid">
+          <div className="learning-article-hero__copy">
+            <button className="landing-text-link landing-text-link--back" type="button" onClick={onBack}>
+              <AppIcon name="arrowBack" /> Back to learning library
+            </button>
+            <SectionEyebrow icon={article.icon || 'eco'}>{localizedContent(article, 'eyebrow', language)}</SectionEyebrow>
+            <h1>{title}</h1>
+            <p>{summary}</p>
+            <div className="learning-article-hero__meta">
+              <span><AppIcon name="history" />{article.reading_minutes} {language === 'th' ? 'นาที' : 'minute read'}</span>
+              <span><AppIcon name="check" />Reviewed educational sources</span>
+            </div>
+          </div>
+          <figure className="learning-article-hero__figure">
+            <img src={article.cover_image_url} alt={imageAlt} />
+            {article.image_credit && (
+              <figcaption>
+                Image: <a href={article.image_credit_url} target="_blank" rel="noreferrer">{article.image_credit}</a>
+              </figcaption>
+            )}
+          </figure>
+        </div>
+      </header>
+
+      <div className="landing-container learning-article-layout">
+        <div className="learning-article-body" dangerouslySetInnerHTML={{ __html: safeHtml }} />
+        <aside className="learning-article-aside">
+          <div className="learning-article-aside__card">
+            <span className="learning-article-aside__icon"><AppIcon name="bookmark" /></span>
+            <h2>Source notes</h2>
+            <p>This lesson is paraphrased and organized for learning. Use the original sources for further study.</p>
+          </div>
+          <div className="learning-article-aside__card">
+            <h2>References</h2>
+            <ol>
+              {(article.references ?? []).map((reference) => (
+                <li key={reference.url}>
+                  <a href={reference.url} target="_blank" rel="noreferrer">{reference.title}</a>
+                  <span>{reference.organization}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </aside>
+      </div>
+
+      <section className="landing-section learning-article-cta">
+        <div className="landing-container learning-article-cta__inner">
+          <div><SectionEyebrow icon="controller">Apply what you learned</SectionEyebrow><h2>Test the idea in the plant lab.</h2></div>
+          <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
+            <AppIcon name="sprout" />{user ? 'Enter the plant lab' : 'Log in to start'}<AppIcon name="arrowForward" />
+          </button>
+        </div>
+      </section>
+    </article>
+  )
+}
+
+function LearnPage({ user, onHome, onStart, onOpenArticle }) {
   return (
     <>
       <section className="landing-learn-hero">
@@ -247,6 +654,8 @@ function LearnPage({ user, onHome, onStart }) {
           <p>Understand the six environmental factors that shape plant health before applying them in the simulation.</p>
         </div>
       </section>
+
+      <LearningLibrary onOpenArticle={onOpenArticle} />
 
       <section className="landing-section landing-section--intro">
         <div className="landing-container landing-split">
@@ -311,7 +720,7 @@ function LandingFooter({ onHome, onLearn }) {
         <BrandButton compact onClick={onHome} />
         <nav aria-label="Footer navigation">
           <button type="button" onClick={onHome}>Home</button>
-          <button type="button" onClick={onLearn}>Learn about plants</button>
+          <button type="button" onClick={onLearn}>Learn about</button>
         </nav>
         <small>© 2026 Plant Growth Academy</small>
       </div>
@@ -319,7 +728,23 @@ function LandingFooter({ onHome, onLearn }) {
   )
 }
 
-export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn }) {
+export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn, onOpenPage }) {
+  const [articleSlug, setArticleSlug] = useState(null)
+
+  function openHome() {
+    setArticleSlug(null)
+    onHome()
+  }
+
+  function openLearningLibrary() {
+    setArticleSlug(null)
+    onLearn()
+  }
+
+  function openArticle(slug) {
+    setArticleSlug(slug)
+  }
+
   useEffect(() => {
     const shell = document.querySelector('.landing-shell')
     if (shell) shell.scrollTop = 0
@@ -340,15 +765,17 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
 
     elements.forEach((element) => observer.observe(element))
     return () => observer.disconnect()
-  }, [page])
+  }, [articleSlug, page])
 
   return (
     <main className="landing-shell">
-      <LandingHeader page={page} user={user} onHome={onHome} onLearn={onLearn} onStart={onStart} onSignIn={onSignIn} />
+      <LandingHeader page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onStart={onStart} onSignIn={onSignIn} />
       {page === 'learn'
-        ? <LearnPage user={user} onHome={onHome} onStart={onStart} />
-        : <HomePage user={user} onStart={onStart} onLearn={onLearn} />}
-      <LandingFooter onHome={onHome} onLearn={onLearn} />
+        ? articleSlug
+          ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />
+          : <LearnPage user={user} onHome={openHome} onOpenArticle={openArticle} onStart={onStart} />
+        : <HomePage user={user} onStart={onStart} onLearn={openLearningLibrary} onOpenPage={onOpenPage} />}
+      <LandingFooter onHome={openHome} onLearn={openLearningLibrary} />
     </main>
   )
 }

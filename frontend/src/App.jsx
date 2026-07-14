@@ -204,6 +204,7 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [activePage, setActivePage] = useState('home')
+  const [pendingPageAfterAuth, setPendingPageAfterAuth] = useState(null)
   const [visitingFriend, setVisitingFriend] = useState(null)
   const [growingMode, setGrowingMode] = useState(null)
   const [modeLoading, setModeLoading] = useState(false)
@@ -1175,7 +1176,8 @@ function App() {
       setSessionStatus('authenticated')
       setAuthStatus('idle')
       setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
-      setActivePage('lab')
+      setActivePage(pendingPageAfterAuth ?? 'lab')
+      setPendingPageAfterAuth(null)
     } catch (error) {
       setAuthStatus('idle')
       setAuthError(error.message || 'Unable to sign in right now')
@@ -1199,7 +1201,8 @@ function App() {
       setSessionStatus('authenticated')
       setAuthStatus('idle')
       setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
-      setActivePage('lab')
+      setActivePage(pendingPageAfterAuth ?? 'lab')
+      setPendingPageAfterAuth(null)
     } catch (error) {
       if (receivedSession) clearToken()
       setAuthStatus('idle')
@@ -1402,11 +1405,22 @@ function App() {
 
   function enterGameFromLanding() {
     if (sessionStatus !== 'authenticated' || !user) {
+      setPendingPageAfterAuth('lab')
       openAuth('login')
       return
     }
 
     setActivePage('lab')
+  }
+
+  function openGamePageFromLanding(page) {
+    if (sessionStatus !== 'authenticated' || !user) {
+      setPendingPageAfterAuth(page)
+      openAuth('login')
+      return
+    }
+
+    setActivePage(page)
   }
 
   function logoutUser() {
@@ -1419,6 +1433,7 @@ function App() {
     setAuthStatus('idle')
     setAuthError('')
     setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
+    setPendingPageAfterAuth(null)
     setActivePage('auth')
   }
 
@@ -1438,6 +1453,7 @@ function App() {
         onLearn={() => openLanding('learn')}
         onStart={enterGameFromLanding}
         onSignIn={() => openAuth('login')}
+        onOpenPage={openGamePageFromLanding}
       />
     )
   }

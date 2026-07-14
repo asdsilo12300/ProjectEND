@@ -28,6 +28,7 @@ Route::prefix('auth')->group(function (): void {
 Route::get('/plants', [PlantController::class, 'index']);
 Route::get('/plants/{plant}', [PlantController::class, 'show']);
 Route::get('/plants/{plant}/stages', [PlantController::class, 'stages']);
+Route::get('/contents', [ContentController::class, 'index']);
 Route::get('/contents/{slug}', [ContentController::class, 'show']);
 Route::get('/shop/items', [ShopController::class, 'index']);
 Route::get('/posts', [PostController::class, 'index']);

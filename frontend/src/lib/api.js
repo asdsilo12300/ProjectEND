@@ -79,6 +79,14 @@ export async function getPlants() {
   return apiFetch('/plants')
 }
 
+export async function getLearningContents() {
+  return apiFetch('/contents')
+}
+
+export async function getLearningContent(slug) {
+  return apiFetch(`/contents/${encodeURIComponent(slug)}`)
+}
+
 export async function getModelAssets() {
   return apiFetch('/model-assets')
 }
