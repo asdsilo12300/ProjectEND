@@ -14,7 +14,7 @@ function GoogleIcon() {
   )
 }
 
-export function LoginPage({ mode, setMode, form, setForm, status, error, onSubmit, onGoogleLogin, onBack }) {
+export function LoginPage({ mode, setMode, form, setForm, status, error, onSubmit, onGoogleLogin, onBack, backLabel = 'Back to simulator' }) {
   const isRegister = mode === 'register'
   const title = isRegister ? 'Create account' : 'Login'
   const submitLabel = status === 'loading' ? 'Please wait...' : isRegister ? 'Create account' : 'Log in'
@@ -52,7 +52,7 @@ export function LoginPage({ mode, setMode, form, setForm, status, error, onSubmi
               onClick={onBack}
             >
               <AppIcon className="h-4 w-4 rotate-180" name="arrowForward" />
-              Back to simulator
+              {backLabel}
             </button>
           )}
 

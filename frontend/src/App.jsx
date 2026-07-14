@@ -15,6 +15,7 @@ import { ShopPage } from './game/shop/ShopPage'
 import { SettingsPage } from './game/settings/SettingsPage'
 import { PasswordResetPage } from './game/settings/PasswordResetPage'
 import { LoginPage } from './auth/LoginPage'
+import { LandingPage } from './landing/LandingPage'
 import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
@@ -202,7 +203,7 @@ function App() {
   const [appliedAsset, setAppliedAsset] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
-  const [activePage, setActivePage] = useState('lab')
+  const [activePage, setActivePage] = useState('home')
   const [visitingFriend, setVisitingFriend] = useState(null)
   const [growingMode, setGrowingMode] = useState(null)
   const [modeLoading, setModeLoading] = useState(false)
@@ -1393,6 +1394,21 @@ function App() {
     setActivePage(page)
   }
 
+  function openLanding(page = 'home') {
+    if (visitingFriend) leaveFriendGarden()
+    setProfileOpen(false)
+    setActivePage(page)
+  }
+
+  function enterGameFromLanding() {
+    if (sessionStatus !== 'authenticated' || !user) {
+      openAuth('login')
+      return
+    }
+
+    setActivePage('lab')
+  }
+
   function logoutUser() {
     clearToken()
     clearClientSimulationSession()
@@ -1413,6 +1429,19 @@ function App() {
     return <SessionLoadingScreen />
   }
 
+  if (activePage === 'home' || activePage === 'learn') {
+    return (
+      <LandingPage
+        page={activePage}
+        user={user}
+        onHome={() => openLanding('home')}
+        onLearn={() => openLanding('learn')}
+        onStart={enterGameFromLanding}
+        onSignIn={() => openAuth('login')}
+      />
+    )
+  }
+
   if (sessionStatus !== 'authenticated' || !user) {
     return (
       <main className="relative h-screen w-screen overflow-hidden bg-[#f7faf5] text-slate-100">
@@ -1425,6 +1454,8 @@ function App() {
           error={authError}
           onSubmit={submitAuth}
           onGoogleLogin={submitGoogleAuth}
+          onBack={() => openLanding('home')}
+          backLabel="Back to home"
         />
       </main>
     )
