@@ -90,7 +90,7 @@ class SimulatorResource extends JsonResource
             ->mapWithKeys(fn ($pest) => [$pest->name_en => $this->pestRiskChance($pest)])
             ->all();
     }
-    
+
     private function pestRiskChance($pest): int
     {
         $tickRisks = $this->resource->getAttribute('pest_risks');
@@ -98,7 +98,7 @@ class SimulatorResource extends JsonResource
             return (int) $tickRisks[$pest->name_en];
         }
 
-        $chance = 0.0;
+        $chance = (float) $pest->base_chance;
         $factors = [
             'water' => $this->water,
             'light' => $this->light,
@@ -111,6 +111,10 @@ class SimulatorResource extends JsonResource
 
         foreach ($pest->conditionRules ?? [] as $rule) {
             if (! $rule->is_active || ! array_key_exists($rule->factor, $factors) || $factors[$rule->factor] === null) {
+                continue;
+            }
+
+            if ($rule->plant_id !== null && (int) $rule->plant_id !== (int) $this->plant_id) {
                 continue;
             }
 
@@ -135,7 +139,7 @@ class SimulatorResource extends JsonResource
             default => false,
         };
     }
-    
+
     private function publicUrl(?string $path): ?string
     {
         if (! $path) {
@@ -146,13 +150,6 @@ class SimulatorResource extends JsonResource
             return $path;
         }
 
-        return '/storage/' . ltrim($path, '/');
+        return '/storage/'.ltrim($path, '/');
     }
 }
-
-
-
-
-
-
-

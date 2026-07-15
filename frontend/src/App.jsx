@@ -17,8 +17,8 @@ import { AdminPage } from './admin/AdminPage'
 import { PasswordResetPage } from './game/settings/PasswordResetPage'
 import { LoginPage } from './auth/LoginPage'
 import { LandingPage } from './landing/LandingPage'
-import { clearToken, claimMaturityReward, finishSimulator, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
-import { buildSimulationFactors, defaultSimulationVisual, evaluateLocalSimulation } from './game/utils/localSimulation'
+import { clearToken, claimMaturityReward, getFriendLatestSimulator, getLatestSimulator, getMe, getModelAssets, getPlants, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
+import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
 
@@ -35,8 +35,11 @@ const initialGrowthTrack = {
   history: [0, 0, 0, 0, 0, 0, 0],
 }
 
-const growthAnimationScale = 100
-const autosaveIntervalMs = 5000
+const growthAnimationDurationMs = 1600
+const autosaveIntervalMs = 10000
+const simulationTickIntervalMs = 30000
+const initialSimulationTickDelayMs = simulationTickIntervalMs
+const simulationTickMarkerPrefix = 'plant_game_last_tick:'
 const resetMarkerKey = 'plant_game_reset_marker'
 
 const itemNameToKey = {
@@ -136,15 +139,28 @@ function itemAssetFromApi(entry, quantity = null) {
   }
 }
 
-function getStageForGrowth(progress) {
-  if (progress >= 100) return { stage_no: 4, stage_name: 'Mature', required_growth_point: 100 }
-  if (progress >= 60) return { stage_no: 3, stage_name: 'Young Plant', required_growth_point: 60 }
-  if (progress >= 25) return { stage_no: 2, stage_name: 'Sprout', required_growth_point: 25 }
-  return { stage_no: 1, stage_name: 'Seedling', required_growth_point: 0 }
-}
-
 function clampSimulationProgress(value) {
   return Math.min(100, Math.max(0, Number(value) || 0))
+}
+
+function mergeSimulatorState(currentState, simulator, options = {}) {
+  const current = currentState ?? defaultSimulationVisual
+  const currentGrowth = clampSimulationProgress(current.growth_point)
+  const nextGrowth = clampSimulationProgress(simulator?.growth_point ?? currentGrowth)
+
+  return {
+    ...defaultSimulationVisual,
+    ...current,
+    ...simulator,
+    growth_point: nextGrowth,
+    growth_rate: options.fromTick ? Math.max(0, nextGrowth - currentGrowth) : Number(current.growth_rate ?? 0),
+    active_pests: Array.isArray(simulator?.active_pests) ? simulator.active_pests : (current.active_pests ?? []),
+    pest_risks: options.preservePestRisks
+      ? (current.pest_risks ?? simulator?.pest_risks ?? defaultSimulationVisual.pest_risks)
+      : (simulator?.pest_risks ?? current.pest_risks ?? defaultSimulationVisual.pest_risks),
+    current_stage: simulator?.current_stage ?? current.current_stage ?? defaultSimulationVisual.current_stage,
+    current_model_url: simulator?.current_model_url ?? current.current_model_url ?? defaultSimulationVisual.current_model_url,
+  }
 }
 
 function wait(ms) {
@@ -212,16 +228,18 @@ function App() {
   const [saveHydrated, setSaveHydrated] = useState(() => !getToken())
   const [resetPending, setResetPending] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
-  const [, setSuppressedPests] = useState([])
   const [plantCatalog, setPlantCatalog] = useState([])
   const [modelAssets, setModelAssets] = useState({})
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
   const [simulationVisual, setSimulationVisual] = useState(defaultSimulationVisual)
   const [growthTrack, setGrowthTrack] = useState(initialGrowthTrack)
-  const lastGrowthAtRef = useRef(0)
   const latestSaveLoadedRef = useRef(false)
   const autosaveStateRef = useRef({})
+  const canonicalSimulationRef = useRef(defaultSimulationVisual)
   const isResettingRef = useRef(false)
+  const isEndingSimulationRef = useRef(false)
+  const simulationMutationQueueRef = useRef(Promise.resolve())
+  const simulationMutationPendingRef = useRef(0)
   const ownGardenSnapshotRef = useRef(null)
   const spectatorRequestRef = useRef(0)
   const accountSessionRef = useRef(0)
@@ -241,6 +259,50 @@ function App() {
   const [inventoryItems, setInventoryItems] = useState([])
   const [shopCatalog, setShopCatalog] = useState([])
   const [shareBusy, setShareBusy] = useState(false)
+
+  const enqueueSimulationMutation = useCallback((operation, options = {}) => {
+    if (options.skipIfBusy && simulationMutationPendingRef.current > 0) {
+      return Promise.resolve(null)
+    }
+
+    simulationMutationPendingRef.current += 1
+    const queued = simulationMutationQueueRef.current
+      .catch(() => null)
+      .then(operation)
+
+    simulationMutationQueueRef.current = queued.catch(() => null)
+
+    return queued.finally(() => {
+      simulationMutationPendingRef.current = Math.max(0, simulationMutationPendingRef.current - 1)
+    })
+  }, [])
+
+  const mergeCanonicalSimulator = useCallback((simulator, options = {}) => {
+    if (!simulator) return null
+
+    const next = mergeSimulatorState(canonicalSimulationRef.current, simulator, options)
+
+    canonicalSimulationRef.current = next
+    setSimulationVisual(next)
+    return next
+  }, [])
+
+  const stashOwnGardenSimulator = useCallback((simulator, options = {}) => {
+    const snapshot = ownGardenSnapshotRef.current
+    if (!simulator || !snapshot) return null
+
+    const next = mergeSimulatorState(snapshot.simulationVisual, simulator, options)
+    const progress = clampSimulationProgress(next.growth_point)
+    ownGardenSnapshotRef.current = {
+      ...snapshot,
+      simulationVisual: next,
+      growthTrack: {
+        progress,
+        history: [...(snapshot.growthTrack?.history ?? initialGrowthTrack.history).slice(1), progress],
+      },
+    }
+    return next
+  }, [])
 
   useEffect(() => {
     if (!getToken()) return undefined
@@ -350,55 +412,43 @@ function App() {
   useEffect(() => {
     if (!growingMode || !selectedPlant || modeLoading) return undefined
 
-    let historyElapsed = 0
-    lastGrowthAtRef.current = Date.now()
+    const targetProgress = clampSimulationProgress(simulationVisual.growth_point)
+    const animationStartedAt = performance.now()
+    let startingProgress = null
+    let lastHistoryAt = animationStartedAt
+    let interval = null
 
-    function advanceGrowth() {
-      const now = Date.now()
-      const elapsed = Math.min(3600, Math.max(0, (now - lastGrowthAtRef.current) / 1000))
-      lastGrowthAtRef.current = now
-      historyElapsed += elapsed
-
-      const factors = buildSimulationFactors(climate, outdoorWeather)
-      const evaluation = evaluateLocalSimulation(factors)
-      const cycleGrowth = Math.max(0, Number(evaluation.growth_point) || 0)
-      const shouldRecordHistory = historyElapsed >= 0.6
-      if (shouldRecordHistory) historyElapsed = 0
+    function animateCanonicalGrowth() {
+      const now = performance.now()
+      const ratio = Math.min(1, Math.max(0, (now - animationStartedAt) / growthAnimationDurationMs))
+      const easedRatio = 1 - ((1 - ratio) ** 3)
 
       setGrowthTrack((current) => {
-        const nextProgress =
-          current.progress >= 100 || cycleGrowth <= 0
-            ? current.progress
-            : Math.min(100, current.progress + (cycleGrowth / growthAnimationScale) * elapsed)
-        const roundedProgress = Number(nextProgress.toFixed(2))
+        if (startingProgress === null) startingProgress = current.progress
+
+        const nextProgress = clampSimulationProgress(startingProgress + ((targetProgress - startingProgress) * easedRatio))
+        const roundedProgress = ratio >= 1 ? targetProgress : Number(nextProgress.toFixed(2))
+        const shouldRecordHistory = ratio >= 1 || now - lastHistoryAt >= 240
         const nextHistory = shouldRecordHistory ? [...current.history.slice(1), roundedProgress] : current.history
+        if (shouldRecordHistory) lastHistoryAt = now
 
         if (roundedProgress === current.progress && nextHistory === current.history) return current
-
-        return {
-          progress: roundedProgress,
-          history: nextHistory,
-        }
+        return { progress: roundedProgress, history: nextHistory }
       })
+
+      if (ratio >= 1 && interval !== null) {
+        window.clearInterval(interval)
+        interval = null
+      }
     }
 
-    const interval = window.setInterval(advanceGrowth, 160)
-
-    function catchUpGrowth() {
-      advanceGrowth()
-    }
-
-    document.addEventListener('visibilitychange', catchUpGrowth)
-    window.addEventListener('focus', catchUpGrowth)
-    window.addEventListener('pageshow', catchUpGrowth)
+    animateCanonicalGrowth()
+    interval = window.setInterval(animateCanonicalGrowth, 50)
 
     return () => {
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', catchUpGrowth)
-      window.removeEventListener('focus', catchUpGrowth)
-      window.removeEventListener('pageshow', catchUpGrowth)
+      if (interval !== null) window.clearInterval(interval)
     }
-  }, [climate, growingMode, modeLoading, outdoorWeather, selectedPlant])
+  }, [growingMode, modeLoading, selectedPlant, simulationVisual.growth_point])
 
   const previewSimulationVisual = useMemo(() => {
     if (!growingMode || !selectedPlant) {
@@ -411,33 +461,33 @@ function App() {
       }
     }
 
-    const factors = buildSimulationFactors(climate, outdoorWeather)
-    const preview = evaluateLocalSimulation(factors)
     const progress = clampSimulationProgress(growthTrack.progress)
 
     return {
       ...simulationVisual,
       growth_point: progress,
       growth_history: growthTrack.history,
-      growth_rate: preview.growth_point,
-      current_stage: getStageForGrowth(progress),
-      visual_state: preview.visual_state,
-      visual_overrides: preview.visual_overrides,
-      pest_risks: preview.pest_risks,
-      active_pests: preview.active_pests,
-      current_model_url: simulationVisual.current_model_url ?? preview.current_model_url,
+      growth_rate: Number(simulationVisual.growth_rate ?? 0),
+      current_stage: simulationVisual.current_stage ?? defaultSimulationVisual.current_stage,
+      visual_state: simulationVisual.visual_state ?? defaultSimulationVisual.visual_state,
+      visual_overrides: simulationVisual.visual_overrides ?? defaultSimulationVisual.visual_overrides,
+      pest_risks: simulationVisual.pest_risks ?? defaultSimulationVisual.pest_risks,
+      active_pests: simulationVisual.active_pests ?? [],
+      current_model_url: simulationVisual.current_model_url ?? defaultSimulationVisual.current_model_url,
     }
-  }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual])
+  }, [growingMode, growthTrack, selectedPlant, simulationVisual])
   useEffect(() => {
+    canonicalSimulationRef.current = simulationVisual
     autosaveStateRef.current = {
       climate,
       growingMode,
       growthTrack,
       outdoorWeather,
-      previewSimulationVisual,
+      simulationVisual,
       selectedPlant,
+      visitingFriend,
     }
-  })
+  }, [climate, growingMode, growthTrack, outdoorWeather, selectedPlant, simulationVisual, visitingFriend])
   const inventoryMap = useMemo(() => {
     return inventoryItems.reduce((map, entry) => {
       const key = inventoryItemKey(entry)
@@ -515,10 +565,12 @@ function App() {
 
   useEffect(() => {
     function handleExpiredSession() {
+      const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
       accountSessionRef.current += 1
       spectatorRequestRef.current += 1
       latestSaveLoadedRef.current = false
       autosaveStateRef.current = {}
+      if (simulatorId) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulatorId}`)
       window.localStorage.removeItem('plant_game_simulator_id')
       window.localStorage.removeItem(resetMarkerKey)
       setUser(null)
@@ -562,7 +614,6 @@ function App() {
       setPlantCatalog((current) => current.some((plant) => plant.id === simulator.plant.id) ? current : [simulator.plant, ...current])
     }
     setSelectedPlant(options.selectPlant === false ? null : restoredPlant)
-    setSuppressedPests([])
     setClimate({
       water: Number(simulator.water ?? defaultClimate.water),
       light: Number(simulator.light ?? defaultClimate.light),
@@ -575,23 +626,26 @@ function App() {
       progress: restoredProgress,
       history: [0, 0, 0, 0, 0, 0, restoredProgress],
     })
-    setSimulationVisual({
+    const nextSimulation = {
       ...defaultSimulationVisual,
       ...simulator,
       growth_point: restoredProgress,
+      growth_rate: 0,
+      active_pests: simulator.active_pests ?? [],
       current_model_url: simulator.current_model_url ?? defaultSimulationVisual.current_model_url,
-    })
+    }
+    canonicalSimulationRef.current = nextSimulation
+    setSimulationVisual(nextSimulation)
   }, [])
 
   const buildSaveSnapshot = useCallback(() => {
     const state = autosaveStateRef.current
     const factors = buildSimulationFactors(state.climate ?? defaultClimate, state.outdoorWeather ?? initialOutdoorWeather)
-    const visual = state.previewSimulationVisual ?? defaultSimulationVisual
-    const track = state.growthTrack ?? initialGrowthTrack
+    const visual = canonicalSimulationRef.current ?? state.simulationVisual ?? defaultSimulationVisual
 
     return {
       ...factors,
-      growth_point: clampSimulationProgress(visual.growth_point ?? track.progress),
+      growth_point: clampSimulationProgress(visual.growth_point),
       health: Math.round(Number(visual.health ?? 100)),
       visual_state: visual.visual_state ?? 'healthy',
       visual_overrides: visual.visual_overrides ?? {},
@@ -602,28 +656,101 @@ function App() {
 
   const persistCurrentSimulation = useCallback(async (options = {}) => {
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
-    const state = autosaveStateRef.current
     const accountSession = accountSessionRef.current
 
-    if (visitingFriend || isResettingRef.current || window.localStorage.getItem(resetMarkerKey) || !simulatorId || !getToken() || !state.selectedPlant || !state.growingMode) {
+    if (!simulatorId) {
       return null
     }
 
-    const payload = await syncSimulatorSnapshot(simulatorId, buildSaveSnapshot(), { keepalive: options.keepalive })
-    if (accountSession !== accountSessionRef.current || !getToken()) return null
+    return enqueueSimulationMutation(async () => {
+      const state = autosaveStateRef.current
+      const currentSimulatorId = window.localStorage.getItem('plant_game_simulator_id')
 
-    const simulator = payload.data ?? payload
+      if (
+        accountSession !== accountSessionRef.current
+        || currentSimulatorId !== String(simulatorId)
+        || state.visitingFriend
+        || isResettingRef.current
+        || (isEndingSimulationRef.current && !options.allowEnding)
+        || window.localStorage.getItem(resetMarkerKey)
+        || !getToken()
+        || !state.selectedPlant
+        || !state.growingMode
+      ) {
+        return null
+      }
 
-    if (!options.silent && simulator) {
-      setSimulationVisual({
-        ...defaultSimulationVisual,
-        ...simulator,
-        current_model_url: simulator.current_model_url ?? autosaveStateRef.current.previewSimulationVisual?.current_model_url ?? defaultSimulationVisual.current_model_url,
-      })
-    }
+      const payload = await syncSimulatorSnapshot(simulatorId, buildSaveSnapshot(), { keepalive: options.keepalive })
+      const simulator = payload.data ?? payload
+      if (
+        accountSession !== accountSessionRef.current
+        || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+        || !getToken()
+      ) {
+        return null
+      }
 
-    return simulator
-  }, [buildSaveSnapshot, visitingFriend])
+      if (autosaveStateRef.current.visitingFriend) {
+        stashOwnGardenSimulator(simulator, { preservePestRisks: true })
+        return simulator
+      }
+
+      if (simulator) mergeCanonicalSimulator(simulator, { preservePestRisks: true })
+
+      return simulator
+    }, { skipIfBusy: Boolean(options.background) })
+  }, [buildSaveSnapshot, enqueueSimulationMutation, mergeCanonicalSimulator, stashOwnGardenSimulator])
+
+  const runSimulationTick = useCallback(async () => {
+    const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+    const accountSession = accountSessionRef.current
+    if (!simulatorId) return null
+
+    return enqueueSimulationMutation(async () => {
+      const state = autosaveStateRef.current
+      const canonical = canonicalSimulationRef.current
+
+      if (
+        accountSession !== accountSessionRef.current
+        || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+        || state.visitingFriend
+        || isResettingRef.current
+        || isEndingSimulationRef.current
+        || window.localStorage.getItem(resetMarkerKey)
+        || !getToken()
+        || !state.selectedPlant
+        || !state.growingMode
+        || (canonical?.status && canonical.status !== 'active')
+      ) {
+        return null
+      }
+
+      const factors = buildSimulationFactors(state.climate ?? defaultClimate, state.outdoorWeather ?? initialOutdoorWeather)
+      const payload = await tickSimulator(simulatorId, factors)
+      const simulator = payload.data ?? payload
+
+      if (
+        accountSession !== accountSessionRef.current
+        || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+        || isResettingRef.current
+        || isEndingSimulationRef.current
+        || !getToken()
+      ) {
+        return null
+      }
+
+      if (simulator) {
+        if (autosaveStateRef.current.visitingFriend) {
+          stashOwnGardenSimulator(simulator, { fromTick: true })
+        } else {
+          mergeCanonicalSimulator(simulator, { fromTick: true })
+        }
+        window.localStorage.setItem(`${simulationTickMarkerPrefix}${simulatorId}`, String(Date.now()))
+      }
+
+      return simulator
+    })
+  }, [enqueueSimulationMutation, mergeCanonicalSimulator, stashOwnGardenSimulator])
 
   useEffect(() => {
     const simulatorId = previewSimulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
@@ -645,16 +772,37 @@ function App() {
 
         if (isCancelled || savedGrowth < 100 || savedAlreadyClaimed) return
 
-        const payload = await claimMaturityReward(simulatorId)
+        const accountSession = accountSessionRef.current
+        const payload = await enqueueSimulationMutation(() => {
+          if (
+            accountSession !== accountSessionRef.current
+            || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+            || autosaveStateRef.current.visitingFriend
+            || isResettingRef.current
+            || isEndingSimulationRef.current
+            || !getToken()
+          ) {
+            return null
+          }
+          return claimMaturityReward(simulatorId)
+        })
+        if (!payload || accountSession !== accountSessionRef.current || isResettingRef.current || isEndingSimulationRef.current) return
+
         const reward = payload.data ?? payload
         const amount = Number(reward.amount ?? 0)
 
+        if (autosaveStateRef.current.visitingFriend) {
+          if (reward.simulator) stashOwnGardenSimulator(reward.simulator, { preservePestRisks: true })
+          if (reward.user) {
+            setUser((current) => current ? { ...current, ...reward.user } : reward.user)
+          } else if (typeof reward.balance === 'number') {
+            setUser((current) => current ? { ...current, coin: reward.balance } : current)
+          }
+          return
+        }
+
         if (reward.simulator) {
-          setSimulationVisual((current) => ({
-            ...current,
-            ...reward.simulator,
-            current_model_url: reward.simulator.current_model_url ?? current.current_model_url ?? defaultSimulationVisual.current_model_url,
-          }))
+          mergeCanonicalSimulator(reward.simulator, { preservePestRisks: true })
         }
 
         if (reward.user) {
@@ -699,11 +847,12 @@ function App() {
     return () => {
       isCancelled = true
     }
-  }, [persistCurrentSimulation, previewSimulationVisual?.growth_point, previewSimulationVisual?.id, previewSimulationVisual?.maturity_reward_claimed_at, selectedPlant, user, visitingFriend])
+  }, [enqueueSimulationMutation, mergeCanonicalSimulator, persistCurrentSimulation, previewSimulationVisual?.growth_point, previewSimulationVisual?.id, previewSimulationVisual?.maturity_reward_claimed_at, selectedPlant, stashOwnGardenSimulator, user, visitingFriend])
   useEffect(() => {
     if (!user || latestSaveLoadedRef.current) return undefined
 
     let isCancelled = false
+    let retryTimeout = null
     latestSaveLoadedRef.current = true
 
     async function restoreLatestSave() {
@@ -713,16 +862,29 @@ function App() {
         const resetMarked = Boolean(window.localStorage.getItem(resetMarkerKey))
 
         if (!isCancelled && resetMarked) {
-          if (simulator?.id) {
-            finishSimulator(simulator.id).catch(() => {})
+          try {
+            if (simulator?.id) {
+              await uprootSimulator(simulator.id)
+            }
+            if (isCancelled) return
+
+            if (simulator?.id) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulator.id}`)
+            window.localStorage.removeItem(resetMarkerKey)
+            window.localStorage.removeItem('plant_game_simulator_id')
+            setGrowingMode(null)
+            setSelectedPlant(null)
+            canonicalSimulationRef.current = defaultSimulationVisual
+            setSimulationVisual(defaultSimulationVisual)
+            setGrowthTrack(initialGrowthTrack)
+            setActionMessage('Reset complete. Choose a growing mode.')
+            setSaveHydrated(true)
+          } catch (error) {
+            if (isCancelled || !getToken()) return
+
+            if (simulator) applySimulatorSnapshot(simulator)
+            setActionMessage(error.message || 'Reset is still pending. Try Reset again.')
+            setSaveHydrated(true)
           }
-          window.localStorage.removeItem('plant_game_simulator_id')
-          setGrowingMode(null)
-          setSelectedPlant(null)
-          setSimulationVisual(defaultSimulationVisual)
-          setGrowthTrack(initialGrowthTrack)
-          setActionMessage('Reset complete. Choose a growing mode.')
-          setSaveHydrated(true)
           return
         }
 
@@ -733,7 +895,17 @@ function App() {
         if (!isCancelled) setSaveHydrated(true)
       } catch {
         latestSaveLoadedRef.current = false
-        if (!isCancelled) setSaveHydrated(true)
+        if (!isCancelled && window.localStorage.getItem(resetMarkerKey) && getToken()) {
+          setSaveHydrated(false)
+          setActionMessage('Confirming the pending reset with the server...')
+          retryTimeout = window.setTimeout(() => {
+            if (isCancelled) return
+            latestSaveLoadedRef.current = true
+            restoreLatestSave()
+          }, 3000)
+        } else if (!isCancelled) {
+          setSaveHydrated(true)
+        }
       }
     }
 
@@ -741,14 +913,53 @@ function App() {
 
     return () => {
       isCancelled = true
+      if (retryTimeout !== null) window.clearTimeout(retryTimeout)
     }
   }, [applySimulatorSnapshot, user])
+
+  useEffect(() => {
+    const simulatorId = simulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
+    if (!simulatorId || !selectedPlant || !growingMode || visitingFriend || !getToken() || simulationVisual?.status !== 'active') {
+      return undefined
+    }
+
+    const markerKey = `${simulationTickMarkerPrefix}${simulatorId}`
+    const storedTickAt = Number(window.localStorage.getItem(markerKey))
+    const hasStoredTick = Number.isFinite(storedTickAt) && storedTickAt > 0
+
+    let cancelled = false
+    let timer = null
+
+    async function tickCycle() {
+      if (cancelled) return
+      try {
+        await runSimulationTick()
+      } catch (error) {
+        if (!cancelled && error?.status !== 401) {
+          console.warn('Unable to advance the simulation cycle', error)
+        }
+      } finally {
+        if (!cancelled) timer = window.setTimeout(tickCycle, simulationTickIntervalMs)
+      }
+    }
+
+    const elapsed = hasStoredTick ? Math.max(0, Date.now() - storedTickAt) : 0
+    const initialDelay = hasStoredTick
+      ? Math.max(1000, simulationTickIntervalMs - elapsed)
+      : initialSimulationTickDelayMs
+    timer = window.setTimeout(tickCycle, initialDelay)
+
+    return () => {
+      cancelled = true
+      if (timer !== null) window.clearTimeout(timer)
+    }
+  }, [growingMode, runSimulationTick, selectedPlant, simulationVisual?.id, simulationVisual?.status, visitingFriend])
 
   useEffect(() => {
     if (!selectedPlant || !growingMode || !getToken()) return undefined
 
     const interval = window.setInterval(() => {
-      persistCurrentSimulation({ silent: true }).catch(() => {})
+      persistCurrentSimulation({ silent: true, background: true }).catch(() => {})
     }, autosaveIntervalMs)
 
     return () => window.clearInterval(interval)
@@ -756,7 +967,7 @@ function App() {
 
   useEffect(() => {
     function saveBeforeLeaving() {
-      persistCurrentSimulation({ silent: true, keepalive: true }).catch(() => {})
+      persistCurrentSimulation({ silent: true, background: true, keepalive: true }).catch(() => {})
     }
 
     window.addEventListener('pagehide', saveBeforeLeaving)
@@ -819,26 +1030,43 @@ function App() {
     setActionMessage(`Using ${asset.name}...`)
 
     try {
-      const payload = await applySimulatorItem(simulatorId, asset.itemKey ?? asset.id)
+      const accountSession = accountSessionRef.current
+      const payload = await enqueueSimulationMutation(async () => {
+        if (
+          accountSession !== accountSessionRef.current
+          || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+          || autosaveStateRef.current.visitingFriend
+          || isResettingRef.current
+          || isEndingSimulationRef.current
+          || !getToken()
+        ) {
+          return null
+        }
+
+        return applySimulatorItem(simulatorId, asset.itemKey ?? asset.id)
+      })
+      if (
+        !payload
+        || accountSession !== accountSessionRef.current
+        || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+        || isResettingRef.current
+        || isEndingSimulationRef.current
+      ) return
+
       const result = payload.data ?? payload
       const simulator = result.simulator ?? null
-      const targets = result.removed_pests ?? []
 
       if (result.inventory) {
         upsertInventoryItem(result.inventory)
       }
 
-      if (targets.length) {
-        setSuppressedPests((current) => [...new Set([...current, ...targets])])
+      if (autosaveStateRef.current.visitingFriend) {
+        if (simulator) stashOwnGardenSimulator(simulator, { preservePestRisks: true })
+        if (ownGardenSnapshotRef.current) ownGardenSnapshotRef.current.appliedAsset = null
+        return
       }
 
-      if (simulator) {
-        setSimulationVisual({
-          ...defaultSimulationVisual,
-          ...simulator,
-          current_model_url: simulator.current_model_url ?? simulationVisual.current_model_url ?? defaultSimulationVisual.current_model_url,
-        })
-      }
+      if (simulator) mergeCanonicalSimulator(simulator, { preservePestRisks: true })
 
       setAppliedAsset(null)
       setActionMessage(result.message ?? `${asset.name} applied`)
@@ -883,39 +1111,49 @@ function App() {
       }
 
       setResetPending(false)
-      setSuppressedPests([])
       setSelectedPlant(asset)
       setGrowthTrack(initialGrowthTrack)
-      setSimulationVisual({
+      const pendingSimulation = {
         ...defaultSimulationVisual,
         current_model_url: fallbackModelUrl,
-      })
+      }
+      canonicalSimulationRef.current = pendingSimulation
+      setSimulationVisual(pendingSimulation)
       setActionMessage('Creating simulation save...')
 
       if (getToken() && growingMode) {
         try {
+          const accountSession = accountSessionRef.current
           const simulatorPayload = await startSimulator(apiPlant.id, growingMode, {
             location_name: outdoorWeather.addressLabel || undefined,
             latitude: outdoorWeather.location?.latitude,
             longitude: outdoorWeather.location?.longitude,
           })
+          if (accountSession !== accountSessionRef.current || !getToken()) return
+
           const simulator = simulatorPayload.data ?? simulatorPayload
           window.localStorage.removeItem(resetMarkerKey)
           window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
-          setSimulationVisual({
-            ...defaultSimulationVisual,
-            ...simulator,
-            current_model_url: simulator.current_model_url ?? fallbackModelUrl,
-          })
+          mergeCanonicalSimulator({ ...simulator, current_model_url: simulator.current_model_url ?? fallbackModelUrl })
           setGrowthTrack({ progress: clampSimulationProgress(simulator.growth_point ?? 0), history: [0, 0, 0, 0, 0, 0, clampSimulationProgress(simulator.growth_point ?? 0)] })
           setActionMessage(`${asset.name} saved to your account`)
-        } catch {
+        } catch (error) {
           window.localStorage.removeItem('plant_game_simulator_id')
-          setActionMessage(`${asset.name} selected locally`)
+          canonicalSimulationRef.current = defaultSimulationVisual
+          setAppliedAsset(null)
+          setSelectedPlant(null)
+          setSimulationVisual(defaultSimulationVisual)
+          setGrowthTrack(initialGrowthTrack)
+          setActionMessage(error.message || `Unable to plant ${asset.name}`)
         }
       } else {
         window.localStorage.removeItem('plant_game_simulator_id')
-        setActionMessage(`${asset.name} selected locally`)
+        canonicalSimulationRef.current = defaultSimulationVisual
+        setAppliedAsset(null)
+        setSelectedPlant(null)
+        setSimulationVisual(defaultSimulationVisual)
+        setActionMessage('Log in before planting')
+        openAuth('login')
       }
     }
   }
@@ -944,6 +1182,7 @@ function App() {
       const payload = await getPlants()
       const plants = payload.data ?? payload
       setPlantCatalog(plants)
+      canonicalSimulationRef.current = defaultSimulationVisual
       setSimulationVisual(defaultSimulationVisual)
       window.localStorage.removeItem('plant_game_simulator_id')
     } catch {
@@ -958,14 +1197,17 @@ function App() {
 
   async function saveSimulation() {
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+    if (isEndingSimulationRef.current) return
 
     if (resetPending) {
+      isEndingSimulationRef.current = true
       try {
         if (simulatorId && getToken()) {
-          await finishSimulator(simulatorId)
+          await enqueueSimulationMutation(() => uprootSimulator(simulatorId))
         }
       } finally {
         window.localStorage.removeItem('plant_game_simulator_id')
+        if (simulatorId) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulatorId}`)
         latestSaveLoadedRef.current = false
         setResetPending(false)
         setGrowingMode(null)
@@ -974,18 +1216,20 @@ function App() {
         setClimate({ ...defaultClimate })
         setOutdoorWeather(initialOutdoorWeather)
         setAppliedAsset(null)
-        setSuppressedPests([])
+        canonicalSimulationRef.current = defaultSimulationVisual
         setSimulationVisual(defaultSimulationVisual)
         setGrowthTrack(initialGrowthTrack)
         setSelectedPlant(null)
+        isEndingSimulationRef.current = false
         setActionMessage('Reset saved. Choose a new growing mode.')
       }
       return
     }
 
+    isEndingSimulationRef.current = true
     try {
       const snapshotImageData = stageSnapshotRef.current?.capture?.() ?? null
-      const simulator = await persistCurrentSimulation({ silent: false })
+      const simulator = await persistCurrentSimulation({ silent: false, allowEnding: true })
       const nextVisual = simulator ?? previewSimulationVisual
       const historySimulatorId = simulator?.id ?? simulatorId
 
@@ -1006,8 +1250,8 @@ function App() {
           : 'private'
         const payload = await savePlantHistory(historySimulatorId, { visibility: historyVisibility, snapshot_image_data: snapshotImageData })
         const history = payload.data ?? payload
-        await finishSimulator(historySimulatorId)
         window.localStorage.removeItem('plant_game_simulator_id')
+        window.localStorage.removeItem(`${simulationTickMarkerPrefix}${historySimulatorId}`)
         window.localStorage.removeItem('plantsim-scenario')
         latestSaveLoadedRef.current = false
         setResetPending(false)
@@ -1015,11 +1259,13 @@ function App() {
         setSaveCompleteHistory(history)
         setActionMessage('Saved to history')
       } else {
+        isEndingSimulationRef.current = false
         setActionMessage('Saved locally')
       }
 
       setResetPending(false)
     } catch (error) {
+      isEndingSimulationRef.current = false
       setActionMessage(error.message || 'Unable to save history')
     }
   }
@@ -1031,16 +1277,43 @@ function App() {
     const previousVisibility = previewSimulationVisual?.share_visibility ?? 'private'
     const visibility = previousVisibility === 'private' ? 'public' : 'private'
     setShareBusy(true)
-    setSimulationVisual((current) => ({ ...current, share_visibility: visibility }))
+    mergeCanonicalSimulator({ ...canonicalSimulationRef.current, share_visibility: visibility })
 
     try {
+      const accountSession = accountSessionRef.current
       const snapshotImageData = visibility === 'private' ? null : stageSnapshotRef.current?.capture?.() ?? null
-      const payload = await shareSimulator(simulatorId, visibility, '', snapshotImageData)
+      const payload = await enqueueSimulationMutation(() => {
+        if (
+          accountSession !== accountSessionRef.current
+          || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+          || autosaveStateRef.current.visitingFriend
+          || isResettingRef.current
+          || isEndingSimulationRef.current
+          || !getToken()
+        ) {
+          return null
+        }
+        return shareSimulator(simulatorId, visibility, '', snapshotImageData)
+      })
+      if (!payload || accountSession !== accountSessionRef.current || isResettingRef.current || isEndingSimulationRef.current) return
+
       const simulator = payload.data ?? payload
-      setSimulationVisual((current) => ({ ...current, ...simulator, current_model_url: simulator.current_model_url ?? current.current_model_url }))
+      if (autosaveStateRef.current.visitingFriend) {
+        stashOwnGardenSimulator(simulator, { preservePestRisks: true })
+        return
+      }
+
+      mergeCanonicalSimulator(simulator, { preservePestRisks: true })
       setActionMessage(visibility === 'private' ? 'Live sharing stopped' : 'Your live garden is now visible in Community')
     } catch (error) {
-      setSimulationVisual((current) => ({ ...current, share_visibility: previousVisibility }))
+      if (autosaveStateRef.current.visitingFriend && ownGardenSnapshotRef.current) {
+        ownGardenSnapshotRef.current.simulationVisual = {
+          ...ownGardenSnapshotRef.current.simulationVisual,
+          share_visibility: previousVisibility,
+        }
+      } else {
+        mergeCanonicalSimulator({ ...canonicalSimulationRef.current, share_visibility: previousVisibility })
+      }
       setActionMessage(error.message || 'Unable to change live sharing')
     } finally {
       setShareBusy(false)
@@ -1059,35 +1332,42 @@ function App() {
     setClimate({ ...defaultClimate })
     setOutdoorWeather(initialOutdoorWeather)
     setAppliedAsset(null)
-    setSuppressedPests([])
+    canonicalSimulationRef.current = defaultSimulationVisual
     setSimulationVisual(defaultSimulationVisual)
     setGrowthTrack(initialGrowthTrack)
     setSelectedPlant(null)
+    isEndingSimulationRef.current = false
     setActionMessage('Choose a new growing mode.')
   }
 
   async function resetSimulation() {
+    if (isResettingRef.current) return
+
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
+    const accountSession = accountSessionRef.current
+    const sessionToken = getToken()
 
     isResettingRef.current = true
     window.localStorage.setItem(resetMarkerKey, String(Date.now()))
     window.localStorage.removeItem('plant_game_simulator_id')
-    autosaveStateRef.current = {
-      ...autosaveStateRef.current,
-      selectedPlant: null,
-    }
     setResetPending(false)
-    setSelectedPlant(null)
     setActionMessage('Resetting simulation...')
 
     try {
-      if (simulatorId && getToken()) {
-        await uprootSimulator(simulatorId)
+      if (simulatorId) {
+        if (!sessionToken) throw new Error('Your session has expired. Please sign in again.')
+
+        const payload = await enqueueSimulationMutation(() => {
+          if (accountSession !== accountSessionRef.current || getToken() !== sessionToken) return null
+          return uprootSimulator(simulatorId)
+        })
+
+        if (!payload || accountSession !== accountSessionRef.current || getToken() !== sessionToken) return
       }
-    } catch {
-      setActionMessage('Reset locally. The previous save will stay hidden until the server responds.')
-    } finally {
+
+      window.localStorage.removeItem(resetMarkerKey)
       latestSaveLoadedRef.current = true
+      if (simulatorId) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulatorId}`)
       setClimate(
         growingMode === 'outdoor' && outdoorWeather.forecast
           ? climateFromForecast({ ...defaultClimate }, outdoorWeather.forecast)
@@ -1098,11 +1378,17 @@ function App() {
       setSaveHydrated(true)
       setOutdoorWeather(initialOutdoorWeather)
       setAppliedAsset(null)
-      setSuppressedPests([])
+      canonicalSimulationRef.current = defaultSimulationVisual
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
       setSelectedPlant(null)
       setActionMessage('Reset complete. Choose a growing mode.')
+    } catch (error) {
+      if (accountSession === accountSessionRef.current && getToken() === sessionToken) {
+        if (simulatorId) window.localStorage.setItem('plant_game_simulator_id', String(simulatorId))
+        setActionMessage(error.message || 'Reset was not confirmed. Try Reset again.')
+      }
+    } finally {
       isResettingRef.current = false
     }
   }
@@ -1117,15 +1403,17 @@ function App() {
   }
 
   function clearClientSimulationSession({ hydrated = true } = {}) {
+    const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
     accountSessionRef.current += 1
     spectatorRequestRef.current += 1
     latestSaveLoadedRef.current = false
     autosaveStateRef.current = {}
     isResettingRef.current = false
+    isEndingSimulationRef.current = false
     ownGardenSnapshotRef.current = null
     rewardClaimingRef.current = null
-    lastGrowthAtRef.current = 0
 
+    if (simulatorId) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulatorId}`)
     window.localStorage.removeItem('plant_game_simulator_id')
     window.localStorage.removeItem(resetMarkerKey)
 
@@ -1138,7 +1426,7 @@ function App() {
     setResetPending(false)
     setOutdoorWeather(initialOutdoorWeather)
     setAppliedAsset(null)
-    setSuppressedPests([])
+    canonicalSimulationRef.current = defaultSimulationVisual
     setSimulationVisual(defaultSimulationVisual)
     setGrowthTrack(initialGrowthTrack)
     setSelectedPlant(null)
@@ -1220,10 +1508,12 @@ function App() {
       climate,
       growingMode,
       growthTrack,
+      outdoorWeather,
       selectedPlant,
       simulationVisual,
       windows,
     }
+    autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: friend }
     setVisitingFriend({ ...friend, simulatorId: friend.latest_simulator?.id ?? null })
     setActivePage('lab')
     setWindows((value) => ({
@@ -1250,6 +1540,7 @@ function App() {
         setActionMessage(`Viewing ${friend?.user?.username ?? 'friend'}'s plant`)
       } else {
         setSelectedPlant(null)
+        canonicalSimulationRef.current = defaultSimulationVisual
         setSimulationVisual(defaultSimulationVisual)
         setGrowthTrack(initialGrowthTrack)
         setActionMessage(`${friend?.user?.username ?? 'Friend'} has no active plant yet`)
@@ -1257,6 +1548,7 @@ function App() {
     } catch (error) {
       if (spectatorRequestRef.current !== requestId) return
       setSelectedPlant(null)
+      canonicalSimulationRef.current = defaultSimulationVisual
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
       setActionMessage(error.message || 'Unable to load this friend plant')
@@ -1281,6 +1573,7 @@ function App() {
       climate,
       growingMode,
       growthTrack,
+      outdoorWeather,
       selectedPlant,
       simulationVisual,
       windows,
@@ -1295,6 +1588,7 @@ function App() {
     }))
 
     if (liveSimulator?.id) {
+      autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: { user: owner, simulatorId: liveSimulator.id, source: 'community' } }
       setVisitingFriend({ user: owner, simulatorId: liveSimulator.id, source: 'community' })
       setActionMessage('Connecting to the live garden...')
       try {
@@ -1311,6 +1605,7 @@ function App() {
     }
 
     if (savedSimulator) {
+      autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: { user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id } }
       setVisitingFriend({ user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id })
       applySimulatorSnapshot(savedSimulator, { persistLocalId: false })
       setActionMessage('Viewing a saved game state')
@@ -1329,17 +1624,29 @@ function App() {
     viewCommunityGame({ plant_history: save, user })
   }
 
-  function leaveFriendGarden() {
+  const leaveFriendGarden = useCallback(() => {
     const snapshot = ownGardenSnapshotRef.current
     spectatorRequestRef.current += 1
+    autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: null }
     setVisitingFriend(null)
 
     if (snapshot) {
+      autosaveStateRef.current = {
+        ...autosaveStateRef.current,
+        climate: snapshot.climate,
+        growingMode: snapshot.growingMode,
+        growthTrack: snapshot.growthTrack,
+        outdoorWeather: snapshot.outdoorWeather,
+        selectedPlant: snapshot.selectedPlant,
+        simulationVisual: snapshot.simulationVisual,
+        visitingFriend: null,
+      }
       setAppliedAsset(snapshot.appliedAsset)
       setClimate(snapshot.climate)
       setGrowingMode(snapshot.growingMode)
       setGrowthTrack(snapshot.growthTrack)
       setSelectedPlant(snapshot.selectedPlant)
+      canonicalSimulationRef.current = snapshot.simulationVisual
       setSimulationVisual(snapshot.simulationVisual)
       setWindows(snapshot.windows ?? defaultWindows())
     } else {
@@ -1354,7 +1661,7 @@ function App() {
 
     ownGardenSnapshotRef.current = null
     setActionMessage('Back to your garden')
-  }
+  }, [])
 
   useEffect(() => {
     const simulatorId = visitingFriend?.simulatorId
@@ -1385,7 +1692,7 @@ function App() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [applySimulatorSnapshot, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
+  }, [applySimulatorSnapshot, leaveFriendGarden, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
 
   function navigateToPage(page) {
     if (sessionStatus !== 'authenticated' || !user) {

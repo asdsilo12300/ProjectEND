@@ -25,20 +25,6 @@ const visualPresets = {
   stunted: { leafColor: '#7b6f3f', stemColor: '#5c4a28', scale: 0.68, leafState: 'small', stemState: 'short' },
 }
 
-function pest(id, nameEn, nameTh, modelUrl, chance) {
-  return {
-    id,
-    status: 'active',
-    risk_chance: chance,
-    pest: {
-      id,
-      name_en: nameEn,
-      name_th: nameTh,
-      model_url: modelUrl,
-    },
-  }
-}
-
 function clampChance(value) {
   return Math.min(100, Math.max(0, Math.round(value)))
 }
@@ -104,12 +90,6 @@ export function evaluateLocalSimulation(factors) {
     snail: clampChance((factors.soil_humidity > 72 ? 65 : 0) + (factors.soil_humidity > 90 ? 30 : 0) + (factors.rain > 0.5 ? 35 : 0)),
     fungus: clampChance((factors.air_humidity > 78 ? 42 : 0) + (factors.soil_humidity > 78 ? 46 : 0)),
   }
-  const activePests = []
-
-  if (pestRisks.aphid > 0) activePests.push(pest(1, 'aphid', 'Aphid', '/storage/models/aphid.gltf', pestRisks.aphid))
-  if (pestRisks.snail > 0) activePests.push(pest(2, 'snail', 'Snail', '/storage/models/snails.gltf', pestRisks.snail))
-  if (pestRisks.fungus > 0) activePests.push(pest(3, 'fungus', 'Fungus', null, pestRisks.fungus))
-
   return {
     growth_point: growthPoint,
     current_stage: growthPoint >= 100 ? { stage_no: 3, stage_name: 'Young Plant', required_growth_point: 100 } : { stage_no: 1, stage_name: 'Seedling', required_growth_point: 0 },
@@ -117,6 +97,8 @@ export function evaluateLocalSimulation(factors) {
     current_model_url: '/plant.gltf',
     visual_overrides: visualPresets[visualState],
     pest_risks: pestRisks,
-    active_pests: activePests,
+    // Active pests are authoritative server state. A local risk preview must
+    // never create a pest that the treatment API cannot see or remove.
+    active_pests: [],
   }
 }

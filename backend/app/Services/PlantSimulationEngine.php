@@ -3,23 +3,35 @@
 namespace App\Services;
 
 use App\Models\Pest;
+use App\Models\PestConditionRule;
 use App\Models\PlantConditionRule;
 use App\Models\PlantVisualVariant;
-use App\Models\PestConditionRule;
 use App\Models\SimulationLog;
 use App\Models\SimulationPest;
 use App\Models\Simulator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PlantSimulationEngine
 {
     /**
-     * @param array<string, int|float|null> $factors
+     * @param  array<string, int|float|null>  $factors
      */
     public function tick(Simulator $simulator, array $factors): Simulator
     {
-        return DB::transaction(function () use ($simulator, $factors): Simulator {
+        $simulatorId = $simulator->getKey();
+
+        return DB::transaction(function () use ($simulatorId, $factors): Simulator {
+            $simulator = Simulator::query()
+                ->whereKey($simulatorId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($simulator->status !== 'active') {
+                throw new ConflictHttpException('Only active simulations can advance.');
+            }
+
             $simulator->loadMissing(['plant.conditionRules', 'plant.visualVariants', 'currentStage']);
             $plant = $simulator->plant;
             $matchedRules = $plant->conditionRules
@@ -31,29 +43,55 @@ class PlantSimulationEngine
             $healthDelta = (int) $matchedRules->sum('health_delta');
             $growthDelta = (int) $matchedRules->sum('growth_delta');
             $stressCount = $matchedRules->filter(fn (PlantConditionRule $rule) => $rule->health_delta < 0 || $rule->growth_delta < 0)->count();
-            $baseGrowth = $stressCount === 0 ? 14 : 6;
+            $wasDepleted = (int) $simulator->health === 0;
+            $naturalRecovery = $stressCount === 0 ? 3 : 0;
 
             $visualState = $stressCount >= 3
                 ? 'stunted'
                 : ($matchedRules->first()?->visual_state ?? 'healthy');
 
-            $nextHealth = $this->clamp((int) $simulator->health + $healthDelta, 0, 100);
+            $pestRisks = $this->pestRiskMap($simulator, $factors);
+            $pestState = $this->updatePests($simulator, $factors, $pestRisks);
+            $activePests = $pestState['count'];
+            $pestDamage = $pestState['damage'];
+            $healthAfterEnvironment = $this->clamp((int) $simulator->health + $healthDelta + $naturalRecovery, 0, 100);
+            $nextHealth = $this->clamp($healthAfterEnvironment - $pestDamage, 0, 100);
+
+            if ($nextHealth <= 50) {
+                $visualState = 'stunted';
+            }
+
             $maxGrowthPoint = (int) $plant->stages()->max('required_growth_point');
-            $calculatedGrowth = max(0, (int) $simulator->growth_point + $baseGrowth + $growthDelta);
-            $nextGrowth = $maxGrowthPoint > 0 ? min($maxGrowthPoint, $calculatedGrowth) : $calculatedGrowth;
+            $currentGrowth = max(0, (int) $simulator->growth_point);
+            $baseGrowth = $stressCount === 0 ? 14 : 6;
+            $growthIncrement = max(0, $baseGrowth + $growthDelta);
+            $calculatedGrowth = $wasDepleted || $nextHealth === 0
+                ? $currentGrowth
+                : $currentGrowth + $growthIncrement;
+            $nextGrowth = $maxGrowthPoint > 0
+                ? min($maxGrowthPoint, $calculatedGrowth)
+                : $calculatedGrowth;
             $stage = $plant->stages()
                 ->reorder()
                 ->where('required_growth_point', '<=', $nextGrowth)
                 ->orderByDesc('required_growth_point')
+                ->orderByDesc('id')
                 ->first();
             $variant = $this->variantFor($plant->id, $stage?->id, $visualState);
             $visualOverrides = $this->visualOverrides($visualState, $variant);
-            $pestRisks = $this->pestRiskMap($simulator, $factors);
-            $activePests = $this->updatePests($simulator, $factors, $pestRisks);
             $analysis = $this->analysisText($matchedRules->pluck('analysis_result')->filter()->values()->all(), $visualState);
             $direction = $this->directionText($matchedRules->pluck('direction')->filter()->values()->all(), $visualState);
-            $nextDay = ((int) $simulator->logs()->max('day_no')) + 1;
-
+            if ($pestDamage > 0) {
+                $analysis .= " Active pests caused {$pestDamage} health damage this cycle.";
+                $direction .= ' Use an appropriate pest treatment to stop further damage.';
+            }
+            if ($nextHealth === 0) {
+                $analysis .= ' Plant health is depleted, so growth has stopped.';
+                $direction .= ' Treat pests and correct the environment before continuing.';
+            } elseif ($wasDepleted) {
+                $analysis .= ' Plant health has started to recover, while growth remains paused for this cycle.';
+                $direction .= ' Keep conditions stable so growth can resume next cycle.';
+            }
             $state = [
                 'growth_point' => $nextGrowth,
                 'current_stage_id' => $stage?->id ?? $simulator->current_stage_id,
@@ -68,17 +106,38 @@ class PlantSimulationEngine
                 'air_humidity' => (int) Arr::get($factors, 'air_humidity', $simulator->air_humidity),
                 'soil_temp' => (float) Arr::get($factors, 'soil_temp', $simulator->soil_temp),
                 'air_temp' => (float) Arr::get($factors, 'air_temp', $simulator->air_temp),
+                'state_version' => ((int) $simulator->state_version) + 1,
             ];
+
+            $latestLog = $simulator->logs()
+                ->latest('created_at')
+                ->latest('id')
+                ->first();
+            $pestSetChanged = $pestState['changed'] || ($latestLog?->created_at && SimulationPest::query()
+                ->where('simulator_id', $simulator->id)
+                ->where(function ($query) use ($latestLog): void {
+                    $query->where('appeared_at', '>', $latestLog->created_at)
+                        ->orWhere('treated_at', '>', $latestLog->created_at);
+                })
+                ->exists());
+            $shouldCreateLog = ! $latestLog
+                || (int) $simulator->growth_point !== $nextGrowth
+                || (int) $simulator->health !== $nextHealth
+                || (int) $simulator->current_stage_id !== (int) $state['current_stage_id']
+                || (string) $simulator->visual_state !== $visualState
+                || $pestSetChanged;
 
             $simulator->update($state);
 
-            SimulationLog::query()->create($state + [
-                'simulator_id' => $simulator->id,
-                'day_no' => $nextDay,
-                'score' => max(0, $nextGrowth + $nextHealth - ($activePests * 8)),
-                'analysis_result' => $analysis,
-                'direction' => $direction,
-            ]);
+            if ($shouldCreateLog) {
+                SimulationLog::query()->create($state + [
+                    'simulator_id' => $simulator->id,
+                    'day_no' => ((int) $simulator->logs()->max('day_no')) + 1,
+                    'score' => max(0, $nextGrowth + $nextHealth - ($activePests * 8)),
+                    'analysis_result' => $analysis,
+                    'direction' => $direction,
+                ]);
+            }
 
             $freshSimulator = $simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']);
             $freshSimulator->setAttribute('pest_risks', $pestRisks);
@@ -149,7 +208,7 @@ class PlantSimulationEngine
     }
 
     /**
-     * @param array<string, int|float|null> $factors
+     * @param  array<string, int|float|null>  $factors
      * @return array<string, int>
      */
     private function pestRiskMap(Simulator $simulator, array $factors): array
@@ -164,7 +223,7 @@ class PlantSimulationEngine
     /** @param array<string, int|float|null> $factors */
     private function pestChance(Simulator $simulator, Pest $pest, array $factors): int
     {
-        $chance = 0.0;
+        $chance = (float) $pest->base_chance;
 
         foreach ($pest->conditionRules->where('is_active', true) as $rule) {
             if ($rule->plant_id !== null && (int) $rule->plant_id !== (int) $simulator->plant_id) {
@@ -179,25 +238,19 @@ class PlantSimulationEngine
     }
 
     /**
-     * @param array<string, int|float|null> $factors
-     * @param array<string, int> $pestRisks
+     * @param  array<string, int|float|null>  $factors
+     * @param  array<string, int>  $pestRisks
+     * @return array{count: int, damage: int, changed: bool}
      */
-    private function updatePests(Simulator $simulator, array $factors, array $pestRisks): int
+    private function updatePests(Simulator $simulator, array $factors, array $pestRisks): array
     {
         $activeCount = 0;
+        $damage = 0;
+        $changed = false;
         $pests = Pest::query()->with('conditionRules')->get();
 
         foreach ($pests as $pest) {
             $chance = $pestRisks[$pest->name_en] ?? $this->pestChance($simulator, $pest, $factors);
-            if ($chance <= 0) {
-                SimulationPest::query()
-                    ->where('simulator_id', $simulator->id)
-                    ->where('pest_id', $pest->id)
-                    ->where('status', 'active')
-                    ->update(['status' => 'inactive']);
-                continue;
-            }
-
             $alreadyActive = SimulationPest::query()
                 ->where('simulator_id', $simulator->id)
                 ->where('pest_id', $pest->id)
@@ -206,10 +259,12 @@ class PlantSimulationEngine
 
             if ($alreadyActive) {
                 $activeCount++;
+                $damage += max(0, (int) $pest->damage_per_turn);
+
                 continue;
             }
 
-            if ($chance >= 100 || random_int(1, 100) <= $chance) {
+            if ($chance > 0 && ($chance >= 100 || random_int(1, 100) <= $chance)) {
                 SimulationPest::query()->create([
                     'simulator_id' => $simulator->id,
                     'pest_id' => $pest->id,
@@ -217,11 +272,14 @@ class PlantSimulationEngine
                     'appeared_at' => now(),
                 ]);
                 $activeCount++;
+                $damage += max(0, (int) $pest->damage_per_turn);
+                $changed = true;
             }
         }
 
-        return $activeCount;
+        return ['count' => $activeCount, 'damage' => $damage, 'changed' => $changed];
     }
+
     /** @param array<int, string> $messages */
     private function analysisText(array $messages, string $visualState): string
     {

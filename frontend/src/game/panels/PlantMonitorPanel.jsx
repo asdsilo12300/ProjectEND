@@ -5,10 +5,9 @@ import { PestChance } from '../components/PestChance'
 import { resolveAssetUrl } from '../../lib/api'
 
 const stageStops = [
-  { label: 'Seed', value: 0 },
-  { label: 'Sprout', value: 25 },
-  { label: 'Young', value: 60 },
-  { label: 'Mature', value: 100 },
+  { label: 'Seedling', value: 0 },
+  { label: 'Sprout', value: 40 },
+  { label: 'Young', value: 100 },
 ]
 
 const visualStateLabels = {
@@ -72,9 +71,14 @@ function buildPestChances(simulationVisual) {
   const risks = simulationVisual?.pest_risks
   if (!risks) return pestChances
 
+  const activeNames = new Set((simulationVisual?.active_pests ?? []).map((entry) => String(
+    entry?.pest?.name_en ?? entry?.name_en ?? entry?.type ?? '',
+  ).toLowerCase()))
+
   return pestChances.map((pest) => ({
     ...pest,
     value: Number(risks[pest.icon] ?? pest.value),
+    active: activeNames.has(pest.icon),
   }))
 }
 
@@ -195,8 +199,8 @@ export function PlantMonitorPanel({ windows, setWindows, simulationVisual }) {
 
         <div className="mt-3 border-t border-lime-100/10 pt-3">
           <div className="mb-2 flex items-center justify-between">
-            <strong className="text-xs text-lime-50">Pest chance</strong>
-            <span className="text-[10px] text-slate-400">next cycle</span>
+            <strong className="text-xs text-lime-50">Pest monitoring</strong>
+            <span className="text-[10px] text-slate-400">risk · next server cycle</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {visiblePestChances.map((pest) => (

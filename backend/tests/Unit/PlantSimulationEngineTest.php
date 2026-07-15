@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Http\Resources\SimulatorResource;
 use App\Models\Pest;
 use App\Models\PestConditionRule;
 use App\Models\Plant;
@@ -11,7 +12,9 @@ use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Services\PlantSimulationEngine;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Tests\TestCase;
 
 class PlantSimulationEngineTest extends TestCase
@@ -32,6 +35,7 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame('healthy', $result->visual_state);
         $this->assertSame(100, (int) $result->health);
         $this->assertGreaterThan(0, (int) $result->growth_point);
+        $this->assertSame(2, (int) $result->state_version);
     }
 
     public function test_low_water_sets_underwatered_visual_state(): void
@@ -55,6 +59,26 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame('underwatered', $result->visual_state);
         $this->assertLessThan(100, (int) $result->health);
         $this->assertSame('wilted', $result->visual_overrides['leafState']);
+    }
+
+    public function test_stress_can_pause_but_never_reverse_growth(): void
+    {
+        [$plant, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['growth_point' => 40]);
+        PlantConditionRule::query()->create([
+            'plant_id' => $plant->id,
+            'factor' => 'water',
+            'operator' => 'below',
+            'min_value' => 35,
+            'visual_state' => 'underwatered',
+            'severity' => 80,
+            'health_delta' => -14,
+            'growth_delta' => -8,
+        ]);
+
+        $result = app(PlantSimulationEngine::class)->tick($simulator->fresh(), $this->healthyFactors(['water' => 20]));
+
+        $this->assertSame(40, (int) $result->growth_point);
     }
 
     public function test_low_fertilizer_sets_nutrient_deficient_visual_state(): void
@@ -111,6 +135,44 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame(100, (int) $result->growth_point);
         $this->assertSame(3, (int) $result->currentStage->stage_no);
     }
+
+    public function test_equal_growth_threshold_uses_latest_stage_id_consistently(): void
+    {
+        [$plant, $simulator] = $this->seedPlantAndSimulator();
+        $latestStage = $plant->stages()->create([
+            'stage_no' => 4,
+            'stage_name' => 'Final Variant',
+            'required_growth_point' => 100,
+            'model_url' => '/plant.gltf',
+        ]);
+        $simulator->update(['growth_point' => 96]);
+
+        $result = app(PlantSimulationEngine::class)->tick($simulator->fresh(), $this->healthyFactors());
+
+        $this->assertSame($latestStage->id, $result->current_stage_id);
+    }
+
+    public function test_stable_mature_plant_does_not_create_duplicate_cycle_logs(): void
+    {
+        [$plant, $simulator] = $this->seedPlantAndSimulator();
+        $finalStage = $plant->stages()
+            ->reorder()
+            ->orderByDesc('required_growth_point')
+            ->firstOrFail();
+        $simulator->update([
+            'growth_point' => 100,
+            'current_stage_id' => $finalStage->id,
+            'health' => 100,
+            'visual_state' => 'healthy',
+        ]);
+
+        $engine = app(PlantSimulationEngine::class);
+        $engine->tick($simulator->fresh(), $this->healthyFactors());
+        $engine->tick($simulator->fresh(), $this->healthyFactors());
+
+        $this->assertSame(1, $simulator->logs()->count());
+    }
+
     public function test_high_humidity_activates_fungus_pest(): void
     {
         [, $simulator] = $this->seedPlantAndSimulator();
@@ -132,6 +194,119 @@ class PlantSimulationEngineTest extends TestCase
         $result = app(PlantSimulationEngine::class)->tick($simulator, $this->healthyFactors(['air_humidity' => 90]));
 
         $this->assertSame(1, SimulationPest::query()->where('simulator_id', $result->id)->where('status', 'active')->count());
+    }
+
+    public function test_base_chance_spawns_pest_and_applies_damage_without_matching_rules(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $pest = Pest::query()->create([
+            'name_th' => 'Base chance pest',
+            'name_en' => 'base-pest',
+            'base_chance' => 100,
+            'damage_per_turn' => 8,
+        ]);
+
+        $result = app(PlantSimulationEngine::class)->tick($simulator, $this->healthyFactors());
+
+        $this->assertDatabaseHas('simulation_pests', [
+            'simulator_id' => $simulator->id,
+            'pest_id' => $pest->id,
+            'status' => 'active',
+        ]);
+        $this->assertSame(92, (int) $result->health);
+        $this->assertSame(100, $result->getAttribute('pest_risks')['base-pest']);
+    }
+
+    public function test_completed_simulation_cannot_advance(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['status' => 'completed']);
+
+        $this->expectException(ConflictHttpException::class);
+
+        app(PlantSimulationEngine::class)->tick($simulator->fresh(), $this->healthyFactors());
+    }
+
+    public function test_active_pest_persists_and_keeps_damaging_when_current_risk_is_zero(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['health' => 54]);
+        $pest = Pest::query()->create([
+            'name_th' => 'Persistent pest',
+            'name_en' => 'persistent-pest',
+            'base_chance' => 0,
+            'damage_per_turn' => 7,
+        ]);
+        $activePest = SimulationPest::query()->create([
+            'simulator_id' => $simulator->id,
+            'pest_id' => $pest->id,
+            'status' => 'active',
+            'appeared_at' => now(),
+        ]);
+
+        $result = app(PlantSimulationEngine::class)->tick($simulator, $this->healthyFactors());
+
+        $this->assertSame('active', $activePest->fresh()->status);
+        $this->assertSame(50, (int) $result->health);
+        $this->assertSame('stunted', $result->visual_state);
+    }
+
+    public function test_healthy_tick_recovers_health_without_exceeding_one_hundred(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['health' => 82]);
+
+        $result = app(PlantSimulationEngine::class)->tick($simulator->fresh(), $this->healthyFactors());
+
+        $this->assertSame(85, (int) $result->health);
+    }
+
+    public function test_zero_health_stops_growth_and_uses_stunted_visual_state(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['health' => 0, 'growth_point' => 40]);
+
+        $result = app(PlantSimulationEngine::class)->tick($simulator->fresh(), $this->healthyFactors());
+
+        $this->assertSame(3, (int) $result->health);
+        $this->assertSame(40, (int) $result->growth_point);
+        $this->assertSame('stunted', $result->visual_state);
+    }
+
+    public function test_resource_risk_includes_base_chance_and_ignores_rules_for_other_plants(): void
+    {
+        [$plant, $simulator] = $this->seedPlantAndSimulator();
+        $otherPlant = Plant::query()->create(['name_th' => 'Other plant', 'name_en' => 'Other Plant']);
+        $pest = Pest::query()->create([
+            'name_th' => 'Scoped pest',
+            'name_en' => 'scoped-pest',
+            'base_chance' => 10,
+            'damage_per_turn' => 0,
+        ]);
+
+        foreach ([
+            ['plant_id' => null, 'chance_delta' => 5],
+            ['plant_id' => $plant->id, 'chance_delta' => 30],
+            ['plant_id' => $otherPlant->id, 'chance_delta' => 55],
+        ] as $rule) {
+            PestConditionRule::query()->create($rule + [
+                'pest_id' => $pest->id,
+                'factor' => 'air_humidity',
+                'operator' => 'above',
+                'max_value' => 50,
+                'severity' => 50,
+            ]);
+        }
+
+        $simulator->update(['air_humidity' => 60]);
+        $payload = (new SimulatorResource($simulator->fresh([
+            'plant.stages',
+            'currentStage',
+            'visualVariant',
+            'activePests.pest.conditionRules',
+        ])))->resolve(Request::create('/simulators/1', 'GET'));
+
+        $this->assertSame(45, $payload['pest_risks']['scoped-pest']);
     }
 
     private function buildSchema(): void
@@ -253,6 +428,7 @@ class PlantSimulationEngineTest extends TestCase
             $table->decimal('soil_temp', 5, 2)->default(0);
             $table->decimal('air_temp', 5, 2)->default(0);
             $table->string('status')->default('active');
+            $table->unsignedBigInteger('state_version')->default(1);
             $table->timestamp('started_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->timestamps();

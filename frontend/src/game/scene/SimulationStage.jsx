@@ -41,6 +41,10 @@ class PestErrorBoundary extends Component {
     return { hasError: true }
   }
 
+  componentDidCatch(error, errorInfo) {
+    console.error(`[Plant Growth Academy] Failed to render pest model: ${this.props.label ?? 'unknown pest'}`, error, errorInfo)
+  }
+
   render() {
     if (this.state.hasError) return null
 
@@ -106,7 +110,9 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
   const health = Number(simulationVisual?.health ?? 100)
   const isMature = currentStageNo >= 3 || growthPoint >= 100
   const isPaused = growthRate <= 0 && !isMature
-  const growthProgress = Math.min(1, Math.max(0, growthPoint / 100))
+  // The source animation is empty at its exact first frame. Keep a small
+  // visible seedling pose while the first authoritative server cycle starts.
+  const growthProgress = Math.min(1, Math.max(plantSelected ? 0.05 : 0, growthPoint / 100))
   const hasSelectedItem = Boolean(selectedItemCursorUrl) && !readOnly
   const itemCursorStyle = hasSelectedItem ? { cursor: 'none' } : undefined
 
@@ -148,7 +154,7 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
         onPointerLeave={() => setItemCursorPoint(null)}
       >
         <SceneErrorBoundary key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}>
-        <Canvas camera={{ position: [0.75, 0.85, 4.2], fov: 32 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
+        <Canvas camera={{ position: [0.75, 1.2, 4.8], fov: 34 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
           <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#080b09']} />
           <ambientLight intensity={0.85} />
           <directionalLight position={[3, 5, 4]} intensity={2.9} color="#d7fff0" />
@@ -164,8 +170,8 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
                   const pestKey = `${pest.pest?.name_en ?? pest.name_en ?? pest.type ?? 'pest'}-${pest.id ?? index}`
 
                   return (
-                    <PestErrorBoundary key={pestKey}>
-                      <PestModel pest={pest} index={index} />
+                    <PestErrorBoundary key={pestKey} label={pestKey}>
+                      <PestModel pest={pest} index={index} visualOverrides={simulationVisual?.visual_overrides} growthProgress={growthProgress} />
                     </PestErrorBoundary>
                   )
                 })}
@@ -173,7 +179,7 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
             )}
             <Environment preset="city" />
           </Suspense>
-          <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, -0.32, 0]} minDistance={2.8} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />
+          <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, 0.38, 0]} minDistance={3.2} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />
         </Canvas>
         </SceneErrorBoundary>
         {coinBurst && (

@@ -46,7 +46,7 @@ export async function apiFetch(path, options = {}) {
   const payload = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    if (response.status === 401 && token) {
+    if (response.status === 401 && token && getToken() === token) {
       clearToken()
       window.dispatchEvent(new Event('plant-game:session-expired'))
     }

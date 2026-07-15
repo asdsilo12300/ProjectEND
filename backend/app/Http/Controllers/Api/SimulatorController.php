@@ -52,6 +52,7 @@ class SimulatorController extends Controller
 
         return new SimulatorResource($simulator);
     }
+
     public function store(Request $request): SimulatorResource
     {
         $data = $request->validate([
@@ -103,9 +104,9 @@ class SimulatorController extends Controller
         ]);
 
         $updated = $engine->tick($simulator, $factors);
-        $updated->increment('state_version');
+        $updated->loadMissing('user');
 
-        return new SimulatorResource($updated->fresh(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
+        return new SimulatorResource($updated);
     }
 
     public function sync(Request $request, Simulator $simulator): SimulatorResource
@@ -128,19 +129,7 @@ class SimulatorController extends Controller
             'direction' => ['nullable', 'string'],
         ]);
 
-        $growthPoint = (int) round((float) $data['growth_point']);
-        $stage = $simulator->plant
-            ->stages()
-            ->where('required_growth_point', '<=', $growthPoint)
-            ->orderByDesc('required_growth_point')
-            ->first();
-
         $state = [
-            'growth_point' => $growthPoint,
-            'current_stage_id' => $stage?->id ?? $simulator->current_stage_id,
-            'health' => $data['health'],
-            'visual_state' => $data['visual_state'] ?? $simulator->visual_state ?? 'healthy',
-            'visual_overrides' => $data['visual_overrides'] ?? $simulator->visual_overrides ?? [],
             'water' => $data['water'],
             'light' => $data['light'],
             'fertilizer' => $data['fertilizer'],
@@ -148,24 +137,26 @@ class SimulatorController extends Controller
             'air_humidity' => $data['air_humidity'],
             'soil_temp' => $data['soil_temp'],
             'air_temp' => $data['air_temp'],
-            'status' => 'active',
-            'state_version' => ((int) $simulator->state_version) + 1,
         ];
 
-        DB::transaction(function () use ($data, $simulator, $state): void {
-            $simulator->update($state);
+        $updated = DB::transaction(function () use ($simulator, $state): Simulator {
+            $lockedSimulator = Simulator::query()
+                ->whereKey($simulator->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            SimulationLog::query()->create($state + [
-                'simulator_id' => $simulator->id,
-                'day_no' => ((int) $simulator->logs()->max('day_no')) + 1,
-                'score' => max(0, (int) $state['growth_point'] + (int) $state['health']),
-                'analysis_result' => $data['analysis_result'] ?? 'Current simulation state saved.',
-                'direction' => $data['direction'] ?? 'Continue from the latest saved state.',
+            abort_unless($lockedSimulator->status === 'active', 409, 'Only active simulations can be synchronized.');
+
+            $lockedSimulator->update($state + [
+                'state_version' => ((int) $lockedSimulator->state_version) + 1,
             ]);
+
+            return $lockedSimulator;
         });
 
-        return new SimulatorResource($simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
+        return new SimulatorResource($updated->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
     }
+
     public function claimMaturityReward(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
@@ -226,6 +217,7 @@ class SimulatorController extends Controller
 
         return response()->json(['data' => $result]);
     }
+
     public function finish(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
@@ -347,6 +339,7 @@ class SimulatorController extends Controller
 
         return $path;
     }
+
     public function storeLog(Request $request, Simulator $simulator): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
@@ -368,29 +361,34 @@ class SimulatorController extends Controller
         ]);
 
         DB::transaction(function () use ($data, $simulator): void {
+            $lockedSimulator = Simulator::query()
+                ->whereKey($simulator->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $activePestCount = $lockedSimulator->activePests()->count();
+
             SimulationLog::query()->updateOrCreate(
                 ['simulator_id' => $simulator->id, 'day_no' => $data['day_no']],
-                $data + ['simulator_id' => $simulator->id, 'score' => $data['score'] ?? 0]
+                [
+                    'simulator_id' => $lockedSimulator->id,
+                    'day_no' => $data['day_no'],
+                    'growth_point' => $lockedSimulator->growth_point,
+                    'health' => $lockedSimulator->health,
+                    'visual_state' => $lockedSimulator->visual_state,
+                    'visual_variant_id' => $lockedSimulator->visual_variant_id,
+                    'visual_overrides' => $lockedSimulator->visual_overrides,
+                    'water' => $lockedSimulator->water,
+                    'light' => $lockedSimulator->light,
+                    'fertilizer' => $lockedSimulator->fertilizer,
+                    'soil_humidity' => $lockedSimulator->soil_humidity,
+                    'air_humidity' => $lockedSimulator->air_humidity,
+                    'soil_temp' => $lockedSimulator->soil_temp,
+                    'air_temp' => $lockedSimulator->air_temp,
+                    'score' => max(0, (int) $lockedSimulator->growth_point + (int) $lockedSimulator->health - ($activePestCount * 8)),
+                    'analysis_result' => $data['analysis_result'] ?? 'Current simulation state recorded.',
+                    'direction' => $data['direction'] ?? 'Continue from the authoritative simulation state.',
+                ]
             );
-
-            $stage = $simulator->plant
-                ->stages()
-                ->where('required_growth_point', '<=', $data['growth_point'])
-                ->orderByDesc('required_growth_point')
-                ->first();
-
-            $simulator->update([
-                'growth_point' => $data['growth_point'],
-                'current_stage_id' => $stage?->id ?? $simulator->current_stage_id,
-                'health' => $data['health'],
-                'water' => $data['water'],
-                'light' => $data['light'],
-                'fertilizer' => $data['fertilizer'],
-                'soil_humidity' => $data['soil_humidity'],
-                'air_humidity' => $data['air_humidity'],
-                'soil_temp' => $data['soil_temp'],
-                'air_temp' => $data['air_temp'],
-            ]);
         });
 
         return new SimulatorResource($simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
@@ -441,7 +439,7 @@ class SimulatorController extends Controller
             abort_if($userItem->quantity < $quantity, 422, 'Not enough item quantity.');
         }
 
-        $result = DB::transaction(function () use ($data, $isHandPick, $item, $quantity, $request, $simulator, $userItem) {
+        $result = DB::transaction(function () use ($isHandPick, $item, $quantity, $request, $simulator, $userItem) {
             $effectType = strtolower((string) $item->effect_type);
             $targetText = str_contains($effectType, ':') ? explode(':', $effectType, 2)[1] : '';
 
@@ -493,11 +491,11 @@ class SimulatorController extends Controller
             $failedNames = $failedPests->map(fn (SimulationPest $pest) => $pest->pest?->name_en)->filter()->values();
 
             $message = match (true) {
-                $removedNames->isNotEmpty() && $failedNames->isNotEmpty() => $item->name . ' removed ' . $removedNames->implode(', ') . ', but missed ' . $failedNames->implode(', ') . '.',
-                $removedNames->isNotEmpty() => $item->name . ' removed ' . $removedNames->implode(', ') . '.',
-                $failedNames->isNotEmpty() => $item->name . ' missed ' . $failedNames->implode(', ') . '. Try again.',
-                $matchedPests->isEmpty() && $targetNames => $item->name . ' targets ' . $targetNames . ', but no active pest was found.',
-                default => $item->name . ' used successfully.',
+                $removedNames->isNotEmpty() && $failedNames->isNotEmpty() => $item->name.' removed '.$removedNames->implode(', ').', but missed '.$failedNames->implode(', ').'.',
+                $removedNames->isNotEmpty() => $item->name.' removed '.$removedNames->implode(', ').'.',
+                $failedNames->isNotEmpty() => $item->name.' missed '.$failedNames->implode(', ').'. Try again.',
+                $matchedPests->isEmpty() && $targetNames => $item->name.' targets '.$targetNames.', but no active pest was found.',
+                default => $item->name.' used successfully.',
             };
 
             $usage = ItemUsage::query()->create([
@@ -634,5 +632,3 @@ class SimulatorController extends Controller
         ];
     }
 }
-
-

@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -56,49 +57,98 @@ class PlantHistoryController extends Controller
             'snapshot_image_data' => ['nullable', 'string'],
         ]);
 
-        $simulator->load(['plant.stages', 'plant.conditionRules', 'currentStage', 'activePests.pest']);
-        $matchedRules = $this->matchedRules($simulator);
-        $activePestCount = $simulator->activePests->count();
-        $score = $this->totalScore($simulator, $matchedRules, $activePestCount);
-        $analysis = $this->analysisText($simulator, $matchedRules, $activePestCount);
-        $direction = $this->directionText($matchedRules, $activePestCount);
-        $snapshotImageUrl = $data['snapshot_image_url'] ?? $this->storeSnapshotImage($data['snapshot_image_data'] ?? null, $simulator->id);
+        $history = DB::transaction(function () use ($data, $request, $simulator): PlantHistory {
+            $lockedSimulator = Simulator::query()
+                ->whereKey($simulator->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $history = PlantHistory::query()->create([
-            'simulator_id' => $simulator->id,
-            'user_id' => $request->user()->id,
-            'plant_id' => $simulator->plant_id,
-            'final_stage_id' => $simulator->current_stage_id,
-            'final_health' => (int) round((float) $simulator->health),
-            'total_score' => $score,
-            'duration_days' => $this->durationDays($simulator),
-            'visibility' => $data['visibility'] ?? 'private',
-            'snapshot_image_url' => $snapshotImageUrl,
-            'game_state' => $this->gameState($simulator),
-            'analysis_result' => $analysis,
-            'direction' => $direction,
-        ]);
+            abort_unless($lockedSimulator->user_id === $request->user()->id, 403);
+            abort_unless(in_array($lockedSimulator->status, ['active', 'completed'], true), 409, 'Only an active or completed simulation can be harvested.');
 
-        if ($history->visibility !== 'private') {
-            $post = Post::query()->withTrashed()->where('simulator_id', $simulator->id)->first();
+            $existingHistory = PlantHistory::query()
+                ->withTrashed()
+                ->where('simulator_id', $lockedSimulator->id)
+                ->where('user_id', $request->user()->id)
+                ->latest('id')
+                ->first();
 
-            if ($post) {
-                $post->restore();
-                $post->forceFill([
-                    'plant_history_id' => $history->id,
-                    'simulator_id' => null,
-                    'visibility' => $history->visibility,
-                ])->save();
-            } else {
-                Post::query()->create([
-                    'user_id' => $request->user()->id,
-                    'plant_history_id' => $history->id,
-                    'simulator_id' => null,
-                    'caption' => 'Harvested a plant and saved the complete game state.',
-                    'visibility' => $history->visibility,
-                ]);
+            if ($existingHistory) {
+                if ($existingHistory->trashed()) {
+                    $existingHistory->restore();
+                }
+
+                if ($lockedSimulator->status !== 'completed') {
+                    $lockedSimulator->forceFill([
+                        'status' => 'completed',
+                        'share_visibility' => 'private',
+                        'state_version' => ((int) $lockedSimulator->state_version) + 1,
+                        'ended_at' => $lockedSimulator->ended_at ?? now(),
+                    ])->save();
+                }
+
+                Post::query()->where('simulator_id', $lockedSimulator->id)->delete();
+
+                return $existingHistory;
             }
-        }
+
+            $lockedSimulator->load(['plant.stages', 'plant.conditionRules', 'currentStage', 'activePests.pest']);
+            $matchedRules = $this->matchedRules($lockedSimulator);
+            $activePestCount = $lockedSimulator->activePests->count();
+            $score = $this->totalScore($lockedSimulator, $matchedRules, $activePestCount);
+            $analysis = $this->analysisText($lockedSimulator, $matchedRules, $activePestCount);
+            $direction = $this->directionText($matchedRules, $activePestCount);
+            $snapshotImageUrl = $data['snapshot_image_url'] ?? $this->storeSnapshotImage($data['snapshot_image_data'] ?? null, $lockedSimulator->id);
+
+            if ($lockedSimulator->status !== 'completed') {
+                $lockedSimulator->forceFill([
+                    'status' => 'completed',
+                    'share_visibility' => 'private',
+                    'state_version' => ((int) $lockedSimulator->state_version) + 1,
+                    'ended_at' => now(),
+                ])->save();
+            }
+
+            $history = PlantHistory::query()->create([
+                'simulator_id' => $lockedSimulator->id,
+                'user_id' => $request->user()->id,
+                'plant_id' => $lockedSimulator->plant_id,
+                'final_stage_id' => $lockedSimulator->current_stage_id,
+                'final_health' => (int) round((float) $lockedSimulator->health),
+                'total_score' => $score,
+                'duration_days' => $this->durationDays($lockedSimulator),
+                'visibility' => $data['visibility'] ?? 'private',
+                'snapshot_image_url' => $snapshotImageUrl,
+                'game_state' => $this->gameState($lockedSimulator),
+                'analysis_result' => $analysis,
+                'direction' => $direction,
+            ]);
+
+            if ($history->visibility !== 'private') {
+                $post = Post::query()->withTrashed()->where('simulator_id', $lockedSimulator->id)->first();
+
+                if ($post) {
+                    $post->restore();
+                    $post->forceFill([
+                        'plant_history_id' => $history->id,
+                        'simulator_id' => null,
+                        'visibility' => $history->visibility,
+                    ])->save();
+                } else {
+                    Post::query()->create([
+                        'user_id' => $request->user()->id,
+                        'plant_history_id' => $history->id,
+                        'simulator_id' => null,
+                        'caption' => 'Harvested a plant and saved the complete game state.',
+                        'visibility' => $history->visibility,
+                    ]);
+                }
+            } else {
+                Post::query()->where('simulator_id', $lockedSimulator->id)->delete();
+            }
+
+            return $history;
+        });
 
         return new PlantHistoryResource($history->load(['plant.stages', 'finalStage']));
     }
