@@ -19,7 +19,16 @@ html.settings-large-text {
 }
 
 html.settings-high-contrast body {
-  filter: contrast(1.12);
+  background: #000;
+  color: #fff;
+}
+
+html.settings-high-contrast :where(button, input, textarea, select, [role="button"], [role="menu"], [role="dialog"]) {
+  border-color: rgb(255 255 255 / 38%) !important;
+}
+
+html.settings-high-contrast :where(.text-slate-400, .text-slate-500, .text-slate-600) {
+  color: #d6dfd8 !important;
 }
 
 html.settings-reduced-motion *,

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { AppIcon } from '../icons/IconifyIcon'
 import { LibraryThumb } from './LibraryThumb'
 
@@ -13,12 +14,30 @@ function readableItemName(item) {
 }
 
 export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply }) {
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
   return (
-    <aside className="absolute bottom-0 left-0 top-16 z-40 w-[244px] overflow-visible border-r border-lime-100/15 bg-[#101511]/95 text-slate-100" aria-label="Plant and item library">
-      <div className="border-b border-lime-100/10 px-3 py-3">
-        <strong className="block text-sm text-lime-50">Lab assets</strong>
-        <span className="text-[11px] text-slate-400">{readOnly ? 'view only tools' : 'click to select'}</span>
-      </div>
+    <>
+      <button
+        type="button"
+        className="lab-library-toggle"
+        aria-controls="lab-asset-library"
+        aria-expanded={drawerOpen}
+        onClick={() => setDrawerOpen((value) => !value)}
+      >
+        <AppIcon className="h-4 w-4" name="plant" />
+        Lab assets
+      </button>
+      <aside id="lab-asset-library" className="lab-library-drawer absolute bottom-0 left-0 top-16 z-40 w-[244px] overflow-visible border-r border-lime-100/15 bg-[#101511]/95 text-slate-100" data-open={drawerOpen ? 'true' : 'false'} aria-label="Plant and item library">
+        <div className="flex items-center gap-3 border-b border-lime-100/10 px-3 py-3">
+          <span className="min-w-0 flex-1">
+            <strong className="block text-sm text-lime-50">Lab assets</strong>
+            <span className="text-[11px] text-slate-400">{readOnly ? 'view only tools' : 'select a plant or treatment'}</span>
+          </span>
+          <button type="button" className="lab-library-close" aria-label="Close Lab assets" onClick={() => setDrawerOpen(false)}>
+            <AppIcon className="h-4 w-4" name="panelClose" />
+          </button>
+        </div>
 
       <div className="p-2">
         {Object.entries(sections).map(([section, items]) => {
@@ -48,12 +67,7 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                   )}
                   {visibleItems.map((item) => {
                     const itemName = readableItemName(item)
-                    const itemLocked = readOnly || (section === 'Plants' && plantLocked) || (section === 'Items' && mockItems)
-                    const selected = selectedAsset?.id === item.id
-                    const lockLabel = section === 'Plants'
-                      ? readOnly ? 'Friend plant is view only' : 'A plant is already growing'
-                      : mockItems ? 'Friend tools are view-only' : undefined
-                    const itemQuantity = section === 'Items' ? inventoryMap[item.itemKey ?? item.id] : null
+                    const itemQuantity = section === 'Items' ? (inventoryMap[item.itemKey ?? item.id] ?? item.quantity) : null
                     const hasInventoryQuantity = Number.isFinite(Number(itemQuantity))
                     const quantityBadge = section === 'Items'
                       ? hasInventoryQuantity
@@ -61,6 +75,19 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                         : item.quantityLabel ?? 'x0'
                       : null
                     const isZeroQuantity = hasInventoryQuantity && Number(itemQuantity) <= 0
+                    const itemLocked = readOnly
+                      || (section === 'Plants' && plantLocked)
+                      || (section === 'Items' && (mockItems || isZeroQuantity))
+                    const selected = selectedAsset?.id === item.id
+                    const lockLabel = readOnly
+                      ? 'Friend garden is view only'
+                      : section === 'Plants' && plantLocked
+                        ? 'A plant is already growing'
+                        : section === 'Items' && mockItems
+                          ? 'Friend tools are view-only'
+                          : isZeroQuantity
+                            ? 'Out of stock — visit Shop to get more'
+                            : undefined
 
                     return (
                       <button
@@ -73,7 +100,10 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                         aria-pressed={selected}
                         title={lockLabel ?? item.help}
                         onClick={() => {
-                          if (!itemLocked) onApply(item)
+                          if (!itemLocked) {
+                            onApply(item)
+                            setDrawerOpen(false)
+                          }
                         }}
                       >
                         {section === 'Plants' ? (
@@ -99,7 +129,7 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                               </span>
                             )}
                             <strong className="mt-1.5 block truncate text-[11px] text-lime-50">{itemName}</strong>
-                            <span className="block truncate text-[10px] text-slate-400">{mockItems ? 'Coming soon' : item.detail}</span>
+                            <span className="block truncate text-[10px] text-slate-400">{mockItems ? 'Coming soon' : isZeroQuantity ? 'Out of stock' : item.detail}</span>
                             {!mockItems && (item.successText || item.failText) && (
                               <span className="pointer-events-none absolute left-1.5 right-1.5 top-[54px] z-30 rounded-md border border-lime-100/15 bg-[#07100b]/95 p-2 text-[9px] leading-relaxed text-slate-200 opacity-0 shadow-[0_10px_22px_rgba(0,0,0,.42)] transition group-hover:opacity-100 group-focus-visible:opacity-100">
                                 <span className="block font-black text-lime-100">{item.successText}</span>
@@ -127,7 +157,8 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
             </section>
           )
         })}
-      </div>
-    </aside>
+        </div>
+      </aside>
+    </>
   )
 }

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
 import './App.css'
 import { defaultClimate, imageAssets } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
@@ -132,6 +134,7 @@ function itemAssetFromApi(entry, quantity = null) {
     icon: 'hand',
     imageUrl: resolveAssetUrl(item?.image_url) ?? itemImageByKey[itemKey],
     targetImages: itemTargetsByKey[itemKey] ?? [],
+    quantity: Number.isFinite(Number(quantity)) ? Number(quantity) : 0,
     quantityLabel: Number.isFinite(Number(quantity)) ? `x${quantity}` : 'x0',
     successText: meta.successText,
     failText: meta.failText,
@@ -215,12 +218,14 @@ function SessionLoadingScreen() {
 
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
+  const [activeMobileLabPanel, setActiveMobileLabPanel] = useState('monitor')
   const [climate, setClimate] = useState(defaultClimate)
   const [openSections, setOpenSections] = useState({ Plants: true, Items: true })
   const [appliedAsset, setAppliedAsset] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [activePage, setActivePage] = useState('home')
+  const [settingsReturnPage, setSettingsReturnPage] = useState('lab')
   const [pendingPageAfterAuth, setPendingPageAfterAuth] = useState(null)
   const [visitingFriend, setVisitingFriend] = useState(null)
   const [growingMode, setGrowingMode] = useState(null)
@@ -233,6 +238,9 @@ function App() {
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
   const [simulationVisual, setSimulationVisual] = useState(defaultSimulationVisual)
   const [growthTrack, setGrowthTrack] = useState(initialGrowthTrack)
+  const [nextSimulationTickAt, setNextSimulationTickAt] = useState(null)
+  const [cycleStatus, setCycleStatus] = useState('idle')
+  const [awaitingFirstCycle, setAwaitingFirstCycle] = useState(false)
   const latestSaveLoadedRef = useRef(false)
   const autosaveStateRef = useRef({})
   const canonicalSimulationRef = useRef(defaultSimulationVisual)
@@ -598,6 +606,9 @@ function App() {
       window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
     }
     setResetPending(false)
+    setAwaitingFirstCycle(false)
+    setCycleStatus('idle')
+    setNextSimulationTickAt(null)
     setGrowingMode(restoredMode)
     if (restoredMode === 'outdoor') {
       setWindows((value) => ({
@@ -630,7 +641,7 @@ function App() {
       ...defaultSimulationVisual,
       ...simulator,
       growth_point: restoredProgress,
-      growth_rate: 0,
+      growth_rate: Number(simulator.growth_rate ?? 0),
       active_pests: simulator.active_pests ?? [],
       current_model_url: simulator.current_model_url ?? defaultSimulationVisual.current_model_url,
     }
@@ -876,6 +887,9 @@ function App() {
             canonicalSimulationRef.current = defaultSimulationVisual
             setSimulationVisual(defaultSimulationVisual)
             setGrowthTrack(initialGrowthTrack)
+            setAwaitingFirstCycle(false)
+            setCycleStatus('idle')
+            setNextSimulationTickAt(null)
             setActionMessage('Reset complete. Choose a growing mode.')
             setSaveHydrated(true)
           } catch (error) {
@@ -929,17 +943,26 @@ function App() {
 
     let cancelled = false
     let timer = null
+    let statusTimer = null
 
     async function tickCycle() {
       if (cancelled) return
+      setCycleStatus('updating')
+      setNextSimulationTickAt(null)
       try {
-        await runSimulationTick()
+        const simulator = await runSimulationTick()
+        if (!cancelled && simulator) setAwaitingFirstCycle(false)
       } catch (error) {
         if (!cancelled && error?.status !== 401) {
           console.warn('Unable to advance the simulation cycle', error)
         }
       } finally {
-        if (!cancelled) timer = window.setTimeout(tickCycle, simulationTickIntervalMs)
+        if (!cancelled) {
+          const nextTickAt = Date.now() + simulationTickIntervalMs
+          setCycleStatus('waiting')
+          setNextSimulationTickAt(nextTickAt)
+          timer = window.setTimeout(tickCycle, simulationTickIntervalMs)
+        }
       }
     }
 
@@ -947,10 +970,17 @@ function App() {
     const initialDelay = hasStoredTick
       ? Math.max(1000, simulationTickIntervalMs - elapsed)
       : initialSimulationTickDelayMs
+    statusTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        setCycleStatus('waiting')
+        setNextSimulationTickAt(Date.now() + initialDelay)
+      }
+    }, 0)
     timer = window.setTimeout(tickCycle, initialDelay)
 
     return () => {
       cancelled = true
+      if (statusTimer !== null) window.clearTimeout(statusTimer)
       if (timer !== null) window.clearTimeout(timer)
     }
   }, [growingMode, runSimulationTick, selectedPlant, simulationVisual?.id, simulationVisual?.status, visitingFriend])
@@ -979,7 +1009,21 @@ function App() {
     }
   }, [persistCurrentSimulation])
   function openWindow(id) {
+    const isCompactLab = window.matchMedia('(max-width: 767px)').matches
+    if (isCompactLab) setActiveMobileLabPanel(id)
+
     setWindows((value) => {
+      if (isCompactLab) {
+        return Object.fromEntries(Object.entries(value).map(([panelId, panel]) => [
+          panelId,
+          {
+            ...panel,
+            visible: panelId === id ? true : panel.visible,
+            collapsed: panelId !== id,
+          },
+        ]))
+      }
+
       if (id === 'friends') {
         return {
           ...value,
@@ -987,6 +1031,19 @@ function App() {
             ...value[id],
             x: Math.max(24, window.innerWidth - 350),
             y: Math.max(76, window.innerHeight - 380),
+            visible: true,
+            collapsed: false,
+          },
+        }
+      }
+
+      if (id === 'comments') {
+        return {
+          ...value,
+          [id]: {
+            ...value[id],
+            x: Math.max(24, window.innerWidth - 400),
+            y: window.innerHeight >= 820 ? 88 : 144,
             visible: true,
             collapsed: false,
           },
@@ -1077,6 +1134,12 @@ function App() {
 
   async function applyLabAsset(asset) {
     if (asset.type === 'item') {
+      if (Number(inventoryMap[asset.itemKey ?? asset.id] ?? asset.quantity ?? 0) <= 0) {
+        setAppliedAsset(null)
+        setActionMessage(`${asset.name} is out of stock. Visit Shop to get more.`)
+        return
+      }
+
       if (appliedAsset?.type === 'item' && appliedAsset.id === asset.id) {
         setAppliedAsset(null)
         setActionMessage(`${asset.name} cancelled`)
@@ -1111,8 +1174,19 @@ function App() {
       }
 
       setResetPending(false)
+      setAwaitingFirstCycle(true)
+      setCycleStatus('idle')
+      setNextSimulationTickAt(null)
       setSelectedPlant(asset)
       setGrowthTrack(initialGrowthTrack)
+      setActiveMobileLabPanel('monitor')
+      setWindows((value) => ({
+        ...value,
+        monitor: { ...value.monitor, visible: true, collapsed: false },
+        climate: { ...value.climate, visible: true, collapsed: true },
+        friends: { ...value.friends, visible: true, collapsed: true },
+        comments: { ...value.comments, visible: true, collapsed: true },
+      }))
       const pendingSimulation = {
         ...defaultSimulationVisual,
         current_model_url: fallbackModelUrl,
@@ -1144,6 +1218,9 @@ function App() {
           setSelectedPlant(null)
           setSimulationVisual(defaultSimulationVisual)
           setGrowthTrack(initialGrowthTrack)
+          setAwaitingFirstCycle(false)
+          setCycleStatus('idle')
+          setNextSimulationTickAt(null)
           setActionMessage(error.message || `Unable to plant ${asset.name}`)
         }
       } else {
@@ -1152,6 +1229,10 @@ function App() {
         setAppliedAsset(null)
         setSelectedPlant(null)
         setSimulationVisual(defaultSimulationVisual)
+        setGrowthTrack(initialGrowthTrack)
+        setAwaitingFirstCycle(false)
+        setCycleStatus('idle')
+        setNextSimulationTickAt(null)
         setActionMessage('Log in before planting')
         openAuth('login')
       }
@@ -1165,18 +1246,26 @@ function App() {
     setGrowingMode(mode)
     setSelectedPlant(null)
     setGrowthTrack(initialGrowthTrack)
+    setAwaitingFirstCycle(false)
+    setCycleStatus('idle')
+    setNextSimulationTickAt(null)
+    setActiveMobileLabPanel('monitor')
+
+    const guidedWindows = defaultWindows()
+    guidedWindows.climate = { ...guidedWindows.climate, collapsed: true }
+    guidedWindows.comments = { ...guidedWindows.comments, collapsed: true }
+    guidedWindows.friends = { ...guidedWindows.friends, collapsed: true }
 
     if (mode === 'outdoor') {
-      setWindows((value) => ({
-        ...value,
-        climate: {
-          ...value.climate,
-          ...outdoorClimateWindow(value),
-        },
-      }))
+      guidedWindows.climate = {
+        ...guidedWindows.climate,
+        ...outdoorClimateWindow(guidedWindows),
+        collapsed: true,
+      }
     } else {
       setOutdoorWeather(initialOutdoorWeather)
     }
+    setWindows(guidedWindows)
 
     try {
       const payload = await getPlants()
@@ -1192,7 +1281,7 @@ function App() {
     const remainingLoadingTime = 800 - (Date.now() - loadingStartedAt)
     if (remainingLoadingTime > 0) await wait(remainingLoadingTime)
     setModeLoading(false)
-    setActionMessage('Select a plant to load the model')
+    setActionMessage('Step 2: Select a plant from Lab assets to begin')
   }
 
   async function saveSimulation() {
@@ -1220,6 +1309,9 @@ function App() {
         setSimulationVisual(defaultSimulationVisual)
         setGrowthTrack(initialGrowthTrack)
         setSelectedPlant(null)
+        setAwaitingFirstCycle(false)
+        setCycleStatus('idle')
+        setNextSimulationTickAt(null)
         isEndingSimulationRef.current = false
         setActionMessage('Reset saved. Choose a new growing mode.')
       }
@@ -1336,12 +1428,40 @@ function App() {
     setSimulationVisual(defaultSimulationVisual)
     setGrowthTrack(initialGrowthTrack)
     setSelectedPlant(null)
+    setAwaitingFirstCycle(false)
+    setCycleStatus('idle')
+    setNextSimulationTickAt(null)
     isEndingSimulationRef.current = false
     setActionMessage('Choose a new growing mode.')
   }
 
   async function resetSimulation() {
-    if (isResettingRef.current) return
+    if (isResettingRef.current || !selectedPlant) return
+
+    const plantName = selectedPlant.name || 'this plant'
+    const confirmation = await Swal.fire({
+      title: `Uproot ${plantName}?`,
+      text: 'This ends the active simulation and removes its current growing progress. This action cannot be undone.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, uproot plant',
+      cancelButtonText: 'Keep growing',
+      focusCancel: true,
+      reverseButtons: true,
+      background: '#101511',
+      color: '#eaf7df',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'plantsim-lab-alert',
+        title: 'plantsim-lab-alert__title',
+        htmlContainer: 'plantsim-lab-alert__message',
+        actions: 'plantsim-lab-alert__actions',
+        confirmButton: 'plantsim-lab-alert__danger',
+        cancelButton: 'plantsim-lab-alert__cancel',
+      },
+    })
+
+    if (!confirmation.isConfirmed) return
 
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
     const accountSession = accountSessionRef.current
@@ -1382,6 +1502,9 @@ function App() {
       setSimulationVisual(defaultSimulationVisual)
       setGrowthTrack(initialGrowthTrack)
       setSelectedPlant(null)
+      setAwaitingFirstCycle(false)
+      setCycleStatus('idle')
+      setNextSimulationTickAt(null)
       setActionMessage('Reset complete. Choose a growing mode.')
     } catch (error) {
       if (accountSession === accountSessionRef.current && getToken() === sessionToken) {
@@ -1430,6 +1553,9 @@ function App() {
     setSimulationVisual(defaultSimulationVisual)
     setGrowthTrack(initialGrowthTrack)
     setSelectedPlant(null)
+    setAwaitingFirstCycle(false)
+    setCycleStatus('idle')
+    setNextSimulationTickAt(null)
     setSaveCompleteHistory(null)
     setSaveReadyForNewPlant(false)
     setInventoryItems([])
@@ -1505,9 +1631,12 @@ function App() {
     spectatorRequestRef.current = requestId
     ownGardenSnapshotRef.current = {
       appliedAsset,
+      awaitingFirstCycle,
       climate,
+      cycleStatus,
       growingMode,
       growthTrack,
+      nextSimulationTickAt,
       outdoorWeather,
       selectedPlant,
       simulationVisual,
@@ -1518,7 +1647,7 @@ function App() {
     setActivePage('lab')
     setWindows((value) => ({
       ...value,
-      comments: { ...value.comments, visible: true, collapsed: false },
+      comments: { ...value.comments, x: Math.max(24, window.innerWidth - 400), y: window.innerHeight >= 820 ? 88 : 144, visible: true, collapsed: false },
       monitor: { ...value.monitor, visible: true, collapsed: false },
       climate: { ...value.climate, visible: false },
       friends: { ...value.friends, visible: false },
@@ -1570,9 +1699,12 @@ function App() {
 
     ownGardenSnapshotRef.current = {
       appliedAsset,
+      awaitingFirstCycle,
       climate,
+      cycleStatus,
       growingMode,
       growthTrack,
+      nextSimulationTickAt,
       outdoorWeather,
       selectedPlant,
       simulationVisual,
@@ -1581,7 +1713,7 @@ function App() {
     setActivePage('lab')
     setWindows((value) => ({
       ...value,
-      comments: { ...value.comments, visible: Boolean(liveSimulator), collapsed: false },
+      comments: { ...value.comments, x: Math.max(24, window.innerWidth - 400), y: window.innerHeight >= 820 ? 88 : 144, visible: Boolean(liveSimulator), collapsed: false },
       monitor: { ...value.monitor, visible: true, collapsed: false },
       climate: { ...value.climate, visible: false },
       friends: { ...value.friends, visible: false },
@@ -1642,9 +1774,12 @@ function App() {
         visitingFriend: null,
       }
       setAppliedAsset(snapshot.appliedAsset)
+      setAwaitingFirstCycle(Boolean(snapshot.awaitingFirstCycle))
       setClimate(snapshot.climate)
+      setCycleStatus(snapshot.cycleStatus ?? 'idle')
       setGrowingMode(snapshot.growingMode)
       setGrowthTrack(snapshot.growthTrack)
+      setNextSimulationTickAt(snapshot.nextSimulationTickAt ?? null)
       setSelectedPlant(snapshot.selectedPlant)
       canonicalSimulationRef.current = snapshot.simulationVisual
       setSimulationVisual(snapshot.simulationVisual)
@@ -1703,6 +1838,9 @@ function App() {
     if (visitingFriend) {
       leaveFriendGarden()
     }
+    if (page === 'settings' && ['lab', 'shop', 'history', 'community'].includes(activePage)) {
+      setSettingsReturnPage(activePage)
+    }
     setActivePage(page)
   }
 
@@ -1747,6 +1885,7 @@ function App() {
   }
 
   const labReady = Boolean(saveHydrated && growingMode && !modeLoading)
+  const availablePlantName = labSections.Plants?.[0]?.name ?? 'a plant'
   const visitorName = visitingFriend?.user?.username ?? visitingFriend?.user?.email?.split('@')[0] ?? 'Friend'
 
   if (sessionStatus === 'checking') {
@@ -1795,7 +1934,7 @@ function App() {
   }
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100">
+    <main className="relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100" data-mobile-lab-panel={activeMobileLabPanel}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
@@ -1831,11 +1970,16 @@ function App() {
       {activePage === 'shop' ? (
         <ShopPage onInventoryItemChange={upsertInventoryItem} onUserUpdate={setUser} />
       ) : activePage === 'history' ? (
-        <HistoryPage onOpenGameState={viewSavedGameState} />
+        <HistoryPage onOpenGameState={viewSavedGameState} onStartGrowing={() => navigateToPage('lab')} />
       ) : activePage === 'community' ? (
         <CommunityPage currentUser={user} onOpenGame={viewCommunityGame} onUserChange={setUser} />
       ) : activePage === 'settings' ? (
-        <SettingsPage user={user} onBack={() => navigateToPage('lab')} onResetPassword={() => navigateToPage('password-reset')} />
+        <SettingsPage
+          backLabel={`Back to ${settingsReturnPage === 'lab' ? 'Plant Lab' : settingsReturnPage[0].toUpperCase() + settingsReturnPage.slice(1)}`}
+          user={user}
+          onBack={() => navigateToPage(settingsReturnPage)}
+          onResetPassword={() => navigateToPage('password-reset')}
+        />
       ) : activePage === 'password-reset' ? (
         <PasswordResetPage user={user} onBack={() => navigateToPage('settings')} onDone={() => navigateToPage('settings')} />
       ) : (
@@ -1849,6 +1993,10 @@ function App() {
                 expBurst={expBurst}
                 mode={growingMode}
                 plantSelected={Boolean(selectedPlant)}
+                availablePlantName={availablePlantName}
+                awaitingFirstCycle={awaitingFirstCycle}
+                cycleStatus={cycleStatus}
+                nextCycleAt={nextSimulationTickAt}
                 selectedItemCursorUrl={selectedItemCursorUrl}
                 onUseSelectedItem={applySelectedItem}
                 readOnly={Boolean(visitingFriend)}
@@ -1876,7 +2024,15 @@ function App() {
                 </div>
               )}
 
-              <PlantMonitorPanel windows={windows} setWindows={setWindows} simulationVisual={previewSimulationVisual} />
+              <PlantMonitorPanel
+                windows={windows}
+                setWindows={setWindows}
+                simulationVisual={previewSimulationVisual}
+                hasPlant={Boolean(selectedPlant)}
+                awaitingFirstCycle={awaitingFirstCycle}
+                cycleStatus={cycleStatus}
+                nextCycleAt={nextSimulationTickAt}
+              />
               {!visitingFriend && (
                 <EnvironmentPanel
                   climate={climate}
@@ -1885,10 +2041,28 @@ function App() {
                   setWindows={setWindows}
                   mode={growingMode}
                   outdoorWeather={outdoorWeather}
+                  plantSelected={Boolean(selectedPlant)}
                 />
               )}
               {!visitingFriend && <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} />}
               <CommentsPanel currentUser={user} onAuthRequired={openAuth} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
+              <nav className="lab-mobile-panel-dock" aria-label="Lab panels">
+                {[
+                  ['monitor', 'Plant'],
+                  ['climate', 'Environment'],
+                  ['comments', 'Comments'],
+                  ['friends', 'Friends'],
+                ].filter(([id]) => !(visitingFriend && (id === 'climate' || id === 'friends'))).map(([id, label]) => (
+                  <button
+                    type="button"
+                    key={id}
+                    aria-pressed={Boolean(activeMobileLabPanel === id && windows[id]?.visible && !windows[id]?.collapsed)}
+                    onClick={() => openWindow(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
             </>
           )}
 

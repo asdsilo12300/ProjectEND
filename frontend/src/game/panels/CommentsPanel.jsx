@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Panel } from '../components/Panel'
 import { AppIcon } from '../icons/IconifyIcon'
-import { createSimulatorComment, getSimulatorComments } from '../../lib/api'
+import { createSimulatorComment, getSimulatorComments, resolveAssetUrl } from '../../lib/api'
 
 function displayName(user) {
   return user?.username ?? user?.email?.split('@')[0] ?? 'Learner'
@@ -9,6 +9,27 @@ function displayName(user) {
 
 function avatarLabel(user) {
   return displayName(user).slice(0, 1).toUpperCase()
+}
+
+function CommentAvatar({ className = '', user }) {
+  const avatarUrl = user?.avatar_url ? resolveAssetUrl(user.avatar_url) : null
+
+  return (
+    <span
+      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full border border-sky-100/25 bg-[#8fc7d9] text-sm font-bold text-[#071013] ${className}`}
+      aria-hidden="true"
+    >
+      {avatarLabel(user)}
+      {avatarUrl && (
+        <img
+          className="absolute inset-0 h-full w-full object-cover object-center"
+          src={avatarUrl}
+          alt=""
+          onError={(event) => { event.currentTarget.hidden = true }}
+        />
+      )}
+    </span>
+  )
 }
 
 function postedLabel(value) {
@@ -116,9 +137,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
             return (
               <article className="rounded-md border border-sky-200/15 bg-[#132026]/82 p-2.5" key={comment.id}>
                 <div className="mb-2 flex items-center gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#8fc7d9] text-sm font-bold text-[#071013]">
-                    {avatarLabel(author)}
-                  </span>
+                  <CommentAvatar className="h-8 w-8" user={author} />
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-lime-50">{displayName(author)}</h3>
                     <p className="text-[11px] text-slate-400">{author.role ?? 'Learner'} · {postedLabel(comment.created_at)}</p>
@@ -133,9 +152,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
         {error && <p className="mt-2 rounded-md border border-red-300/20 bg-red-400/10 px-3 py-2 text-[11px] text-red-100">{error}</p>}
 
         <form className="mt-3 flex items-end gap-2.5 rounded-lg border border-sky-200/15 bg-[#122026]/86 p-2.5" onSubmit={submitComment}>
-          <span className="mb-1 grid h-8 w-8 shrink-0 place-items-center rounded-full border border-sky-100/25 bg-[#8fc7d9] text-sm font-bold text-[#071013]" aria-hidden="true">
-            {avatarLabel(avatarUser)}
-          </span>
+          <CommentAvatar className="mb-1 h-8 w-8" user={avatarUser} />
           <label className="min-w-0 flex-1">
             <span className="sr-only">Comment</span>
             <textarea

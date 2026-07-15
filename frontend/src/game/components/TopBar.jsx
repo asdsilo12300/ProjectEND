@@ -1,4 +1,5 @@
 ﻿import { imageAssets, navItems, navTargets } from '../data/gameData'
+import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '../icons/IconifyIcon'
 import { NavIcon } from '../icons/NavIcon'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
@@ -30,7 +31,18 @@ function nextLevelExperience(level) {
   return 100 + ((currentLevel - 1) * 50)
 }
 
+const navPages = {
+  Home: 'home',
+  Learn: 'learn',
+  'Plant Lab': 'lab',
+  Shop: 'shop',
+  History: 'history',
+  Community: 'community',
+}
+
 export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, onNavigate, openWindow, profileOpen, setProfileOpen, user, onAuthRequired, onLogout }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const accountMenuRef = useRef(null)
   const displayName = user?.username ?? 'Learner'
   const learnerLevel = user?.level ?? 1
   const learnerExperience = Number(user?.experience ?? user?.level_progress?.experience ?? 0)
@@ -38,6 +50,25 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
   const learnerExpPercent = Math.max(0, Math.min(100, Number(user?.level_progress?.percent ?? ((learnerExperience / learnerNextExperience) * 100)) || 0))
   const initial = displayName.slice(0, 1).toUpperCase()
   const shownCoins = Number(user?.coin ?? coinBalance ?? 0).toLocaleString()
+
+  useEffect(() => {
+    function handlePointerDown(event) {
+      if (profileOpen && !accountMenuRef.current?.contains(event.target)) setProfileOpen(false)
+    }
+
+    function handleKeyDown(event) {
+      if (event.key !== 'Escape') return
+      setProfileOpen(false)
+      setMobileNavOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [profileOpen, setProfileOpen])
 
   function handleProfileClick() {
     if (!user) {
@@ -48,70 +79,82 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
     setProfileOpen((value) => !value)
   }
 
+  function navigate(item) {
+    const page = navPages[item] ?? 'lab'
+    setMobileNavOpen(false)
+    setProfileOpen(false)
+    onNavigate?.(page)
+    if (page === 'lab' && navTargets[item]) openWindow?.(navTargets[item])
+  }
+
+  function renderNavItems(mobile = false) {
+    return navItems.map((item) => {
+      const page = navPages[item] ?? 'lab'
+      const active = activePage === page
+
+      return (
+        <li className={mobile ? '' : 'me-1'} key={item}>
+          <button
+            className={mobile
+              ? `flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${active ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100' : 'border-white/[0.07] bg-white/[0.035] text-slate-300 hover:bg-white/[0.07] hover:text-lime-50'}`
+              : `group inline-flex min-h-12 items-center justify-center border-b px-2.5 py-4 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-lime-200 ${active ? 'border-[#9bcf82] text-lime-100' : 'border-transparent text-slate-300 hover:border-[#9bcf82]/80 hover:text-lime-100'}`}
+            type="button"
+            aria-current={active ? 'page' : undefined}
+            onClick={() => navigate(item)}
+          >
+            <NavIcon className={`${mobile ? 'h-5 w-5' : 'me-2 h-4 w-4'} ${active ? 'text-[#9bcf82]' : 'text-slate-400 group-hover:text-[#9bcf82]'}`} type={item} />
+            {item}
+          </button>
+        </li>
+      )
+    })
+  }
+
   return (
-    <header className="absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-lime-100/15 bg-[#101511]/95 px-5">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-16 items-center border-r border-lime-100/10 pr-5">
+    <header className="absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-lime-100/15 bg-[#101511]/95 px-3 sm:px-5">
+      <div className="flex min-w-0 items-center gap-2 xl:gap-3">
+        <button
+          className="flex h-16 shrink-0 items-center border-r border-lime-100/10 pr-3 transition hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 sm:pr-5"
+          type="button"
+          aria-label="Go to home"
+          onClick={() => navigate('Home')}
+        >
           <img
-            className="h-28 w-auto max-w-[290px] object-contain"
+            className="h-20 w-auto max-w-[120px] object-contain sm:h-24 sm:max-w-[180px]"
             src={plantGrowthLogo}
             alt="Plant Growth Academy"
           />
-        </div>
-        <nav className="flex h-16 min-w-0 items-end overflow-x-auto" aria-label="Primary">
-          <ul className="flex min-w-max flex-wrap text-center text-sm font-medium text-slate-300">
-            {navItems.map((item, index) => {
-              const active = item === 'Shop' ? activePage === 'shop' : item === 'History' ? activePage === 'history' : item === 'Community' ? activePage === 'community' : activePage === 'lab' && index === 0
-
-              return (
-                <li className="me-2" key={item}>
-                  <button
-                    className={`group inline-flex items-center justify-center border-b px-3.5 py-4 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-lime-200 ${
-                      active
-                        ? 'border-[#9bcf82] text-lime-100'
-                        : 'border-transparent text-slate-300 hover:border-[#9bcf82]/80 hover:text-lime-100'
-                    }`}
-                    type="button"
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => {
-                      if (item === 'Shop') {
-                        onNavigate?.('shop')
-                        return
-                      }
-                      if (item === 'History') {
-                        onNavigate?.('history')
-                        return
-                      }
-                      if (item === 'Community') {
-                        onNavigate?.('community')
-                        return
-                      }
-                      onNavigate?.('lab')
-                      if (navTargets[item]) openWindow(navTargets[item])
-                    }}
-                  >
-                    <NavIcon className={`me-2 h-4 w-4 ${active ? 'text-[#9bcf82]' : 'text-slate-400 group-hover:text-[#9bcf82]'}`} type={item} />
-                    {item}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+        </button>
+        <nav className="hidden h-16 min-w-0 items-end overflow-x-auto xl:flex" aria-label="Primary">
+          <ul className="flex min-w-max text-center text-sm font-medium text-slate-300">{renderNavItems()}</ul>
         </nav>
       </div>
 
-      <div className="relative flex items-center gap-2 text-sm">
+      <div ref={accountMenuRef} className="relative flex items-center gap-2 text-sm">
         {user && (
-          <div className="relative flex h-12 items-center gap-2 rounded-md border border-lime-100/10 bg-white/[0.04] px-3 shadow-[0_8px_18px_rgba(0,0,0,.18)]" aria-label="Coin balance">
-            <img className="h-7 w-7 shrink-0 object-contain" src={imageAssets.coin} alt="Coin" />
-            <span className="min-w-10 text-right text-sm font-black tabular-nums text-lime-50">{shownCoins}</span>
+          <div className="relative flex h-11 items-center gap-1.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-2 shadow-[0_8px_18px_rgba(0,0,0,.18)] sm:h-12 sm:gap-2 sm:px-3" aria-label="Coin balance">
+            <img className="h-6 w-6 shrink-0 object-contain sm:h-7 sm:w-7" src={imageAssets.coin} alt="Coin" />
+            <span className="min-w-6 text-right text-xs font-black tabular-nums text-lime-50 sm:min-w-10 sm:text-sm">{shownCoins}</span>
             {coinDelta ? (
-              <span className="coin-pop pointer-events-none absolute -top-3 right-2 rounded-full border border-amber-100/25 bg-[#1b1a10] px-2 py-0.5 text-[11px] font-black text-amber-200 shadow-[0_8px_18px_rgba(0,0,0,.28)]">
+              <span className="coin-pop pointer-events-none absolute -top-3 right-2 rounded-full border border-amber-100/25 bg-[#1b1a10] px-2 py-0.5 text-[11px] font-black text-amber-200 shadow-[0_8px_18px_rgba(0,0,0,.28)]" aria-live="polite" title="Simulation reward">
                 +{coinDelta}
               </span>
             ) : null}
           </div>
         )}
+
+        <button
+          className="grid h-11 w-11 place-items-center rounded-md border border-lime-100/10 bg-white/[0.04] text-slate-200 transition hover:bg-white/[0.075] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 xl:hidden"
+          type="button"
+          aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+          aria-expanded={mobileNavOpen}
+          onClick={() => {
+            setProfileOpen(false)
+            setMobileNavOpen((value) => !value)
+          }}
+        >
+          <AppIcon className="h-5 w-5" name={mobileNavOpen ? 'panelClose' : 'sort'} />
+        </button>
 
         <button
           className="flex items-center gap-3 rounded-md bg-white/[0.045] px-3 py-2 text-left transition hover:bg-white/[0.075] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
@@ -121,7 +164,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           onClick={handleProfileClick}
         >
           <ProfileAvatar user={user} initial={initial} />
-          <span className="hidden leading-none sm:block">
+          <span className="hidden leading-none md:block">
             <strong className="block text-xs text-lime-50">{user ? `${displayName} Lv.${learnerLevel}` : 'Sign in'}</strong>
             <small className="mt-1 block text-[10px] text-slate-400">{user ? 'profile' : 'Login or create account'}</small>
           </span>
@@ -201,6 +244,12 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           </div>
         )}
       </div>
+
+      {mobileNavOpen && (
+        <nav className="absolute left-3 right-3 top-[68px] z-[65] rounded-xl border border-lime-100/15 bg-[#101511]/98 p-3 shadow-[0_22px_50px_rgba(0,0,0,.48)] backdrop-blur-xl xl:hidden" aria-label="Mobile navigation">
+          <ul className="grid grid-cols-2 gap-2">{renderNavItems(true)}</ul>
+        </nav>
+      )}
     </header>
   )
 }

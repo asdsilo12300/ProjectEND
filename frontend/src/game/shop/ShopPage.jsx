@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { buyShopItem, getShopItems, resolveAssetUrl } from '../../lib/api'
+import { getAppLanguage } from '../../i18n/appI18n'
 import { imageAssets } from '../data/gameData'
+import { AppIcon } from '../icons/IconifyIcon'
 import { shopItems } from './data/shopItems'
+import { getShopCopy } from './shopCopy'
 import { ProductGrid } from './components/ProductGrid'
 import { ShopPagination } from './components/ShopPagination'
 import { ShopSidebar } from './components/ShopSidebar'
@@ -35,14 +38,17 @@ function mapApiShopItem(shopItem) {
 
 export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
   const [selectedCategory, setSelectedCategory] = useState(null)
-  const [maxPrice, setMaxPrice] = useState(defaultPriceRange.max)
+  const [maxPrice, setMaxPrice] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortMode, setSortMode] = useState('default')
   const [currentPage, setCurrentPage] = useState(1)
   const [favoriteIds, setFavoriteIds] = useState(() => new Set())
   const [apiItems, setApiItems] = useState([])
   const [buyingId, setBuyingId] = useState(null)
-  const [shopMessage, setShopMessage] = useState('')
+  const [shopNotice, setShopNotice] = useState(null)
+  const [catalogStatus, setCatalogStatus] = useState('loading')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [latestPurchases, setLatestPurchases] = useState(() => {
     try {
       return JSON.parse(window.localStorage.getItem(recentPurchasesKey) ?? '[]')
@@ -56,16 +62,25 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
 
     getShopItems()
       .then((payload) => {
-        if (!cancelled) setApiItems((payload.data ?? []).map(mapApiShopItem))
+        if (!cancelled) {
+          setApiItems((payload.data ?? []).map(mapApiShopItem))
+          setCatalogStatus('ready')
+        }
       })
       .catch(() => {
-        if (!cancelled) setApiItems([])
+        if (!cancelled) {
+          setApiItems([])
+          setCatalogStatus('error')
+        }
       })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
+
+  const language = getAppLanguage()
+  const copy = getShopCopy(language)
 
   const products = apiItems
 
@@ -82,7 +97,9 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
     }
   }, [products])
 
-  const effectiveMaxPrice = Math.min(Math.max(maxPrice, priceBounds.min), priceBounds.max)
+  const effectiveMaxPrice = maxPrice === null
+    ? priceBounds.max
+    : Math.min(Math.max(maxPrice, priceBounds.min), priceBounds.max)
 
   const categories = useMemo(() => {
     const counts = products.reduce((map, item) => {
@@ -138,6 +155,19 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
     setMaxPrice(value)
   }
 
+  function resetFilters() {
+    setCurrentPage(1)
+    setSearchQuery('')
+    setSelectedCategory(null)
+    setMaxPrice(null)
+  }
+
+  function retryCatalog() {
+    setShopNotice(null)
+    setCatalogStatus('loading')
+    setReloadKey((value) => value + 1)
+  }
+
   function updateSearchQuery(value) {
     setCurrentPage(1)
     setSearchQuery(value)
@@ -164,12 +194,12 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
 
   async function buyItem(item) {
     if (!item.backendId) {
-      setShopMessage('Connect the backend shop before buying this item.')
+      setShopNotice({ type: 'error', text: copy.buyUnavailable })
       return
     }
 
     const confirmation = await Swal.fire({
-      title: `Buy ${item.name}?`,
+      title: copy.confirmTitle(item.name),
       html: `
         <div class="plantsim-shop-confirm">
           ${item.imageUrl ? `<img class="plantsim-shop-confirm__item" src="${item.imageUrl}" alt="">` : ''}
@@ -177,12 +207,12 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
             <img src="${imageAssets.coin}" alt="">
             <strong>${item.price}</strong>
           </div>
-          <p>This item will be added to your lab inventory.</p>
+          <p>${copy.confirmDescription}</p>
         </div>
       `,
       showCancelButton: true,
-      confirmButtonText: 'Buy',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: copy.confirmBuy,
+      cancelButtonText: copy.cancel,
       background: '#101511',
       color: '#eaf7df',
       buttonsStyling: false,
@@ -199,7 +229,7 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
     if (!confirmation.isConfirmed) return
 
     setBuyingId(item.id)
-    setShopMessage('')
+    setShopNotice(null)
 
     try {
       const payload = await buyShopItem(item.backendId, 1)
@@ -226,36 +256,87 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
         return next
       })
 
-      setShopMessage(`${item.name} added to your inventory.`)
+      setShopNotice({ type: 'success', text: copy.purchaseSuccess(item.name) })
     } catch (error) {
-      setShopMessage(error.message || 'Could not buy this item.')
+      setShopNotice({ type: 'error', text: error.message || copy.purchaseError })
     } finally {
       setBuyingId(null)
     }
   }
 
+  const hasActiveFilters = Boolean(searchQuery.trim() || selectedCategory || (maxPrice !== null && effectiveMaxPrice < priceBounds.max))
+  const activeFilterCount = [searchQuery.trim(), selectedCategory, maxPrice !== null && effectiveMaxPrice < priceBounds.max].filter(Boolean).length
+
   return (
-    <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-hidden bg-[#0b1215]" aria-label="Shop page">
-      <div className="grid h-full w-full grid-cols-1 gap-6 px-5 py-4 lg:grid-cols-[240px_minmax(0,1fr)] lg:px-8">
-        <ShopSidebar
-          categories={categories}
-          latestItems={latestPurchases}
-          maxPrice={effectiveMaxPrice}
-          onPriceChange={updateMaxPrice}
-          priceRange={priceBounds}
-          searchQuery={searchQuery}
-          selectedCategory={selectedCategory}
-          onSearchChange={updateSearchQuery}
-          onSelectCategory={selectCategory}
-        />
-        <main className="flex min-h-0 flex-col">
-          <div className="mb-2 flex min-h-6 items-center justify-between gap-3">
-            <ShopToolbar endIndex={endIndex} sortMode={sortMode} startIndex={startIndex} totalCount={filteredItems.length} onSortChange={updateSortMode} />
-            {shopMessage && <span className="rounded-sm border border-[#34d981]/25 bg-[#34d981]/10 px-3 py-1 text-xs font-semibold text-[#9cf3bd]">{shopMessage}</span>}
+    <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] text-slate-100" aria-label={copy.pageLabel}>
+      <div className="mx-auto min-h-full w-full max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start gap-3.5">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#55dc91]/12 text-[#78eda8] ring-1 ring-[#55dc91]/20">
+              <AppIcon className="h-6 w-6" name="shop" />
+            </span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#75dca0]">{copy.eyebrow}</p>
+              <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">{copy.title}</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{copy.subtitle}</p>
+            </div>
           </div>
-          <ProductGrid buyingId={buyingId} favoriteIds={favoriteIds} items={visibleItems} onBuy={buyItem} onToggleFavorite={toggleFavorite} />
-          <ShopPagination currentPage={safeCurrentPage} pageCount={pageCount} onPageChange={setCurrentPage} />
-        </main>
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <span className="text-xs font-semibold text-slate-500">{copy.itemCount(products.length)}</span>
+            <button
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#55dc91]/25 bg-[#55dc91]/10 px-3.5 text-sm font-bold text-[#9cf3bd] transition hover:bg-[#55dc91]/16 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9cf3bd] lg:hidden"
+              type="button"
+              aria-controls="shop-filters"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((value) => !value)}
+            >
+              <AppIcon className="h-4 w-4" name="sort" />
+              {filtersOpen ? copy.hideFilters : copy.showFilters}
+              {activeFilterCount ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#55dc91] px-1 text-[10px] text-[#07120d]">{activeFilterCount}</span> : null}
+            </button>
+          </div>
+        </header>
+
+        <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <div className={`${filtersOpen ? 'block' : 'hidden'} lg:block`} id="shop-filters">
+            <ShopSidebar
+              categories={categories}
+              copy={copy}
+              hasActiveFilters={hasActiveFilters}
+              latestItems={latestPurchases}
+              maxPrice={effectiveMaxPrice}
+              onPriceChange={updateMaxPrice}
+              onResetFilters={resetFilters}
+              priceRange={priceBounds}
+              searchQuery={searchQuery}
+              selectedCategory={selectedCategory}
+              onSearchChange={updateSearchQuery}
+              onSelectCategory={selectCategory}
+            />
+          </div>
+          <main className="min-w-0">
+            {shopNotice ? (
+              <div className={`mb-4 rounded-xl border px-4 py-3 text-sm font-semibold ${shopNotice.type === 'error' ? 'border-rose-300/20 bg-rose-500/10 text-rose-100' : 'border-[#55dc91]/25 bg-[#55dc91]/10 text-[#9cf3bd]'}`} role={shopNotice.type === 'error' ? 'alert' : 'status'}>
+                {shopNotice.text}
+              </div>
+            ) : null}
+            {catalogStatus === 'ready' ? <ShopToolbar copy={copy} endIndex={endIndex} sortMode={sortMode} startIndex={startIndex} totalCount={filteredItems.length} onSortChange={updateSortMode} /> : null}
+            <ProductGrid
+              buyingId={buyingId}
+              copy={copy}
+              error={catalogStatus === 'error'}
+              favoriteIds={favoriteIds}
+              hasFilters={hasActiveFilters}
+              items={visibleItems}
+              loading={catalogStatus === 'loading'}
+              onBuy={buyItem}
+              onClearFilters={resetFilters}
+              onRetry={retryCatalog}
+              onToggleFavorite={toggleFavorite}
+            />
+            {catalogStatus === 'ready' && filteredItems.length > 0 ? <ShopPagination copy={copy} currentPage={safeCurrentPage} pageCount={pageCount} onPageChange={setCurrentPage} /> : null}
+          </main>
+        </div>
       </div>
     </section>
   )

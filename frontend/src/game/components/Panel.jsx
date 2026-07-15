@@ -63,28 +63,50 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
     setWindows((value) => {
       const nextCollapsed = !value[id].collapsed
 
+      if (window.matchMedia('(max-width: 767px)').matches && !nextCollapsed) {
+        return Object.fromEntries(Object.entries(value).map(([panelId, panel]) => [
+          panelId,
+          {
+            ...panel,
+            visible: panelId === id ? true : panel.visible,
+            collapsed: panelId === id ? false : true,
+          },
+        ]))
+      }
+
       if (id === 'friends') {
         return {
           ...value,
           [id]: {
             ...value[id],
             x: Math.max(24, window.innerWidth - 350),
-            y: nextCollapsed ? Math.max(76, window.innerHeight - 72) : Math.max(92, window.innerHeight - 400),
+            y: nextCollapsed ? Math.max(76, window.innerHeight - 124) : Math.max(92, window.innerHeight - 400),
+            collapsed: nextCollapsed,
+          },
+        }
+      }
+
+      if (id === 'comments') {
+        return {
+          ...value,
+          [id]: {
+            ...value[id],
+            x: Math.max(24, window.innerWidth - 400),
+            y: window.innerHeight >= 820 ? 88 : 144,
             collapsed: nextCollapsed,
           },
         }
       }
 
       if (id === 'climate') {
-        const dockY = Math.max(76, window.innerHeight - 56)
         const expandedY = value[id].expandedY ?? value[id].y
 
         return {
           ...value,
           [id]: {
             ...value[id],
-            y: nextCollapsed ? dockY : expandedY,
-            expandedY: nextCollapsed ? value[id].y : expandedY,
+            y: expandedY,
+            expandedY,
             collapsed: nextCollapsed,
           },
         }
@@ -96,7 +118,9 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
 
   return (
     <section
-      className={`absolute left-0 top-0 z-30 w-[320px] overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511]/92 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.36)] ${className}`}
+      className={`lab-panel absolute left-0 top-0 z-30 w-[320px] overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511]/92 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.36)] ${className}`}
+      data-panel-id={id}
+      data-panel-collapsed={current.collapsed ? 'true' : 'false'}
       style={{ transform: `translate(${current.x}px, ${current.y}px)` }}
     >
       <header className={`group flex h-11 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3 ${canDrag ? 'cursor-grab select-none active:cursor-grabbing' : ''}`} onPointerDown={startDrag}>

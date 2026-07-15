@@ -19,12 +19,9 @@ export const imageAssets = {
   uproot: storageAsset('icon picture/uproot.jpg'),
   harvest: storageAsset('icon picture/harvest.jpg'),
 }
-export const navItems = ['Plant Lab', 'Shop', 'History', 'Community']
+export const navItems = ['Home', 'Learn', 'Plant Lab', 'Shop', 'History', 'Community']
 export const navTargets = {
   'Plant Lab': 'monitor',
-  Shop: 'climate',
-  History: 'comments',
-  Community: 'friends',
 }
 
 export const pestChances = [

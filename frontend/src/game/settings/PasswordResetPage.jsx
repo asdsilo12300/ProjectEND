@@ -30,21 +30,45 @@ function StepProgress({ step }) {
   )
 }
 
-function Field({ autoComplete, label, name, onChange, placeholder, type = 'text', value }) {
+function Field({ autoComplete, label, name, onChange, placeholder, revealable = false, type = 'text', value }) {
+  const [visible, setVisible] = useState(false)
+  const inputType = revealable && visible ? 'text' : type
+
   return (
-    <label className="block">
-      <span className="mb-2 block text-xs font-bold text-slate-200">{label}</span>
-      <input
-        className="h-11 w-full rounded-lg border border-white/10 bg-black/25 px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-[#9bcf82]/70 focus:ring-2 focus:ring-[#9bcf82]/15"
-        autoComplete={autoComplete}
-        name={name}
-        placeholder={placeholder}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+    <div>
+      <label className="mb-2 block text-xs font-bold text-slate-200" htmlFor={name}>{label}</label>
+      <div className="relative">
+        <input
+          className={`h-11 w-full rounded-lg border border-white/10 bg-black/25 px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-[#9bcf82]/70 focus:ring-2 focus:ring-[#9bcf82]/15 ${revealable ? 'pr-12' : ''}`}
+          id={name}
+          autoComplete={autoComplete}
+          name={name}
+          placeholder={placeholder}
+          type={inputType}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {revealable && (
+          <button
+            className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-lg text-slate-400 transition hover:bg-white/[0.05] hover:text-lime-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"
+            type="button"
+            aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+            aria-pressed={visible}
+            onClick={() => setVisible((current) => !current)}
+          >
+            <AppIcon className="h-5 w-5" name={visible ? 'eyeOff' : 'eye'} />
+          </button>
+        )}
+      </div>
+    </div>
   )
+}
+
+function StatusMessage({ children, tone = 'info' }) {
+  if (!children) return null
+  const isError = tone === 'error'
+
+  return <p className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${isError ? 'border-red-300/20 bg-red-400/10 text-red-200' : 'border-lime-200/15 bg-lime-300/[0.07] text-lime-100'}`} role={isError ? 'alert' : 'status'}>{children}</p>
 }
 
 export function PasswordResetPage({ onBack, onDone, user }) {
@@ -56,6 +80,7 @@ export function PasswordResetPage({ onBack, onDone, user }) {
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [status, setStatus] = useState('idle')
   const [message, setMessage] = useState('')
+  const [messageTone, setMessageTone] = useState('info')
   const [resendIn, setResendIn] = useState(0)
 
   useEffect(() => {
@@ -75,6 +100,7 @@ export function PasswordResetPage({ onBack, onDone, user }) {
   async function sendOtp() {
     setStatus('loading')
     setMessage('')
+    setMessageTone('info')
     try {
       const payload = await requestPasswordResetOtp()
       setEmailHint(payload.email_hint || maskEmail(user?.email))
@@ -83,6 +109,7 @@ export function PasswordResetPage({ onBack, onDone, user }) {
       setStep('verify')
       setMessage('A 6-digit code has been sent to your email.')
     } catch (error) {
+      setMessageTone('error')
       setMessage(error.payload?.configuration_error || error.message || 'Could not send the verification code.')
     } finally {
       setStatus('idle')
@@ -94,11 +121,13 @@ export function PasswordResetPage({ onBack, onDone, user }) {
     if (otp.length !== 6) return
     setStatus('loading')
     setMessage('')
+    setMessageTone('info')
     try {
       const payload = await verifyPasswordResetOtp(otp)
       setResetToken(payload.reset_token)
       setStep('password')
     } catch (error) {
+      setMessageTone('error')
       setMessage(error.message || 'The code could not be verified.')
     } finally {
       setStatus('idle')
@@ -110,10 +139,12 @@ export function PasswordResetPage({ onBack, onDone, user }) {
     if (!passwordReady) return
     setStatus('loading')
     setMessage('')
+    setMessageTone('info')
     try {
       await completePasswordReset(resetToken, password, passwordConfirmation)
       setStep('success')
     } catch (error) {
+      setMessageTone('error')
       setMessage(error.message || 'Could not update your password.')
     } finally {
       setStatus('idle')
@@ -179,7 +210,7 @@ export function PasswordResetPage({ onBack, onDone, user }) {
                     onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
                   />
                 </label>
-                {message && <p className="mt-3 text-xs leading-5 text-amber-200" role="status">{message}</p>}
+                <StatusMessage tone={messageTone}>{message}</StatusMessage>
                 <button className="mt-6 h-11 w-full rounded-lg bg-[#9bcf82] text-sm font-black text-[#101511] transition hover:bg-[#addf96] disabled:cursor-not-allowed disabled:opacity-45" type="submit" disabled={otp.length !== 6 || status === 'loading'}>
                   {status === 'loading' ? 'Verifying...' : 'Verify code'}
                 </button>
@@ -194,15 +225,15 @@ export function PasswordResetPage({ onBack, onDone, user }) {
                 <h2 className="text-xl font-black text-lime-50">Create a new password</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-400">Use a password that is different from passwords you use elsewhere.</p>
                 <div className="mt-6 grid gap-4">
-                  <Field autoComplete="new-password" label="New password" name="password" onChange={setPassword} placeholder="At least 8 characters" type="password" value={password} />
-                  <Field autoComplete="new-password" label="Confirm new password" name="password_confirmation" onChange={setPasswordConfirmation} placeholder="Enter it again" type="password" value={passwordConfirmation} />
+                  <Field autoComplete="new-password" label="New password" name="password" onChange={setPassword} placeholder="At least 8 characters" revealable type="password" value={password} />
+                  <Field autoComplete="new-password" label="Confirm new password" name="password_confirmation" onChange={setPasswordConfirmation} placeholder="Enter it again" revealable type="password" value={passwordConfirmation} />
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/15 p-3 text-[11px]">
                   {[[passwordChecks.length, '8+ characters'], [passwordChecks.letter, 'Contains a letter'], [passwordChecks.number, 'Contains a number'], [passwordChecks.match, 'Passwords match']].map(([valid, label]) => (
                     <span className={`flex items-center gap-1.5 ${valid ? 'text-lime-200' : 'text-slate-500'}`} key={label}><AppIcon className="h-3.5 w-3.5" name="check" />{label}</span>
                   ))}
                 </div>
-                {message && <p className="mt-3 text-xs leading-5 text-amber-200" role="alert">{message}</p>}
+                <StatusMessage tone={messageTone}>{message}</StatusMessage>
                 <button className="mt-6 h-11 w-full rounded-lg bg-[#9bcf82] text-sm font-black text-[#101511] transition hover:bg-[#addf96] disabled:cursor-not-allowed disabled:opacity-45" type="submit" disabled={!passwordReady || status === 'loading'}>
                   {status === 'loading' ? 'Updating password...' : 'Update password'}
                 </button>
@@ -218,7 +249,7 @@ export function PasswordResetPage({ onBack, onDone, user }) {
               </div>
             )}
 
-            {message && step === 'request' && <p className="mt-4 text-xs leading-5 text-amber-200" role="alert">{message}</p>}
+            {step === 'request' && <StatusMessage tone={messageTone}>{message}</StatusMessage>}
           </section>
         </div>
       </div>

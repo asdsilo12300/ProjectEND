@@ -1,4 +1,4 @@
-import { Component, Suspense, useImperativeHandle, useRef, useState } from 'react'
+import { Component, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, Html, OrbitControls } from '@react-three/drei'
 import { imageAssets } from '../data/gameData'
@@ -56,6 +56,27 @@ function clampPercent(value) {
   return Math.min(100, Math.max(0, Number(value) || 0))
 }
 
+function useCountdownSeconds(targetTime) {
+  const [seconds, setSeconds] = useState(null)
+
+  useEffect(() => {
+    if (!targetTime) return undefined
+
+    function update() {
+      setSeconds(Math.max(0, Math.ceil((Number(targetTime) - Date.now()) / 1000)))
+    }
+
+    const firstUpdate = window.setTimeout(update, 0)
+    const timer = window.setInterval(update, 1000)
+    return () => {
+      window.clearTimeout(firstUpdate)
+      window.clearInterval(timer)
+    }
+  }, [targetTime])
+
+  return targetTime ? seconds : null
+}
+
 function getHudPace(growthRate, growthPoint, health) {
   if (growthPoint >= 100) return 0
   if (growthRate <= 0 || health < 50) return 0
@@ -63,7 +84,7 @@ function getHudPace(growthRate, growthPoint, health) {
   return 78
 }
 
-function PlantStatusHud({ growthPoint = 0, growthRate = 0, health = 100 }) {
+function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycleStatus = 'idle', growthPoint = 0, growthRate = 0, health = 100 }) {
   const healthValue = clampPercent(health)
   const growthValue = clampPercent(growthPoint)
   const paceValue = clampPercent(getHudPace(growthRate, growthPoint, healthValue))
@@ -78,7 +99,9 @@ function PlantStatusHud({ growthPoint = 0, growthRate = 0, health = 100 }) {
       <div className="pointer-events-none w-[230px] rounded-lg border border-lime-100/25 bg-[#101511]/96 px-3 py-2 text-slate-100 shadow-[0_14px_34px_rgba(0,0,0,.45),0_0_0_1px_rgba(0,0,0,.35)]">
         <div className="mb-2 flex items-center justify-between border-b border-lime-100/10 pb-1.5">
           <strong className="text-[11px] text-lime-50">Plant status</strong>
-          <span className="rounded bg-[#9bcf82]/12 px-1.5 py-0.5 text-[9px] font-black text-lime-100">LIVE</span>
+          <span className="rounded bg-[#9bcf82]/12 px-1.5 py-0.5 text-[9px] font-black text-lime-100">
+            {cycleStatus === 'updating' ? 'UPDATING' : awaitingFirstCycle && cycleSeconds != null ? `FIRST ${cycleSeconds}s` : 'LIVE'}
+          </span>
         </div>
         <div className="grid gap-2">
           {stats.map((stat) => (
@@ -90,7 +113,7 @@ function PlantStatusHud({ growthPoint = 0, growthRate = 0, health = 100 }) {
               <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.12]">
                 <span className="block h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${stat.value}%`, backgroundColor: stat.color }} />
               </span>
-              <strong className="text-right text-[10px] text-lime-50">{Math.round(stat.value)}</strong>
+              <strong className="text-right text-[10px] text-lime-50">{awaitingFirstCycle && stat.label === 'Pace' ? '—' : Math.round(stat.value)}</strong>
             </div>
           ))}
         </div>
@@ -99,7 +122,7 @@ function PlantStatusHud({ growthPoint = 0, growthRate = 0, health = 100 }) {
   )
 }
 
-export function SimulationStage({ actionMessage, coinBurst = null, expBurst = null, mode = 'greenhouse', plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
+export function SimulationStage({ actionMessage, availablePlantName = 'a plant', awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', expBurst = null, mode = 'greenhouse', nextCycleAt = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -108,6 +131,7 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
   const growthRate = Number(simulationVisual?.growth_rate ?? 0)
   const health = Number(simulationVisual?.health ?? 100)
+  const cycleSeconds = useCountdownSeconds(nextCycleAt)
   const isMature = currentStageNo >= 3 || growthPoint >= 100
   const isPaused = growthRate <= 0 && !isMature
   // The source animation is empty at its exact first frame. Keep a small
@@ -165,7 +189,7 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
             {plantSelected && (
               <>
                 <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
-                <PlantStatusHud growthPoint={growthPoint} growthRate={growthRate} health={health} />
+                <PlantStatusHud awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} growthPoint={growthPoint} growthRate={growthRate} health={health} />
                 {pests.map((pest, index) => {
                   const pestKey = `${pest.pest?.name_en ?? pest.name_en ?? pest.type ?? 'pest'}-${pest.id ?? index}`
 
@@ -213,9 +237,10 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
           />
         )}
         {!plantSelected && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-4 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,.35)]">
-            <strong className="block text-sm text-lime-50">Select a plant to begin</strong>
-            <span className="mt-1 block text-xs leading-5 text-slate-400">Choose Sprout from Lab assets to load the plant model.</span>
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[310px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-lime-100/20 bg-[#101511]/94 px-5 py-4 text-center shadow-[0_16px_38px_rgba(0,0,0,.42)]">
+            <span className="mx-auto mb-2 inline-flex rounded-full bg-[#9bcf82]/14 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-lime-100">Step 2 of 3 · Choose plant</span>
+            <strong className="block text-base text-lime-50">Select {availablePlantName} to begin</strong>
+            <span className="mt-1 block text-xs leading-5 text-slate-300">Open Lab assets and choose the plant card. Your simulation will be saved to this account.</span>
           </div>
         )}
         {!readOnly && plantSelected && (
@@ -237,12 +262,12 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
         {actionMessage && (
           <div className="pointer-events-none absolute bottom-32 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs font-semibold text-lime-50 shadow-[0_8px_18px_rgba(0,0,0,.32)]">
             <span className="grid h-6 w-6 place-items-center rounded-md bg-[#9bcf82] text-[#101511]">
-              <AppIcon className="h-4 w-4" name="check" />
+              <AppIcon className="h-4 w-4" name="leaf" />
             </span>
             {actionMessage}
           </div>
         )}
-        {!readOnly && <div className="absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" aria-label="Simulation actions">
+        {!readOnly && plantSelected && <div className="lab-simulation-actions absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" aria-label="Simulation actions">
           <button
             className="box-border inline-flex items-center gap-2 rounded-full border border-lime-100/15 bg-white/[0.035] px-4 py-2.5 text-sm font-medium leading-5 text-slate-200 shadow-xs transition hover:bg-white/[0.075] hover:text-lime-50 focus:outline-none focus:ring-4 focus:ring-lime-100/10"
             type="button"
@@ -252,13 +277,17 @@ export function SimulationStage({ actionMessage, coinBurst = null, expBurst = nu
             Uproot
           </button>
           <button
-            className="box-border inline-flex items-center gap-2 rounded-full border border-transparent bg-[#9bcf82] px-4 py-2.5 text-sm font-medium leading-5 text-[#101511] shadow-xs transition hover:bg-[#addf96] focus:outline-none focus:ring-4 focus:ring-[#9bcf82]/25"
+            className="box-border inline-flex items-center gap-2 rounded-full border border-transparent bg-[#9bcf82] px-4 py-2.5 text-sm font-medium leading-5 text-[#101511] shadow-xs transition enabled:hover:bg-[#addf96] focus:outline-none focus:ring-4 focus:ring-[#9bcf82]/25 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-slate-200 disabled:opacity-80"
             type="button"
             onClick={saveSimulation}
+            disabled={!isMature}
+            aria-describedby={!isMature ? 'harvest-requirement' : undefined}
+            title={!isMature ? `Harvest unlocks at 100% growth (currently ${Math.round(growthPoint)}%).` : 'Harvest and save to history'}
           >
             <img className="h-6 w-6 rounded-full border border-[#101511]/15 object-cover shadow-[0_2px_6px_rgba(0,0,0,.22)]" src={imageAssets.harvest} alt="" draggable="false" />
             Harvest
           </button>
+          {!isMature && <span className="sr-only" id="harvest-requirement">Harvest is available when plant growth reaches 100 percent.</span>}
         </div>}
       </section>
   )

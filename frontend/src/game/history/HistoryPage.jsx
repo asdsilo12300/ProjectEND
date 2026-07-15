@@ -1,39 +1,162 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { deletePlantHistory, getPlantHistories, getToken, resolveAssetUrl, updatePlantHistoryVisibility } from '../../lib/api'
+import { getAppLanguage } from '../../i18n/appI18n'
 import { AppIcon } from '../icons/IconifyIcon'
 
-function formatDate(value) {
-  if (!value) return 'Not saved yet'
+const historyMessages = {
+  en: {
+    pageLabel: 'Save history',
+    eyebrow: 'Growth records',
+    title: 'Save history',
+    subtitle: 'Review completed simulations, compare results, and reopen saved evidence.',
+    recordCount: (count) => `${count} saved record${count === 1 ? '' : 's'}`,
+    searchLabel: 'Search saved games',
+    searchPlaceholder: 'Search plants, stages, or results',
+    notSaved: 'Not saved yet',
+    defaultPlant: 'Plant simulation',
+    defaultStage: 'Seedling',
+    day: (count) => `${count} day${count === 1 ? '' : 's'}`,
+    scoreShort: 'Score',
+    healthShort: 'Health',
+    noAnalysis: 'No analysis was recorded for this simulation.',
+    noDirection: 'Continue observing the plant during the next cycle.',
+    shared: 'Shared',
+    private: 'Private',
+    sharedTitle: 'Shared with Community',
+    privateTitle: 'Only you can see this save',
+    deleteLabel: 'Delete saved history',
+    closeLabel: 'Close history details',
+    deleteTitle: 'Delete this save?',
+    deleteDescription: (name) => `${name} will be permanently removed from your history.`,
+    cancel: 'Cancel',
+    delete: 'Delete',
+    deleting: 'Deleting…',
+    deleteError: 'The save could not be deleted. Please try again.',
+    savedPlant: 'Saved plant',
+    analysis: 'Analysis',
+    direction: 'Next direction',
+    viewGame: 'View game state',
+    score: 'Score',
+    health: 'Health',
+    duration: 'Duration',
+    loadingLabel: 'Loading save history',
+    loadingTitle: 'Loading your growth records…',
+    errorTitle: 'Your history could not be loaded',
+    errorDescription: 'Check your connection and try again. Your saved records are still safe.',
+    retry: 'Try again',
+    emptyTitle: 'No saved simulations yet',
+    emptyDescription: 'Complete a growing session in Plant Lab, then save the result to build your history.',
+    refresh: 'Go to Plant Lab',
+    noMatchTitle: 'No records match your search',
+    noMatchDescription: 'Try a plant name, growth stage, or result from another session.',
+    clearSearch: 'Clear search',
+    loginTitle: 'Sign in to view your history',
+    loginDescription: 'Your saved simulations are connected to your account.',
+    visibilityError: 'Sharing could not be updated. Your previous setting has been restored.',
+    pageNumber: (page) => `History page ${page}`,
+    previousPage: 'Previous history page',
+    nextPage: 'Next history page',
+    stages: { Seedling: 'Seedling', Sprout: 'Sprout', Young: 'Young', Mature: 'Mature', 'Fully grown': 'Fully grown' },
+  },
+  th: {
+    pageLabel: 'ประวัติการบันทึก',
+    eyebrow: 'บันทึกการเติบโต',
+    title: 'ประวัติการบันทึก',
+    subtitle: 'ตรวจสอบการทดลองที่ผ่านมา เปรียบเทียบผลลัพธ์ และเปิดดูสถานะเกมที่บันทึกไว้',
+    recordCount: (count) => `บันทึกแล้ว ${count} รายการ`,
+    searchLabel: 'ค้นหาเกมที่บันทึก',
+    searchPlaceholder: 'ค้นหาพืช ระยะการเติบโต หรือผลลัพธ์',
+    notSaved: 'ยังไม่ได้บันทึก',
+    defaultPlant: 'การจำลองการปลูกพืช',
+    defaultStage: 'ต้นกล้า',
+    day: (count) => `${count} วัน`,
+    scoreShort: 'คะแนน',
+    healthShort: 'สุขภาพ',
+    noAnalysis: 'ไม่มีผลการวิเคราะห์สำหรับการจำลองนี้',
+    noDirection: 'สังเกตพืชต่อในรอบการเติบโตถัดไป',
+    shared: 'แชร์แล้ว',
+    private: 'ส่วนตัว',
+    sharedTitle: 'แชร์ไปยังชุมชนแล้ว',
+    privateTitle: 'มีเพียงคุณที่เห็นบันทึกนี้',
+    deleteLabel: 'ลบประวัติที่บันทึก',
+    closeLabel: 'ปิดรายละเอียดประวัติ',
+    deleteTitle: 'ลบบันทึกนี้หรือไม่?',
+    deleteDescription: (name) => `${name} จะถูกลบออกจากประวัติของคุณอย่างถาวร`,
+    cancel: 'ยกเลิก',
+    delete: 'ลบ',
+    deleting: 'กำลังลบ…',
+    deleteError: 'ไม่สามารถลบบันทึกได้ กรุณาลองอีกครั้ง',
+    savedPlant: 'พืชที่บันทึก',
+    analysis: 'ผลการวิเคราะห์',
+    direction: 'คำแนะนำถัดไป',
+    viewGame: 'ดูสถานะเกม',
+    score: 'คะแนน',
+    health: 'สุขภาพ',
+    duration: 'ระยะเวลา',
+    loadingLabel: 'กำลังโหลดประวัติการบันทึก',
+    loadingTitle: 'กำลังโหลดบันทึกการเติบโต…',
+    errorTitle: 'ไม่สามารถโหลดประวัติได้',
+    errorDescription: 'ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง บันทึกของคุณยังคงปลอดภัย',
+    retry: 'ลองอีกครั้ง',
+    emptyTitle: 'ยังไม่มีการจำลองที่บันทึกไว้',
+    emptyDescription: 'ปลูกพืชให้จบใน Plant Lab แล้วบันทึกผลลัพธ์เพื่อสร้างประวัติของคุณ',
+    refresh: 'ไปที่ห้องทดลองปลูกพืช',
+    noMatchTitle: 'ไม่พบบันทึกที่ตรงกับการค้นหา',
+    noMatchDescription: 'ลองค้นหาด้วยชื่อพืช ระยะการเติบโต หรือผลลัพธ์จากการทดลอง',
+    clearSearch: 'ล้างการค้นหา',
+    loginTitle: 'เข้าสู่ระบบเพื่อดูประวัติ',
+    loginDescription: 'การจำลองที่บันทึกไว้จะเชื่อมต่อกับบัญชีของคุณ',
+    visibilityError: 'ไม่สามารถอัปเดตการแชร์ได้ ระบบคืนค่าเดิมให้แล้ว',
+    pageNumber: (page) => `หน้าประวัติที่ ${page}`,
+    previousPage: 'หน้าประวัติก่อนหน้า',
+    nextPage: 'หน้าประวัติถัดไป',
+    stages: { Seedling: 'ต้นกล้า', Sprout: 'ต้นอ่อน', Young: 'ระยะเติบโต', Mature: 'โตเต็มวัย', 'Fully grown': 'โตเต็มที่' },
+  },
+}
+
+function formatDate(value, language, copy) {
+  if (!value) return copy.notSaved
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleString('en-GB', {
+  return new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-GB', {
     year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  })
+  }).format(date)
 }
 
-function saveTitle(save) {
-  return save.plant?.name_en || save.plant?.name_th || save.title || 'Plant Simulation'
+function saveTitle(save, language, copy) {
+  return (language === 'th' ? save.plant?.name_th : save.plant?.name_en)
+    || save.plant?.name_en
+    || save.plant?.name_th
+    || save.title
+    || copy.defaultPlant
 }
 
-function saveStage(save) {
-  return save.final_stage?.stage_name || save.current_stage?.stage_name || 'Seedling'
+function saveStage(save, language, copy) {
+  const stage = save.final_stage || save.current_stage || {}
+  const name = (language === 'th' ? stage.stage_name_th : stage.stage_name) || stage.stage_name || stage.stage_name_th
+  return copy.stages[name] || name || copy.defaultStage
 }
 
-function saveSubtitle(save) {
+function saveSubtitle(save, language, copy) {
   if (save.subtitle) return save.subtitle
   const days = Number(save.duration_days || 1)
-  return `${saveStage(save)} - ${days} day${days > 1 ? 's' : ''}`
+  return `${saveStage(save, language, copy)} · ${copy.day(days)}`
 }
 
-function PreviewScene({ imageUrl, score = 0 }) {
+function localizedField(save, field, language) {
+  return (language === 'th' ? save[`${field}_th`] : save[field]) || save[field] || save[`${field}_th`] || ''
+}
+
+function PreviewScene({ copy, imageUrl, score = 0 }) {
   if (imageUrl) {
     return (
-      <div className="relative h-32 overflow-hidden rounded-t-xl border-b border-[#24335d] bg-[#080b09]">
-        <img className="h-full w-full object-cover" src={resolveAssetUrl(imageUrl)} alt="Saved plant snapshot" />
+      <div className="relative h-36 overflow-hidden border-b border-[#32493b] bg-[#080b09]">
+        <img className="h-full w-full object-cover" src={resolveAssetUrl(imageUrl)} alt={copy.savedPlant} />
+        <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#08100c]/45 to-transparent" />
       </div>
     )
   }
@@ -43,17 +166,16 @@ function PreviewScene({ imageUrl, score = 0 }) {
   const leafScale = 0.6 + progress / 135
 
   return (
-    <div className="relative h-32 overflow-hidden rounded-t-xl border-b border-[#24335d] bg-[#cdeefd]">
+    <div className="relative h-36 overflow-hidden border-b border-[#32493b] bg-[#cdeefd]">
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 360 144" preserveAspectRatio="none" aria-hidden="true">
-        <rect width="360" height="144" fill="#cdeefd" />
+        <rect width="360" height="144" fill="#d9efe5" />
         <circle cx="72" cy="24" r="6" fill="white" opacity="0.9" />
         <circle cx="84" cy="22" r="9" fill="white" opacity="0.92" />
         <circle cx="98" cy="25" r="6" fill="white" opacity="0.85" />
         <circle cx="188" cy="22" r="13" fill="white" opacity="0.96" />
         <circle cx="206" cy="27" r="8" fill="white" opacity="0.88" />
-        <circle cx="320" cy="27" r="6" fill="white" opacity="0.78" />
-        <path d="M0 96 C35 88 55 65 83 76 C110 87 120 104 158 91 C194 79 222 107 256 88 C294 67 318 83 360 78 L360 144 L0 144 Z" fill="#88a900" />
-        <path d="M0 106 C40 109 57 87 100 95 C136 102 151 114 187 104 C228 93 241 117 282 103 C316 91 334 104 360 97 L360 144 L0 144 Z" fill="#c1df77" opacity="0.82" />
+        <path d="M0 96 C35 88 55 65 83 76 C110 87 120 104 158 91 C194 79 222 107 256 88 C294 67 318 83 360 78 L360 144 L0 144 Z" fill="#719b51" />
+        <path d="M0 106 C40 109 57 87 100 95 C136 102 151 114 187 104 C228 93 241 117 282 103 C316 91 334 104 360 97 L360 144 L0 144 Z" fill="#a8ce79" opacity="0.88" />
       </svg>
       <div className="absolute left-1/2 top-[58px] -translate-x-1/2" style={{ transform: `translateX(-50%) scale(${leafScale})` }}>
         <div className="mx-auto w-1.5 rounded-full bg-[#557d34]" style={{ height: `${stemHeight}px` }} />
@@ -64,148 +186,117 @@ function PreviewScene({ imageUrl, score = 0 }) {
   )
 }
 
-function ShareToggle({ checked, disabled = false, onChange }) {
+function ShareToggle({ checked, copy, disabled = false, onChange }) {
   return (
     <label
-      className={`inline-flex h-8 items-center rounded-md border px-2 text-[11px] font-bold transition ${
-        checked
-          ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100'
-          : 'border-white/10 bg-black/20 text-slate-300'
-      } ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer hover:bg-white/[0.06]'}`}
+      className={`inline-flex min-h-11 items-center rounded-xl border px-2.5 text-xs font-bold transition ${checked ? 'border-[#55dc91]/40 bg-[#55dc91]/12 text-[#b8f5ce]' : 'border-white/10 bg-[#08100c]/82 text-slate-300'} ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer hover:bg-white/[0.07]'}`}
       onClick={(event) => event.stopPropagation()}
-      title={checked ? 'Shared to Community' : 'Private save'}
+      title={checked ? copy.sharedTitle : copy.privateTitle}
     >
-      <AppIcon className={`h-4 w-4 ${checked ? 'text-[#9bcf82]' : 'text-slate-400'}`} name={checked ? 'groups' : 'shield'} />
-      <input
-        type="checkbox"
-        className="sr-only peer"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <div className="relative mx-2 h-5 w-9 rounded-full bg-slate-700/80 transition peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#9bcf82]/35 peer-checked:bg-[#9bcf82]">
-        <span className={`absolute start-[2px] top-[2px] h-4 w-4 rounded-full bg-white transition ${checked ? 'translate-x-full' : ''}`} />
-      </div>
-      <AppIcon className={`h-4 w-4 ${checked ? 'text-[#9bcf82]' : 'text-slate-500'}`} name="groups" />
-      <span className="ml-2">{checked ? 'Shared' : 'Private'}</span>
+      <AppIcon className={`h-4 w-4 ${checked ? 'text-[#78eda8]' : 'text-slate-400'}`} name={checked ? 'groups' : 'shield'} />
+      <input type="checkbox" className="sr-only peer" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+      <span className="relative mx-2 h-5 w-9 rounded-full bg-slate-700/80 transition peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#78eda8]/45 peer-checked:bg-[#55dc91]">
+        <span className={`absolute start-[2px] top-[2px] h-4 w-4 rounded-full bg-white shadow transition ${checked ? 'translate-x-full' : ''}`} />
+      </span>
+      <span>{checked ? copy.shared : copy.private}</span>
     </label>
   )
 }
 
-function SaveCard({ onDelete, onOpen, onToggleVisibility, save, visibilityBusy = false }) {
+function SaveCard({ copy, language, onDelete, onOpen, onToggleVisibility, save, visibilityBusy = false }) {
   const score = Math.min(100, Math.max(0, Number(save.total_score ?? save.growth_point) || 0))
   const health = Math.min(100, Math.max(0, Number(save.final_health ?? save.health) || 0))
   const isShared = save.visibility === 'public'
+  const analysis = localizedField(save, 'analysis_result', language)
+  const direction = localizedField(save, 'direction', language)
 
   return (
-    <article className="group relative overflow-hidden rounded-2xl bg-[#172344] text-left shadow-[0_18px_36px_rgba(0,0,0,.24)] ring-1 ring-[#304066] transition hover:-translate-y-0.5 hover:ring-[#8fbf78]/60">
-      <button className="block w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" type="button" onClick={() => onOpen(save)}>
-        <PreviewScene score={score} imageUrl={save.snapshot_image_url} />
-        <div className="px-3 pb-14 pt-3">
+    <article className="group relative flex min-h-full flex-col overflow-hidden rounded-2xl bg-[#121c17] text-left shadow-[0_18px_36px_rgba(0,0,0,.22)] ring-1 ring-[#32493b] transition hover:-translate-y-0.5 hover:ring-[#78eda8]/55 focus-within:ring-[#78eda8]/65 motion-reduce:transform-none">
+      <button className="block flex-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#9cf3bd]" type="button" onClick={() => onOpen(save)}>
+        <PreviewScene copy={copy} score={score} imageUrl={save.snapshot_image_url} />
+        <div className="px-4 pb-20 pt-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-black text-slate-100">{saveTitle(save)}</h2>
-              <p className="mt-0.5 truncate text-xs text-slate-400">{saveSubtitle(save)}</p>
-              <p className="mt-1 text-[11px] text-slate-500">{formatDate(save.created_at || save.updated_at || save.started_at)}</p>
-            </div>
-            <div className="shrink-0 pt-7 text-right text-[11px] font-bold text-rose-400">
-              <span>Sc.{score.toFixed(0)}</span>
-              <span className="mx-1 text-slate-500">|</span>
-              <span>Hp.{health.toFixed(0)}</span>
+              <h2 className="truncate text-base font-black text-slate-50">{saveTitle(save, language, copy)}</h2>
+              <p className="mt-1 truncate text-xs text-[#8eeab4]">{saveSubtitle(save, language, copy)}</p>
+              <p className="mt-1.5 text-[11px] text-slate-500">{formatDate(save.created_at || save.updated_at || save.started_at, language, copy)}</p>
             </div>
           </div>
-          <p className="mt-3 line-clamp-2 min-h-[32px] text-xs leading-4 text-slate-300">{save.analysis_result || 'No analysis recorded yet.'}</p>
-          <p className="mt-1 truncate text-[11px] font-semibold text-[#bdeaa5]">{save.direction || 'Continue observing the next cycle.'}</p>
+          <div className="mt-4 flex gap-2">
+            <span className="rounded-lg bg-[#08100c]/70 px-2.5 py-1.5 text-xs text-slate-400"><strong className="text-[#9cf3bd]">{score.toFixed(0)}</strong> {copy.scoreShort}</span>
+            <span className="rounded-lg bg-[#08100c]/70 px-2.5 py-1.5 text-xs text-slate-400"><strong className="text-[#9cf3bd]">{health.toFixed(0)}%</strong> {copy.healthShort}</span>
+          </div>
+          <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-300">{analysis || copy.noAnalysis}</p>
+          <p className="mt-2 line-clamp-1 text-xs font-semibold text-[#8eeab4]">{direction || copy.noDirection}</p>
         </div>
       </button>
       <button
-        className="absolute right-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-md border border-red-200/30 bg-[#1b1114]/90 text-red-100 transition hover:border-red-200/55 hover:bg-red-500/24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-200"
+        className="absolute right-3 top-3 z-20 grid h-11 w-11 place-items-center rounded-xl border border-red-200/25 bg-[#190e10]/90 text-red-100 shadow-md transition hover:border-red-200/55 hover:bg-red-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-200"
         type="button"
-        onClick={(event) => {
-          event.stopPropagation()
-          onDelete(save)
-        }}
-        aria-label="Delete save history"
+        onClick={(event) => { event.stopPropagation(); onDelete(save) }}
+        aria-label={copy.deleteLabel}
       >
-        <AppIcon className="h-4 w-4" name="trash" />
+        <AppIcon className="h-5 w-5" name="trash" />
       </button>
       <div className="absolute bottom-3 right-3 z-20">
-        <ShareToggle checked={isShared} disabled={visibilityBusy} onChange={(nextChecked) => onToggleVisibility(save, nextChecked ? 'public' : 'private')} />
+        <ShareToggle checked={isShared} copy={copy} disabled={visibilityBusy} onChange={(nextChecked) => onToggleVisibility(save, nextChecked ? 'public' : 'private')} />
       </div>
     </article>
   )
 }
 
-function DeleteConfirmModal({ onCancel, onConfirm, save, status }) {
+function DeleteConfirmModal({ copy, error, language, onCancel, onConfirm, save, status }) {
   if (!save) return null
 
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/55 px-4 backdrop-blur-sm" onMouseDown={onCancel}>
-      <div className="animate-[saveModalIn_.2s_ease-out] w-full max-w-[380px] rounded-xl border border-red-200/20 bg-[#151110] p-5 text-center text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.55)]" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-red-500/18 text-red-100">
-          <AppIcon className="h-5 w-5" name="trash" />
-        </div>
-        <h2 className="mt-3 text-lg font-black text-red-50">Delete this save?</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-300">{saveTitle(save)} will be removed from your history.</p>
-        <div className="mt-5 flex justify-center gap-2">
-          <button className="h-9 rounded-md border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08]" type="button" onClick={onCancel} disabled={status === 'deleting'}>Cancel</button>
-          <button className="h-9 rounded-md bg-red-500 px-4 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onConfirm} disabled={status === 'deleting'}>{status === 'deleting' ? 'Deleting...' : 'Delete'}</button>
+    <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-black/65 px-4 py-8 backdrop-blur-sm" onMouseDown={onCancel} role="presentation">
+      <div className="w-full max-w-[400px] rounded-2xl border border-red-200/20 bg-[#15110f] p-5 text-center text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.55)]" onMouseDown={(event) => event.stopPropagation()} role="alertdialog" aria-modal="true" aria-labelledby="delete-history-title">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-red-500/18 text-red-100"><AppIcon className="h-6 w-6" name="trash" /></div>
+        <h2 className="mt-4 text-lg font-black text-red-50" id="delete-history-title">{copy.deleteTitle}</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">{copy.deleteDescription(saveTitle(save, language, copy))}</p>
+        {error ? <p className="mt-3 rounded-xl border border-red-300/20 bg-red-500/10 px-3 py-2 text-sm text-red-100" role="alert">{error}</p> : null}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+          <button className="min-h-11 rounded-xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08]" type="button" onClick={onCancel} disabled={status === 'deleting'}>{copy.cancel}</button>
+          <button className="min-h-11 rounded-xl bg-red-500 px-5 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onConfirm} disabled={status === 'deleting'}>{status === 'deleting' ? copy.deleting : copy.delete}</button>
         </div>
       </div>
     </div>
   )
 }
 
-function HistoryDetailModal({ onClose, onDelete, onOpenGameState, save }) {
+function HistoryDetailModal({ copy, language, onClose, onDelete, onOpenGameState, save }) {
   if (!save) return null
 
   const score = Number(save.total_score ?? 0)
   const health = Number(save.final_health ?? save.health ?? 0)
+  const analysis = localizedField(save, 'analysis_result', language)
+  const direction = localizedField(save, 'direction', language)
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 px-4 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="animate-[saveModalIn_.22s_ease-out] w-full max-w-[720px] overflow-hidden rounded-2xl border border-lime-100/15 bg-[#111823] text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.55)]" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="relative h-[300px] bg-[#080b09]">
-          {save.snapshot_image_url ? (
-            <img className="h-full w-full object-cover" src={resolveAssetUrl(save.snapshot_image_url)} alt="Saved plant snapshot" />
-          ) : (
-            <PreviewScene score={score} stage={saveStage(save)} />
-          )}
-          <button className="absolute right-14 top-4 grid h-8 w-8 place-items-center rounded-md border border-red-200/20 bg-black/45 text-red-100 hover:bg-red-500/20" type="button" onClick={() => onDelete(save)} aria-label="Delete save history">
-            <AppIcon className="h-4 w-4" name="trash" />
-          </button>
-          <button className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-white/10 bg-black/45 text-slate-100 hover:bg-black/65" type="button" onClick={onClose} aria-label="Close history details">
-            <AppIcon className="h-4 w-4" name="close" />
-          </button>
+    <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/65 px-3 py-5 backdrop-blur-sm sm:px-5" onMouseDown={onClose} role="presentation">
+      <div className="max-h-[calc(100dvh-2.5rem)] w-full max-w-[760px] overflow-y-auto rounded-2xl border border-[#78eda8]/20 bg-[#101813] text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.6)]" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="history-detail-title">
+        <div className="relative h-48 bg-[#080b09] sm:h-64 md:h-[300px]">
+          {save.snapshot_image_url ? <img className="h-full w-full object-cover" src={resolveAssetUrl(save.snapshot_image_url)} alt={copy.savedPlant} /> : <PreviewScene copy={copy} score={score} />}
+          <div className="absolute right-3 top-3 flex gap-2 sm:right-4 sm:top-4">
+            <button className="grid h-11 w-11 place-items-center rounded-xl border border-red-200/25 bg-black/60 text-red-100 hover:bg-red-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-100" type="button" onClick={() => onDelete(save)} aria-label={copy.deleteLabel}><AppIcon className="h-5 w-5" name="trash" /></button>
+            <button className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-black/60 text-2xl leading-none text-slate-100 hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" type="button" onClick={onClose} aria-label={copy.closeLabel}><span aria-hidden="true">×</span></button>
+          </div>
         </div>
-        <div className="grid gap-5 p-5 md:grid-cols-[1fr_220px]">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[#9bcf82]">Saved plant</p>
-            <h2 className="mt-1 text-2xl font-black text-white">{saveTitle(save)}</h2>
-            <p className="mt-1 text-sm text-slate-400">{saveSubtitle(save)} - {formatDate(save.created_at)}</p>
-            <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.035] p-4">
-              <strong className="text-sm text-lime-50">Analysis</strong>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{save.analysis_result || 'No analysis recorded yet.'}</p>
-            </div>
-            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.035] p-4">
-              <strong className="text-sm text-lime-50">Direction</strong>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{save.direction || 'Continue observing the next cycle.'}</p>
-            </div>
+        <div className="grid gap-5 p-4 sm:p-6 md:grid-cols-[1fr_220px]">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#75dca0]">{copy.savedPlant}</p>
+            <h2 className="mt-1 break-words text-2xl font-black text-white" id="history-detail-title">{saveTitle(save, language, copy)}</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">{saveSubtitle(save, language, copy)} · {formatDate(save.created_at, language, copy)}</p>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><strong className="text-sm text-lime-50">{copy.analysis}</strong><p className="mt-2 text-sm leading-6 text-slate-300">{analysis || copy.noAnalysis}</p></div>
+            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><strong className="text-sm text-lime-50">{copy.direction}</strong><p className="mt-2 text-sm leading-6 text-slate-300">{direction || copy.noDirection}</p></div>
           </div>
           <div className="grid content-start gap-3">
-            {save.game_state?.simulator ? (
-              <button
-                className="group inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-lime-100/20 bg-[#9bcf82] px-4 text-sm font-semibold text-[#101511] shadow-[0_8px_18px_rgba(0,0,0,.22)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#addf96] hover:shadow-[0_10px_22px_rgba(0,0,0,.3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50"
-                type="button"
-                onClick={() => onOpenGameState(save)}
-              >
-                <AppIcon className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" name="eye" />
-                View game
-              </button>
+            {save.game_state?.simulator && onOpenGameState ? (
+              <button className="group inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#55dc91] px-4 text-sm font-semibold text-[#07120d] shadow-[0_8px_18px_rgba(0,0,0,.22)] transition hover:bg-[#78eda8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9cf3bd]" type="button" onClick={() => onOpenGameState(save)}><AppIcon className="h-4 w-4" name="eye" />{copy.viewGame}</button>
             ) : null}
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">Score</span><strong className="mt-1 block text-2xl text-lime-100">{score}</strong></div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">Health</span><strong className="mt-1 block text-2xl text-lime-100">{health}%</strong></div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">Duration</span><strong className="mt-1 block text-2xl text-lime-100">{save.duration_days ?? 1}d</strong></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.score}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{score}</strong></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.health}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{health}%</strong></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.duration}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{copy.day(save.duration_days ?? 1)}</strong></div>
           </div>
         </div>
       </div>
@@ -213,70 +304,134 @@ function HistoryDetailModal({ onClose, onDelete, onOpenGameState, save }) {
   )
 }
 
-export function HistoryPage({ onOpenGameState }) {
+function HistoryState({ actionLabel, description, icon, onAction, title }) {
+  return (
+    <div className="grid min-h-[340px] place-items-center rounded-2xl border border-dashed border-[#385242] bg-[#101914]/70 px-6 py-12 text-center">
+      <div className="max-w-md">
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#55dc91]/10 text-[#78eda8] ring-1 ring-[#55dc91]/20"><AppIcon className="h-7 w-7" name={icon} /></span>
+        <h2 className="mt-5 text-lg font-black text-slate-50">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
+        {onAction ? <button className="mt-5 min-h-11 rounded-xl border border-[#55dc91]/30 bg-[#55dc91]/10 px-5 text-sm font-bold text-[#9cf3bd] transition hover:bg-[#55dc91]/18 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9cf3bd]" type="button" onClick={onAction}>{actionLabel}</button> : null}
+      </div>
+    </div>
+  )
+}
+
+function HistorySkeleton({ copy }) {
+  return (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label={copy.loadingLabel} aria-busy="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div className="animate-pulse overflow-hidden rounded-2xl bg-[#121c17] ring-1 ring-[#32493b]/70 motion-reduce:animate-none" key={index}>
+          <div className="h-36 bg-white/[0.06]" />
+          <div className="p-4"><div className="h-4 w-2/3 rounded bg-white/[0.08]" /><div className="mt-3 h-3 w-1/2 rounded bg-white/[0.05]" /><div className="mt-5 h-10 rounded bg-white/[0.05]" /><div className="mt-4 h-11 rounded-xl bg-white/[0.06]" /></div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function pageWindow(currentPage, pageCount) {
+  if (pageCount <= 5) return Array.from({ length: pageCount }, (_, index) => index + 1)
+  const start = Math.max(2, Math.min(currentPage - 1, pageCount - 3))
+  const pages = [1]
+  if (start > 2) pages.push('start-gap')
+  pages.push(start, start + 1, start + 2)
+  if (start + 2 < pageCount - 1) pages.push('end-gap')
+  pages.push(pageCount)
+  return pages
+}
+
+function HistoryPagination({ copy, currentPage, onPageChange, pageCount }) {
+  if (pageCount <= 1) return null
+  return (
+    <nav className="mt-8 flex flex-wrap justify-center gap-2" aria-label={copy.pageLabel}>
+      <button className="grid h-11 w-11 place-items-center rounded-xl bg-[#111a16] text-slate-300 ring-1 ring-[#34483c] transition hover:bg-white/[0.06] disabled:opacity-35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#55dc91]" type="button" disabled={currentPage <= 1} aria-label={copy.previousPage} onClick={() => onPageChange(Math.max(1, currentPage - 1))}><AppIcon className="h-4 w-4" name="arrowBack" /></button>
+      {pageWindow(currentPage, pageCount).map((item, index) => typeof item === 'string'
+        ? <span className="grid h-11 min-w-11 place-items-center text-slate-500" key={`${item}-${index}`}>…</span>
+        : <button className={`grid h-11 min-w-11 place-items-center rounded-xl px-2 text-sm font-bold ring-1 ring-[#34483c] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#55dc91] ${item === currentPage ? 'bg-[#55dc91] text-[#07120d]' : 'bg-[#111a16] text-slate-300 hover:bg-white/[0.06]'}`} key={item} type="button" aria-current={item === currentPage ? 'page' : undefined} aria-label={copy.pageNumber(item)} onClick={() => onPageChange(item)}>{item}</button>)}
+      <button className="grid h-11 w-11 place-items-center rounded-xl bg-[#111a16] text-slate-300 ring-1 ring-[#34483c] transition hover:bg-white/[0.06] disabled:opacity-35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#55dc91]" type="button" disabled={currentPage >= pageCount} aria-label={copy.nextPage} onClick={() => onPageChange(Math.min(pageCount, currentPage + 1))}><AppIcon className="h-4 w-4" name="arrowForward" /></button>
+    </nav>
+  )
+}
+
+export function HistoryPage({ onOpenGameState, onStartGrowing }) {
+  const language = getAppLanguage()
+  const copy = historyMessages[language === 'th' ? 'th' : 'en']
   const [saves, setSaves] = useState([])
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
-  const [status, setStatus] = useState('idle')
-  const [errorMessage, setErrorMessage] = useState('')
+  const [status, setStatus] = useState(() => (getToken() ? 'loading' : 'unauthenticated'))
   const [selectedSave, setSelectedSave] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteStatus, setDeleteStatus] = useState('idle')
+  const [deleteError, setDeleteError] = useState('')
   const [visibilityBusyId, setVisibilityBusyId] = useState(null)
+  const [feedback, setFeedback] = useState('')
   const pageSize = 6
 
-  useEffect(() => {
+  const loadSaves = useCallback(async () => {
     if (!getToken()) {
-      return undefined
+      setStatus('unauthenticated')
+      return
     }
 
+    setStatus('loading')
+    setFeedback('')
+    try {
+      const payload = await getPlantHistories()
+      setSaves(payload.data ?? [])
+      setStatus('ready')
+    } catch {
+      setSaves([])
+      setStatus('error')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!getToken()) return undefined
     let cancelled = false
 
-    async function loadSaves() {
-      setStatus('loading')
-      setErrorMessage('')
-      try {
-        const payload = await getPlantHistories()
+    getPlantHistories()
+      .then((payload) => {
         if (cancelled) return
         setSaves(payload.data ?? [])
-      } catch {
-        if (!cancelled) {
-          setSaves([])
-          setErrorMessage('Could not load your save history.')
-        }
-      } finally {
-        if (!cancelled) setStatus('idle')
-      }
-    }
+        setStatus('ready')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSaves([])
+        setStatus('error')
+      })
 
-    loadSaves()
-
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase()
     if (!term) return saves
-    return saves.filter((save) => `${saveTitle(save)} ${saveSubtitle(save)} ${save.analysis_result ?? ''} ${save.direction ?? ''}`.toLowerCase().includes(term))
-  }, [query, saves])
+    return saves.filter((save) => `${saveTitle(save, language, copy)} ${saveSubtitle(save, language, copy)} ${localizedField(save, 'analysis_result', language)} ${localizedField(save, 'direction', language)}`.toLowerCase().includes(term))
+  }, [copy, language, query, saves])
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
-  const currentPage = Math.min(page, pageCount)
+  const pageCount = Math.ceil(filtered.length / pageSize)
+  const currentPage = Math.min(page, Math.max(1, pageCount))
   const visibleSaves = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  function requestDelete(save) {
+    setDeleteError('')
+    setDeleteTarget(save)
+  }
 
   async function confirmDelete() {
     if (!deleteTarget) return
-
     setDeleteStatus('deleting')
+    setDeleteError('')
     try {
-      if (getToken()) {
-        await deletePlantHistory(deleteTarget.id)
-      }
+      await deletePlantHistory(deleteTarget.id)
       setSaves((current) => current.filter((save) => save.id !== deleteTarget.id))
       setSelectedSave((current) => (current?.id === deleteTarget.id ? null : current))
       setDeleteTarget(null)
+    } catch {
+      setDeleteError(copy.deleteError)
     } finally {
       setDeleteStatus('idle')
     }
@@ -284,85 +439,61 @@ export function HistoryPage({ onOpenGameState }) {
 
   async function toggleVisibility(save, visibility) {
     const previousVisibility = save.visibility ?? 'private'
-
     setVisibilityBusyId(save.id)
+    setFeedback('')
     setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, visibility } : item)))
     setSelectedSave((current) => (current?.id === save.id ? { ...current, visibility } : current))
 
     try {
-      if (getToken()) {
-        const payload = await updatePlantHistoryVisibility(save.id, visibility)
-        const updated = payload.data ?? payload
-        setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, ...updated } : item)))
-        setSelectedSave((current) => (current?.id === save.id ? { ...current, ...updated } : current))
-      }
+      const payload = await updatePlantHistoryVisibility(save.id, visibility)
+      const updated = payload.data ?? payload
+      setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, ...updated } : item)))
+      setSelectedSave((current) => (current?.id === save.id ? { ...current, ...updated } : current))
     } catch {
       setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, visibility: previousVisibility } : item)))
       setSelectedSave((current) => (current?.id === save.id ? { ...current, visibility: previousVisibility } : current))
+      setFeedback(copy.visibilityError)
     } finally {
       setVisibilityBusyId(null)
     }
   }
 
   return (
-    <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#1b1a2b] px-8 py-7 text-slate-100">
-      <div className="mx-auto max-w-[1120px]">
-        <div className="mb-6 flex items-center justify-between gap-5">
-          <h1 className="text-3xl font-medium tracking-wide text-white">SAVE HISTORY</h1>
-          <label className="relative w-[240px] max-w-full">
-            <span className="sr-only">Search saved games</span>
-            <AppIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/60" name="search" />
-            <input
-              className="h-9 w-full rounded-sm border border-blue-400/10 bg-[#124273] px-4 pr-9 text-sm text-blue-50 outline-none placeholder:text-blue-100/55 focus:border-[#8fbf78]"
-              placeholder="Search saved games..."
-              type="search"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value)
-                setPage(1)
-              }}
-            />
+    <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7" aria-label={copy.pageLabel}>
+      <div className="mx-auto max-w-[1220px]">
+        <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start gap-3.5">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#55dc91]/12 text-[#78eda8] ring-1 ring-[#55dc91]/20"><AppIcon className="h-6 w-6" name="history" /></span>
+            <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#75dca0]">{copy.eyebrow}</p><h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">{copy.title}</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{copy.subtitle}</p></div>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">{copy.recordCount(saves.length)}</span>
+        </header>
+
+        <div className="mb-5 flex justify-end">
+          <label className="relative w-full sm:w-[340px]">
+            <span className="sr-only">{copy.searchLabel}</span>
+            <AppIcon className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" name="search" />
+            <input className="min-h-11 w-full rounded-xl border border-[#34483c] bg-[#111a16] px-4 pr-10 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-[#55dc91] focus:ring-2 focus:ring-[#55dc91]/10" placeholder={copy.searchPlaceholder} type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} />
           </label>
         </div>
 
-        {status === 'loading' ? (
-          <div className="grid min-h-[420px] place-items-center rounded-2xl border border-white/10 bg-white/[0.03] text-sm text-slate-300">Loading save history...</div>
-        ) : visibleSaves.length ? (
-          <div className="grid grid-cols-3 gap-x-6 gap-y-8 max-lg:grid-cols-2 max-sm:grid-cols-1">
-            {visibleSaves.map((save) => (
-              <SaveCard
-                key={save.id}
-                save={save}
-                visibilityBusy={visibilityBusyId === save.id}
-                onDelete={setDeleteTarget}
-                onOpen={setSelectedSave}
-                onToggleVisibility={toggleVisibility}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="grid min-h-[420px] place-items-center rounded-2xl border border-white/10 bg-white/[0.03] px-6 text-center text-sm text-slate-300">
-            {errorMessage || (getToken() ? 'No saved simulations found.' : 'Log in to view your saved plant history.')}
-          </div>
-        )}
+        {feedback ? <div className="mb-4 rounded-xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{feedback}</div> : null}
 
-        <div className="mt-10 flex justify-center gap-2">
-          {Array.from({ length: pageCount }, (_, index) => index + 1).map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`grid h-7 w-7 place-items-center rounded-sm text-sm font-bold transition ${
-                item === currentPage ? 'bg-rose-500 text-white' : 'bg-[#124273] text-blue-100 hover:bg-[#1b5b98]'
-              }`}
-              onClick={() => setPage(item)}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
+        {status === 'loading' ? <HistorySkeleton copy={copy} /> : null}
+        {status === 'error' ? <HistoryState actionLabel={copy.retry} description={copy.errorDescription} icon="restartAlt" onAction={loadSaves} title={copy.errorTitle} /> : null}
+        {status === 'unauthenticated' ? <HistoryState description={copy.loginDescription} icon="lock" title={copy.loginTitle} /> : null}
+        {status === 'ready' && saves.length === 0 ? <HistoryState actionLabel={copy.refresh} description={copy.emptyDescription} icon="sprout" onAction={onStartGrowing ?? loadSaves} title={copy.emptyTitle} /> : null}
+        {status === 'ready' && saves.length > 0 && filtered.length === 0 ? <HistoryState actionLabel={copy.clearSearch} description={copy.noMatchDescription} icon="search" onAction={() => setQuery('')} title={copy.noMatchTitle} /> : null}
+        {status === 'ready' && visibleSaves.length > 0 ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleSaves.map((save) => <SaveCard copy={copy} key={save.id} language={language} save={save} visibilityBusy={visibilityBusyId === save.id} onDelete={requestDelete} onOpen={setSelectedSave} onToggleVisibility={toggleVisibility} />)}
+          </div>
+        ) : null}
+
+        {status === 'ready' && filtered.length > 0 ? <HistoryPagination copy={copy} currentPage={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
       </div>
-      <HistoryDetailModal save={selectedSave} onClose={() => setSelectedSave(null)} onDelete={setDeleteTarget} onOpenGameState={onOpenGameState} />
-      <DeleteConfirmModal save={deleteTarget} status={deleteStatus} onCancel={() => deleteStatus === 'idle' && setDeleteTarget(null)} onConfirm={confirmDelete} />
+      <HistoryDetailModal copy={copy} language={language} save={selectedSave} onClose={() => setSelectedSave(null)} onDelete={requestDelete} onOpenGameState={onOpenGameState} />
+      <DeleteConfirmModal copy={copy} error={deleteError} language={language} save={deleteTarget} status={deleteStatus} onCancel={() => { if (deleteStatus === 'idle') { setDeleteTarget(null); setDeleteError('') } }} onConfirm={confirmDelete} />
     </section>
   )
 }

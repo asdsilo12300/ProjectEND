@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import Swal from 'sweetalert2'
 import { AppIcon } from '../icons/IconifyIcon'
 import { defaultSettings, loadSettings, saveSettings } from './settingsPreferences'
 
 function Toggle({ checked, label, onChange }) {
   return (
     <button
-      className={`relative h-7 w-12 shrink-0 rounded-full border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 ${
+      className={`relative h-8 w-14 shrink-0 rounded-full border transition after:absolute after:-inset-y-2 after:inset-x-0 after:content-[''] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 ${
         checked ? 'border-[#9bcf82] bg-[#9bcf82]' : 'border-white/15 bg-[#202720]'
       }`}
       type="button"
@@ -14,7 +15,7 @@ function Toggle({ checked, label, onChange }) {
       aria-checked={checked}
       onClick={() => onChange(!checked)}
     >
-      <span className={`absolute top-1 h-[18px] w-[18px] rounded-full bg-white shadow transition ${checked ? 'left-[25px]' : 'left-1'}`} />
+      <span className={`absolute top-1 h-[22px] w-[22px] rounded-full bg-white shadow transition ${checked ? 'left-[29px]' : 'left-1'}`} />
     </button>
   )
 }
@@ -53,7 +54,7 @@ function ChoiceGroup({ label, options, value, onChange }) {
     <div className="inline-flex shrink-0 rounded-lg border border-white/10 bg-black/20 p-1" role="group" aria-label={label}>
       {options.map((option) => (
         <button
-          className={`rounded-md px-3 py-2 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${
+          className={`min-h-11 rounded-md px-3 py-2 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${
             value === option.value ? 'bg-[#9bcf82] text-[#101511]' : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
           }`}
           key={option.value}
@@ -68,16 +69,14 @@ function ChoiceGroup({ label, options, value, onChange }) {
   )
 }
 
-export function SettingsPage({ onBack, onResetPassword, user }) {
+export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user }) {
   const [settings, setSettings] = useState(loadSettings)
   const [savedPulse, setSavedPulse] = useState(false)
-  const initialized = useRef(false)
+  const changedByUser = useRef(false)
 
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true
-      return undefined
-    }
+    if (!changedByUser.current) return undefined
+    changedByUser.current = false
 
     saveSettings(settings)
     setSavedPulse(true)
@@ -86,11 +85,30 @@ export function SettingsPage({ onBack, onResetPassword, user }) {
   }, [settings])
 
   function updateSetting(key, value) {
+    changedByUser.current = true
     setSettings((current) => ({ ...current, [key]: value }))
   }
 
-  function resetSettings() {
-    setSettings({ ...defaultSettings })
+  async function resetSettings() {
+    const result = await Swal.fire({
+      title: 'Restore default settings?',
+      text: 'Text size, contrast, motion, and language will return to their original values.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Restore defaults',
+      cancelButtonText: 'Keep my settings',
+      background: '#111713',
+      color: '#ecfccb',
+      confirmButtonColor: '#4f7947',
+      cancelButtonColor: '#343d36',
+      reverseButtons: true,
+      focusCancel: true,
+    })
+
+    if (result.isConfirmed) {
+      changedByUser.current = true
+      setSettings({ ...defaultSettings })
+    }
   }
 
   return (
@@ -104,7 +122,7 @@ export function SettingsPage({ onBack, onResetPassword, user }) {
               onClick={onBack}
             >
               <AppIcon className="h-4 w-4" name="arrowBack" />
-              Back to lab
+              {backLabel}
             </button>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#9bcf82] text-[#101511] shadow-[0_8px_24px_rgba(155,207,130,.16)]">
@@ -119,7 +137,7 @@ export function SettingsPage({ onBack, onResetPassword, user }) {
           <div className="flex items-center gap-3">
             <span className={`inline-flex items-center gap-1.5 text-xs font-bold transition ${savedPulse ? 'text-[#bdeba7]' : 'text-slate-500'}`} aria-live="polite">
               <AppIcon className="h-4 w-4" name="check" />
-              {savedPulse ? 'Saved' : 'Changes save automatically'}
+              {savedPulse ? 'Saved just now' : 'Changes save automatically'}
             </span>
             <button
               className="rounded-md border border-lime-100/15 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
@@ -140,10 +158,10 @@ export function SettingsPage({ onBack, onResetPassword, user }) {
               <div className="min-w-0">
                 <div className="mb-1 flex items-center gap-2">
                   <strong className="truncate text-sm text-slate-100">{user?.username ?? 'Learner'}</strong>
-                  <span className="rounded-full bg-[#9bcf82]/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#bdeba7]">Account</span>
+                  <span className="rounded-full bg-[#9bcf82]/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-[#bdeba7]">Account</span>
                 </div>
                 <span className="block truncate text-xs text-slate-400">{user?.email ?? 'Sign in to manage your account'}</span>
-                <span className="mt-1 block text-[11px] text-slate-500">Verify your email with OTP before changing your password.</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-400">Verify your email with OTP before changing your password.</span>
               </div>
             </div>
             <button
@@ -153,7 +171,7 @@ export function SettingsPage({ onBack, onResetPassword, user }) {
               onClick={onResetPassword}
             >
               <AppIcon className="h-4 w-4" name="key" />
-              Reset password
+              Change password
             </button>
           </div>
         </section>

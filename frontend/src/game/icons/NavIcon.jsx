@@ -1,6 +1,8 @@
 ﻿import { AppIcon } from './IconifyIcon'
 
 const navIconMap = {
+  Home: 'home',
+  Learn: 'bookmark',
   'Plant Lab': 'plant',
   Shop: 'shop',
   History: 'history',

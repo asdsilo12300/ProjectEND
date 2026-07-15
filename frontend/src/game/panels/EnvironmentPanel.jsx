@@ -34,12 +34,12 @@ function ClimateValue({ climateKey, value }) {
   )
 }
 
-function ClimateControl({ climateKey, value, onChange, compact = false }) {
+function ClimateControl({ climateKey, value, onChange, compact = false, disabled = false }) {
   const icon = climateIcons[climateKey]
   const layout = compact ? 'grid-cols-[26px_34px_minmax(72px,1fr)_56px] sm:grid-cols-[28px_38px_minmax(78px,1fr)_60px]' : 'grid-cols-[28px_42px_minmax(88px,1fr)_64px]'
 
   return (
-    <label className={`grid ${layout} items-center gap-2 text-xs text-slate-300`}>
+    <label className={`grid ${layout} items-center gap-2 text-xs text-slate-300 ${disabled ? 'opacity-55' : ''}`}>
       <MetricIcon type={icon.icon} color={icon.color} imageUrl={icon.imageUrl} label={`${climateLabels[climateKey]} icon`} size="sm" />
       <span className="truncate">{climateLabels[climateKey]}</span>
       <input
@@ -49,6 +49,7 @@ function ClimateControl({ climateKey, value, onChange, compact = false }) {
         min="0"
         max="100"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(climateKey, Number(event.target.value))}
       />
       <ClimateValue climateKey={climateKey} value={value} />
@@ -119,7 +120,7 @@ function buildWeatherCards(readings) {
   ]
 }
 
-export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mode = 'greenhouse', outdoorWeather }) {
+export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mode = 'greenhouse', outdoorWeather, plantSelected = true }) {
   const isOutdoor = mode === 'outdoor'
   const controlKeys = isOutdoor ? outdoorControlKeys : Object.keys(climate)
   const outdoorReadings = getOutdoorReadings(outdoorWeather?.forecast)
@@ -139,9 +140,14 @@ export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mod
       className={isOutdoor ? 'w-[390px] max-w-[calc(100vw-32px)]' : 'w-[540px] max-w-[calc(100vw-32px)]'}
     >
       <div className={isOutdoor ? 'max-h-[186px] overflow-y-auto pr-1 sm:max-h-[330px]' : ''}>
-        <div className={`grid gap-x-3 gap-y-3 ${isOutdoor ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        <div className={`mb-3 rounded-md border px-3 py-2 text-[11px] leading-4 ${plantSelected ? 'border-lime-100/10 bg-[#9bcf82]/[0.07] text-slate-300' : 'border-amber-200/15 bg-amber-300/[0.07] text-amber-100'}`}>
+          {plantSelected
+            ? 'Changes are saved automatically and applied at the next simulation update.'
+            : 'Select a plant first. Environment controls unlock when the simulation starts.'}
+        </div>
+        <div className={`grid gap-x-3 gap-y-3 ${isOutdoor ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {controlKeys.map((key) => (
-            <ClimateControl key={key} climateKey={key} value={climate[key]} onChange={updateClimate} compact={isOutdoor} />
+            <ClimateControl key={key} climateKey={key} value={climate[key]} onChange={updateClimate} compact={isOutdoor} disabled={!plantSelected} />
           ))}
         </div>
 
