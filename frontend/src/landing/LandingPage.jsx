@@ -180,8 +180,7 @@ function ProductTour() {
               </div>
             </div>
             <button className="product-tour-player__control" type="button" onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause game preview' : 'Play game preview'}>
-              <span className={playing ? 'is-pause' : 'is-play'} />
-              {playing ? 'Pause' : 'Play'}
+              <span className={playing ? 'is-pause' : 'is-play'} aria-hidden="true" />
             </button>
           </div>
 
@@ -395,34 +394,122 @@ function localizedContent(content, field, language) {
   return content?.[field] ?? ''
 }
 
+const articleAllowedStyles = new Set([
+  'background-color', 'border', 'border-color', 'border-style', 'border-width',
+  'color', 'float', 'font-family', 'font-size', 'height', 'list-style-type',
+  'margin', 'margin-left', 'margin-right', 'max-width', 'min-width',
+  'text-align', 'width',
+])
+
+function articleMediaEmbedUrl(value) {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase().replace(/^www\./, '')
+    let mediaId = ''
+
+    if (host === 'youtu.be') mediaId = url.pathname.split('/').filter(Boolean)[0] ?? ''
+    if (host === 'youtube.com') {
+      mediaId = url.searchParams.get('v') ?? ''
+      if (!mediaId && /^\/(embed|shorts)\//.test(url.pathname)) mediaId = url.pathname.split('/')[2] ?? ''
+    }
+    if (/^[\w-]{6,20}$/.test(mediaId)) return `https://www.youtube-nocookie.com/embed/${mediaId}`
+
+    if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+      mediaId = url.pathname.split('/').filter(Boolean).find((part) => /^\d+$/.test(part)) ?? ''
+      if (mediaId) return `https://player.vimeo.com/video/${mediaId}`
+    }
+  } catch {
+    // Unsupported or malformed media URLs are removed by the sanitizer.
+  }
+  return ''
+}
+
+function isSafeWebUrl(value) {
+  try {
+    const url = new URL(value, window.location.origin)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function isTrustedMediaEmbedSrc(value) {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:') return false
+    if (url.hostname === 'www.youtube-nocookie.com') return /^\/embed\/[\w-]{6,20}$/.test(url.pathname)
+    if (url.hostname === 'player.vimeo.com') return /^\/video\/\d+$/.test(url.pathname)
+  } catch {
+    // Invalid embed URLs are rejected.
+  }
+  return false
+}
+
 function sanitizeArticleHtml(html) {
   const documentFragment = new DOMParser().parseFromString(String(html ?? ''), 'text/html')
-  const allowedTags = new Set(['P', 'H2', 'H3', 'UL', 'OL', 'LI', 'STRONG', 'EM', 'DIV', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'A', 'BLOCKQUOTE', 'BR', 'SPAN'])
-  const allowedAttributes = new Set(['class', 'colspan', 'rowspan'])
+  const allowedTags = new Set([
+    'A', 'BLOCKQUOTE', 'BR', 'CODE', 'DIV', 'EM', 'FIGCAPTION', 'FIGURE',
+    'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HR', 'IFRAME', 'IMG', 'LI', 'OL',
+    'P', 'PRE', 'S', 'SECTION', 'SPAN', 'STRONG', 'SUB', 'SUP', 'TABLE',
+    'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR', 'U', 'UL',
+  ])
+  const removeWithContents = new Set(['EMBED', 'FORM', 'INPUT', 'LINK', 'META', 'NOSCRIPT', 'OBJECT', 'SCRIPT', 'STYLE', 'TEMPLATE'])
+  const allowedGlobalAttributes = new Set(['class', 'id', 'style', 'title'])
+
+  documentFragment.body.querySelectorAll('oembed').forEach((element) => {
+    const src = articleMediaEmbedUrl(element.getAttribute('url') ?? '')
+    if (!src) {
+      element.remove()
+      return
+    }
+    const iframe = documentFragment.createElement('iframe')
+    iframe.setAttribute('src', src)
+    iframe.setAttribute('title', 'Embedded educational video')
+    element.replaceWith(iframe)
+  })
 
   documentFragment.body.querySelectorAll('*').forEach((element) => {
     if (!allowedTags.has(element.tagName)) {
-      element.replaceWith(...element.childNodes)
+      if (removeWithContents.has(element.tagName)) element.remove()
+      else element.replaceWith(...element.childNodes)
       return
     }
 
     Array.from(element.attributes).forEach((attribute) => {
       const name = attribute.name.toLowerCase()
-      if (allowedAttributes.has(name)) return
-      if (element.tagName === 'A' && name === 'href') {
-        try {
-          const url = new URL(attribute.value, window.location.origin)
-          if (url.protocol === 'http:' || url.protocol === 'https:') return
-        } catch {
-          // Invalid links are removed below.
-        }
-      }
+      if (allowedGlobalAttributes.has(name)) return
+      if (element.tagName === 'A' && name === 'href' && isSafeWebUrl(attribute.value)) return
+      if (element.tagName === 'IMG' && ['src', 'alt', 'width', 'height', 'loading'].includes(name) && (name !== 'src' || isSafeWebUrl(attribute.value))) return
+      if (element.tagName === 'IFRAME' && name === 'src' && isTrustedMediaEmbedSrc(attribute.value)) return
+      if (['TD', 'TH'].includes(element.tagName) && ['colspan', 'rowspan'].includes(name)) return
+      if (element.tagName === 'OL' && ['start', 'reversed'].includes(name)) return
+      if (element.tagName === 'LI' && name === 'value') return
       element.removeAttribute(attribute.name)
     })
+
+    if (element.hasAttribute('style')) {
+      const safeDeclarations = []
+      Array.from(element.style).forEach((property) => {
+        const value = element.style.getPropertyValue(property).trim()
+        if (articleAllowedStyles.has(property) && !/(url\s*\(|expression|javascript:)/i.test(value)) {
+          safeDeclarations.push(`${property}:${value}`)
+        }
+      })
+      if (safeDeclarations.length) element.setAttribute('style', safeDeclarations.join(';'))
+      else element.removeAttribute('style')
+    }
 
     if (element.tagName === 'A' && element.hasAttribute('href')) {
       element.setAttribute('target', '_blank')
       element.setAttribute('rel', 'noreferrer noopener')
+    }
+    if (element.tagName === 'IMG' && element.hasAttribute('src')) element.setAttribute('loading', 'lazy')
+    if (element.tagName === 'IFRAME' && element.hasAttribute('src')) {
+      element.setAttribute('loading', 'lazy')
+      element.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share')
+      element.setAttribute('allowfullscreen', '')
+      element.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')
+      element.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation')
     }
   })
 

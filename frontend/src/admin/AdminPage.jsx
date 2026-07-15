@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
@@ -15,8 +15,11 @@ import {
   saveAdminResource,
   saveAdminContent,
   updateAdminUser,
+  uploadAdminContentImage,
 } from '../lib/api'
 import './AdminPage.css'
+
+const ContentRichEditor = lazy(() => import('./ContentRichEditor').then((module) => ({ default: module.ContentRichEditor })))
 
 const adminPreferenceKey = 'plant-growth-admin-preferences'
 
@@ -200,9 +203,36 @@ const resourceGroups = {
 
 const emptyContent = {
   slug: '', category: 'plant-science', icon: 'eco', eyebrow: '', eyebrow_th: '',
-  title: '', title_th: '', summary: '', summary_th: '', body_html: '<h2>Section heading</h2>\n<p>Write the lesson content here.</p>',
-  body_html_th: '<h2>หัวข้อเนื้อหา</h2>\n<p>เขียนเนื้อหาบทเรียนที่นี่</p>', cover_image_url: '', cover_image_alt: '', cover_image_alt_th: '',
-  image_credit: '', image_credit_url: '', reading_minutes: 5, sort_order: 0, status: 'draft', published_at: null, references: [],
+  title: '', title_th: '', summary: '', summary_th: '', body_html: '', body_html_th: '',
+  cover_image_url: '', cover_image_alt: '', cover_image_alt_th: '', image_credit: '', image_credit_url: '',
+  reading_minutes: '', sort_order: 0, status: 'draft', published_at: null, references: [],
+}
+
+function articleExcerpt(html, fallback = '') {
+  const parsed = new DOMParser().parseFromString(String(html ?? ''), 'text/html')
+  const text = (parsed.body.textContent || fallback).replace(/\s+/g, ' ').trim()
+  return text.length > 320 ? `${text.slice(0, 317).trimEnd()}…` : text
+}
+
+function prepareContentPayload(form) {
+  const title = String(form.title ?? '').trim() || String(form.title_th ?? '').trim()
+  const titleTh = String(form.title_th ?? '').trim() || title
+  const body = String(form.body_html ?? '').trim() || String(form.body_html_th ?? '').trim()
+  const bodyTh = String(form.body_html_th ?? '').trim() || body
+
+  return {
+    ...form,
+    title,
+    title_th: titleTh,
+    body_html: body,
+    body_html_th: bodyTh,
+    summary: String(form.summary ?? '').trim() || articleExcerpt(body, title),
+    summary_th: String(form.summary_th ?? '').trim() || articleExcerpt(bodyTh, titleTh),
+    slug: String(form.slug ?? '').trim(),
+    reading_minutes: form.reading_minutes === '' ? null : Number(form.reading_minutes),
+    sort_order: Number(form.sort_order || 0),
+    published_at: form.published_at || null,
+  }
 }
 
 function formatDate(value, includeTime = false) {
@@ -228,11 +258,29 @@ function MetricCard({ icon, label, value, detail, tone = 'green' }) {
   )
 }
 
-function TrendChart({ trend = [] }) {
-  const maximum = Math.max(1, ...trend.flatMap((day) => [day.users, day.simulations]))
+const trendSeriesConfig = [
+  { key: 'users', label: 'New users', color: '#5bd296' },
+  { key: 'simulations', label: 'Simulations', color: '#6c94ef' },
+  { key: 'posts', label: 'Posts', color: '#e8be67' },
+  { key: 'harvests', label: 'Harvests', color: '#ee8b72' },
+]
+
+const overviewColors = {
+  accounts: '#67d29a',
+  learning: '#e8be67',
+  game_data: '#6ca7ef',
+  activity: '#4cc7c9',
+  community: '#ac87eb',
+  audit: '#ee8b72',
+}
+
+function TrendChart({ trend = [], activeSeries }) {
+  const selectedSeries = trendSeriesConfig.filter((series) => activeSeries.includes(series.key))
+  const maximum = Math.max(1, ...trend.flatMap((day) => selectedSeries.map((series) => day[series.key] ?? 0)))
+  const seriesLabel = selectedSeries.map((series) => series.label).join(', ')
 
   return (
-    <div className="admin-trend" role="img" aria-label={`${trend.length} day user and simulation activity chart`}>
+    <div className="admin-trend" role="img" aria-label={`${trend.length} day activity chart showing ${seriesLabel}`}>
       <div className="admin-trend__axis"><span>{maximum}</span><span>{Math.ceil(maximum / 2)}</span><span>0</span></div>
       <div className="admin-trend__scroller">
         <div className="admin-trend__plot" style={{ gridTemplateColumns: `repeat(${Math.max(trend.length, 1)}, minmax(28px, 1fr))`, minWidth: trend.length > 14 ? `${trend.length * 32}px` : undefined }}>
@@ -240,8 +288,9 @@ function TrendChart({ trend = [] }) {
           {trend.map((day) => (
             <div className="admin-trend__day" key={day.date}>
               <div className="admin-trend__bars">
-                <span className="admin-trend__bar admin-trend__bar--users" style={{ height: `${Math.max(4, (day.users / maximum) * 100)}%` }} title={`${day.users} new users on ${day.date}`} />
-                <span className="admin-trend__bar admin-trend__bar--simulations" style={{ height: `${Math.max(4, (day.simulations / maximum) * 100)}%` }} title={`${day.simulations} simulations on ${day.date}`} />
+                {selectedSeries.map((series) => (
+                  <span className={`admin-trend__bar admin-trend__bar--${series.key}`} key={series.key} style={{ height: `${Math.max(4, ((day[series.key] ?? 0) / maximum) * 100)}%` }} title={`${day[series.key] ?? 0} ${series.label.toLowerCase()} on ${day.date}`} />
+                ))}
               </div>
               <small>{day.label}</small>
             </div>
@@ -255,15 +304,39 @@ function TrendChart({ trend = [] }) {
 function DashboardView({ data, days, onChangeDays, onOpenSection }) {
   const metrics = data?.metrics ?? {}
   const totalContent = (metrics.published_contents ?? 0) + (metrics.draft_contents ?? 0)
-  const publishedPercent = totalContent ? Math.round((metrics.published_contents / totalContent) * 100) : 0
+  const totalComments = (metrics.post_comments ?? 0) + (metrics.simulator_comments ?? 0)
+  const totalSpecies = (metrics.plants ?? 0) + (metrics.pests ?? 0)
+  const totalGameCatalog = (metrics.items ?? 0) + (metrics.shop_items ?? 0) + (metrics.quests ?? 0) + (metrics.achievements ?? 0) + (metrics.model_assets ?? 0)
+  const [activeSeries, setActiveSeries] = useState(['users', 'simulations'])
+  const overview = data?.system_overview ?? { total: 0, groups: [] }
+  let overviewAngle = 0
+  const overviewSegments = (overview.groups ?? []).map((group) => {
+    const start = overviewAngle
+    overviewAngle += overview.total ? (group.value / overview.total) * 360 : 0
+    return `${overviewColors[group.key] ?? '#87928b'} ${start}deg ${overviewAngle}deg`
+  })
+  const overviewBackground = overview.total && overviewSegments.length
+    ? `conic-gradient(${overviewSegments.join(',')})`
+    : 'conic-gradient(#29312c 0deg 360deg)'
+
+  function toggleSeries(seriesKey) {
+    setActiveSeries((current) => {
+      if (current.includes(seriesKey)) return current.length === 1 ? current : current.filter((key) => key !== seriesKey)
+      return [...current, seriesKey]
+    })
+  }
 
   return (
     <div className="admin-view admin-dashboard-view">
       <div className="admin-metric-grid">
         <MetricCard icon="groups" label="Total Users" value={metrics.users} detail={`${metrics.active_users ?? 0} active accounts`} />
-        <MetricCard icon="controller" label="Simulations" value={metrics.simulations} detail={`${metrics.harvests ?? 0} completed harvests`} tone="blue" />
-        <MetricCard icon="bookmark" label="Published lessons" value={metrics.published_contents} detail={`${metrics.draft_contents ?? 0} drafts waiting`} tone="gold" />
+        <MetricCard icon="controller" label="Simulations" value={metrics.simulations} detail={`${metrics.active_simulations ?? 0} currently active`} tone="blue" />
+        <MetricCard icon="history" label="Harvested plants" value={metrics.harvests} detail="Completed learning results" tone="cyan" />
+        <MetricCard icon="bookmark" label="Learning content" value={totalContent} detail={`${metrics.published_contents ?? 0} published · ${metrics.draft_contents ?? 0} draft`} tone="gold" />
         <MetricCard icon="chat" label="Community posts" value={metrics.community_posts} detail="Shared learning activity" tone="violet" />
+        <MetricCard icon="live" label="All comments" value={totalComments} detail={`${metrics.hidden_comments ?? 0} require moderation`} tone="coral" />
+        <MetricCard icon="plant" label="Plants & pests" value={totalSpecies} detail={`${metrics.plants ?? 0} plants · ${metrics.pests ?? 0} pests`} tone="green" />
+        <MetricCard icon="shop" label="Game catalog" value={totalGameCatalog} detail={`${metrics.items ?? 0} items · ${metrics.quests ?? 0} quests`} tone="blue" />
       </div>
 
       <div className="admin-dashboard-grid">
@@ -271,24 +344,30 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
           <header className="admin-panel__header">
             <div><small>ACTIVITY</small><h2>Academy growth</h2></div>
             <div className="admin-panel__tools">
-              <div className="admin-chart-legend"><span><i className="is-users" />New users</span><span><i className="is-simulations" />Simulations</span></div>
+              <div className="admin-series-picker" role="group" aria-label="Chart data">
+                {trendSeriesConfig.map((series) => <button className={activeSeries.includes(series.key) ? 'is-active' : ''} type="button" aria-pressed={activeSeries.includes(series.key)} key={series.key} onClick={() => toggleSeries(series.key)}><i style={{ background: series.color }} />{series.label}</button>)}
+              </div>
               <div className="admin-range-switch" role="group" aria-label="Activity period">
                 {[7, 14, 30].map((period) => <button className={days === period ? 'is-active' : ''} type="button" aria-pressed={days === period} key={period} onClick={() => onChangeDays(period)}>{period}D</button>)}
               </div>
             </div>
           </header>
-          <TrendChart trend={data?.trend} />
+          <TrendChart trend={data?.trend} activeSeries={activeSeries} />
         </section>
 
-        <section className="admin-panel admin-publish-panel">
-          <header className="admin-panel__header"><div><small>CONTENT HEALTH</small><h2>Publication</h2></div></header>
-          <div className="admin-publish-panel__body">
-            <div className="admin-publish-ring" style={{ '--publish-progress': `${publishedPercent * 3.6}deg` }}><span><strong>{publishedPercent}%</strong><small>published</small></span></div>
-            <dl>
-              <div><dt><i className="is-published" />Published</dt><dd>{metrics.published_contents ?? 0}</dd></div>
-              <div><dt><i className="is-draft" />Draft</dt><dd>{metrics.draft_contents ?? 0}</dd></div>
-            </dl>
-            <button type="button" onClick={() => onOpenSection('contents')}>Manage content<AppIcon name="arrowForward" /></button>
+        <section className="admin-panel admin-system-panel">
+          <header className="admin-panel__header"><div><small>SYSTEM OVERVIEW</small><h2>Data composition</h2></div></header>
+          <div className="admin-system-panel__body">
+            <div className="admin-system-ring" style={{ background: overviewBackground }}><span><strong>{Number(overview.total ?? 0).toLocaleString()}</strong><small>total records</small></span></div>
+            <div className="admin-system-breakdown">
+              {(overview.groups ?? []).map((group) => (
+                <button type="button" key={group.key} onClick={() => onOpenSection(group.section)}>
+                  <span><i style={{ background: overviewColors[group.key] }} />{group.label}</span>
+                  <strong>{Number(group.value ?? 0).toLocaleString()}</strong>
+                  <AppIcon name="arrowForward" />
+                </button>
+              ))}
+            </div>
           </div>
         </section>
       </div>
@@ -329,21 +408,68 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
 function ContentEditor({ content, onClose, onSaved }) {
   const [form, setForm] = useState(() => ({ ...emptyContent, ...content }))
   const [language, setLanguage] = useState('en')
-  const [referencesText, setReferencesText] = useState(() => JSON.stringify(content?.references ?? [], null, 2))
+  const [editorMode, setEditorMode] = useState('visual')
+  const [references, setReferences] = useState(() => (content?.references ?? []).map((reference) => ({
+    title: reference.title ?? '', organization: reference.organization ?? '', url: reference.url ?? '',
+  })))
+  const [coverUploadStatus, setCoverUploadStatus] = useState('idle')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const editorScrollRef = useRef(null)
+  const coverInputRef = useRef(null)
   useModalLifecycle(onClose)
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  function updateReference(index, field, value) {
+    setReferences((current) => current.map((reference, referenceIndex) => (
+      referenceIndex === index ? { ...reference, [field]: value } : reference
+    )))
+  }
+
+  async function uploadCover(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const previousScrollTop = editorScrollRef.current?.scrollTop ?? 0
+    const restoreScrollPosition = () => window.requestAnimationFrame(() => {
+      if (editorScrollRef.current) editorScrollRef.current.scrollTop = previousScrollTop
+    })
+    setError('')
+    setCoverUploadStatus('uploading')
+    try {
+      const payload = await uploadAdminContentImage(file)
+      update('cover_image_url', payload.url)
+      setCoverUploadStatus('idle')
+      restoreScrollPosition()
+    } catch (uploadError) {
+      setError(uploadError.message || 'Unable to upload the cover image.')
+      setCoverUploadStatus('idle')
+      restoreScrollPosition()
+    }
+  }
+
   async function submit(event) {
     event.preventDefault()
     setError('')
     try {
-      const references = referencesText.trim() ? JSON.parse(referencesText) : []
-      if (!Array.isArray(references)) throw new Error('References must be a JSON array.')
+      const currentTitle = String((language === 'th' ? form.title_th : form.title) ?? '').trim()
+      const currentBody = String((language === 'th' ? form.body_html_th : form.body_html) ?? '').trim()
+      if (!currentTitle) throw new Error(language === 'th' ? 'กรุณาใส่ชื่อบทความ' : 'Please enter the article title.')
+      if (!currentBody) throw new Error(language === 'th' ? 'กรุณาเขียนเนื้อหาบทความใน Editor' : 'Please write the article content in the editor.')
+      const preparedReferences = references
+        .map((reference) => ({
+          title: reference.title.trim(),
+          organization: reference.organization.trim(),
+          url: reference.url.trim(),
+        }))
+        .filter((reference) => reference.title || reference.organization || reference.url)
+      const incompleteReference = preparedReferences.find((reference) => !reference.title || !reference.url)
+      if (incompleteReference) throw new Error(language === 'th' ? 'รายการอ้างอิงต้องมีชื่อและ URL ให้ครบ' : 'Each reference needs both a title and URL.')
+      if (form.status === 'published' && !form.cover_image_url) throw new Error(language === 'th' ? 'กรุณาเพิ่มรูปปกก่อนเผยแพร่' : 'Please add a cover image before publishing.')
+      if (form.status === 'published' && preparedReferences.length === 0) throw new Error(language === 'th' ? 'กรุณาเพิ่มแหล่งอ้างอิงอย่างน้อย 1 รายการก่อนเผยแพร่' : 'Please add at least one reference before publishing.')
       if (form.id) {
         const confirmed = await confirmAdminAction({
           title: 'Save content changes?',
@@ -354,13 +480,7 @@ function ContentEditor({ content, onClose, onSaved }) {
         if (!confirmed) return
       }
       setStatus('saving')
-      const payload = await saveAdminContent({
-        ...form,
-        references,
-        reading_minutes: Number(form.reading_minutes),
-        sort_order: Number(form.sort_order),
-        published_at: form.published_at || null,
-      })
+      const payload = await saveAdminContent({ ...prepareContentPayload(form), references: preparedReferences })
       await onSaved(payload.data)
       await showAdminSuccess(form.id ? 'Content updated' : 'Content added', form.id ? 'Your changes were saved successfully.' : 'The new content was placed at the bottom of the list.')
     } catch (saveError) {
@@ -384,43 +504,97 @@ function ContentEditor({ content, onClose, onSaved }) {
           <label>Status<select value={form.status} onChange={(event) => update('status', event.target.value)}><option value="draft">Draft</option><option value="published">Published</option></select></label>
         </div>
 
-        <div className="admin-editor__body">
-          <div className="admin-editor__form">
-            <section>
-              <h3>Article identity</h3>
+        <div className={`admin-editor__body ${editorMode === 'visual' ? 'admin-editor__body--visual' : ''}`}>
+          <div className="admin-editor__form" ref={editorScrollRef}>
+            <section className="admin-writing-section">
+              <div className="admin-writing-section__intro">
+                <div><small>{language === 'th' ? 'เขียนบทความแบบง่าย' : 'QUICK ARTICLE EDITOR'}</small><h3>{language === 'th' ? 'ใส่ชื่อ แล้วเริ่มเขียนได้เลย' : 'Add a title, then start writing.'}</h3></div>
+                <p>{language === 'th' ? 'Slug, สรุปบทความ และเวลาอ่าน ระบบจะสร้างให้อัตโนมัติ' : 'Slug, summary, and reading time are generated automatically.'}</p>
+              </div>
+              <label className="admin-writing-title">{language === 'th' ? 'ชื่อบทความ' : 'Article title'}<input autoFocus placeholder={language === 'th' ? 'ชื่อบทความของคุณ' : 'Enter the article title'} value={language === 'th' ? form.title_th : form.title} onChange={(event) => update(language === 'th' ? 'title_th' : 'title', event.target.value)} /></label>
+              <div className="admin-content-mode">
+                <div><strong>{language === 'th' ? 'รูปแบบการเขียน' : 'Writing mode'}</strong><small>{language === 'th' ? 'สลับโหมดได้โดยเนื้อหาไม่หาย' : 'Switch modes without losing the content.'}</small></div>
+                <div className="admin-content-mode__switch" role="tablist" aria-label="Content editing mode">
+                  <button className={editorMode === 'visual' ? 'is-active' : ''} type="button" role="tab" aria-selected={editorMode === 'visual'} onClick={() => setEditorMode('visual')}><AppIcon name="edit" />{language === 'th' ? 'เขียนปกติ' : 'Visual editor'}</button>
+                  <button className={editorMode === 'html' ? 'is-active' : ''} type="button" role="tab" aria-selected={editorMode === 'html'} onClick={() => setEditorMode('html')}><AppIcon name="code" />HTML</button>
+                </div>
+              </div>
+              {editorMode === 'visual' ? (
+                <Suspense fallback={<div className="admin-rich-editor-loading"><span /><strong>Loading visual editor…</strong></div>}>
+                  <ContentRichEditor key={language} data={previewHtml} language={language} onChange={(html) => update(language === 'th' ? 'body_html_th' : 'body_html', html)} />
+                </Suspense>
+              ) : (
+                <label>{language === 'th' ? 'โครงสร้าง HTML' : 'HTML source'}<textarea className="admin-code-field admin-html-source-field" rows="20" spellCheck="false" value={previewHtml} onChange={(event) => update(language === 'th' ? 'body_html_th' : 'body_html', event.target.value)} /></label>
+              )}
+            </section>
+
+            <section className="admin-content-essentials">
+              <div className="admin-content-essentials__header">
+                <div><small>{language === 'th' ? 'ข้อมูลสำหรับเผยแพร่' : 'PUBLICATION DETAILS'}</small><h3>{language === 'th' ? 'รูปปกและแหล่งอ้างอิง' : 'Cover image and references'}</h3></div>
+                <span>{form.status === 'published' ? (language === 'th' ? 'จำเป็นสำหรับการเผยแพร่' : 'Required to publish') : (language === 'th' ? 'กรอกไว้ก่อนเผยแพร่' : 'Complete before publishing')}</span>
+              </div>
+
+              <label>{language === 'th' ? 'สรุปบทความ' : 'Article summary'}<textarea placeholder={language === 'th' ? 'เว้นว่างได้ ระบบจะสร้างจากเนื้อหาให้อัตโนมัติ' : 'Optional — generated automatically from the article when left blank'} rows="3" value={language === 'th' ? form.summary_th : form.summary} onChange={(event) => update(language === 'th' ? 'summary_th' : 'summary', event.target.value)} /></label>
+
+              <div className="admin-cover-editor">
+                <div className={`admin-cover-editor__preview ${form.cover_image_url ? 'has-image' : ''}`}>
+                  {form.cover_image_url ? <img src={form.cover_image_url} alt="" /> : <AppIcon name="camera" />}
+                </div>
+                <div className="admin-cover-editor__fields">
+                  <div className="admin-cover-editor__heading"><strong>{language === 'th' ? 'รูปปกบทความ' : 'Article cover'}</strong><small>{language === 'th' ? 'แนะนำภาพแนวนอน JPG, PNG หรือ WebP ไม่เกิน 8 MB' : 'Landscape JPG, PNG, or WebP up to 8 MB is recommended.'}</small></div>
+                  <label>Cover image URL<input placeholder="https://…" value={form.cover_image_url ?? ''} onChange={(event) => update('cover_image_url', event.target.value)} /></label>
+                  <div className="admin-cover-editor__actions">
+                    <input className="admin-cover-file-input" ref={coverInputRef} accept="image/jpeg,image/png,image/webp,image/gif" disabled={coverUploadStatus === 'uploading'} tabIndex="-1" type="file" onChange={uploadCover} />
+                    <button className="admin-cover-upload" disabled={coverUploadStatus === 'uploading'} type="button" onClick={() => coverInputRef.current?.click()}><AppIcon name="camera" />{coverUploadStatus === 'uploading' ? (language === 'th' ? 'กำลังอัปโหลด…' : 'Uploading…') : (language === 'th' ? 'อัปโหลดรูป' : 'Upload image')}</button>
+                    {form.cover_image_url && <button type="button" onClick={() => update('cover_image_url', '')}><AppIcon name="delete" />{language === 'th' ? 'นำรูปออก' : 'Remove'}</button>}
+                  </div>
+                </div>
+              </div>
+
               <div className="admin-form-grid">
-                <label className="is-wide">{language === 'th' ? 'ชื่อบทความ (ไทย)' : 'Article title (English)'}<input required value={language === 'th' ? form.title_th : form.title} onChange={(event) => update(language === 'th' ? 'title_th' : 'title', event.target.value)} /></label>
-                <label>Slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={form.slug} onChange={(event) => update('slug', event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} /></label>
-                <label>Category<input required value={form.category} onChange={(event) => update('category', event.target.value)} /></label>
-                <label>{language === 'th' ? 'ป้ายกำกับ (ไทย)' : 'Eyebrow (English)'}<input value={language === 'th' ? form.eyebrow_th : form.eyebrow} onChange={(event) => update(language === 'th' ? 'eyebrow_th' : 'eyebrow', event.target.value)} /></label>
-                <label>Reading minutes<input min="1" max="60" type="number" value={form.reading_minutes} onChange={(event) => update('reading_minutes', event.target.value)} /></label>
-                <label>Sort order<input min="0" max="999" type="number" value={form.sort_order} onChange={(event) => update('sort_order', event.target.value)} /></label>
+                <label>{language === 'th' ? 'คำอธิบายรูป' : 'Image description'} <small>{language === 'th' ? 'ไม่บังคับ' : 'OPTIONAL'}</small><input placeholder={language === 'th' ? 'อธิบายสิ่งที่อยู่ในภาพ' : 'Describe what is shown in the image'} value={language === 'th' ? form.cover_image_alt_th ?? '' : form.cover_image_alt ?? ''} onChange={(event) => update(language === 'th' ? 'cover_image_alt_th' : 'cover_image_alt', event.target.value)} /></label>
+                <label>{language === 'th' ? 'เครดิตรูปภาพ' : 'Image credit'} <small>{language === 'th' ? 'ไม่บังคับ' : 'OPTIONAL'}</small><input placeholder={language === 'th' ? 'ชื่อช่างภาพหรือองค์กร' : 'Photographer or organization'} value={form.image_credit ?? ''} onChange={(event) => update('image_credit', event.target.value)} /></label>
+                <label className="is-wide">Image credit URL <small>{language === 'th' ? 'ไม่บังคับ' : 'OPTIONAL'}</small><input placeholder="https://…" value={form.image_credit_url ?? ''} onChange={(event) => update('image_credit_url', event.target.value)} /></label>
+              </div>
+
+              <div className="admin-reference-editor">
+                <div className="admin-reference-editor__header"><div><strong>{language === 'th' ? 'แหล่งอ้างอิง' : 'References'}</strong><small>{language === 'th' ? 'อย่างน้อย 1 รายการเมื่อเผยแพร่บทความ' : 'At least one source is required when publishing.'}</small></div><button type="button" onClick={() => setReferences((current) => [...current, { title: '', organization: '', url: '' }])}><AppIcon name="add" />{language === 'th' ? 'เพิ่มอ้างอิง' : 'Add reference'}</button></div>
+                {references.length === 0 ? (
+                  <button className="admin-reference-editor__empty" type="button" onClick={() => setReferences([{ title: '', organization: '', url: '' }])}><AppIcon name="bookmark" /><span><strong>{language === 'th' ? 'ยังไม่มีแหล่งอ้างอิง' : 'No references yet'}</strong><small>{language === 'th' ? 'กดเพื่อเพิ่มแหล่งข้อมูลที่น่าเชื่อถือ' : 'Add the first trusted source for this article.'}</small></span></button>
+                ) : references.map((reference, index) => (
+                  <div className="admin-reference-row" key={index}>
+                    <span>{index + 1}</span>
+                    <label>{language === 'th' ? 'ชื่อแหล่งข้อมูล' : 'Source title'}<input placeholder={language === 'th' ? 'ชื่อบทความหรือเอกสาร' : 'Article or document title'} value={reference.title} onChange={(event) => updateReference(index, 'title', event.target.value)} /></label>
+                    <label>{language === 'th' ? 'องค์กร' : 'Organization'}<input placeholder="FAO, NASA, University…" value={reference.organization} onChange={(event) => updateReference(index, 'organization', event.target.value)} /></label>
+                    <label>URL<input placeholder="https://…" type="url" value={reference.url} onChange={(event) => updateReference(index, 'url', event.target.value)} /></label>
+                    <button type="button" aria-label={language === 'th' ? `ลบอ้างอิงที่ ${index + 1}` : `Remove reference ${index + 1}`} onClick={() => setReferences((current) => current.filter((_, referenceIndex) => referenceIndex !== index))}><AppIcon name="delete" /></button>
+                  </div>
+                ))}
               </div>
             </section>
 
-            <section>
-              <h3>Summary & HTML body</h3>
-              <label>{language === 'th' ? 'สรุปบทความ (ไทย)' : 'Article summary (English)'}<textarea required rows="3" value={language === 'th' ? form.summary_th : form.summary} onChange={(event) => update(language === 'th' ? 'summary_th' : 'summary', event.target.value)} /></label>
-              <label>{language === 'th' ? 'เนื้อหา HTML (ไทย)' : 'HTML content (English)'}<textarea className="admin-code-field" required rows="15" spellCheck="false" value={previewHtml} onChange={(event) => update(language === 'th' ? 'body_html_th' : 'body_html', event.target.value)} /></label>
-            </section>
-
-            <section>
-              <h3>Cover image & sources</h3>
-              <div className="admin-form-grid">
-                <label className="is-wide">Cover image URL<input value={form.cover_image_url ?? ''} onChange={(event) => update('cover_image_url', event.target.value)} /></label>
-                <label>{language === 'th' ? 'คำอธิบายรูป (ไทย)' : 'Image alt text (English)'}<input value={language === 'th' ? form.cover_image_alt_th ?? '' : form.cover_image_alt ?? ''} onChange={(event) => update(language === 'th' ? 'cover_image_alt_th' : 'cover_image_alt', event.target.value)} /></label>
-                <label>Image credit<input value={form.image_credit ?? ''} onChange={(event) => update('image_credit', event.target.value)} /></label>
-                <label className="is-wide">Image credit URL<input value={form.image_credit_url ?? ''} onChange={(event) => update('image_credit_url', event.target.value)} /></label>
+            <details className="admin-editor-advanced">
+              <summary><span><AppIcon name="settings" /><strong>{language === 'th' ? 'ตั้งค่าเพิ่มเติม' : 'Advanced settings'}</strong><small>{language === 'th' ? 'ไม่จำเป็นต้องกรอก ระบบตั้งค่าให้แล้ว' : 'Optional — the system fills these automatically.'}</small></span><AppIcon name="arrowDown" /></summary>
+              <div className="admin-editor-advanced__body">
+                <section>
+                  <h3>{language === 'th' ? 'ข้อมูลบทความเพิ่มเติม' : 'Article details'}</h3>
+                  <div className="admin-form-grid">
+                    <label>Slug <small>AUTO</small><input placeholder="Generated from the title" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={form.slug} onChange={(event) => update('slug', event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} /></label>
+                    <label>Category<input value={form.category} onChange={(event) => update('category', event.target.value)} /></label>
+                    <label>{language === 'th' ? 'ป้ายกำกับ' : 'Eyebrow'}<input value={language === 'th' ? form.eyebrow_th : form.eyebrow} onChange={(event) => update(language === 'th' ? 'eyebrow_th' : 'eyebrow', event.target.value)} /></label>
+                    <label>{language === 'th' ? 'เวลาอ่าน (นาที)' : 'Reading time'} <small>AUTO</small><input min="1" max="60" placeholder="Auto" type="number" value={form.reading_minutes} onChange={(event) => update('reading_minutes', event.target.value)} /></label>
+                    <label>Sort order<input min="0" max="999" type="number" value={form.sort_order} onChange={(event) => update('sort_order', event.target.value)} /></label>
+                  </div>
+                </section>
               </div>
-              <label>References (JSON array)<textarea className="admin-code-field" rows="7" spellCheck="false" value={referencesText} onChange={(event) => setReferencesText(event.target.value)} /></label>
-            </section>
+            </details>
           </div>
 
-          <aside className="admin-editor__preview">
+          {editorMode === 'html' && <aside className="admin-editor__preview">
             <div><span>LIVE PREVIEW</span><strong>{language === 'th' ? form.title_th : form.title || 'Untitled article'}</strong></div>
             {form.cover_image_url && <img src={form.cover_image_url} alt="" />}
-            <iframe title="Article HTML preview" sandbox="" srcDoc={`<!doctype html><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px;color:#1c2b21;line-height:1.7}h2{margin-top:28px;color:#163b23}img{max-width:100%}.article-callout{padding:16px;border-left:4px solid #75b45c;background:#edf6e9}</style>${previewHtml}`} />
-          </aside>
+            <iframe title="Article HTML preview" sandbox="" srcDoc={`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;padding:28px;font-family:Arial,sans-serif;color:#1c2b21;line-height:1.7}h1,h2,h3,h4{margin:1.4em 0 .55em;color:#163b23;line-height:1.25}p{margin:.6em 0 1em}img{display:block;max-width:100%;height:auto;border-radius:10px}figure{max-width:100%;margin:1.5em auto}figcaption{margin-top:.5em;color:#647168;font-size:12px;text-align:center}table{width:100%;margin:1.5em 0;border-collapse:collapse}th,td{padding:10px;border:1px solid #ccd8cf;text-align:left;vertical-align:top}th{background:#edf4ef}blockquote,.article-callout,.article-science-note{margin:1.5em 0;padding:16px 18px;border-left:4px solid #75b45c;background:#edf6e9}.article-science-note{border-left-color:#4e8eae;background:#edf5f8}pre{overflow:auto;padding:16px;border-radius:9px;background:#132119;color:#e9f5eb}code{font-family:Consolas,monospace}.media{position:relative;overflow:hidden;padding-top:56.25%}.media iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style>${previewHtml}`} />
+          </aside>}
         </div>
 
         {error && <div className="admin-editor__error" role="alert">{error}</div>}

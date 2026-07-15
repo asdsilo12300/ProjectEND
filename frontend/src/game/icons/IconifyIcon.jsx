@@ -61,6 +61,8 @@ import DarkModeIcon from '@iconify-react/material-symbols/dark-mode'
 import LeftPanelCloseIcon from '@iconify-react/material-symbols/left-panel-close'
 import LeftPanelOpenIcon from '@iconify-react/material-symbols/left-panel-open'
 import TranslateIcon from '@iconify-react/material-symbols/translate'
+import EditIcon from '@iconify-react/material-symbols/edit'
+import CodeIcon from '@iconify-react/material-symbols/code'
 
 const iconMap = {
   repeat: RepeatIcon,
@@ -131,6 +133,8 @@ const iconMap = {
   panelClose: LeftPanelCloseIcon,
   panelOpen: LeftPanelOpenIcon,
   translate: TranslateIcon,
+  edit: EditIcon,
+  code: CodeIcon,
   arrowDown: KeyboardArrowDownIcon,
   arrowUp: KeyboardArrowUpIcon,
   axe: ConstructionIcon,

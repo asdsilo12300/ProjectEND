@@ -107,6 +107,29 @@ export async function saveAdminContent(content) {
   })
 }
 
+export async function uploadAdminContentImage(file, signal) {
+  const token = getToken()
+  const form = new FormData()
+  form.append('upload', file)
+  const response = await fetch(`${API_BASE_URL}/admin/contents/images`, {
+    method: 'POST',
+    signal,
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  })
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
+    throw new Error(validationMessage || payload.message || 'Unable to upload this image.')
+  }
+
+  return { ...payload, url: resolveAssetUrl(payload.url) }
+}
+
 export async function deleteAdminContent(contentId) {
   return apiFetch(`/admin/contents/${contentId}`, { method: 'DELETE' })
 }

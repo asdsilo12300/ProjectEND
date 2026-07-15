@@ -108,6 +108,7 @@ Route::middleware('jwt')->group(function (): void {
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/contents', [AdminContentController::class, 'index']);
         Route::post('/contents', [AdminContentController::class, 'store']);
+        Route::post('/contents/images', [AdminContentController::class, 'uploadImage']);
         Route::put('/contents/{content}', [AdminContentController::class, 'update']);
         Route::delete('/contents/{content}', [AdminContentController::class, 'destroy']);
         Route::get('/users', [AdminUserController::class, 'index']);
