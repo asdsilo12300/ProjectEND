@@ -163,6 +163,20 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 </div>
               </div>
             </div>
+            {user.role === 'admin' && (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-emerald-200 transition hover:bg-emerald-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-200"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setProfileOpen(false)
+                  onNavigate?.('admin')
+                }}
+              >
+                <AppIcon className="h-4 w-4 text-emerald-300" name="shield" />
+                Admin console
+              </button>
+            )}
             <button
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"
               type="button"

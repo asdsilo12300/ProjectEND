@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminContentController;
+use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminUserController;
+use App\Http\Controllers\Api\AdminResourceController;
 use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\FriendController;
@@ -99,6 +103,21 @@ Route::middleware('jwt')->group(function (): void {
     // Upload 3D model files (GLB) and save path to DB
     Route::post('/plants/{plant}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadBaseModel']);
     Route::post('/plants/{plant}/stages/{stage}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadStageModel']);
+
+    Route::prefix('admin')->middleware('admin')->group(function (): void {
+        Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+        Route::get('/contents', [AdminContentController::class, 'index']);
+        Route::post('/contents', [AdminContentController::class, 'store']);
+        Route::put('/contents/{content}', [AdminContentController::class, 'update']);
+        Route::delete('/contents/{content}', [AdminContentController::class, 'destroy']);
+        Route::get('/users', [AdminUserController::class, 'index']);
+        Route::patch('/users/{user}', [AdminUserController::class, 'update']);
+        Route::get('/resources/lookups', [AdminResourceController::class, 'lookups']);
+        Route::get('/resources/{resource}', [AdminResourceController::class, 'index']);
+        Route::post('/resources/{resource}', [AdminResourceController::class, 'store']);
+        Route::put('/resources/{resource}/{record}', [AdminResourceController::class, 'update']);
+        Route::delete('/resources/{resource}/{record}', [AdminResourceController::class, 'destroy']);
+    });
 });
 
 

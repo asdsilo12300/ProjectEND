@@ -56,6 +56,11 @@ import SensorsIcon from '@iconify-react/material-symbols/sensors'
 import KeyIcon from '@iconify-react/material-symbols/key'
 import LockIcon from '@iconify-react/material-symbols/lock'
 import MailIcon from '@iconify-react/material-symbols/mail'
+import LightModeIcon from '@iconify-react/material-symbols/light-mode'
+import DarkModeIcon from '@iconify-react/material-symbols/dark-mode'
+import LeftPanelCloseIcon from '@iconify-react/material-symbols/left-panel-close'
+import LeftPanelOpenIcon from '@iconify-react/material-symbols/left-panel-open'
+import TranslateIcon from '@iconify-react/material-symbols/translate'
 
 const iconMap = {
   repeat: RepeatIcon,
@@ -121,6 +126,11 @@ const iconMap = {
   key: KeyIcon,
   lock: LockIcon,
   mail: MailIcon,
+  lightMode: LightModeIcon,
+  darkMode: DarkModeIcon,
+  panelClose: LeftPanelCloseIcon,
+  panelOpen: LeftPanelOpenIcon,
+  translate: TranslateIcon,
   arrowDown: KeyboardArrowDownIcon,
   arrowUp: KeyboardArrowUpIcon,
   axe: ConstructionIcon,

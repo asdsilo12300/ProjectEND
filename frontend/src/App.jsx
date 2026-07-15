@@ -13,6 +13,7 @@ import { CommunityPage } from './game/community/CommunityPage'
 import { HistoryPage } from './game/history/HistoryPage'
 import { ShopPage } from './game/shop/ShopPage'
 import { SettingsPage } from './game/settings/SettingsPage'
+import { AdminPage } from './admin/AdminPage'
 import { PasswordResetPage } from './game/settings/PasswordResetPage'
 import { LoginPage } from './auth/LoginPage'
 import { LandingPage } from './landing/LandingPage'
@@ -254,6 +255,7 @@ function App() {
         if (!isCancelled) {
           setUser(syncedUser)
           setSessionStatus('authenticated')
+          if (syncedUser.role === 'admin') setActivePage('admin')
         }
       } catch {
         clearToken()
@@ -1176,7 +1178,7 @@ function App() {
       setSessionStatus('authenticated')
       setAuthStatus('idle')
       setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
-      setActivePage(pendingPageAfterAuth ?? 'lab')
+      setActivePage(pendingPageAfterAuth ?? (signedInUser.role === 'admin' ? 'admin' : 'lab'))
       setPendingPageAfterAuth(null)
     } catch (error) {
       setAuthStatus('idle')
@@ -1201,7 +1203,7 @@ function App() {
       setSessionStatus('authenticated')
       setAuthStatus('idle')
       setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
-      setActivePage(pendingPageAfterAuth ?? 'lab')
+      setActivePage(pendingPageAfterAuth ?? (signedInUser.role === 'admin' ? 'admin' : 'lab'))
       setPendingPageAfterAuth(null)
     } catch (error) {
       if (receivedSession) clearToken()
@@ -1475,6 +1477,14 @@ function App() {
         />
       </main>
     )
+  }
+
+  if (activePage === 'admin') {
+    if (user.role !== 'admin') {
+      return null
+    }
+
+    return <AdminPage user={user} onLogout={logoutUser} />
   }
 
   return (

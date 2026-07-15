@@ -87,6 +87,67 @@ export async function getLearningContent(slug) {
   return apiFetch(`/contents/${encodeURIComponent(slug)}`)
 }
 
+export async function getAdminDashboard(days = 7) {
+  return apiFetch(`/admin/dashboard?days=${encodeURIComponent(days)}`)
+}
+
+export async function getAdminContents({ search = '', status = '' } = {}) {
+  const params = new URLSearchParams()
+  if (search) params.set('search', search)
+  if (status) params.set('status', status)
+  const query = params.toString()
+  return apiFetch(`/admin/contents${query ? `?${query}` : ''}`)
+}
+
+export async function saveAdminContent(content) {
+  const hasId = Boolean(content.id)
+  return apiFetch(hasId ? `/admin/contents/${content.id}` : '/admin/contents', {
+    method: hasId ? 'PUT' : 'POST',
+    body: JSON.stringify(content),
+  })
+}
+
+export async function deleteAdminContent(contentId) {
+  return apiFetch(`/admin/contents/${contentId}`, { method: 'DELETE' })
+}
+
+export async function getAdminUsers({ search = '', role = '', page = 1 } = {}) {
+  const params = new URLSearchParams({ page: String(page) })
+  if (search) params.set('search', search)
+  if (role) params.set('role', role)
+  return apiFetch(`/admin/users?${params.toString()}`)
+}
+
+export async function updateAdminUser(userId, updates) {
+  return apiFetch(`/admin/users/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  })
+}
+
+export async function getAdminResourceLookups() {
+  return apiFetch('/admin/resources/lookups')
+}
+
+export async function getAdminResource(resource, { search = '', status = '', page = 1 } = {}) {
+  const params = new URLSearchParams({ page: String(page) })
+  if (search) params.set('search', search)
+  if (status) params.set('status', status)
+  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}?${params.toString()}`)
+}
+
+export async function saveAdminResource(resource, record) {
+  const hasId = Boolean(record.id)
+  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}${hasId ? `/${record.id}` : ''}`, {
+    method: hasId ? 'PUT' : 'POST',
+    body: JSON.stringify(record),
+  })
+}
+
+export async function deleteAdminResource(resource, recordId) {
+  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}`, { method: 'DELETE' })
+}
+
 export async function getModelAssets() {
   return apiFetch('/model-assets')
 }
