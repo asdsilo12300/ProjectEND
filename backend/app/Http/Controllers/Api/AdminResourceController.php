@@ -157,11 +157,11 @@ class AdminResourceController extends Controller
     private function moderationIndex(Request $request, string $resource): JsonResponse
     {
         $query = match ($resource) {
-            'posts' => Post::query()->with('user:id,username,email')->withCount(['comments', 'likes']),
-            'comments' => Comment::query()->with('user:id,username,email')->withCount(['replies', 'likes']),
-            'simulator-comments' => SimulatorComment::query()->with(['user:id,username,email', 'simulator:id,user_id,plant_id,status']),
-            'simulators' => Simulator::query()->with(['user:id,username,email', 'plant:id,name_th,name_en'])->withCount('posts'),
-            'plant-histories' => PlantHistory::query()->with(['user:id,username,email', 'plant:id,name_th,name_en']),
+            'posts' => Post::query()->with('user:id,username,email,avatar_url')->withCount(['comments', 'likes']),
+            'comments' => Comment::query()->with('user:id,username,email,avatar_url')->withCount(['replies', 'likes']),
+            'simulator-comments' => SimulatorComment::query()->with(['user:id,username,email,avatar_url', 'simulator:id,user_id,plant_id,status']),
+            'simulators' => Simulator::query()->with(['user:id,username,email,avatar_url', 'plant:id,name_th,name_en'])->withCount('posts'),
+            'plant-histories' => PlantHistory::query()->with(['user:id,username,email,avatar_url', 'plant:id,name_th,name_en']),
             'activity-logs' => AdminActivityLog::query()->with('admin:id,username,email'),
             default => abort(404, 'Unknown management resource.'),
         };

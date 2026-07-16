@@ -14,6 +14,7 @@ import {
   getAdminUsers,
   saveAdminResource,
   saveAdminContent,
+  resolveAssetUrl,
   updateAdminUser,
   uploadAdminContentImage,
 } from '../lib/api'
@@ -82,17 +83,83 @@ function loadAdminPreferences() {
   }
 }
 
-function useModalLifecycle(onClose) {
+function useModalLifecycle(onClose, dialogRef) {
+  const closeRef = useRef(onClose)
+
+  useEffect(() => { closeRef.current = onClose }, [onClose])
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
-    const closeOnEscape = (event) => { if (event.key === 'Escape') onClose() }
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', closeOnEscape)
+    const previousActiveElement = document.activeElement
+    const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+    const handleKeyDown = (event) => {
+      if (document.querySelector('.swal2-container')) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeRef.current?.()
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = [...dialog.querySelectorAll(focusableSelector)].filter((element) => !element.hidden && element.getClientRects().length)
+      if (!focusable.length) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-  }, [onClose])
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+    const focusTimer = window.requestAnimationFrame(() => {
+      const dialog = dialogRef.current
+      if (dialog && !dialog.contains(document.activeElement)) dialog.focus()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(focusTimer)
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+      if (previousActiveElement?.isConnected) previousActiveElement.focus()
+    }
+  }, [dialogRef])
+}
+
+function dataSnapshot(value) {
+  return JSON.stringify(value)
+}
+
+async function confirmDiscardChanges() {
+  return confirmAdminAction({
+    title: 'Discard unsaved changes?',
+    text: 'The changes in this form have not been saved and will be lost.',
+    confirmButtonText: 'Discard changes',
+  })
+}
+
+function AdminAvatar({ user, className = '' }) {
+  const avatarUrl = user?.avatar_url ? resolveAssetUrl(user.avatar_url) : ''
+  const initial = user?.username?.trim()?.slice(0, 1)?.toUpperCase() || 'A'
+
+  return (
+    <span className={`admin-avatar ${avatarUrl ? 'has-image' : ''} ${className}`.trim()} aria-hidden="true">
+      <b>{initial}</b>
+      {avatarUrl && <img src={avatarUrl} alt="" onError={(event) => { event.currentTarget.hidden = true }} />}
+    </span>
+  )
 }
 
 function toDateTimeLocal(value) {
@@ -274,6 +341,42 @@ const overviewColors = {
   audit: '#ee8b72',
 }
 
+const attentionItemMeta = {
+  moderated_comments: { label: 'Comments to review', detail: 'Hidden or suspended discussions', icon: 'chat' },
+  draft_contents: { label: 'Draft content', detail: 'Articles waiting to be published', icon: 'bookmark' },
+  suspended_users: { label: 'Suspended accounts', detail: 'Accounts with restricted access', icon: 'groups' },
+  failed_simulations: { label: 'Failed simulations', detail: 'Runs that may need investigation', icon: 'controller' },
+  cancelled_simulations: { label: 'Cancelled simulations', detail: 'Interrupted learner sessions', icon: 'history' },
+  stale_active_simulations: { label: 'Long-running simulations', detail: 'Active for more than seven days', icon: 'live' },
+  missing_model_assets: { label: 'Missing model files', detail: 'Asset records without a configured URL', icon: 'hardware' },
+}
+
+function AttentionCenter({ attention, onOpenSection }) {
+  const items = attention?.items ?? []
+
+  return (
+    <section className="admin-panel admin-attention-panel">
+      <header className="admin-panel__header">
+        <div><small>ACTION CENTER</small><h2>Items that need attention</h2></div>
+        <span className={attention?.total ? 'has-items' : 'is-clear'}>{attention?.total ? `${Number(attention.total).toLocaleString()} open` : 'All clear'}</span>
+      </header>
+      <div className="admin-attention-grid">
+        {items.map((item) => {
+          const meta = attentionItemMeta[item.key] ?? { label: item.key.replaceAll('_', ' '), detail: 'Open the related section to review', icon: 'shield' }
+          return (
+            <button className={`admin-attention-item is-${item.severity} ${item.value ? 'has-items' : 'is-clear'}`} type="button" key={item.key} onClick={() => onOpenSection(item.section)}>
+              <span><AppIcon name={meta.icon} /></span>
+              <span><strong>{meta.label}</strong><small>{meta.detail}</small></span>
+              <b>{Number(item.value ?? 0).toLocaleString()}</b>
+              <AppIcon name="arrowForward" />
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function TrendChart({ trend = [], activeSeries }) {
   const selectedSeries = trendSeriesConfig.filter((series) => activeSeries.includes(series.key))
   const maximum = Math.max(1, ...trend.flatMap((day) => selectedSeries.map((series) => day[series.key] ?? 0)))
@@ -339,6 +442,8 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
         <MetricCard icon="shop" label="Game catalog" value={totalGameCatalog} detail={`${metrics.items ?? 0} items · ${metrics.quests ?? 0} quests`} tone="blue" />
       </div>
 
+      <AttentionCenter attention={data?.attention} onOpenSection={onOpenSection} />
+
       <div className="admin-dashboard-grid">
         <section className="admin-panel admin-panel--trend">
           <header className="admin-panel__header">
@@ -378,7 +483,7 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
           <div className="admin-list">
             {(data?.recent_users ?? []).map((user) => (
               <div className="admin-list__row" key={user.id}>
-                <span className="admin-avatar">{user.username?.slice(0, 1).toUpperCase()}</span>
+                <AdminAvatar user={user} />
                 <span><strong>{user.username}</strong><small>{user.email}</small></span>
                 <StatusBadge status={user.role} />
                 <time>{formatDate(user.created_at)}</time>
@@ -400,24 +505,49 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
             ))}
           </div>
         </section>
+
+        <section className="admin-panel admin-audit-summary">
+          <header className="admin-panel__header"><div><small>ADMIN ACTIVITY</small><h2>Recent changes</h2></div><button type="button" onClick={() => onOpenSection('activity')}>View audit log</button></header>
+          <div className="admin-list">
+            {(data?.attention?.recent_admin_actions ?? []).map((action) => (
+              <div className="admin-list__row admin-list__row--audit" key={action.id}>
+                <span className="admin-list__content-icon"><AppIcon name="history" /></span>
+                <span><strong>{action.action?.replaceAll('_', ' ')}</strong><small>{action.admin?.username || 'System administrator'} · {action.target_type || 'system'} #{action.target_id || '—'}</small></span>
+                <time>{formatDate(action.created_at, true)}</time>
+              </div>
+            ))}
+            {!data?.attention?.recent_admin_actions?.length && <div className="admin-list__empty">No recent administrator changes.</div>}
+          </div>
+        </section>
       </div>
     </div>
   )
 }
 
 function ContentEditor({ content, onClose, onSaved }) {
-  const [form, setForm] = useState(() => ({ ...emptyContent, ...content }))
+  const [initialState] = useState(() => ({
+    form: { ...emptyContent, ...content },
+    references: (content?.references ?? []).map((reference) => ({
+      title: reference.title ?? '', organization: reference.organization ?? '', url: reference.url ?? '',
+    })),
+  }))
+  const [form, setForm] = useState(initialState.form)
   const [language, setLanguage] = useState('en')
   const [editorMode, setEditorMode] = useState('visual')
-  const [references, setReferences] = useState(() => (content?.references ?? []).map((reference) => ({
-    title: reference.title ?? '', organization: reference.organization ?? '', url: reference.url ?? '',
-  })))
+  const [references, setReferences] = useState(initialState.references)
   const [coverUploadStatus, setCoverUploadStatus] = useState('idle')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const dialogRef = useRef(null)
   const editorScrollRef = useRef(null)
   const coverInputRef = useRef(null)
-  useModalLifecycle(onClose)
+  const dirty = useMemo(() => dataSnapshot({ form, references }) !== dataSnapshot(initialState), [form, initialState, references])
+  const requestClose = useCallback(async () => {
+    if (status === 'saving') return
+    if (dirty && !await confirmDiscardChanges()) return
+    onClose()
+  }, [dirty, onClose, status])
+  useModalLifecycle(requestClose, dialogRef)
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -451,10 +581,11 @@ function ContentEditor({ content, onClose, onSaved }) {
     }
   }
 
-  async function submit(event) {
-    event.preventDefault()
+  async function submit(event, requestedStatus = form.status) {
+    event?.preventDefault()
     setError('')
     try {
+      const nextForm = { ...form, status: requestedStatus }
       const currentTitle = String((language === 'th' ? form.title_th : form.title) ?? '').trim()
       const currentBody = String((language === 'th' ? form.body_html_th : form.body_html) ?? '').trim()
       if (!currentTitle) throw new Error(language === 'th' ? 'กรุณาใส่ชื่อบทความ' : 'Please enter the article title.')
@@ -468,8 +599,8 @@ function ContentEditor({ content, onClose, onSaved }) {
         .filter((reference) => reference.title || reference.organization || reference.url)
       const incompleteReference = preparedReferences.find((reference) => !reference.title || !reference.url)
       if (incompleteReference) throw new Error(language === 'th' ? 'รายการอ้างอิงต้องมีชื่อและ URL ให้ครบ' : 'Each reference needs both a title and URL.')
-      if (form.status === 'published' && !form.cover_image_url) throw new Error(language === 'th' ? 'กรุณาเพิ่มรูปปกก่อนเผยแพร่' : 'Please add a cover image before publishing.')
-      if (form.status === 'published' && preparedReferences.length === 0) throw new Error(language === 'th' ? 'กรุณาเพิ่มแหล่งอ้างอิงอย่างน้อย 1 รายการก่อนเผยแพร่' : 'Please add at least one reference before publishing.')
+      if (requestedStatus === 'published' && !form.cover_image_url) throw new Error(language === 'th' ? 'กรุณาเพิ่มรูปปกก่อนเผยแพร่' : 'Please add a cover image before publishing.')
+      if (requestedStatus === 'published' && preparedReferences.length === 0) throw new Error(language === 'th' ? 'กรุณาเพิ่มแหล่งอ้างอิงอย่างน้อย 1 รายการก่อนเผยแพร่' : 'Please add at least one reference before publishing.')
       if (form.id) {
         const confirmed = await confirmAdminAction({
           title: 'Save content changes?',
@@ -480,7 +611,8 @@ function ContentEditor({ content, onClose, onSaved }) {
         if (!confirmed) return
       }
       setStatus('saving')
-      const payload = await saveAdminContent({ ...prepareContentPayload(form), references: preparedReferences })
+      setForm(nextForm)
+      const payload = await saveAdminContent({ ...prepareContentPayload(nextForm), references: preparedReferences })
       await onSaved(payload.data)
       await showAdminSuccess(form.id ? 'Content updated' : 'Content added', form.id ? 'Your changes were saved successfully.' : 'The new content was placed at the bottom of the list.')
     } catch (saveError) {
@@ -493,10 +625,10 @@ function ContentEditor({ content, onClose, onSaved }) {
 
   return (
     <div className="admin-editor-backdrop" role="presentation">
-      <form className="admin-editor" role="dialog" aria-modal="true" aria-labelledby="admin-content-editor-title" onSubmit={submit}>
+      <form ref={dialogRef} className="admin-editor" role="dialog" aria-modal="true" aria-labelledby="admin-content-editor-title" tabIndex="-1" onSubmit={submit}>
         <header className="admin-editor__header">
           <div><small>{form.id ? `CONTENT / VERSION ${form.version}` : 'CONTENT / NEW ARTICLE'}</small><h2 id="admin-content-editor-title">{form.id ? 'Edit learning content' : 'Create learning content'}</h2></div>
-          <button type="button" onClick={onClose} aria-label="Close editor">×</button>
+          <button type="button" onClick={requestClose} aria-label="Close editor">×</button>
         </header>
 
         <div className="admin-editor__toolbar">
@@ -598,7 +730,12 @@ function ContentEditor({ content, onClose, onSaved }) {
         </div>
 
         {error && <div className="admin-editor__error" role="alert">{error}</div>}
-        <footer className="admin-editor__footer"><button type="button" onClick={onClose}>Cancel</button><button className="is-primary" disabled={status === 'saving'} type="submit"><AppIcon name="save" />{status === 'saving' ? 'Saving…' : 'Save content'}</button></footer>
+        <footer className="admin-editor__footer">
+          <span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span>
+          <button type="button" onClick={requestClose}>Cancel</button>
+          <button disabled={status === 'saving'} type="button" onClick={(event) => submit(event, 'draft')}>Save draft</button>
+          <button className="is-primary" disabled={status === 'saving'} type="button" onClick={(event) => submit(event, 'published')}><AppIcon name="save" />{status === 'saving' ? 'Saving…' : form.status === 'published' ? 'Update published' : 'Publish content'}</button>
+        </footer>
       </form>
     </div>
   )
@@ -703,7 +840,7 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
           <tbody>{users.map((user, index) => (
             <tr className={busyUser === user.id ? 'is-busy' : ''} key={user.id}>
               <td className="admin-index-cell">{((usersPayload?.current_page ?? 1) - 1) * (usersPayload?.per_page ?? users.length) + index + 1}</td>
-              <td><div className="admin-user-cell"><span className="admin-avatar">{user.username?.slice(0, 1).toUpperCase()}</span><div><strong>{user.username}{currentUser.id === user.id && <em>YOU</em>}</strong><small>{user.email}</small></div></div></td>
+              <td><div className="admin-user-cell"><AdminAvatar user={user} /><div><strong>{user.username}{currentUser.id === user.id && <em>YOU</em>}</strong><small>{user.email}</small></div></div></td>
               <td>Level {user.level ?? 1}<small>{Number(user.coin ?? 0).toLocaleString()} coins</small></td><td>{user.simulators_count ?? 0}<small>{user.plant_histories_count ?? 0} harvests</small></td>
               <td><select disabled={busyUser === user.id || currentUser.id === user.id} value={user.role} onChange={(event) => changeUser(user, { role: event.target.value })}><option value="member">Member</option><option value="admin">Admin</option></select></td>
               <td><select className={`is-${user.status}`} disabled={busyUser === user.id || currentUser.id === user.id} value={user.status} onChange={(event) => changeUser(user, { status: event.target.value })}><option value="active">Active</option><option value="suspended">Suspended</option></select></td>
@@ -718,10 +855,18 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
 }
 
 function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
-  const [form, setForm] = useState(() => ({ ...config.defaults, ...record }))
+  const [initialForm] = useState(() => ({ ...config.defaults, ...record }))
+  const [form, setForm] = useState(initialForm)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
-  useModalLifecycle(onClose)
+  const dialogRef = useRef(null)
+  const dirty = useMemo(() => dataSnapshot(form) !== dataSnapshot(initialForm), [form, initialForm])
+  const requestClose = useCallback(async () => {
+    if (status === 'saving') return
+    if (dirty && !await confirmDiscardChanges()) return
+    onClose()
+  }, [dirty, onClose, status])
+  useModalLifecycle(requestClose, dialogRef)
 
   function fieldValue(field) {
     const value = form[field.key]
@@ -762,8 +907,8 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
 
   return (
     <div className="admin-editor-backdrop" role="presentation">
-      <form className="admin-resource-editor" data-resource={config.id} role="dialog" aria-modal="true" aria-labelledby="admin-resource-editor-title" onSubmit={submit}>
-        <header className="admin-editor__header"><div><small>{config.label.toUpperCase()} / {record?.id ? `RECORD #${record.id}` : 'NEW RECORD'}</small><h2 id="admin-resource-editor-title">{record?.id ? `Edit ${config.label}` : config.createLabel}</h2></div><button type="button" onClick={onClose} aria-label="Close editor">×</button></header>
+      <form ref={dialogRef} className="admin-resource-editor" data-resource={config.id} role="dialog" aria-modal="true" aria-labelledby="admin-resource-editor-title" tabIndex="-1" onSubmit={submit}>
+        <header className="admin-editor__header"><div><small>{config.label.toUpperCase()} / {record?.id ? `RECORD #${record.id}` : 'NEW RECORD'}</small><h2 id="admin-resource-editor-title">{record?.id ? `Edit ${config.label}` : config.createLabel}</h2></div><button type="button" onClick={requestClose} aria-label="Close editor">×</button></header>
         <div className="admin-resource-editor__body">
           <div className="admin-resource-form-grid">
             {config.fields.map((field) => (
@@ -785,8 +930,112 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
           </div>
         </div>
         {error && <div className="admin-editor__error">{error}</div>}
-        <footer className="admin-editor__footer"><button type="button" onClick={onClose}>Cancel</button><button className="is-primary" disabled={status === 'saving'} type="submit"><AppIcon name="save" />{status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
+        <footer className="admin-editor__footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span><button type="button" onClick={requestClose}>Cancel</button><button className="is-primary" disabled={status === 'saving'} type="submit"><AppIcon name="save" />{status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
       </form>
+    </div>
+  )
+}
+
+const detailFieldMap = {
+  posts: [
+    ['Record ID', 'id'], ['Visibility', 'visibility'], ['Caption', 'caption'], ['Comments', 'comments_count'], ['Likes', 'likes_count'],
+    ['Plant history', 'plant_history_id'], ['Simulation', 'simulator_id'], ['Created', 'created_at', 'date'], ['Last updated', 'updated_at', 'date'],
+  ],
+  comments: [
+    ['Record ID', 'id'], ['Moderation status', 'status'], ['Full comment', 'comment_text'], ['Post', 'post_id'], ['Parent comment', 'parent_id'],
+    ['Replies', 'replies_count'], ['Likes', 'likes_count'], ['Created', 'created_at', 'date'], ['Last updated', 'updated_at', 'date'],
+  ],
+  'simulator-comments': [
+    ['Record ID', 'id'], ['Moderation status', 'status'], ['Full comment', 'comment_text'], ['Simulation', 'simulator_id'],
+    ['Created', 'created_at', 'date'], ['Last updated', 'updated_at', 'date'],
+  ],
+  simulators: [
+    ['Record ID', 'id'], ['Run status', 'status'], ['Sharing', 'share_visibility'], ['Mode', 'mode'], ['Location', 'location_name'],
+    ['Health', 'health', 'percent'], ['Growth points', 'growth_point'], ['Visual state', 'visual_state'], ['State version', 'state_version'],
+    ['Community posts', 'posts_count'], ['Started', 'started_at', 'date'], ['Ended', 'ended_at', 'date'], ['Last updated', 'updated_at', 'date'],
+  ],
+  'plant-histories': [
+    ['Record ID', 'id'], ['Visibility', 'visibility'], ['Final health', 'final_health', 'percent'], ['Total score', 'total_score'],
+    ['Duration', 'duration_days', 'days'], ['Analysis result', 'analysis_result'], ['Player guidance', 'direction'], ['Created', 'created_at', 'date'],
+  ],
+  'activity-logs': [
+    ['Log ID', 'id'], ['Action', 'action'], ['Target type', 'target_type'], ['Target ID', 'target_id'], ['Details', 'detail'], ['Recorded', 'created_at', 'date'],
+  ],
+}
+
+function recordDetailValue(record, field, format) {
+  const value = record?.[field]
+  if (value === null || value === undefined || value === '') return '—'
+  if (format === 'date') return formatDate(value, true)
+  if (format === 'percent') return `${value}%`
+  if (format === 'days') return `${value} days`
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  return String(value)
+}
+
+function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onModerate }) {
+  const dialogRef = useRef(null)
+  useModalLifecycle(onClose, dialogRef)
+  const fields = detailFieldMap[config.id] ?? [
+    ['Record ID', 'id'],
+    ...config.columns.map((column) => [column.label, null, null, column.render(record)]),
+    ['Created', 'created_at', 'date'], ['Last updated', 'updated_at', 'date'],
+  ]
+  const person = record.user ?? record.admin
+  const imageUrl = resolveAssetUrl(record.live_snapshot_url || record.snapshot_image_url || '')
+  const plantName = record.plant?.name_en || record.plant?.name_th
+
+  return (
+    <div className="admin-details-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <aside ref={dialogRef} className="admin-details-drawer" role="dialog" aria-modal="true" aria-labelledby="admin-details-title" tabIndex="-1">
+        <header className="admin-details-drawer__header">
+          <div><small>{config.label.toUpperCase()} / RECORD #{record.id}</small><h2 id="admin-details-title">Record details</h2></div>
+          <button type="button" onClick={onClose} aria-label="Close details">×</button>
+        </header>
+
+        <div className="admin-details-drawer__body">
+          {person && (
+            <section className="admin-details-person">
+              <AdminAvatar user={person} />
+              <span><small>{record.user ? 'Account owner' : 'Administrator'}</small><strong>{person.username}</strong><a href={`mailto:${person.email}`}>{person.email}</a></span>
+            </section>
+          )}
+
+          {(plantName || record.mode) && (
+            <section className="admin-details-context">
+              <span className="admin-list__content-icon"><AppIcon name="plant" /></span>
+              <span><small>Simulation context</small><strong>{plantName || 'Plant not available'}</strong><p>{record.mode ? `${record.mode} mode` : 'Saved plant result'}</p></span>
+            </section>
+          )}
+
+          {imageUrl && <img className="admin-details-media" src={imageUrl} alt="Simulation or harvested plant preview" onError={(event) => { event.currentTarget.hidden = true }} />}
+
+          {config.moderation && (
+            <section className="admin-details-moderation">
+              <div><small>MODERATION</small><h3>Review decision</h3><p>Changes are confirmed before they are applied and recorded in the audit log.</p></div>
+              <label>{config.statusField.replaceAll('_', ' ')}<select value={record[config.statusField]} onChange={(event) => onModerate(config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
+              {config.extraStatusField && <label>{config.extraStatusField.replaceAll('_', ' ')}<select value={record[config.extraStatusField]} onChange={(event) => onModerate(config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>}
+            </section>
+          )}
+
+          <section className="admin-details-fields">
+            <div><small>COMPLETE RECORD</small><h3>Available information</h3></div>
+            <dl>
+              {fields.map(([label, field, format, rendered]) => (
+                <div className={(field === 'caption' || field === 'comment_text' || field === 'detail' || field === 'analysis_result' || field === 'direction') ? 'is-wide' : ''} key={`${label}-${field}`}>
+                  <dt>{label}</dt><dd>{rendered ?? recordDetailValue(record, field, format)}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
+
+        <footer className="admin-details-drawer__footer">
+          {!config.moderation && !config.readOnly && <button type="button" onClick={onEdit}><AppIcon name="settings" />Edit record</button>}
+          {!config.readOnly && <button className="is-danger" type="button" onClick={onDelete}><AppIcon name="trash" />Delete</button>}
+          <button className="is-primary" type="button" onClick={onClose}>Done</button>
+        </footer>
+      </aside>
     </div>
   )
 }
@@ -798,23 +1047,33 @@ function ResourceView({ groupKey }) {
   const [lookups, setLookups] = useState({})
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [appliedFilter, setAppliedFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editor, setEditor] = useState(null)
+  const [selectedRecord, setSelectedRecord] = useState(null)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
+  const [refreshState, setRefreshState] = useState('connected')
+  const refreshInFlightRef = useRef(false)
   const config = configs.find((item) => item.id === activeResource) ?? configs[0]
   const records = payload?.data ?? []
   const pagination = payload?.mode === 'catalog' ? null : payload
 
-  async function load(resource = activeResource, options = {}) {
-    setLoading(true)
-    setError('')
+  async function load(resource = activeResource, options = {}, { silent = false } = {}) {
+    if (!silent) { setLoading(true); setError('') }
     try {
       const result = await getAdminResource(resource, options)
       setPayload(result)
+      setLastUpdatedAt(new Date())
+      setRefreshState('connected')
+      return result
     } catch (loadError) {
-      setError(loadError.message || 'Unable to load this database table.')
+      if (silent) setRefreshState('stale')
+      else setError(loadError.message || 'Unable to load this database table.')
+      return null
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -822,28 +1081,40 @@ function ResourceView({ groupKey }) {
     let cancelled = false
     Promise.all([getAdminResource(configs[0].id), getAdminResourceLookups()])
       .then(([resourcePayload, lookupPayload]) => {
-        if (!cancelled) { setPayload(resourcePayload); setLookups(lookupPayload.data ?? {}); setLoading(false) }
+        if (!cancelled) { setPayload(resourcePayload); setLookups(lookupPayload.data ?? {}); setLastUpdatedAt(new Date()); setRefreshState('connected'); setLoading(false) }
       })
       .catch((loadError) => { if (!cancelled) { setError(loadError.message || 'Unable to load management data.'); setLoading(false) } })
     return () => { cancelled = true }
   }, [configs])
 
   useEffect(() => {
-    if (editor) return undefined
-    const refreshTimer = window.setInterval(() => {
-      if (document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]')) return
-      getAdminResource(config.id, { search, status: filter, page: pagination?.current_page ?? 1 })
-        .then((result) => setPayload(result))
-        .catch(() => {})
+    const refreshTimer = window.setInterval(async () => {
+      const activeElement = document.activeElement
+      const isEditingFilter = activeElement?.closest?.('.admin-resource-view') && activeElement.matches('input, select, textarea')
+      if (refreshInFlightRef.current || editor || selectedRecord || isEditingFilter || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]')) return
+      refreshInFlightRef.current = true
+      try {
+        const result = await getAdminResource(config.id, { search: appliedSearch, status: appliedFilter, page: pagination?.current_page ?? 1 })
+        setPayload(result)
+        setLastUpdatedAt(new Date())
+        setRefreshState('connected')
+      } catch {
+        setRefreshState('stale')
+      } finally {
+        refreshInFlightRef.current = false
+      }
     }, 2000)
     return () => window.clearInterval(refreshTimer)
-  }, [config.id, editor, filter, pagination?.current_page, search])
+  }, [appliedFilter, appliedSearch, config.id, editor, pagination?.current_page, selectedRecord])
 
   async function chooseResource(resource) {
     setActiveResource(resource)
     setSearch('')
     setFilter('')
+    setAppliedSearch('')
+    setAppliedFilter('')
     setEditor(null)
+    setSelectedRecord(null)
     await load(resource)
   }
 
@@ -860,10 +1131,13 @@ function ResourceView({ groupKey }) {
       const updates = { [config.statusField]: field === config.statusField ? value : record[config.statusField] }
       if (config.extraStatusField) updates[config.extraStatusField] = field === config.extraStatusField ? value : record[config.extraStatusField]
       await saveAdminResource(config.id, { id: record.id, ...updates })
-      await load(config.id, { search, status: filter, page: pagination?.current_page ?? 1 })
+      await load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination?.current_page ?? 1 })
+      setSelectedRecord((current) => current?.id === record.id ? { ...current, [field]: value } : current)
       await showAdminSuccess('Change applied')
+      return true
     } catch (updateError) {
       setError(updateError.message || 'Unable to update this record.')
+      return false
     }
   }
 
@@ -876,10 +1150,13 @@ function ResourceView({ groupKey }) {
     if (!confirmed) return
     try {
       await deleteAdminResource(config.id, record.id)
-      await load(config.id, { search, status: filter, page: pagination?.current_page ?? 1 })
+      await load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination?.current_page ?? 1 })
+      setSelectedRecord(null)
       await showAdminSuccess('Record deleted')
+      return true
     } catch (deleteError) {
       setError(deleteError.message || 'Unable to delete this record.')
+      return false
     }
   }
 
@@ -890,9 +1167,10 @@ function ResourceView({ groupKey }) {
       </div>
 
       <div className="admin-content-toolbar">
-        <form onSubmit={(event) => { event.preventDefault(); load(config.id, { search, status: filter }) }}><AppIcon name="search" /><input placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />{config.statusOptions && <select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}<button type="submit">Filter</button></form>
+        <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, page: 1 }) }}><AppIcon name="search" /><input placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />{config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}<button type="submit">Filter</button></form>
         {!config.moderation && !config.readOnly && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
         {config.readOnly && <span className="admin-readonly-label"><AppIcon name="shield" />Read-only audit evidence</span>}
+        <span className={`admin-refresh-state is-${refreshState}`}><i />{refreshState === 'stale' ? 'Update delayed' : 'Live data'}<small>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Connecting…'}</small></span>
       </div>
 
       {error && <div className="admin-inline-error">{error}</div>}
@@ -904,8 +1182,8 @@ function ResourceView({ groupKey }) {
               <tr key={record.id}>
                 <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
                 {config.columns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
-                {!config.readOnly && <td>{config.moderation ? <div className="admin-moderation-controls"><select value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-                <td><div className="admin-row-actions">{!config.moderation && !config.readOnly && <button type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!config.readOnly && <button className="is-danger" type="button" aria-label={`Delete record #${record.id}`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}</div></td>
+                {!config.readOnly && <td>{config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
+                <td><div className="admin-row-actions"><button type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!config.moderation && !config.readOnly && <button type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!config.readOnly && <button className="is-danger" type="button" aria-label={`Delete record #${record.id}`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}</div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -913,14 +1191,28 @@ function ResourceView({ groupKey }) {
         {!loading && !records.length && <div className="admin-empty"><AppIcon name={config.icon} /><strong>No records found</strong><span>This database table does not have matching records yet.</span></div>}
       </section>
 
-      {pagination && <div className="admin-pagination"><button disabled={!pagination.prev_page_url} type="button" onClick={() => load(config.id, { search, status: filter, page: pagination.current_page - 1 })}><AppIcon name="arrowBack" />Previous</button><span>Page {pagination.current_page} of {pagination.last_page}</span><button disabled={!pagination.next_page_url} type="button" onClick={() => load(config.id, { search, status: filter, page: pagination.current_page + 1 })}>Next<AppIcon name="arrowForward" /></button></div>}
-      {editor && <ResourceEditor config={config} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await load(config.id, { search, status: filter }) }} />}
+      {pagination && <div className="admin-pagination"><button disabled={!pagination.prev_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination.current_page - 1 })}><AppIcon name="arrowBack" />Previous</button><span>Page {pagination.current_page} of {pagination.last_page}</span><button disabled={!pagination.next_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination.current_page + 1 })}>Next<AppIcon name="arrowForward" /></button></div>}
+      {selectedRecord && <ResourceDetailsDrawer config={config} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
+      {editor && <ResourceEditor config={config} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await load(config.id, { search: appliedSearch, status: appliedFilter }) }} />}
     </div>
   )
 }
 
+const validAdminSections = new Set(navigationGroups.flatMap((group) => group.items.map((item) => item.id)))
+
+function adminSectionFromLocation() {
+  const section = new URL(window.location.href).searchParams.get('admin')
+  return validAdminSections.has(section) ? section : 'dashboard'
+}
+
+function writeAdminSectionToHistory(section, method = 'pushState') {
+  const url = new URL(window.location.href)
+  url.searchParams.set('admin', section)
+  window.history[method]({ ...window.history.state, adminSection: section }, '', url)
+}
+
 export function AdminPage({ user, onLogout }) {
-  const [section, setSection] = useState('dashboard')
+  const [section, setSection] = useState(adminSectionFromLocation)
   const [dashboard, setDashboard] = useState(null)
   const [contents, setContents] = useState([])
   const [users, setUsers] = useState(null)
@@ -929,10 +1221,13 @@ export function AdminPage({ user, onLogout }) {
   const [preferences, setPreferences] = useState(loadAdminPreferences)
   const [language, setLanguage] = useState(() => loadSettings().language === 'th' ? 'th' : 'en')
   const [trendDays, setTrendDays] = useState(7)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
+  const [refreshState, setRefreshState] = useState('connecting')
   const contentFiltersRef = useRef({})
   const userFiltersRef = useRef({})
   const trendDaysRef = useRef(7)
   const refreshInFlightRef = useRef(false)
+  const initialSectionRef = useRef(section)
 
   const sectionMeta = useMemo(() => ({
     dashboard: ['Academy overview', 'Monitor learning activity and system health.'],
@@ -954,8 +1249,11 @@ export function AdminPage({ user, onLogout }) {
     try {
       const payload = await getAdminDashboard(days)
       setDashboard(payload.data)
+      setLastUpdatedAt(new Date())
+      setRefreshState('connected')
       if (!silent) setStatus('ready')
     } catch (loadError) {
+      setRefreshState('stale')
       if (!silent) { setError(loadError.message || 'Unable to load admin dashboard.'); setStatus('error') }
     }
   }, [])
@@ -967,8 +1265,11 @@ export function AdminPage({ user, onLogout }) {
     try {
       const payload = await getAdminContents(activeFilters)
       setContents(payload.data ?? [])
+      setLastUpdatedAt(new Date())
+      setRefreshState('connected')
       if (!silent) setStatus('ready')
     } catch (loadError) {
+      setRefreshState('stale')
       if (!silent) { setError(loadError.message || 'Unable to load content.'); setStatus('error') }
     }
   }, [])
@@ -980,18 +1281,27 @@ export function AdminPage({ user, onLogout }) {
     try {
       const payload = await getAdminUsers(activeFilters)
       setUsers(payload)
+      setLastUpdatedAt(new Date())
+      setRefreshState('connected')
       if (!silent) setStatus('ready')
     } catch (loadError) {
+      setRefreshState('stale')
       if (!silent) { setError(loadError.message || 'Unable to load users.'); setStatus('error') }
     }
   }, [])
 
-  function openSection(nextSection) {
+  const loadSection = useCallback((nextSection) => {
     setSection(nextSection)
     if (nextSection === 'dashboard') loadDashboard()
     if (nextSection === 'contents') loadContents()
     if (nextSection === 'users') loadUsers()
-    if (resourceGroups[nextSection]) { setError(''); setStatus('ready') }
+    if (resourceGroups[nextSection]) { setError(''); setStatus('ready'); setRefreshState('connected'); setLastUpdatedAt(new Date()) }
+  }, [loadContents, loadDashboard, loadUsers])
+
+  function openSection(nextSection) {
+    if (!validAdminSections.has(nextSection)) return
+    if (nextSection !== section) writeAdminSectionToHistory(nextSection)
+    loadSection(nextSection)
   }
 
   function updatePreferences(updates) {
@@ -1009,13 +1319,22 @@ export function AdminPage({ user, onLogout }) {
   }
 
   useEffect(() => {
-    const initialLoadTimer = window.setTimeout(() => loadDashboard(), 0)
+    writeAdminSectionToHistory(initialSectionRef.current, 'replaceState')
+    const initialLoadTimer = window.setTimeout(() => loadSection(initialSectionRef.current), 0)
     return () => window.clearTimeout(initialLoadTimer)
-  }, [loadDashboard])
+  }, [loadSection])
+
+  useEffect(() => {
+    const restoreSection = () => loadSection(adminSectionFromLocation())
+    window.addEventListener('popstate', restoreSection)
+    return () => window.removeEventListener('popstate', restoreSection)
+  }, [loadSection])
 
   useEffect(() => {
     const refreshTimer = window.setInterval(async () => {
-      if (refreshInFlightRef.current || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]') || document.querySelector('.admin-users-table tr.is-busy')) return
+      const activeElement = document.activeElement
+      const isEditing = activeElement?.matches?.('input, select, textarea, [contenteditable="true"]')
+      if (refreshInFlightRef.current || isEditing || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]') || document.querySelector('.admin-users-table tr.is-busy')) return
       refreshInFlightRef.current = true
       try {
         if (section === 'dashboard') await loadDashboard({ silent: true })
@@ -1046,14 +1365,14 @@ export function AdminPage({ user, onLogout }) {
             </div>
           ))}
         </nav>
-        <div className="admin-sidebar__account"><span className="admin-avatar">{user.username?.slice(0, 1).toUpperCase()}</span><span><strong>{user.username}</strong><small>Administrator</small></span><button type="button" onClick={onLogout} aria-label="Log out"><AppIcon name="logout" /></button></div>
+        <div className="admin-sidebar__account"><AdminAvatar user={user} /><span><strong>{user.username}</strong><small>Administrator</small></span><button type="button" onClick={onLogout} aria-label="Log out"><AppIcon name="logout" /></button></div>
       </aside>
 
       <section className="admin-main">
         <header className="admin-topbar">
           <div><small>ADMINISTRATION / {section.toUpperCase()}</small><h1>{sectionMeta[0]}</h1><p>{sectionMeta[1]}</p></div>
           <div className="admin-topbar__actions">
-            <span className="admin-system-status"><AppIcon name="live" /><i />System online<em>Auto · 2s</em></span>
+            <span className={`admin-system-status is-${refreshState}`}><AppIcon name="live" /><i />{refreshState === 'connecting' ? 'Connecting data' : refreshState === 'stale' ? 'Update delayed' : 'Live data'}<em>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · Auto 2s` : 'Auto refresh · 2s'}</em></span>
             <div className="admin-language-switch" role="group" aria-label="Interface language"><AppIcon name="translate" /><button className={language === 'en' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('en')} aria-pressed={language === 'en'}>EN</button><button className={language === 'th' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('th')} aria-pressed={language === 'th'}>ไทย</button></div>
             <button className="admin-text-size-button" type="button" onClick={() => updatePreferences({ textSize: preferences.textSize === 'large' ? 'default' : 'large' })} aria-label={preferences.textSize === 'large' ? 'Use standard text size' : 'Use large text size'} aria-pressed={preferences.textSize === 'large'} title={preferences.textSize === 'large' ? 'Standard text size' : 'Large text size'}>{preferences.textSize === 'large' ? 'A' : 'A+'}</button>
             <button type="button" onClick={() => updatePreferences({ theme: preferences.theme === 'dark' ? 'light' : 'dark' })} aria-label={preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme'} title={preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme'}><AppIcon name={preferences.theme === 'dark' ? 'lightMode' : 'darkMode'} /></button>
