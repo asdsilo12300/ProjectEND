@@ -19,8 +19,8 @@ class AdminUserController extends Controller
             ->when($request->string('search')->trim()->isNotEmpty(), function ($query) use ($request): void {
                 $search = '%'.$request->string('search')->trim().'%';
                 $query->where(fn ($nested) => $nested
-                    ->where('username', 'like', $search)
-                    ->orWhere('email', 'like', $search));
+                    ->whereLike('username', $search, caseSensitive: false)
+                    ->orWhereLike('email', $search, caseSensitive: false));
             })
             ->when($request->filled('role'), fn ($query) => $query->where('role', $request->string('role')))
             ->orderBy('created_at')

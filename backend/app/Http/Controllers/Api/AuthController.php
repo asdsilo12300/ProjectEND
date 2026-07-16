@@ -24,9 +24,11 @@ class AuthController extends Controller
 
     public function register(Request $request): JsonResponse
     {
+        $this->normalizeEmailInput($request);
+
         $data = $request->validate([
             'username' => ['required', 'string', 'max:80', 'unique:users,username'],
-            'email' => ['required', 'email', 'max:191', 'unique:users,email'],
+            'email' => ['required', 'email', 'max:191', $this->uniqueEmailIgnoringCase()],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'password_confirmation' => ['required', 'string'],
         ]);
@@ -53,12 +55,16 @@ class AuthController extends Controller
 
     public function login(Request $request): JsonResponse
     {
+        $this->normalizeEmailInput($request);
+
         $data = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::query()->where('email', $data['email'])->first();
+        $user = User::query()
+            ->whereRaw('LOWER(email) = ?', [$data['email']])
+            ->first();
 
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
@@ -146,6 +152,25 @@ class AuthController extends Controller
                 $inventory->save();
             });
     }
+
+    private function normalizeEmailInput(Request $request): void
+    {
+        $email = $request->input('email');
+
+        if (is_string($email)) {
+            $request->merge(['email' => mb_strtolower(trim($email))]);
+        }
+    }
+
+    private function uniqueEmailIgnoringCase(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (User::query()->whereRaw('LOWER(email) = ?', [(string) $value])->exists()) {
+                $fail('The email has already been taken.');
+            }
+        };
+    }
+
     private function userPayload(User $user): array
     {
         return [

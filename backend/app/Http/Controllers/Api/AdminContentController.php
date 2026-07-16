@@ -19,9 +19,9 @@ class AdminContentController extends Controller
             ->when($request->string('search')->trim()->isNotEmpty(), function ($query) use ($request): void {
                 $search = '%'.$request->string('search')->trim().'%';
                 $query->where(fn ($nested) => $nested
-                    ->where('title', 'like', $search)
-                    ->orWhere('title_th', 'like', $search)
-                    ->orWhere('slug', 'like', $search));
+                    ->whereLike('title', $search, caseSensitive: false)
+                    ->orWhereLike('title_th', $search, caseSensitive: false)
+                    ->orWhereLike('slug', $search, caseSensitive: false));
             })
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->orderBy('sort_order')

@@ -171,13 +171,13 @@ class AdminResourceController extends Controller
             $query->where(function ($nested) use ($resource, $search): void {
                 $like = '%'.$search.'%';
                 if ($resource === 'posts') {
-                    $nested->where('caption', 'like', $like)->orWhereHas('user', fn ($user) => $user->where('username', 'like', $like)->orWhere('email', 'like', $like));
+                    $nested->whereLike('caption', $like, caseSensitive: false)->orWhereHas('user', fn ($user) => $user->whereLike('username', $like, caseSensitive: false)->orWhereLike('email', $like, caseSensitive: false));
                 } elseif (in_array($resource, ['comments', 'simulator-comments'], true)) {
-                    $nested->where('comment_text', 'like', $like)->orWhereHas('user', fn ($user) => $user->where('username', 'like', $like));
+                    $nested->whereLike('comment_text', $like, caseSensitive: false)->orWhereHas('user', fn ($user) => $user->whereLike('username', $like, caseSensitive: false));
                 } elseif ($resource === 'activity-logs') {
-                    $nested->where('action', 'like', $like)->orWhere('target_type', 'like', $like)->orWhere('detail', 'like', $like);
+                    $nested->whereLike('action', $like, caseSensitive: false)->orWhereLike('target_type', $like, caseSensitive: false)->orWhereLike('detail', $like, caseSensitive: false);
                 } else {
-                    $nested->where('id', (int) $search)->orWhereHas('user', fn ($user) => $user->where('username', 'like', $like)->orWhere('email', 'like', $like));
+                    $nested->where('id', (int) $search)->orWhereHas('user', fn ($user) => $user->whereLike('username', $like, caseSensitive: false)->orWhereLike('email', $like, caseSensitive: false));
                 }
             });
         }
@@ -229,8 +229,8 @@ class AdminResourceController extends Controller
         }
         $query->where(function ($nested) use ($columns, $search): void {
             foreach ($columns as $index => $column) {
-                $method = $index === 0 ? 'where' : 'orWhere';
-                $nested->{$method}($column, 'like', '%'.$search.'%');
+                $method = $index === 0 ? 'whereLike' : 'orWhereLike';
+                $nested->{$method}($column, '%'.$search.'%', caseSensitive: false);
             }
         });
     }

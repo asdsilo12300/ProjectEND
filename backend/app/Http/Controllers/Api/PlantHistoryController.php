@@ -29,15 +29,15 @@ class PlantHistoryController extends Controller
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($inner) use ($search): void {
                     $inner
-                        ->where('analysis_result', 'like', "%{$search}%")
-                        ->orWhere('direction', 'like', "%{$search}%")
+                        ->whereLike('analysis_result', "%{$search}%", caseSensitive: false)
+                        ->orWhereLike('direction', "%{$search}%", caseSensitive: false)
                         ->orWhereHas('plant', function ($plantQuery) use ($search): void {
                             $plantQuery
-                                ->where('name_th', 'like', "%{$search}%")
-                                ->orWhere('name_en', 'like', "%{$search}%");
+                                ->whereLike('name_th', "%{$search}%", caseSensitive: false)
+                                ->orWhereLike('name_en', "%{$search}%", caseSensitive: false);
                         })
                         ->orWhereHas('finalStage', function ($stageQuery) use ($search): void {
-                            $stageQuery->where('stage_name', 'like', "%{$search}%");
+                            $stageQuery->whereLike('stage_name', "%{$search}%", caseSensitive: false);
                         });
                 });
             })

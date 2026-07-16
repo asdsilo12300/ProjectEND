@@ -57,8 +57,8 @@ class FriendController extends Controller
             ->where('id', '<>', $user->id)
             ->where(function ($builder) use ($query): void {
                 $builder
-                    ->where('username', 'like', "%{$query}%")
-                    ->orWhere('email', 'like', "%{$query}%");
+                    ->whereLike('username', "%{$query}%", caseSensitive: false)
+                    ->orWhereLike('email', "%{$query}%", caseSensitive: false);
             })
             ->limit(8)
             ->get()
