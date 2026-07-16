@@ -1,2 +1,3 @@
-*
+# Public assets in this directory are deployed with the application.
+# Do not ignore new uploads here; Git can now add them normally.
 !.gitignore
