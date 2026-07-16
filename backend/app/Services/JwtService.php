@@ -18,7 +18,7 @@ class JwtService
             'iss' => config('app.url'),
             'sub' => $user->id,
             'iat' => $now->timestamp,
-            'exp' => $now->copy()->addDays(7)->timestamp,
+            'exp' => $now->copy()->addDays((int) config('auth.jwt_ttl_days', 7))->timestamp,
         ], $this->secret(), 'HS256');
     }
 
@@ -31,7 +31,7 @@ class JwtService
 
     private function secret(): string
     {
-        $secret = (string) env('JWT_SECRET', config('app.key'));
+        $secret = (string) config('auth.jwt_secret', config('app.key'));
 
         if ($secret === '') {
             throw new RuntimeException('JWT_SECRET is not configured.');

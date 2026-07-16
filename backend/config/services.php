@@ -46,4 +46,13 @@ return [
         'timeout' => (int) env('GOOGLE_OAUTH_TIMEOUT', 10),
     ],
 
+    'media' => [
+        'driver' => env('MEDIA_DRIVER', 'laravel'),
+        'disk' => env('MEDIA_DISK', 'public'),
+        'supabase_url' => env('SUPABASE_URL'),
+        'supabase_key' => env('SUPABASE_SECRET_KEY', env('SUPABASE_SERVICE_ROLE_KEY')),
+        'supabase_bucket' => env('SUPABASE_STORAGE_BUCKET', 'plant-media'),
+        'timeout' => (int) env('SUPABASE_STORAGE_TIMEOUT', 30),
+    ],
+
 ];

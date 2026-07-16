@@ -14,17 +14,19 @@ use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Models\SimulatorComment;
 use App\Models\UserItem;
+use App\Services\MediaStorage;
 use App\Services\PlantSimulationEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class SimulatorController extends Controller
 {
+    public function __construct(private readonly MediaStorage $media) {}
+
     public function index(Request $request): AnonymousResourceCollection
     {
         return SimulatorResource::collection(
@@ -258,7 +260,7 @@ class SimulatorController extends Controller
         $data = $request->validate([
             'visibility' => ['required', Rule::in(['private', 'friends', 'public'])],
             'caption' => ['nullable', 'string', 'max:1200'],
-            'snapshot_image_data' => ['nullable', 'string'],
+            'snapshot_image_data' => ['nullable', 'string', 'max:9000000'],
         ]);
 
         $liveSnapshotUrl = $simulator->live_snapshot_url;
@@ -335,9 +337,11 @@ class SimulatorController extends Controller
 
         $extension = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
         $path = 'live-snapshots/simulator-'.$simulatorId.'-'.Str::uuid().'.'.$extension;
-        Storage::disk('public')->put($path, $binary);
+        if (! $this->media->put($path, $binary, 'image/'.$matches[1])) {
+            return null;
+        }
 
-        return $path;
+        return $this->media->reference($path);
     }
 
     public function storeLog(Request $request, Simulator $simulator): SimulatorResource

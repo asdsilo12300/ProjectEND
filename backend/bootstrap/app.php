@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\JwtAuthenticate;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,10 +15,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->append(\App\Http\Middleware\ApiCors::class);
+        // Railway terminates HTTPS at its proxy; trust its forwarded scheme/host.
+        $middleware->trustProxies(at: '*');
         $middleware->alias([
-            'jwt' => \App\Http\Middleware\JwtAuthenticate::class,
-            'admin' => \App\Http\Middleware\EnsureAdmin::class,
+            'jwt' => JwtAuthenticate::class,
+            'admin' => EnsureAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

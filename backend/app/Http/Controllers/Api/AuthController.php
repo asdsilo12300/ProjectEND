@@ -8,19 +8,20 @@ use App\Models\Item;
 use App\Models\User;
 use App\Models\UserItem;
 use App\Services\JwtService;
+use App\Services\MediaStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function __construct(private readonly JwtService $jwt)
-    {
-    }
+    public function __construct(
+        private readonly JwtService $jwt,
+        private readonly MediaStorage $media,
+    ) {}
 
     public function register(Request $request): JsonResponse
     {
@@ -102,21 +103,17 @@ class AuthController extends Controller
         $coverUrl = $user->cover_url;
 
         if ($request->hasFile('avatar')) {
-            if ($avatarUrl && str_starts_with($avatarUrl, '/storage/profile-avatars/')) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $avatarUrl));
-            }
+            $this->media->deleteFromReference($avatarUrl);
 
-            $path = $request->file('avatar')->store('profile-avatars', 'public');
-            $avatarUrl = Storage::url($path);
+            $path = $this->media->storeUploadedFile($request->file('avatar'), 'profile-avatars');
+            $avatarUrl = $this->media->publicUrl($path);
         }
 
         if ($request->hasFile('cover')) {
-            if ($coverUrl && str_starts_with($coverUrl, '/storage/profile-covers/')) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $coverUrl));
-            }
+            $this->media->deleteFromReference($coverUrl);
 
-            $path = $request->file('cover')->store('profile-covers', 'public');
-            $coverUrl = Storage::url($path);
+            $path = $this->media->storeUploadedFile($request->file('cover'), 'profile-covers');
+            $coverUrl = $this->media->publicUrl($path);
         }
 
         $user->forceFill([

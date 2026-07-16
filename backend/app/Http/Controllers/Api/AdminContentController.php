@@ -5,14 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AdminActivityLog;
 use App\Models\Content;
+use App\Services\MediaStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AdminContentController extends Controller
 {
+    public function __construct(private readonly MediaStorage $media) {}
+
     public function index(Request $request): JsonResponse
     {
         $contents = Content::query()
@@ -52,7 +54,7 @@ class AdminContentController extends Controller
         ]);
 
         $file = $request->file('upload');
-        $path = $file->store('content-images', 'public');
+        $path = $this->media->storeUploadedFile($file, 'content-images');
         AdminActivityLog::record($request->user(), 'uploaded', 'content-image', null, [
             'path' => $path,
             'size' => $file->getSize(),
@@ -60,7 +62,7 @@ class AdminContentController extends Controller
         ]);
 
         return response()->json([
-            'url' => Storage::url($path),
+            'url' => $this->media->publicUrl($path),
         ], 201);
     }
 

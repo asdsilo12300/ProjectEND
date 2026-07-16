@@ -6,13 +6,14 @@ use App\Models\ModelAsset;
 use App\Models\Pest;
 use App\Models\Plant;
 use App\Models\PlantGrowthStage;
+use App\Services\MediaStorage;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ImportModels extends Command
 {
     protected $signature = 'models:import {--dir=../frontend/public}';
+
     protected $description = 'Import local GLTF/GLB model sets into public storage and update plant, pest, stage, and model asset records.';
 
     private array $knownAssets = [
@@ -22,36 +23,47 @@ class ImportModels extends Command
         'snails.gltf' => ['key' => 'pest.snail', 'type' => 'pest', 'label' => 'Snail pest model'],
     ];
 
+    public function __construct(private readonly MediaStorage $media)
+    {
+        parent::__construct();
+    }
+
     public function handle(): int
     {
         $dir = realpath(base_path($this->option('dir')));
 
         if (! $dir || ! is_dir($dir)) {
-            $this->error('Directory not found: ' . base_path($this->option('dir')));
+            $this->error('Directory not found: '.base_path($this->option('dir')));
+
             return self::FAILURE;
         }
 
-        Storage::disk('public')->makeDirectory('models');
-
         foreach ($this->modelFiles($dir) as $file) {
             $basename = basename($file);
-            $storagePath = 'models/' . $basename;
-            Storage::disk('public')->put($storagePath, file_get_contents($file));
+            $storagePath = 'models/'.$basename;
+            $contents = file_get_contents($file);
+            if ($contents === false || ! $this->media->put($storagePath, $contents, $this->modelContentType($file))) {
+                $this->error("Could not store {$basename}.");
+
+                return self::FAILURE;
+            }
             $this->info("Stored {$basename} -> {$storagePath}");
 
             $this->copyGltfDependencies($file, $dir);
-            $this->bindKnownAsset($basename, $storagePath);
-            $this->bindLegacyPattern($basename, $storagePath);
+            $reference = $this->media->reference($storagePath);
+            $this->bindKnownAsset($basename, $reference);
+            $this->bindLegacyPattern($basename, $reference);
         }
 
         $this->info('Model import complete.');
+
         return self::SUCCESS;
     }
 
     private function modelFiles(string $dir): array
     {
         return array_values(array_filter(
-            glob($dir . DIRECTORY_SEPARATOR . '*.{gltf,glb}', GLOB_BRACE) ?: [],
+            glob($dir.DIRECTORY_SEPARATOR.'*.{gltf,glb}', GLOB_BRACE) ?: [],
             fn (string $file) => is_file($file)
         ));
     }
@@ -84,17 +96,34 @@ class ImportModels extends Command
                 continue;
             }
 
-            $source = realpath($dir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $uri));
+            $source = realpath($dir.DIRECTORY_SEPARATOR.str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $uri));
             if (! $source || ! is_file($source)) {
                 $this->warn("Missing GLTF dependency: {$uri}");
+
                 continue;
             }
 
             $relativeUri = str_replace('\\', '/', $uri);
-            $storagePath = 'models/' . $relativeUri;
-            Storage::disk('public')->put($storagePath, file_get_contents($source));
+            $storagePath = 'models/'.$relativeUri;
+            $contents = file_get_contents($source);
+            $contentType = function_exists('mime_content_type')
+                ? (mime_content_type($source) ?: 'application/octet-stream')
+                : 'application/octet-stream';
+
+            if ($contents === false || ! $this->media->put($storagePath, $contents, $contentType)) {
+                $this->warn("Could not store GLTF dependency: {$uri}");
+
+                continue;
+            }
             $this->line("  dependency {$uri} -> {$storagePath}");
         }
+    }
+
+    private function modelContentType(string $file): string
+    {
+        return Str::endsWith(strtolower($file), '.gltf')
+            ? 'model/gltf+json'
+            : 'model/gltf-binary';
     }
 
     private function bindKnownAsset(string $basename, string $storagePath): void

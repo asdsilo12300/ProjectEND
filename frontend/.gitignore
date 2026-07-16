@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Local environment values must never be committed. Keep safe templates.
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Accidental local tooling cache; it is not part of the application.
+-d/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

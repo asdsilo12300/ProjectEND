@@ -1,5 +1,11 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
-const API_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, '')
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '')
+const API_BASE_URL = configuredApiBaseUrl || (import.meta.env.DEV ? 'http://localhost:8000/api' : '')
+
+if (!API_BASE_URL) {
+  throw new Error('VITE_API_BASE_URL is required for a production build.')
+}
+
+const API_ROOT_URL = API_BASE_URL.replace(/\/api$/, '')
 
 export function getToken() {
   return window.localStorage.getItem('plant_game_token')

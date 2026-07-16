@@ -1,10 +1,10 @@
 <?php
 
-use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminContentController;
 use App\Http\Controllers\Api\AdminDashboardController;
-use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AdminResourceController;
+use App\Http\Controllers\Api\AdminUserController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\FriendController;
@@ -12,19 +12,20 @@ use App\Http\Controllers\Api\GameProgressController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\ModelAssetController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PlantController;
 use App\Http\Controllers\Api\PlantHistoryController;
-use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\PlantModelController;
 use App\Http\Controllers\Api\PostController;
-use App\Http\Controllers\Api\SimulatorController;
 use App\Http\Controllers\Api\ShopController;
+use App\Http\Controllers\Api\SimulatorController;
 use Illuminate\Support\Facades\Route;
 
 Route::options('/{any}', fn () => response()->noContent())->where('any', '.*');
 
 Route::prefix('auth')->group(function (): void {
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:3,1');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::get('/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:20,1');
     Route::get('/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:30,1');
 });
@@ -39,9 +40,9 @@ Route::get('/posts', [PostController::class, 'index']);
 Route::get('/model-assets', [ModelAssetController::class, 'index']);
 Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
 
-// Dev-only test upload route (no auth) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â only enabled when APP_DEBUG is true
-if (env('APP_DEBUG', false)) {
-    Route::post('/dev/upload-model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadTest']);
+// Dev-only test upload route (no auth); enabled only when APP_DEBUG is true.
+if (config('app.debug')) {
+    Route::post('/dev/upload-model', [PlantModelController::class, 'uploadTest']);
 }
 
 Route::middleware('jwt')->group(function (): void {
@@ -100,9 +101,9 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'read']);
 
-    // Upload 3D model files (GLB) and save path to DB
-    Route::post('/plants/{plant}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadBaseModel']);
-    Route::post('/plants/{plant}/stages/{stage}/model', [\App\Http\Controllers\Api\PlantModelController::class, 'uploadStageModel']);
+    // Model files can change the whole simulation and are admin-only.
+    Route::post('/plants/{plant}/model', [PlantModelController::class, 'uploadBaseModel'])->middleware('admin');
+    Route::post('/plants/{plant}/stages/{stage}/model', [PlantModelController::class, 'uploadStageModel'])->middleware('admin');
 
     Route::prefix('admin')->middleware('admin')->group(function (): void {
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
@@ -118,9 +119,6 @@ Route::middleware('jwt')->group(function (): void {
         Route::post('/resources/{resource}', [AdminResourceController::class, 'store']);
         Route::put('/resources/{resource}/{record}', [AdminResourceController::class, 'update']);
         Route::delete('/resources/{resource}/{record}', [AdminResourceController::class, 'destroy']);
+
     });
 });
-
-
-
-

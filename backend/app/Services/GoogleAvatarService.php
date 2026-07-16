@@ -4,11 +4,12 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class GoogleAvatarService
 {
+    public function __construct(private readonly MediaStorage $media) {}
+
     public function cache(string $googleId, string $pictureUrl): ?string
     {
         $googleId = trim($googleId);
@@ -55,11 +56,11 @@ class GoogleAvatarService
 
             $path = 'profile-avatars/google/'.hash('sha256', $googleId).'.'.$extension;
 
-            if (! Storage::disk('public')->put($path, $body)) {
+            if (! $this->media->put($path, $body, $mime)) {
                 return null;
             }
 
-            return Storage::url($path);
+            return $this->media->publicUrl($path);
         } catch (Throwable $error) {
             Log::notice('Could not cache a Google profile image.', [
                 'exception' => $error::class,

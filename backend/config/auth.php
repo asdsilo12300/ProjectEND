@@ -4,6 +4,9 @@ use App\Models\User;
 
 return [
 
+    'jwt_secret' => env('JWT_SECRET', env('APP_KEY')),
+    'jwt_ttl_days' => (int) env('JWT_TTL_DAYS', 7),
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Defaults

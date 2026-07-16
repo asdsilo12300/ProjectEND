@@ -1,0 +1,8 @@
+-d
+.env
+.env.*
+!.env.example
+!.env.production.example
+node_modules
+dist
+coverage

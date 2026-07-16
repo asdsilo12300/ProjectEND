@@ -4,21 +4,24 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PlantHistoryResource;
+use App\Http\Resources\SimulatorResource;
 use App\Models\PlantConditionRule;
 use App\Models\PlantHistory;
 use App\Models\Post;
 use App\Models\Simulator;
+use App\Services\MediaStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class PlantHistoryController extends Controller
 {
+    public function __construct(private readonly MediaStorage $media) {}
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $search = trim((string) $request->query('q', ''));
@@ -54,7 +57,7 @@ class PlantHistoryController extends Controller
         $data = $request->validate([
             'visibility' => ['nullable', Rule::in(['private', 'friends', 'public'])],
             'snapshot_image_url' => ['nullable', 'string', 'max:2048'],
-            'snapshot_image_data' => ['nullable', 'string'],
+            'snapshot_image_data' => ['nullable', 'string', 'max:7500000'],
         ]);
 
         $history = DB::transaction(function () use ($data, $request, $simulator): PlantHistory {
@@ -155,7 +158,7 @@ class PlantHistoryController extends Controller
 
     private function gameState(Simulator $simulator): array
     {
-        $resource = (new \App\Http\Resources\SimulatorResource(
+        $resource = (new SimulatorResource(
             $simulator->fresh(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
         ))->resolve(request());
 
@@ -174,6 +177,7 @@ class PlantHistoryController extends Controller
 
         return response()->json(['data' => ['id' => $history->id, 'deleted' => true]]);
     }
+
     public function publish(Request $request, PlantHistory $history): JsonResponse
     {
         abort_unless($history->user_id === $request->user()->id, 403);
@@ -252,10 +256,12 @@ class PlantHistoryController extends Controller
             return null;
         }
 
-        $path = 'plant-history-snapshots/simulator-' . $simulatorId . '-' . Str::uuid() . '.' . $extension;
-        Storage::disk('public')->put($path, $binary);
+        $path = 'plant-history-snapshots/simulator-'.$simulatorId.'-'.Str::uuid().'.'.$extension;
+        if (! $this->media->put($path, $binary, 'image/'.$matches[1])) {
+            return null;
+        }
 
-        return '/storage/' . $path;
+        return $this->media->reference($path);
     }
 
     private function totalScore(Simulator $simulator, Collection $matchedRules, int $activePestCount): int
@@ -316,7 +322,7 @@ class PlantHistoryController extends Controller
         $health = (int) round((float) $simulator->health);
 
         if ($growthPoint >= 100) {
-            return $this->thai('\\u0e1e\\u0e37\\u0e0a\\u0e42\\u0e15\\u0e40\\u0e15\\u0e47\\u0e21\\u0e27\\u0e31\\u0e22\\u0e41\\u0e25\\u0e49\\u0e27 \\u0e1a\\u0e31\\u0e19\\u0e17\\u0e36\\u0e01\\u0e23\\u0e2d\\u0e1a\\u0e2a\\u0e21\\u0e1a\\u0e39\\u0e23\\u0e13\\u0e4c\\u0e14\\u0e49\\u0e27\\u0e22\\u0e2a\\u0e38\\u0e02\\u0e20\\u0e32\\u0e1e ') . $health . '%';
+            return $this->thai('\\u0e1e\\u0e37\\u0e0a\\u0e42\\u0e15\\u0e40\\u0e15\\u0e47\\u0e21\\u0e27\\u0e31\\u0e22\\u0e41\\u0e25\\u0e49\\u0e27 \\u0e1a\\u0e31\\u0e19\\u0e17\\u0e36\\u0e01\\u0e23\\u0e2d\\u0e1a\\u0e2a\\u0e21\\u0e1a\\u0e39\\u0e23\\u0e13\\u0e4c\\u0e14\\u0e49\\u0e27\\u0e22\\u0e2a\\u0e38\\u0e02\\u0e20\\u0e32\\u0e1e ').$health.'%';
         }
 
         if ($matchedRules->isEmpty() && $activePestCount === 0) {
@@ -333,14 +339,14 @@ class PlantHistoryController extends Controller
         $parts = [];
 
         if ($stressNames->isNotEmpty()) {
-            $parts[] = $this->thai('\\u0e1e\\u0e1a\\u0e04\\u0e27\\u0e32\\u0e21\\u0e40\\u0e04\\u0e23\\u0e35\\u0e22\\u0e14\\u0e08\\u0e32\\u0e01') . $stressNames->implode($this->thai('\\u0e41\\u0e25\\u0e30'));
+            $parts[] = $this->thai('\\u0e1e\\u0e1a\\u0e04\\u0e27\\u0e32\\u0e21\\u0e40\\u0e04\\u0e23\\u0e35\\u0e22\\u0e14\\u0e08\\u0e32\\u0e01').$stressNames->implode($this->thai('\\u0e41\\u0e25\\u0e30'));
         }
 
         if ($activePestCount > 0) {
-            $parts[] = $this->thai('\\u0e21\\u0e35\\u0e28\\u0e31\\u0e15\\u0e23\\u0e39\\u0e1e\\u0e37\\u0e0a ') . $activePestCount . $this->thai(' \\u0e08\\u0e38\\u0e14');
+            $parts[] = $this->thai('\\u0e21\\u0e35\\u0e28\\u0e31\\u0e15\\u0e23\\u0e39\\u0e1e\\u0e37\\u0e0a ').$activePestCount.$this->thai(' \\u0e08\\u0e38\\u0e14');
         }
 
-        return implode(' ' . $this->thai('\\u0e41\\u0e25\\u0e30') . ' ', $parts) . ' ' . $this->thai('\\u0e17\\u0e33\\u0e43\\u0e2b\\u0e49\\u0e1e\\u0e37\\u0e0a\\u0e42\\u0e15\\u0e0a\\u0e49\\u0e32\\u0e25\\u0e07\\u0e2b\\u0e23\\u0e37\\u0e2d\\u0e2a\\u0e38\\u0e02\\u0e20\\u0e32\\u0e1e\\u0e25\\u0e14\\u0e25\\u0e07');
+        return implode(' '.$this->thai('\\u0e41\\u0e25\\u0e30').' ', $parts).' '.$this->thai('\\u0e17\\u0e33\\u0e43\\u0e2b\\u0e49\\u0e1e\\u0e37\\u0e0a\\u0e42\\u0e15\\u0e0a\\u0e49\\u0e32\\u0e25\\u0e07\\u0e2b\\u0e23\\u0e37\\u0e2d\\u0e2a\\u0e38\\u0e02\\u0e20\\u0e32\\u0e1e\\u0e25\\u0e14\\u0e25\\u0e07');
     }
 
     private function directionText(Collection $matchedRules, int $activePestCount): string
@@ -360,7 +366,7 @@ class PlantHistoryController extends Controller
             $directions->push($this->thai('\\u0e08\\u0e31\\u0e14\\u0e01\\u0e32\\u0e23\\u0e28\\u0e31\\u0e15\\u0e23\\u0e39\\u0e1e\\u0e37\\u0e0a\\u0e17\\u0e35\\u0e48\\u0e1e\\u0e1a'));
         }
 
-        return $directions->isEmpty() ? $this->thai('\\u0e1b\\u0e23\\u0e31\\u0e1a\\u0e1b\\u0e31\\u0e08\\u0e08\\u0e31\\u0e22\\u0e17\\u0e35\\u0e48\\u0e40\\u0e2a\\u0e35\\u0e48\\u0e22\\u0e07\\u0e01\\u0e48\\u0e2d\\u0e19\\u0e23\\u0e2d\\u0e1a\\u0e16\\u0e31\\u0e14\\u0e44\\u0e1b') : $directions->implode(' ' . $this->thai('\\u0e41\\u0e25\\u0e30') . ' ');
+        return $directions->isEmpty() ? $this->thai('\\u0e1b\\u0e23\\u0e31\\u0e1a\\u0e1b\\u0e31\\u0e08\\u0e08\\u0e31\\u0e22\\u0e17\\u0e35\\u0e48\\u0e40\\u0e2a\\u0e35\\u0e48\\u0e22\\u0e07\\u0e01\\u0e48\\u0e2d\\u0e19\\u0e23\\u0e2d\\u0e1a\\u0e16\\u0e31\\u0e14\\u0e44\\u0e1b') : $directions->implode(' '.$this->thai('\\u0e41\\u0e25\\u0e30').' ');
     }
 
     private function stressLabel(PlantConditionRule $rule): string
@@ -368,16 +374,16 @@ class PlantHistoryController extends Controller
         $factor = $this->factorLabel($rule->factor);
 
         return match ($rule->operator) {
-            'below' => $factor . $this->thai('\\u0e15\\u0e48\\u0e33'),
-            'above' => $factor . $this->thai('\\u0e2a\\u0e39\\u0e07'),
-            'outside' => $factor . $this->thai('\\u0e19\\u0e2d\\u0e01\\u0e0a\\u0e48\\u0e27\\u0e07\\u0e40\\u0e2b\\u0e21\\u0e32\\u0e30\\u0e2a\\u0e21'),
+            'below' => $factor.$this->thai('\\u0e15\\u0e48\\u0e33'),
+            'above' => $factor.$this->thai('\\u0e2a\\u0e39\\u0e07'),
+            'outside' => $factor.$this->thai('\\u0e19\\u0e2d\\u0e01\\u0e0a\\u0e48\\u0e27\\u0e07\\u0e40\\u0e2b\\u0e21\\u0e32\\u0e30\\u0e2a\\u0e21'),
             default => $factor,
         };
     }
 
     private function directionLabel(PlantConditionRule $rule): string
     {
-        return match ($rule->factor . ':' . $rule->operator) {
+        return match ($rule->factor.':'.$rule->operator) {
             'water:below' => $this->thai('\\u0e40\\u0e1e\\u0e34\\u0e48\\u0e21\\u0e19\\u0e49\\u0e33\\u0e40\\u0e25\\u0e47\\u0e01\\u0e19\\u0e49\\u0e2d\\u0e22'),
             'water:above' => $this->thai('\\u0e25\\u0e14\\u0e19\\u0e49\\u0e33\\u0e41\\u0e25\\u0e30\\u0e1b\\u0e25\\u0e48\\u0e2d\\u0e22\\u0e14\\u0e34\\u0e19\\u0e23\\u0e30\\u0e1a\\u0e32\\u0e22'),
             'light:below' => $this->thai('\\u0e40\\u0e1e\\u0e34\\u0e48\\u0e21\\u0e41\\u0e2a\\u0e07\\u0e43\\u0e2b\\u0e49\\u0e1e\\u0e37\\u0e0a'),
@@ -388,7 +394,7 @@ class PlantHistoryController extends Controller
             'soil_humidity:below', 'air_humidity:below' => $this->thai('\\u0e40\\u0e1e\\u0e34\\u0e48\\u0e21\\u0e04\\u0e27\\u0e32\\u0e21\\u0e0a\\u0e37\\u0e49\\u0e19\\u0e43\\u0e2b\\u0e49\\u0e40\\u0e2b\\u0e21\\u0e32\\u0e30\\u0e2a\\u0e21'),
             'soil_temp:above', 'air_temp:above' => $this->thai('\\u0e25\\u0e14\\u0e04\\u0e27\\u0e32\\u0e21\\u0e23\\u0e49\\u0e2d\\u0e19\\u0e23\\u0e2d\\u0e1a\\u0e1e\\u0e37\\u0e0a'),
             'soil_temp:below', 'air_temp:below' => $this->thai('\\u0e40\\u0e1e\\u0e34\\u0e48\\u0e21\\u0e2d\\u0e38\\u0e13\\u0e2b\\u0e20\\u0e39\\u0e21\\u0e34\\u0e43\\u0e2b\\u0e49\\u0e40\\u0e2b\\u0e21\\u0e32\\u0e30\\u0e2a\\u0e21'),
-            default => $this->thai('\\u0e1b\\u0e23\\u0e31\\u0e1a') . $this->factorLabel($rule->factor) . $this->thai('\\u0e43\\u0e2b\\u0e49\\u0e2d\\u0e22\\u0e39\\u0e48\\u0e43\\u0e19\\u0e0a\\u0e48\\u0e27\\u0e07\\u0e40\\u0e2b\\u0e21\\u0e32\\u0e30\\u0e2a\\u0e21'),
+            default => $this->thai('\\u0e1b\\u0e23\\u0e31\\u0e1a').$this->factorLabel($rule->factor).$this->thai('\\u0e43\\u0e2b\\u0e49\\u0e2d\\u0e22\\u0e39\\u0e48\\u0e43\\u0e19\\u0e0a\\u0e48\\u0e27\\u0e07\\u0e40\\u0e2b\\u0e21\\u0e32\\u0e30\\u0e2a\\u0e21'),
         };
     }
 
@@ -408,6 +414,6 @@ class PlantHistoryController extends Controller
 
     private function thai(string $escaped): string
     {
-        return json_decode('"' . $escaped . '"') ?: $escaped;
+        return json_decode('"'.$escaped.'"') ?: $escaped;
     }
 }
