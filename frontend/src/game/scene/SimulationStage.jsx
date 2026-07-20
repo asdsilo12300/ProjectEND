@@ -188,7 +188,14 @@ export function SimulationStage({ actionMessage, awaitingFirstCycle = false, coi
             <SceneEnvironment dirtModelUrl={sceneAssets['ground.dirt']?.url} mode={mode} />
             {plantSelected && (
               <>
-                <PlantModel modelUrl={simulationVisual?.current_model_url} visualOverrides={simulationVisual?.visual_overrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
+                <PlantModel
+                  modelUrl={simulationVisual?.current_model_url}
+                  plantName={simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th}
+                  visualOverrides={simulationVisual?.visual_overrides}
+                  isMature={isMature}
+                  isPaused={isPaused}
+                  growthProgress={growthProgress}
+                />
                 <PlantStatusHud awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} growthPoint={growthPoint} growthRate={growthRate} health={health} />
                 {pests.map((pest, index) => {
                   const pestKey = `${pest.pest?.name_en ?? pest.name_en ?? pest.type ?? 'pest'}-${pest.id ?? index}`

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import heroImage from '../assets/hero.png'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 import { AppIcon } from '../game/icons/IconifyIcon'
+import { loadSettings, saveSettings } from '../game/settings/settingsPreferences'
 import { getLearningContent, getLearningContents } from '../lib/api'
 import './LandingPage.css'
 
@@ -86,7 +87,7 @@ function BrandButton({ onClick, compact = false }) {
   )
 }
 
-function LandingHeader({ page, user, onHome, onLearn, onStart, onSignIn }) {
+function LandingHeader({ language, onLanguageChange, page, user, onHome, onLearn, onStart, onSignIn }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   function run(action) {
@@ -101,6 +102,10 @@ function LandingHeader({ page, user, onHome, onLearn, onStart, onSignIn }) {
         <nav className={`landing-nav ${menuOpen ? 'landing-nav--open' : ''}`} aria-label="Main navigation">
           <button className={page === 'home' ? 'is-active' : ''} type="button" onClick={() => run(onHome)}>Home</button>
           <button className={page === 'learn' ? 'is-active' : ''} type="button" onClick={() => run(onLearn)}>Learn about</button>
+          <div className="landing-language-toggle" role="group" aria-label="Interface language">
+            <button className={language === 'en' ? 'is-active' : ''} type="button" aria-pressed={language === 'en'} onClick={() => onLanguageChange('en')}>EN</button>
+            <button className={language === 'th' ? 'is-active' : ''} type="button" aria-pressed={language === 'th'} onClick={() => onLanguageChange('th')}>ไทย</button>
+          </div>
           {!user && <button type="button" onClick={() => run(onSignIn)}>Log in</button>}
           <button className="landing-nav__cta" type="button" onClick={() => run(onStart)}>
             <AppIcon name="sprout" />
@@ -817,6 +822,13 @@ function LandingFooter({ onHome, onLearn }) {
 
 export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn, onOpenPage }) {
   const [articleSlug, setArticleSlug] = useState(null)
+  const [language, setLanguage] = useState(() => loadSettings().language === 'th' ? 'th' : 'en')
+
+  function changeLanguage(nextLanguage) {
+    const normalizedLanguage = nextLanguage === 'th' ? 'th' : 'en'
+    setLanguage(normalizedLanguage)
+    saveSettings({ ...loadSettings(), language: normalizedLanguage })
+  }
 
   function openHome() {
     setArticleSlug(null)
@@ -856,7 +868,7 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
 
   return (
     <main className="landing-shell">
-      <LandingHeader page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onStart={onStart} onSignIn={onSignIn} />
+      <LandingHeader language={language} onLanguageChange={changeLanguage} page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onStart={onStart} onSignIn={onSignIn} />
       {page === 'learn'
         ? articleSlug
           ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />

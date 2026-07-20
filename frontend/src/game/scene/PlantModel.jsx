@@ -13,6 +13,7 @@ const PLANT_ASSET_ALIGNMENT_POSITION = [-0.1, -0.026, 0.02]
 const PLANT_ASSET_ALIGNMENT_SCALE = 0.9
 const GENERIC_PLANT_TARGET_HEIGHT = 2.15
 const GENERIC_MATURE_ANIMATION_FRACTION = 0.95
+const TULIP_SOIL_EMBED_DEPTH = 0.2
 
 const STEM_LEAN_BY_STATE = {
   leaning: 0.095,
@@ -124,7 +125,12 @@ function isBasePlantModel(modelUrl) {
   return modelUrl === '/plant.gltf' || modelUrl.endsWith('/plant.gltf')
 }
 
-function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+function plantSoilEmbedDepth(plantName = '') {
+  const normalizedName = String(plantName).trim().toLowerCase()
+  return normalizedName.includes('tulip') || normalizedName.includes('ทิวลิป') ? TULIP_SOIL_EMBED_DEPTH : 0
+}
+
+function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
   const clonedScene = useMemo(() => {
@@ -205,7 +211,7 @@ function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaus
     clone.scale.setScalar(scale)
     clone.position.set(
       -center.x * scale,
-      PLANT_BASE_LOCAL_Y - box.min.y * scale,
+      PLANT_BASE_LOCAL_Y - box.min.y * scale - plantSoilEmbedDepth(plantName),
       -center.z * scale,
     )
     clone.updateMatrixWorld(true)
@@ -218,7 +224,7 @@ function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaus
     }
 
     return clone
-  }, [animations, scene])
+  }, [animations, plantName, scene])
   const { actions } = useAnimations(animations, group)
 
   useEffect(() => {
@@ -255,7 +261,7 @@ function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaus
   )
 }
 
-export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   if (isBasePlantModel(modelUrl)) {
     return (
       <group {...props}>
@@ -268,16 +274,16 @@ export function PlantModel({ modelUrl = '/plant.gltf', visualOverrides = {}, isM
 
   const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
 
-  return <GenericPlantModel modelUrl={resolvedModelUrl} visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} {...props} />
+  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} {...props} />
 }
 
 const pestAnchors = {
   aphid: [
-    { position: [-0.02, 2.185, 0.025], rotation: [-0.08, 0.15, 0.04], size: 0.072, modelOffset: [0, 0.004, 0] },
-    { position: [0.12, 2.375, -0.035], rotation: [0.12, -0.42, -0.08], size: 0.069, modelOffset: [0, 0.004, 0] },
-    { position: [-0.08, 2.595, -0.075], rotation: [-0.16, 0.32, 0.06], size: 0.069, modelOffset: [0, 0.004, 0] },
-    { position: [-0.18, 2.972, -0.12], rotation: [0.2, 0.58, -0.1], size: 0.066, modelOffset: [0, 0.004, 0] },
-    { position: [0.08, 3.278, -0.08], rotation: [-0.12, -0.28, 0.08], size: 0.064, modelOffset: [0, 0.004, 0] },
+    { position: [-0.02, 2.185, 0.025], rotation: [-0.08, 0.15, 0.04], size: 0.072, modelOffset: [0, -0.006, 0] },
+    { position: [0.12, 2.375, -0.035], rotation: [0.12, -0.42, -0.08], size: 0.069, modelOffset: [0, -0.006, 0] },
+    { position: [-0.08, 2.595, -0.075], rotation: [-0.16, 0.32, 0.06], size: 0.069, modelOffset: [0, -0.006, 0] },
+    { position: [-0.18, 2.972, -0.12], rotation: [0.2, 0.58, -0.1], size: 0.066, modelOffset: [0, -0.005, 0] },
+    { position: [0.08, 3.278, -0.08], rotation: [-0.12, -0.28, 0.08], size: 0.064, modelOffset: [0, -0.005, 0] },
   ],
   snail: [
     { position: [0.46, 1.3, 0.3], rotation: [0, 0.16, 0], size: 0.28, modelOffset: [0, 0.002, 0] },
@@ -382,7 +388,7 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
       ))
     : !useSurfaceFungus
       ? anchors.map((anchor, anchorIndex) => (
-          <LoadedPest key={`${stableSeed}-${anchorIndex}`} modelUrl={modelUrl} anchor={anchor} />
+          <LoadedPest key={`${stableSeed}-${anchorIndex}`} modelUrl={modelUrl} anchor={anchor} pestName={name} />
         ))
       : anchors.map((anchor, anchorIndex) => (
           <FungusSurfacePatch key={`${stableSeed}-${anchorIndex}`} anchor={anchor} variant={anchorIndex} />
@@ -442,7 +448,7 @@ function SnailSurfaceModel({ anchor }) {
   )
 }
 
-function LoadedPest({ modelUrl, anchor }) {
+function LoadedPest({ modelUrl, anchor, pestName }) {
   const { scene } = useGLTF(modelUrl)
   const normalizedAsset = useMemo(() => {
     const clone = cloneSkeleton(scene)
@@ -488,6 +494,12 @@ function LoadedPest({ modelUrl, anchor }) {
 
   return (
     <group position={anchor.position} rotation={anchor.rotation}>
+      {pestName === 'aphid' && (
+        <mesh position={[0, 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.35, 0.72, 1]} renderOrder={1}>
+          <circleGeometry args={[0.018, 16]} />
+          <meshBasicMaterial color="#152012" transparent opacity={0.24} depthWrite={false} />
+        </mesh>
+      )}
       <group position={anchor.modelOffset ?? [0, 0, 0]} rotation={anchor.modelRotation ?? [0, 0, 0]}>
         <primitive object={normalizedAsset.scene} />
       </group>
