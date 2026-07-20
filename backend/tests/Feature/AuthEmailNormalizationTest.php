@@ -56,6 +56,7 @@ class AuthEmailNormalizationTest extends TestCase
             $table->string('name')->unique();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('user_items', function (Blueprint $table): void {

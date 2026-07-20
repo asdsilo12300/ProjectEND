@@ -102,6 +102,46 @@ class SimulatorSnapshotTest extends TestCase
         ]);
     }
 
+    public function test_starting_simulations_reuses_the_same_species_and_allows_a_second_species(): void
+    {
+        $elephantEar = $this->seedPlayablePlant('Elephant Ear');
+        $tulip = $this->seedPlayablePlant('Tulip', [
+            'water_min' => 35,
+            'water_max' => 60,
+            'light_min' => 60,
+            'light_max' => 100,
+            'fertilizer_min' => 20,
+            'fertilizer_max' => 45,
+            'soil_humidity_min' => 40,
+            'soil_humidity_max' => 65,
+            'air_humidity_min' => 45,
+            'air_humidity_max' => 70,
+            'soil_temp_min' => 4,
+            'soil_temp_max' => 13,
+            'air_temp_min' => 10,
+            'air_temp_max' => 18,
+        ]);
+        $controller = app(SimulatorController::class);
+
+        $firstElephant = $controller->store($this->startRequest($elephantEar->id, 'greenhouse'))->resource;
+        $duplicateElephant = $controller->store($this->startRequest($elephantEar->id, 'outdoor'))->resource;
+        $firstTulip = $controller->store($this->startRequest($tulip->id, 'outdoor'))->resource;
+
+        $this->assertSame($firstElephant->id, $duplicateElephant->id);
+        $this->assertSame('greenhouse', $duplicateElephant->mode);
+        $this->assertNotSame($firstElephant->id, $firstTulip->id);
+        $this->assertSame(2, Simulator::query()->where('user_id', 99)->where('status', 'active')->count());
+        $this->assertDatabaseHas('simulators', ['user_id' => 99, 'plant_id' => $elephantEar->id, 'status' => 'active']);
+        $this->assertDatabaseHas('simulators', ['user_id' => 99, 'plant_id' => $tulip->id, 'status' => 'active']);
+        $this->assertSame(48, (int) $firstTulip->water);
+        $this->assertSame(80, (int) $firstTulip->light);
+        $this->assertSame(33, (int) $firstTulip->fertilizer);
+        $this->assertSame(53, (int) $firstTulip->soil_humidity);
+        $this->assertSame(58, (int) $firstTulip->air_humidity);
+        $this->assertEquals(8.5, (float) $firstTulip->soil_temp);
+        $this->assertEquals(14.0, (float) $firstTulip->air_temp);
+    }
+
     /** @return array{0: Simulator, 1: array<int, int>} */
     private function seedSimulator(): array
     {
@@ -140,6 +180,28 @@ class SimulatorSnapshotTest extends TestCase
         return [$simulator, $stages];
     }
 
+    /** @param array<string, int|float> $environment */
+    private function seedPlayablePlant(string $name, array $environment = []): Plant
+    {
+        $plant = Plant::query()->create([
+            'name_th' => $name,
+            'name_en' => $name,
+            'base_model_url' => '/plant.gltf',
+            ...$environment,
+        ]);
+
+        foreach ([1 => 0, 2 => 40, 3 => 100] as $stageNo => $growthPoint) {
+            $plant->stages()->create([
+                'stage_no' => $stageNo,
+                'stage_name' => "{$name} stage {$stageNo}",
+                'required_growth_point' => $growthPoint,
+                'model_url' => '/plant.gltf',
+            ]);
+        }
+
+        return $plant;
+    }
+
     /** @param array<string, mixed> $overrides */
     private function snapshotPayload(array $overrides = []): array
     {
@@ -164,6 +226,19 @@ class SimulatorSnapshotTest extends TestCase
     private function request(array $payload): Request
     {
         $request = Request::create('/api/simulators/1/sync', 'POST', $payload);
+        $user = new User;
+        $user->id = 99;
+        $request->setUserResolver(fn () => $user);
+
+        return $request;
+    }
+
+    private function startRequest(int $plantId, string $mode): Request
+    {
+        $request = Request::create('/api/simulators', 'POST', [
+            'plant_id' => $plantId,
+            'mode' => $mode,
+        ]);
         $user = new User;
         $user->id = 99;
         $request->setUserResolver(fn () => $user);
@@ -214,6 +289,7 @@ class SimulatorSnapshotTest extends TestCase
             $table->string('image_url')->nullable();
             $table->string('model_url')->nullable();
             $table->text('description')->nullable();
+            $table->softDeletes();
         });
 
         Schema::create('plant_visual_variants', function (Blueprint $table): void {
@@ -231,6 +307,7 @@ class SimulatorSnapshotTest extends TestCase
             $table->unsignedInteger('priority')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('pests', function (Blueprint $table): void {
@@ -259,6 +336,7 @@ class SimulatorSnapshotTest extends TestCase
             $table->unsignedInteger('severity')->default(1);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('simulators', function (Blueprint $table): void {

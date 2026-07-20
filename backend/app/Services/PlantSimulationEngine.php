@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Pest;
 use App\Models\PestConditionRule;
+use App\Models\Plant;
 use App\Models\PlantConditionRule;
 use App\Models\PlantVisualVariant;
 use App\Models\SimulationLog;
@@ -34,6 +35,7 @@ class PlantSimulationEngine
 
             $simulator->loadMissing(['plant.conditionRules', 'plant.visualVariants', 'currentStage']);
             $plant = $simulator->plant;
+            $repairedLegacyRootTemperature = $this->repairLegacyGreenhouseRootTemperature($simulator, $plant, $factors);
             $matchedRules = $plant->conditionRules
                 ->where('is_active', true)
                 ->filter(fn (PlantConditionRule $rule) => $this->matchesRule($rule, $factors))
@@ -54,7 +56,14 @@ class PlantSimulationEngine
             $pestState = $this->updatePests($simulator, $factors, $pestRisks);
             $activePests = $pestState['count'];
             $pestDamage = $pestState['damage'];
-            $healthAfterEnvironment = $this->clamp((int) $simulator->health + $healthDelta + $naturalRecovery, 0, 100);
+            // Earlier clients had one temperature control and sent its air
+            // reading as the root-zone temperature. When that known legacy
+            // payload is corrected and no other condition is wrong, restore
+            // health lost solely to the interface defect.
+            $startingHealth = $repairedLegacyRootTemperature && $stressCount === 0
+                ? 100
+                : (int) $simulator->health;
+            $healthAfterEnvironment = $this->clamp($startingHealth + $healthDelta + $naturalRecovery, 0, 100);
             $nextHealth = $this->clamp($healthAfterEnvironment - $pestDamage, 0, 100);
 
             if ($nextHealth <= 50) {
@@ -164,6 +173,32 @@ class PlantSimulationEngine
             'outside' => $min !== null && $max !== null && ($value < $min || $value > $max),
             default => false,
         };
+    }
+
+    /** @param array<string, int|float|bool|null> $factors */
+    private function repairLegacyGreenhouseRootTemperature(Simulator $simulator, Plant $plant, array &$factors): bool
+    {
+        if (($factors['root_temperature_controlled'] ?? false) || $simulator->mode !== 'greenhouse') {
+            return false;
+        }
+
+        $soilTemp = (float) ($factors['soil_temp'] ?? $simulator->soil_temp);
+        $airTemp = (float) ($factors['air_temp'] ?? $simulator->air_temp);
+        $soilMin = (float) $plant->soil_temp_min;
+        $soilMax = (float) $plant->soil_temp_max;
+        $airMin = (float) $plant->air_temp_min;
+        $airMax = (float) $plant->air_temp_max;
+        $rootTemperatureWasCopied = abs($soilTemp - $airTemp) < 0.01;
+        $airIsHealthy = $airTemp >= $airMin && $airTemp <= $airMax;
+        $soilIsStressed = $soilTemp < $soilMin || $soilTemp > $soilMax;
+
+        if (! $rootTemperatureWasCopied || ! $airIsHealthy || ! $soilIsStressed || $soilMin > $soilMax) {
+            return false;
+        }
+
+        $factors['soil_temp'] = round(($soilMin + $soilMax) / 2, 2);
+
+        return true;
     }
 
     private function variantFor(int $plantId, ?int $stageId, string $visualState): ?PlantVisualVariant

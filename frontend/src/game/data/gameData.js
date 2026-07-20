@@ -45,6 +45,7 @@ export const defaultClimate = {
   fertilizer: 35,
   soil: 62,
   air: 58,
+  soilTemp: 25,
   temp: 29,
 }
 

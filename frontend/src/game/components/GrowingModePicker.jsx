@@ -18,17 +18,19 @@ const modeOptions = [
   },
 ]
 
-export function GrowingModePicker({ onSelect }) {
+export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
+  const choosingForPlant = Boolean(plantName)
+
   return (
     <div className="absolute inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-[2px]">
       <section className="w-full max-w-[680px] rounded-lg border border-lime-100/15 bg-[#101511] p-5 text-slate-100 shadow-[0_20px_48px_rgba(0,0,0,.46)]">
         <div className="mb-4 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9bcf82]">Step 1 of 3 · Growing mode</p>
-          <h2 className="mt-1 text-xl font-bold text-lime-50">Choose growing mode</h2>
-          <p className="mt-2 text-sm text-slate-300">Choose the kind of environment you want to manage. You will select a plant next.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9bcf82]">{choosingForPlant ? 'New planted species · Growing mode' : 'Step 1 of 3 · Growing mode'}</p>
+          <h2 className="mt-1 text-xl font-bold text-lime-50">{choosingForPlant ? `Choose a mode for ${plantName}` : 'Choose growing mode'}</h2>
+          <p className="mt-2 text-sm text-slate-300">{choosingForPlant ? `Your current plant stays saved. Choose how you want to grow ${plantName}.` : 'Choose the kind of environment you want to manage. You will select a plant next.'}</p>
           <div className="mx-auto mt-4 grid max-w-[360px] grid-cols-3 items-center gap-2 text-[10px] font-semibold text-slate-400" aria-label="Plant setup progress">
-            <span className="rounded-full bg-[#9bcf82] px-2 py-1 text-[#101511]">1 Mode</span>
-            <span className="rounded-full border border-lime-100/10 bg-white/[0.04] px-2 py-1">2 Plant</span>
+            <span className={`rounded-full px-2 py-1 ${choosingForPlant ? 'border border-lime-100/10 bg-white/[0.04] text-lime-100' : 'bg-[#9bcf82] text-[#101511]'}`}>{choosingForPlant ? `1 ${plantName}` : '1 Mode'}</span>
+            <span className={`rounded-full px-2 py-1 ${choosingForPlant ? 'bg-[#9bcf82] text-[#101511]' : 'border border-lime-100/10 bg-white/[0.04]'}`}>{choosingForPlant ? '2 Mode' : '2 Plant'}</span>
             <span className="rounded-full border border-lime-100/10 bg-white/[0.04] px-2 py-1">3 Start</span>
           </div>
         </div>
@@ -61,7 +63,14 @@ export function GrowingModePicker({ onSelect }) {
           ))}
         </div>
 
-        <p className="mt-4 text-center text-xs leading-5 text-slate-400">You can change modes after uprooting the current plant. Outdoor mode reuses the location you approve on this device.</p>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-center text-xs leading-5 text-slate-400">
+          {onCancel && (
+            <button className="rounded-md border border-lime-100/15 bg-white/[0.04] px-3 py-2 font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-lime-50" type="button" onClick={onCancel}>
+              Keep current plant
+            </button>
+          )}
+          <p>{choosingForPlant ? 'Each planted species keeps its own mode and progress.' : 'Outdoor mode reuses the location you approve on this device.'}</p>
+        </div>
       </section>
     </div>
   )

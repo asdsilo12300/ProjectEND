@@ -26,7 +26,7 @@ export function clearToken() {
 export function resolveAssetUrl(path) {
   if (!path) return null
   if (path.startsWith('http://') || path.startsWith('https://')) return path
-  if (path.startsWith('/storage/')) return `${API_ROOT_URL}${path}`
+  if (path.startsWith('/storage/')) return import.meta.env.DEV ? path : `${API_ROOT_URL}${path}`
   return path
 }
 
@@ -97,10 +97,11 @@ export async function getAdminDashboard(days = 7) {
   return apiFetch(`/admin/dashboard?days=${encodeURIComponent(days)}`)
 }
 
-export async function getAdminContents({ search = '', status = '' } = {}) {
+export async function getAdminContents({ search = '', status = '', trashed = '' } = {}) {
   const params = new URLSearchParams()
   if (search) params.set('search', search)
   if (status) params.set('status', status)
+  if (trashed) params.set('trashed', trashed)
   const query = params.toString()
   return apiFetch(`/admin/contents${query ? `?${query}` : ''}`)
 }
@@ -136,8 +137,40 @@ export async function uploadAdminContentImage(file, signal) {
   return { ...payload, url: resolveAssetUrl(payload.url) }
 }
 
+export async function uploadAdminImage({ file, scope }, signal) {
+  const token = getToken()
+  const form = new FormData()
+  form.append('scope', scope)
+  form.append('upload', file)
+
+  const response = await fetch(`${API_BASE_URL}/admin/media/images`, {
+    method: 'POST',
+    signal,
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  })
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
+    throw new Error(validationMessage || payload.message || 'Unable to upload this image.')
+  }
+
+  return {
+    ...payload.data,
+    url: resolveAssetUrl(payload.data?.url ?? payload.data?.reference),
+  }
+}
+
 export async function deleteAdminContent(contentId) {
   return apiFetch(`/admin/contents/${contentId}`, { method: 'DELETE' })
+}
+
+export async function restoreAdminContent(contentId) {
+  return apiFetch(`/admin/contents/${contentId}/restore`, { method: 'POST' })
 }
 
 export async function getAdminUsers({ search = '', role = '', page = 1 } = {}) {
@@ -158,10 +191,11 @@ export async function getAdminResourceLookups() {
   return apiFetch('/admin/resources/lookups')
 }
 
-export async function getAdminResource(resource, { search = '', status = '', page = 1 } = {}) {
+export async function getAdminResource(resource, { search = '', status = '', trashed = '', page = 1 } = {}) {
   const params = new URLSearchParams({ page: String(page) })
   if (search) params.set('search', search)
   if (status) params.set('status', status)
+  if (trashed) params.set('trashed', trashed)
   return apiFetch(`/admin/resources/${encodeURIComponent(resource)}?${params.toString()}`)
 }
 
@@ -175,6 +209,41 @@ export async function saveAdminResource(resource, record) {
 
 export async function deleteAdminResource(resource, recordId) {
   return apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}`, { method: 'DELETE' })
+}
+
+export async function restoreAdminResource(resource, recordId) {
+  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}/restore`, { method: 'POST' })
+}
+
+export async function uploadAdminModelBundle({ model, resources = [] }) {
+  const token = getToken()
+  const form = new FormData()
+  form.append('model', model)
+
+  resources.forEach((file) => {
+    form.append('resources[]', file)
+    const rawPath = String(file.webkitRelativePath || file.name || '').replaceAll('\\', '/')
+    const segments = rawPath.split('/').filter(Boolean)
+    if (file.webkitRelativePath && segments.length > 1) segments.shift()
+    form.append('resource_paths[]', segments.join('/'))
+  })
+
+  const response = await fetch(`${API_BASE_URL}/admin/model-bundles`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  })
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
+    throw new Error(validationMessage || payload.message || 'Unable to upload this GLTF model package.')
+  }
+
+  return payload.data
 }
 
 export async function getModelAssets() {
@@ -371,8 +440,9 @@ export async function getLatestSimulator() {
   return apiFetch('/simulators/latest')
 }
 
-export async function getSimulators() {
-  return apiFetch('/simulators')
+export async function getSimulators({ status = '' } = {}) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : ''
+  return apiFetch(`/simulators${query}`)
 }
 
 export async function getPlantHistories(query = '') {

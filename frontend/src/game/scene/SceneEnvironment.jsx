@@ -12,7 +12,11 @@ function getDirtModelUrl(dirtModelUrl) {
 function DirtGround({ dirtModelUrl, mode }) {
   const modelUrl = getDirtModelUrl(dirtModelUrl)
   const { scene } = useGLTF(modelUrl)
-  const clonedScene = useMemo(() => scene.clone(true), [scene])
+  const clonedScene = useMemo(() => {
+    // This asset is the laboratory soil and scattered stones. Keep its central
+    // soil surface: the pot belongs to a plant model, not the environment.
+    return scene.clone(true)
+  }, [scene])
   const isOutdoor = mode === 'outdoor'
 
   return (

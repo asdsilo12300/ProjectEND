@@ -38,6 +38,38 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame(2, (int) $result->state_version);
     }
 
+    public function test_legacy_greenhouse_payload_does_not_copy_air_temperature_into_tulip_roots(): void
+    {
+        [$plant, $simulator] = $this->seedPlantAndSimulator();
+        $plant->update([
+            'soil_temp_min' => 4,
+            'soil_temp_max' => 13,
+            'air_temp_min' => 10,
+            'air_temp_max' => 18,
+        ]);
+        $simulator->update(['health' => 20]);
+        PlantConditionRule::query()->create([
+            'plant_id' => $plant->id,
+            'factor' => 'soil_temp',
+            'operator' => 'above',
+            'max_value' => 13,
+            'visual_state' => 'heat_stress',
+            'severity' => 70,
+            'health_delta' => -8,
+            'growth_delta' => -6,
+        ]);
+
+        $result = app(PlantSimulationEngine::class)->tick(
+            $simulator->fresh(),
+            $this->healthyFactors(['soil_temp' => 14, 'air_temp' => 14]),
+        );
+
+        $this->assertSame('healthy', $result->visual_state);
+        $this->assertSame(100, (int) $result->health);
+        $this->assertEquals(8.5, (float) $result->soil_temp);
+        $this->assertGreaterThan(0, (int) $result->growth_point);
+    }
+
     public function test_low_water_sets_underwatered_visual_state(): void
     {
         [$plant, $simulator] = $this->seedPlantAndSimulator();
@@ -343,6 +375,7 @@ class PlantSimulationEngineTest extends TestCase
             $table->string('image_url')->nullable();
             $table->string('model_url')->nullable();
             $table->text('description')->nullable();
+            $table->softDeletes();
         });
 
         Schema::create('plant_visual_variants', function (Blueprint $table) {
@@ -360,6 +393,7 @@ class PlantSimulationEngineTest extends TestCase
             $table->unsignedInteger('priority')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('plant_condition_rules', function (Blueprint $table) {
@@ -377,6 +411,7 @@ class PlantSimulationEngineTest extends TestCase
             $table->text('direction')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('pests', function (Blueprint $table) {
@@ -405,6 +440,7 @@ class PlantSimulationEngineTest extends TestCase
             $table->unsignedInteger('severity')->default(1);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('simulators', function (Blueprint $table) {

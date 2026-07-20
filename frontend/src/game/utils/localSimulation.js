@@ -30,9 +30,10 @@ function clampChance(value) {
 }
 
 
-export function buildSimulationFactors(climate, outdoorWeather) {
-  const current = outdoorWeather?.forecast?.current
-  const hourly = outdoorWeather?.forecast?.hourly
+export function buildSimulationFactors(climate, outdoorWeather, mode = 'greenhouse') {
+  const forecast = mode === 'outdoor' ? outdoorWeather?.forecast : null
+  const current = forecast?.current
+  const hourly = forecast?.hourly
   const first = (key) => (Array.isArray(hourly?.[key]) ? hourly[key][0] : null)
 
   return {
@@ -41,9 +42,10 @@ export function buildSimulationFactors(climate, outdoorWeather) {
     fertilizer: climate.fertilizer,
     soil_humidity: climate.soil,
     air_humidity: climate.air,
-    soil_temp: first('soil_temperature_6cm') ?? climate.temp,
+    soil_temp: first('soil_temperature_6cm') ?? climate.soilTemp ?? climate.temp,
     air_temp: first('temperature_2m') ?? climate.temp,
     rain: current?.rain ?? 0,
+    root_temperature_controlled: climate.soilTemp != null && Number.isFinite(Number(climate.soilTemp)),
   }
 }
 

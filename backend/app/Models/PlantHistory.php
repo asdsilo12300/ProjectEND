@@ -39,11 +39,11 @@ class PlantHistory extends Model
 
     public function plant(): BelongsTo
     {
-        return $this->belongsTo(Plant::class);
+        return $this->belongsTo(Plant::class)->withTrashed();
     }
 
     public function finalStage(): BelongsTo
     {
-        return $this->belongsTo(PlantGrowthStage::class, 'final_stage_id');
+        return $this->belongsTo(PlantGrowthStage::class, 'final_stage_id')->withTrashed();
     }
 }

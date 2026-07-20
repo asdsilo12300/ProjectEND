@@ -81,6 +81,9 @@ const thaiMessages = {
 
   'Plant setup': 'ตั้งค่าการปลูก',
   'Choose growing mode': 'เลือกโหมดการปลูก',
+  'New planted species · Growing mode': 'เพิ่มพืชชนิดใหม่ · เลือกโหมดปลูก',
+  'Keep current plant': 'ดูแลต้นปัจจุบันต่อ',
+  'Each planted species keeps its own mode and progress.': 'พืชแต่ละชนิดจะเก็บโหมดและความคืบหน้าของตนเอง',
   'Select how this plant will be grown before starting the lesson.': 'เลือกวิธีปลูกพืชก่อนเริ่มบทเรียน',
   'Environment Control Mode': 'โหมดควบคุมสภาพแวดล้อม',
   'Full lab controls': 'ควบคุมห้องทดลองเต็มรูปแบบ',
@@ -106,6 +109,9 @@ const thaiMessages = {
   Item: 'ไอเทม',
   'Database plant': 'พืชจากฐานข้อมูล',
   Planted: 'ปลูกแล้ว',
+  Growing: 'กำลังปลูก',
+  Available: 'พร้อมปลูก',
+  'Growing now': 'กำลังปลูกอยู่',
   'Not planted': 'ยังไม่ได้ปลูก',
   'More plants coming soon': 'พืชชนิดอื่นกำลังจะมา',
   'Please wait for the next update.': 'โปรดรออัปเดตครั้งถัดไป',
@@ -114,6 +120,10 @@ const thaiMessages = {
   'Lab panels': 'แผงห้องทดลอง',
   'view only tools': 'เครื่องมือสำหรับดูเท่านั้น',
   'select a plant or treatment': 'เลือกพืชหรือวิธีรักษา',
+  'manage planted species or choose a treatment': 'จัดการพืชที่ปลูกไว้หรือเลือกวิธีรักษา',
+  'Saving the current plant': 'กำลังบันทึกต้นปัจจุบัน',
+  'Choose a plant to begin': 'เลือกพืชเพื่อเริ่มปลูก',
+  'Grow next plant': 'ปลูกต้นถัดไป',
   'Close Lab assets': 'ปิดคลังห้องทดลอง',
   'Friend garden is view only': 'สวนของเพื่อนดูได้เท่านั้น',
   'A plant is already growing': 'มีพืชกำลังเติบโตอยู่แล้ว',
@@ -1074,6 +1084,12 @@ const thaiMessages = {
 }
 
 const thaiPatterns = [
+  [/^Choose a mode for (.+)$/, (_, plant) => `เลือกโหมดปลูกสำหรับ ${plant}`],
+  [/^Choose a growing mode for (.+)$/, (_, plant) => `เลือกโหมดปลูกสำหรับ ${plant}`],
+  [/^Your current plant stays saved\. Choose how you want to grow (.+)\.$/, (_, plant) => `ต้นปัจจุบันจะถูกบันทึกไว้ เลือกโหมดที่ต้องการใช้ปลูก ${plant}`],
+  [/^(.+) planted in (Outdoor|Environment Control) mode$/, (_, plant, mode) => `ปลูก ${plant} ใน${mode === 'Outdoor' ? 'โหมดกลางแจ้ง' : 'โหมดควบคุมสภาพแวดล้อม'}แล้ว`],
+  [/^Switched to (.+)$/, (_, plant) => `สลับมาดู ${plant} แล้ว`],
+  [/^Preparing (.+)\.\.\.$/, (_, plant) => `กำลังเตรียมปลูก ${plant}...`],
   [/^Step 2: Select a plant from Lab assets to begin$/, () => 'ขั้นที่ 2: เลือกพืชจากคลังห้องทดลองเพื่อเริ่มต้น'],
   [/^(.+) is out of stock\. Visit Shop to get more\.$/, (_, item) => `${item} หมดแล้ว ไปที่ร้านค้าเพื่อซื้อเพิ่ม`],
   [/^Uproot (.+)\?$/, (_, plant) => `ถอน ${plant} หรือไม่?`],

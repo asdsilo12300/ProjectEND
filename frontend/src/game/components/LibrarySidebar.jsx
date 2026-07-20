@@ -13,7 +13,7 @@ function readableItemName(item) {
   return name || 'Plant'
 }
 
-export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply }) {
+export function LibrarySidebar({ busy = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
@@ -32,7 +32,7 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
         <div className="flex items-center gap-3 border-b border-lime-100/10 px-3 py-3">
           <span className="min-w-0 flex-1">
             <strong className="block text-sm text-lime-50">Lab assets</strong>
-            <span className="text-[11px] text-slate-400">{readOnly ? 'view only tools' : 'select a plant or treatment'}</span>
+            <span className="text-[11px] text-slate-400">{readOnly ? 'view only tools' : 'manage planted species or choose a treatment'}</span>
           </span>
           <button type="button" className="lab-library-close" aria-label="Close Lab assets" onClick={() => setDrawerOpen(false)}>
             <AppIcon className="h-4 w-4" name="panelClose" />
@@ -42,7 +42,7 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
       <div className="p-2">
         {Object.entries(sections).map(([section, items]) => {
           const expanded = openSections[section]
-          const visibleItems = section === 'Plants' ? items.slice(0, 1) : items
+          const visibleItems = items
 
           return (
             <section className="mb-2" key={section}>
@@ -76,13 +76,13 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                       : null
                     const isZeroQuantity = hasInventoryQuantity && Number(itemQuantity) <= 0
                     const itemLocked = readOnly
-                      || (section === 'Plants' && plantLocked)
+                      || (section === 'Plants' && busy)
                       || (section === 'Items' && (mockItems || isZeroQuantity))
-                    const selected = selectedAsset?.id === item.id
+                    const selected = section === 'Plants' ? Boolean(item.current) : selectedAsset?.id === item.id
                     const lockLabel = readOnly
                       ? 'Friend garden is view only'
-                      : section === 'Plants' && plantLocked
-                        ? 'A plant is already growing'
+                      : section === 'Plants' && busy
+                        ? 'Saving the current plant'
                         : section === 'Items' && mockItems
                           ? 'Friend tools are view-only'
                           : isZeroQuantity
@@ -115,9 +115,9 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                               <strong className="block truncate text-[12px] text-lime-50">{itemName}</strong>
                               <span className="block truncate text-[10px] text-slate-400">{readOnly ? 'Friend plant' : item.detail}</span>
                             </span>
-                            <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-slate-400" aria-label={item.planted ? 'Planted' : 'Not planted'}>
-                              <span className={`h-2.5 w-2.5 rounded-full ${item.planted ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.12)]' : 'bg-red-400 shadow-[0_0_0_3px_rgba(248,113,113,.12)]'}`} />
-                              {item.planted ? 'Planted' : 'Not planted'}
+                            <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-slate-400" aria-label={item.current ? 'Growing now' : item.planted ? 'Planted' : 'Available'}>
+                              <span className={`h-2.5 w-2.5 rounded-full ${item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
+                              {item.current ? 'Growing' : item.planted ? 'Planted' : 'Available'}
                             </span>
                           </>
                         ) : (
@@ -146,12 +146,6 @@ export function LibrarySidebar({ plantLocked = false, readOnly = false, mockItem
                       </button>
                     )
                   })}
-                  {section === 'Plants' && (
-                    <div className="rounded-md border border-dashed border-lime-100/15 bg-[#101511]/70 px-3 py-3 text-center">
-                      <strong className="block text-[11px] text-lime-50">More plants coming soon</strong>
-                      <span className="mt-0.5 block text-[10px] leading-relaxed text-slate-400">Please wait for the next update.</span>
-                    </div>
-                  )}
                 </div>
               )}
             </section>

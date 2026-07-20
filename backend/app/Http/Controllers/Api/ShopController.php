@@ -16,6 +16,7 @@ class ShopController extends Controller
     {
         $items = ShopItem::query()
             ->with('item')
+            ->whereHas('item', fn ($query) => $query->whereNull('deleted_at')->where('is_active', true))
             ->where('is_active', true)
             ->get();
 
@@ -39,6 +40,13 @@ class ShopController extends Controller
         ]);
 
         $quantity = (int) ($data['quantity'] ?? 1);
+
+        abort_unless(
+            $shopItem->is_active
+            && $shopItem->item()->whereNull('deleted_at')->where('is_active', true)->exists(),
+            404,
+            'This shop item is no longer available.',
+        );
 
         $user = $request->user();
         $totalCoin = $shopItem->price_coin * $quantity;

@@ -4,6 +4,8 @@ import 'sweetalert2/dist/sweetalert2.min.css'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 import { AppIcon } from '../game/icons/IconifyIcon'
 import { loadSettings, saveSettings } from '../game/settings/settingsPreferences'
+import { ImageUploadField } from './ImageUploadField'
+import { ModelBundleField } from './ModelBundleField'
 import {
   deleteAdminContent,
   deleteAdminResource,
@@ -12,11 +14,15 @@ import {
   getAdminResource,
   getAdminResourceLookups,
   getAdminUsers,
+  restoreAdminContent,
+  restoreAdminResource,
   saveAdminResource,
   saveAdminContent,
   resolveAssetUrl,
   updateAdminUser,
   uploadAdminContentImage,
+  uploadAdminImage,
+  uploadAdminModelBundle,
 } from '../lib/api'
 import './AdminPage.css'
 
@@ -207,7 +213,7 @@ const resourceGroups = {
       defaults: { name_th: '', name_en: '', description: '', base_image_url: '', base_model_url: '', water_min: 40, water_max: 80, light_min: 40, light_max: 90, fertilizer_min: 20, fertilizer_max: 70, soil_humidity_min: 40, soil_humidity_max: 80, air_humidity_min: 40, air_humidity_max: 80, soil_temp_min: 18, soil_temp_max: 32, air_temp_min: 18, air_temp_max: 35 },
       fields: [
         { key: 'name_en', label: 'English name', required: true }, { key: 'name_th', label: 'Thai name', required: true },
-        { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'base_image_url', label: 'Image URL', wide: true }, { key: 'base_model_url', label: 'Base 3D model URL', wide: true },
+        { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'base_image_url', label: 'Plant image', type: 'image-upload', scope: 'plants', wide: true }, { key: 'base_model_url', label: 'Base 3D model package', type: 'model-bundle', required: true, wide: true },
         ...['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'].flatMap((factor) => [
           { key: `${factor}_min`, label: `${factor.replaceAll('_', ' ')} min`, type: 'number', required: true },
           { key: `${factor}_max`, label: `${factor.replaceAll('_', ' ')} max`, type: 'number', required: true },
@@ -223,7 +229,7 @@ const resourceGroups = {
     {
       id: 'plant-stages', label: 'Growth stages', createLabel: 'New stage', icon: 'sprout',
       defaults: { plant_id: '', stage_no: 1, stage_name: '', required_growth_point: 0, image_url: '', model_url: '', description: '' },
-      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_no', label: 'Stage number', type: 'number', required: true }, { key: 'stage_name', label: 'Stage name', required: true }, { key: 'required_growth_point', label: 'Required growth points', type: 'number', required: true }, { key: 'image_url', label: 'Image URL', wide: true }, { key: 'model_url', label: '3D model URL', wide: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }],
+      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_no', label: 'Stage number', type: 'number', required: true }, { key: 'stage_name', label: 'Stage name', required: true }, { key: 'required_growth_point', label: 'Required growth points', type: 'number', required: true }, { key: 'image_url', label: 'Stage image', type: 'image-upload', scope: 'plant-stages', wide: true }, { key: 'model_url', label: 'Stage 3D model package', type: 'model-bundle', wide: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }],
       columns: [{ label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'Stage', render: (row) => `${row.stage_no}. ${row.stage_name}` }, { label: 'Growth points', render: (row) => row.required_growth_point }, { label: 'Model', render: (row) => row.model_url ? 'Configured' : 'Not set' }],
     },
     {
@@ -235,24 +241,24 @@ const resourceGroups = {
     {
       id: 'plant-variants', label: 'Visual variants', createLabel: 'New visual', icon: 'eye',
       defaults: { plant_id: '', stage_id: '', state_key: 'healthy', label: '', model_url: '', leaf_color: '#6fa84f', stem_color: '#5c8f42', leaf_state: 'normal', stem_state: 'normal', scale: 1, priority: 0, is_active: true },
-      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_id', label: 'Growth stage', type: 'lookup', lookup: 'stages' }, { key: 'state_key', label: 'State key', required: true }, { key: 'label', label: 'Display label' }, { key: 'model_url', label: '3D model URL', wide: true }, { key: 'leaf_color', label: 'Leaf color' }, { key: 'stem_color', label: 'Stem color' }, { key: 'leaf_state', label: 'Leaf state' }, { key: 'stem_state', label: 'Stem state' }, { key: 'scale', label: 'Scale', type: 'number', step: '0.01', required: true }, { key: 'priority', label: 'Priority', type: 'number', required: true }, commonActiveField],
+      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_id', label: 'Growth stage', type: 'lookup', lookup: 'stages' }, { key: 'state_key', label: 'State key', required: true }, { key: 'label', label: 'Display label' }, { key: 'model_url', label: 'Variant 3D model package', type: 'model-bundle', wide: true }, { key: 'leaf_color', label: 'Leaf color' }, { key: 'stem_color', label: 'Stem color' }, { key: 'leaf_state', label: 'Leaf state' }, { key: 'stem_state', label: 'Stem state' }, { key: 'scale', label: 'Scale', type: 'number', step: '0.01', required: true }, { key: 'priority', label: 'Priority', type: 'number', required: true }, commonActiveField],
       columns: [{ label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'State', render: (row) => row.label || row.state_key }, { label: 'Stage', render: (row) => row.stage?.stage_name || 'All stages' }, { label: 'Appearance', render: (row) => `${row.leaf_color || '—'} / ${row.stem_color || '—'}` }],
     },
   ],
   pests: [
-    { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', base_chance: 0, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Image URL', wide: true }, { key: 'model_url', label: '3D model URL', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => row.name_en || row.name_th }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
+    { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', base_chance: 0, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Pest image', type: 'image-upload', scope: 'pests', wide: true }, { key: 'model_url', label: 'Pest 3D model package', type: 'model-bundle', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => row.name_en || row.name_th }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
     { id: 'pest-rules', label: 'Occurrence rules', createLabel: 'New pest rule', icon: 'bug', defaults: { pest_id: '', plant_id: '', factor: 'air_humidity', operator: 'above', min_value: 0, max_value: 100, chance_delta: 0, severity: 1, is_active: true }, fields: [{ key: 'pest_id', label: 'Pest', type: 'lookup', lookup: 'pests', required: true }, { key: 'plant_id', label: 'Specific plant (optional)', type: 'lookup', lookup: 'plants' }, { key: 'factor', label: 'Factor', required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'chance_delta', label: 'Chance change', type: 'number', step: '0.01', required: true }, { key: 'severity', label: 'Severity', type: 'number', required: true }, commonActiveField], columns: [{ label: 'Pest', render: (row) => row.pest?.name_en || row.pest?.name_th }, { label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th || 'All plants' }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Chance / severity', render: (row) => `${row.chance_delta} / ${row.severity}` }] },
   ],
   store: [
-    { id: 'items', label: 'Item catalog', createLabel: 'New item', icon: 'shop', defaults: { name: '', type: 'pesticide', description: '', image_url: '', effect_type: '', effect_value: 0, rarity: 'common', is_active: true }, fields: [{ key: 'name', label: 'Item name', required: true }, { key: 'type', label: 'Type', type: 'select', options: ['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Image URL', wide: true }, { key: 'effect_type', label: 'Effect type' }, { key: 'effect_value', label: 'Effect value', type: 'number', required: true }, { key: 'rarity', label: 'Rarity', type: 'select', options: ['common', 'rare', 'epic', 'legendary'], required: true }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.name }, { label: 'Type', render: (row) => row.type }, { label: 'Effect', render: (row) => `${row.effect_type || '—'} ${row.effect_value}` }, { label: 'Rarity', render: (row) => row.rarity }] },
+    { id: 'items', label: 'Item catalog', createLabel: 'New item', icon: 'shop', defaults: { name: '', type: 'pesticide', description: '', image_url: '', effect_type: '', effect_value: 0, rarity: 'common', is_active: true }, fields: [{ key: 'name', label: 'Item name', required: true }, { key: 'type', label: 'Type', type: 'select', options: ['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Item image', type: 'image-upload', scope: 'items', wide: true }, { key: 'effect_type', label: 'Effect type' }, { key: 'effect_value', label: 'Effect value', type: 'number', required: true }, { key: 'rarity', label: 'Rarity', type: 'select', options: ['common', 'rare', 'epic', 'legendary'], required: true }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.name }, { label: 'Type', render: (row) => row.type }, { label: 'Effect', render: (row) => `${row.effect_type || '—'} ${row.effect_value}` }, { label: 'Rarity', render: (row) => row.rarity }] },
     { id: 'shop-items', label: 'Shop listings', createLabel: 'New listing', icon: 'shoppingCart', defaults: { item_id: '', price_coin: 0, price_gem: 0, stock_limit: '', is_active: true, starts_at: '', ends_at: '' }, fields: [{ key: 'item_id', label: 'Item', type: 'lookup', lookup: 'items', required: true }, { key: 'price_coin', label: 'Coin price', type: 'number', required: true }, { key: 'price_gem', label: 'Gem price', type: 'number', required: true }, { key: 'stock_limit', label: 'Stock limit', type: 'number' }, { key: 'starts_at', label: 'Starts at', type: 'datetime-local' }, { key: 'ends_at', label: 'Ends at', type: 'datetime-local' }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.item?.name }, { label: 'Type', render: (row) => row.item?.type }, { label: 'Price', render: (row) => `${row.price_coin} coins / ${row.price_gem} gems` }, { label: 'Stock', render: (row) => row.stock_limit ?? 'Unlimited' }] },
   ],
   progression: [
     { id: 'quests', label: 'Quests', createLabel: 'New quest', icon: 'trophy', defaults: { title: '', description: '', quest_type: 'daily', target_type: '', target_value: 1, reward_exp: 0, reward_coin: 0, reward_gem: 0, is_active: true }, fields: [{ key: 'title', label: 'Quest title', required: true }, { key: 'quest_type', label: 'Quest type', type: 'select', options: ['daily', 'weekly', 'story', 'event'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'target_type', label: 'Target type', required: true }, { key: 'target_value', label: 'Target value', type: 'number', required: true }, { key: 'reward_exp', label: 'EXP reward', type: 'number', required: true }, { key: 'reward_coin', label: 'Coin reward', type: 'number', required: true }, { key: 'reward_gem', label: 'Gem reward', type: 'number', required: true }, commonActiveField], columns: [{ label: 'Quest', render: (row) => row.title }, { label: 'Type', render: (row) => row.quest_type }, { label: 'Target', render: (row) => `${row.target_type} × ${row.target_value}` }, { label: 'Rewards', render: (row) => `${row.reward_exp} EXP · ${row.reward_coin} coins` }] },
-    { id: 'achievements', label: 'Achievements', createLabel: 'New achievement', icon: 'crown', defaults: { title: '', description: '', condition_type: '', condition_value: 1, reward_exp: 0, reward_coin: 0, badge_image_url: '', is_active: true }, fields: [{ key: 'title', label: 'Achievement title', required: true }, { key: 'condition_type', label: 'Condition type', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'condition_value', label: 'Condition value', type: 'number', required: true }, { key: 'reward_exp', label: 'EXP reward', type: 'number', required: true }, { key: 'reward_coin', label: 'Coin reward', type: 'number', required: true }, { key: 'badge_image_url', label: 'Badge image URL', wide: true }, commonActiveField], columns: [{ label: 'Achievement', render: (row) => row.title }, { label: 'Condition', render: (row) => `${row.condition_type} × ${row.condition_value}` }, { label: 'Rewards', render: (row) => `${row.reward_exp} EXP · ${row.reward_coin} coins` }, { label: 'Badge', render: (row) => row.badge_image_url ? 'Configured' : 'Not set' }] },
+    { id: 'achievements', label: 'Achievements', createLabel: 'New achievement', icon: 'crown', defaults: { title: '', description: '', condition_type: '', condition_value: 1, reward_exp: 0, reward_coin: 0, badge_image_url: '', is_active: true }, fields: [{ key: 'title', label: 'Achievement title', required: true }, { key: 'condition_type', label: 'Condition type', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'condition_value', label: 'Condition value', type: 'number', required: true }, { key: 'reward_exp', label: 'EXP reward', type: 'number', required: true }, { key: 'reward_coin', label: 'Coin reward', type: 'number', required: true }, { key: 'badge_image_url', label: 'Badge image', type: 'image-upload', scope: 'achievements', wide: true }, commonActiveField], columns: [{ label: 'Achievement', render: (row) => row.title }, { label: 'Condition', render: (row) => `${row.condition_type} × ${row.condition_value}` }, { label: 'Rewards', render: (row) => `${row.reward_exp} EXP · ${row.reward_coin} coins` }, { label: 'Badge', render: (row) => row.badge_image_url ? 'Configured' : 'Not set' }] },
   ],
   models: [
-    { id: 'model-assets', label: 'Model assets', createLabel: 'New model asset', icon: 'hardware', defaults: { asset_key: '', label: '', type: 'model', url: '', metadata: {} }, fields: [{ key: 'asset_key', label: 'Asset key', required: true }, { key: 'label', label: 'Display label' }, { key: 'type', label: 'Asset type', required: true }, { key: 'url', label: 'File URL', required: true, wide: true }, { key: 'metadata', label: 'Metadata (JSON)', type: 'json', wide: true }], columns: [{ label: 'Asset', render: (row) => row.label || row.asset_key }, { label: 'Key', render: (row) => row.asset_key }, { label: 'Type', render: (row) => row.type }, { label: 'URL', render: (row) => row.url }] },
+    { id: 'model-assets', label: 'Model assets', createLabel: 'New model asset', icon: 'hardware', defaults: { asset_key: '', label: '', type: 'model', url: '', metadata: {} }, fields: [{ key: 'asset_key', label: 'Asset key', required: true }, { key: 'label', label: 'Display label' }, { key: 'type', label: 'Asset type', required: true }, { key: 'url', label: 'GLTF model package', type: 'model-bundle', required: true, wide: true }, { key: 'metadata', label: 'Metadata (JSON)', type: 'json', wide: true }], columns: [{ label: 'Asset', render: (row) => row.label || row.asset_key }, { label: 'Key', render: (row) => row.asset_key }, { label: 'Type', render: (row) => row.type }, { label: 'Model file', render: (row) => row.url ? decodeURIComponent(String(row.url).split(/[?#]/, 1)[0].split('/').pop()) : 'Not set' }] },
   ],
   community: [
     { id: 'posts', label: 'Posts', icon: 'chat', moderation: true, statusField: 'visibility', statusOptions: ['public', 'friends', 'private'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Caption', render: (row) => row.caption || 'No caption' }, { label: 'Engagement', render: (row) => `${row.comments_count} comments · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
@@ -674,7 +680,6 @@ function ContentEditor({ content, onClose, onSaved }) {
                 </div>
                 <div className="admin-cover-editor__fields">
                   <div className="admin-cover-editor__heading"><strong>{language === 'th' ? 'รูปปกบทความ' : 'Article cover'}</strong><small>{language === 'th' ? 'แนะนำภาพแนวนอน JPG, PNG หรือ WebP ไม่เกิน 8 MB' : 'Landscape JPG, PNG, or WebP up to 8 MB is recommended.'}</small></div>
-                  <label>Cover image URL<input placeholder="https://…" value={form.cover_image_url ?? ''} onChange={(event) => update('cover_image_url', event.target.value)} /></label>
                   <div className="admin-cover-editor__actions">
                     <input className="admin-cover-file-input" ref={coverInputRef} accept="image/jpeg,image/png,image/webp,image/gif" disabled={coverUploadStatus === 'uploading'} tabIndex="-1" type="file" onChange={uploadCover} />
                     <button className="admin-cover-upload" disabled={coverUploadStatus === 'uploading'} type="button" onClick={() => coverInputRef.current?.click()}><AppIcon name="camera" />{coverUploadStatus === 'uploading' ? (language === 'th' ? 'กำลังอัปโหลด…' : 'Uploading…') : (language === 'th' ? 'อัปโหลดรูป' : 'Upload image')}</button>
@@ -744,35 +749,54 @@ function ContentEditor({ content, onClose, onSaved }) {
 function ContentsView({ contents, onRefresh }) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
+  const [trashed, setTrashed] = useState('')
   const [editor, setEditor] = useState(null)
   const [actionError, setActionError] = useState('')
 
   async function runSearch(event) {
     event?.preventDefault()
-    await onRefresh({ search, status: filter })
+    await onRefresh({ search, status: filter, trashed })
   }
 
   async function remove(content) {
     const confirmed = await confirmAdminAction({
-      title: 'Delete this content?',
-      text: `“${content.title}” will be permanently removed. This action cannot be undone.`,
-      confirmButtonText: 'Delete content',
+      title: 'Move this content to trash?',
+      text: `“${content.title}” will be hidden from the learning pages and can be restored later.`,
+      confirmButtonText: 'Move to trash',
     })
     if (!confirmed) return
     setActionError('')
     try {
       await deleteAdminContent(content.id)
-      await onRefresh({ search, status: filter })
-      await showAdminSuccess('Content deleted')
+      await onRefresh({ search, status: filter, trashed })
+      await showAdminSuccess('Moved to trash')
     } catch (error) {
       setActionError(error.message || 'Unable to delete content.')
+    }
+  }
+
+  async function restore(content) {
+    const confirmed = await confirmAdminAction({
+      title: 'Restore this content?',
+      text: `“${content.title}” will return to the content workspace.`,
+      confirmButtonText: 'Restore content',
+      icon: 'question',
+    })
+    if (!confirmed) return
+    setActionError('')
+    try {
+      await restoreAdminContent(content.id)
+      await onRefresh({ search, status: filter, trashed })
+      await showAdminSuccess('Content restored')
+    } catch (error) {
+      setActionError(error.message || 'Unable to restore content.')
     }
   }
 
   return (
     <div className="admin-view">
       <div className="admin-content-toolbar">
-        <form onSubmit={runSearch}><AppIcon name="search" /><input placeholder="Search title or slug" value={search} onChange={(event) => setSearch(event.target.value)} /><select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option><option value="published">Published</option><option value="draft">Draft</option></select><button type="submit">Filter</button></form>
+        <form onSubmit={runSearch}><AppIcon name="search" /><input placeholder="Search title or slug" value={search} onChange={(event) => setSearch(event.target.value)} /><select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option><option value="published">Published</option><option value="draft">Draft</option></select><select aria-label="Filter content by trash status" value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); onRefresh({ search, status: filter, trashed: value }) }}><option value="">Active content</option><option value="only">Trash</option><option value="with">Active + trash</option></select><button type="submit">Filter</button></form>
         <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...emptyContent })}><AppIcon name="plus" />New content</button>
       </div>
       {actionError && <div className="admin-inline-error">{actionError}</div>}
@@ -781,18 +805,18 @@ function ContentsView({ contents, onRefresh }) {
           <thead><tr><th className="admin-index-column">#</th><th>Content</th><th>Category</th><th>Status</th><th>Version</th><th>Updated</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>
             {contents.map((content, index) => (
-              <tr key={content.id}>
+              <tr className={content.deleted_at ? 'is-trashed' : ''} key={content.id}>
                 <td className="admin-index-cell">{index + 1}</td>
                 <td><div className="admin-content-cell">{content.cover_image_url ? <img src={content.cover_image_url} alt="" /> : <span><AppIcon name="bookmark" /></span>}<div><strong>{content.title}</strong><small>/{content.slug}</small></div></div></td>
-                <td>{content.category}</td><td><StatusBadge status={content.status} /></td><td>v{content.version}</td><td>{formatDate(content.updated_at, true)}</td>
-                <td><div className="admin-row-actions"><button type="button" onClick={() => setEditor(content)}><AppIcon name="settings" />Edit</button><button className="is-danger" type="button" aria-label={`Delete ${content.title}`} onClick={() => remove(content)}><AppIcon name="trash" /></button></div></td>
+                <td>{content.category}</td><td><StatusBadge status={content.deleted_at ? 'archived' : content.status} /></td><td>v{content.version}</td><td>{formatDate(content.updated_at, true)}</td>
+                <td><div className="admin-row-actions">{!content.deleted_at && <button type="button" onClick={() => setEditor(content)}><AppIcon name="settings" />Edit</button>}{!content.deleted_at && <button className="is-danger" type="button" aria-label={`Move ${content.title} to trash`} onClick={() => remove(content)}><AppIcon name="trash" /></button>}{content.deleted_at && <button type="button" onClick={() => restore(content)}><AppIcon name="history" />Restore</button>}</div></td>
               </tr>
             ))}
           </tbody>
         </table>
         {!contents.length && <div className="admin-empty"><AppIcon name="bookmark" /><strong>No content found</strong><span>Adjust the filter or create a new learning article.</span></div>}
       </section>
-      {editor && <ContentEditor content={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await onRefresh({ search, status: filter }) }} />}
+      {editor && <ContentEditor content={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await onRefresh({ search, status: filter, trashed }) }} />}
     </div>
   )
 }
@@ -857,12 +881,14 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
 function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
   const [initialForm] = useState(() => ({ ...config.defaults, ...record }))
   const [form, setForm] = useState(initialForm)
+  const [imageFiles, setImageFiles] = useState({})
+  const [modelBundles, setModelBundles] = useState({})
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const dialogRef = useRef(null)
-  const dirty = useMemo(() => dataSnapshot(form) !== dataSnapshot(initialForm), [form, initialForm])
+  const dirty = useMemo(() => dataSnapshot(form) !== dataSnapshot(initialForm) || Object.values(imageFiles).some((file) => file instanceof File) || Object.values(modelBundles).some((bundle) => bundle?.model), [form, imageFiles, initialForm, modelBundles])
   const requestClose = useCallback(async () => {
-    if (status === 'saving') return
+    if (status !== 'idle') return
     if (dirty && !await confirmDiscardChanges()) return
     onClose()
   }, [dirty, onClose, status])
@@ -896,6 +922,29 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
         if (!confirmed) return
       }
       setStatus('saving')
+      for (const field of config.fields.filter((item) => item.type === 'model-bundle')) {
+        const bundle = modelBundles[field.key]
+        if (field.required && !payload[field.key] && !bundle?.model) {
+          throw new Error(`${field.label} is required.`)
+        }
+        if (bundle?.model) {
+          setStatus('uploading')
+          const uploaded = await uploadAdminModelBundle(bundle)
+          payload[field.key] = uploaded.reference
+        }
+      }
+      for (const field of config.fields.filter((item) => item.type === 'image-upload')) {
+        const file = imageFiles[field.key]
+        if (field.required && !payload[field.key] && !(file instanceof File)) {
+          throw new Error(`${field.label} is required.`)
+        }
+        if (file instanceof File) {
+          setStatus('uploading')
+          const uploaded = await uploadAdminImage({ file, scope: field.scope })
+          payload[field.key] = uploaded.reference
+        }
+      }
+      setStatus('saving')
       const result = await saveAdminResource(config.id, payload)
       await onSaved(result.data)
       await showAdminSuccess(record?.id ? 'Changes saved' : 'Record added', record?.id ? 'The record was updated successfully.' : 'The new record was placed at the bottom of the list.')
@@ -912,7 +961,31 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
         <div className="admin-resource-editor__body">
           <div className="admin-resource-form-grid">
             {config.fields.map((field) => (
-              <label className={field.wide ? 'is-wide' : ''} key={field.key}>
+              field.type === 'image-upload' ? (
+                <ImageUploadField
+                  disabled={status !== 'idle'}
+                  file={imageFiles[field.key]}
+                  key={field.key}
+                  label={field.label}
+                  onFileChange={(file) => setImageFiles((current) => ({ ...current, [field.key]: file }))}
+                  onRemove={() => {
+                    setImageFiles((current) => ({ ...current, [field.key]: null }))
+                    setForm((current) => ({ ...current, [field.key]: '' }))
+                  }}
+                  required={field.required && !form[field.key]}
+                  value={form[field.key]}
+                />
+              ) : field.type === 'model-bundle' ? (
+                <ModelBundleField
+                  bundle={modelBundles[field.key]}
+                  disabled={status !== 'idle'}
+                  key={field.key}
+                  label={field.label}
+                  onChange={(bundle) => setModelBundles((current) => ({ ...current, [field.key]: bundle }))}
+                  required={field.required && !form[field.key]}
+                  value={form[field.key]}
+                />
+              ) : <label className={field.wide ? 'is-wide' : ''} key={field.key}>
                 {field.label}{field.required && <em>*</em>}
                 {field.type === 'textarea' || field.type === 'json' ? (
                   <textarea className={field.type === 'json' ? 'admin-code-field' : ''} required={field.required} rows={field.type === 'json' ? 8 : 4} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
@@ -930,7 +1003,7 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
           </div>
         </div>
         {error && <div className="admin-editor__error">{error}</div>}
-        <footer className="admin-editor__footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span><button type="button" onClick={requestClose}>Cancel</button><button className="is-primary" disabled={status === 'saving'} type="submit"><AppIcon name="save" />{status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
+        <footer className="admin-editor__footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span><button disabled={status !== 'idle'} type="button" onClick={requestClose}>Cancel</button><button className="is-primary" disabled={status !== 'idle'} type="submit"><AppIcon name="save" />{status === 'uploading' ? 'Uploading files…' : status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
       </form>
     </div>
   )
@@ -973,7 +1046,7 @@ function recordDetailValue(record, field, format) {
   return String(value)
 }
 
-function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onModerate }) {
+function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRestore, onModerate }) {
   const dialogRef = useRef(null)
   useModalLifecycle(onClose, dialogRef)
   const fields = detailFieldMap[config.id] ?? [
@@ -1010,7 +1083,9 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onMo
 
           {imageUrl && <img className="admin-details-media" src={imageUrl} alt="Simulation or harvested plant preview" onError={(event) => { event.currentTarget.hidden = true }} />}
 
-          {config.moderation && (
+          {record.deleted_at && <div className="admin-trash-notice"><AppIcon name="history" /><span><strong>This record is in the trash.</strong><small>Restore it to edit or use it again.</small></span></div>}
+
+          {config.moderation && !record.deleted_at && (
             <section className="admin-details-moderation">
               <div><small>MODERATION</small><h3>Review decision</h3><p>Changes are confirmed before they are applied and recorded in the audit log.</p></div>
               <label>{config.statusField.replaceAll('_', ' ')}<select value={record[config.statusField]} onChange={(event) => onModerate(config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
@@ -1031,8 +1106,9 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onMo
         </div>
 
         <footer className="admin-details-drawer__footer">
-          {!config.moderation && !config.readOnly && <button type="button" onClick={onEdit}><AppIcon name="settings" />Edit record</button>}
-          {!config.readOnly && <button className="is-danger" type="button" onClick={onDelete}><AppIcon name="trash" />Delete</button>}
+          {!record.deleted_at && !config.moderation && !config.readOnly && <button type="button" onClick={onEdit}><AppIcon name="settings" />Edit record</button>}
+          {!record.deleted_at && !config.readOnly && <button className="is-danger" type="button" onClick={onDelete}><AppIcon name="trash" />Move to trash</button>}
+          {record.deleted_at && !config.readOnly && <button type="button" onClick={onRestore}><AppIcon name="history" />Restore record</button>}
           <button className="is-primary" type="button" onClick={onClose}>Done</button>
         </footer>
       </aside>
@@ -1047,6 +1123,7 @@ function ResourceView({ groupKey }) {
   const [lookups, setLookups] = useState({})
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
+  const [trashed, setTrashed] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [appliedFilter, setAppliedFilter] = useState('')
   const [loading, setLoading] = useState(true)
@@ -1094,7 +1171,7 @@ function ResourceView({ groupKey }) {
       if (refreshInFlightRef.current || editor || selectedRecord || isEditingFilter || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]')) return
       refreshInFlightRef.current = true
       try {
-        const result = await getAdminResource(config.id, { search: appliedSearch, status: appliedFilter, page: pagination?.current_page ?? 1 })
+        const result = await getAdminResource(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
         setPayload(result)
         setLastUpdatedAt(new Date())
         setRefreshState('connected')
@@ -1105,7 +1182,7 @@ function ResourceView({ groupKey }) {
       }
     }, 2000)
     return () => window.clearInterval(refreshTimer)
-  }, [appliedFilter, appliedSearch, config.id, editor, pagination?.current_page, selectedRecord])
+  }, [appliedFilter, appliedSearch, config.id, editor, pagination?.current_page, selectedRecord, trashed])
 
   async function chooseResource(resource) {
     setActiveResource(resource)
@@ -1113,6 +1190,7 @@ function ResourceView({ groupKey }) {
     setFilter('')
     setAppliedSearch('')
     setAppliedFilter('')
+    setTrashed('')
     setEditor(null)
     setSelectedRecord(null)
     await load(resource)
@@ -1131,7 +1209,7 @@ function ResourceView({ groupKey }) {
       const updates = { [config.statusField]: field === config.statusField ? value : record[config.statusField] }
       if (config.extraStatusField) updates[config.extraStatusField] = field === config.extraStatusField ? value : record[config.extraStatusField]
       await saveAdminResource(config.id, { id: record.id, ...updates })
-      await load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination?.current_page ?? 1 })
+      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
       setSelectedRecord((current) => current?.id === record.id ? { ...current, [field]: value } : current)
       await showAdminSuccess('Change applied')
       return true
@@ -1143,19 +1221,39 @@ function ResourceView({ groupKey }) {
 
   async function removeRecord(record) {
     const confirmed = await confirmAdminAction({
-      title: 'Delete this record?',
-      text: `Record #${record.id} from ${config.label} will be permanently removed. This action cannot be undone.`,
-      confirmButtonText: 'Delete record',
+      title: 'Move this record to trash?',
+      text: `Record #${record.id} from ${config.label} will be hidden from the live system. It can be restored later.`,
+      confirmButtonText: 'Move to trash',
     })
     if (!confirmed) return
     try {
       await deleteAdminResource(config.id, record.id)
-      await load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination?.current_page ?? 1 })
+      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
       setSelectedRecord(null)
-      await showAdminSuccess('Record deleted')
+      await showAdminSuccess('Moved to trash')
       return true
     } catch (deleteError) {
       setError(deleteError.message || 'Unable to delete this record.')
+      return false
+    }
+  }
+
+  async function restoreRecord(record) {
+    const confirmed = await confirmAdminAction({
+      title: 'Restore this record?',
+      text: `Record #${record.id} will become available to the live system again.`,
+      confirmButtonText: 'Restore record',
+      icon: 'question',
+    })
+    if (!confirmed) return false
+    try {
+      await restoreAdminResource(config.id, record.id)
+      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
+      setSelectedRecord(null)
+      await showAdminSuccess('Record restored')
+      return true
+    } catch (restoreError) {
+      setError(restoreError.message || 'Unable to restore this record.')
       return false
     }
   }
@@ -1167,7 +1265,7 @@ function ResourceView({ groupKey }) {
       </div>
 
       <div className="admin-content-toolbar">
-        <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, page: 1 }) }}><AppIcon name="search" /><input placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />{config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}<button type="submit">Filter</button></form>
+        <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed, page: 1 }) }}><AppIcon name="search" /><input placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />{config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}{!config.readOnly && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); load(config.id, { search: appliedSearch, status: appliedFilter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}<button type="submit">Filter</button></form>
         {!config.moderation && !config.readOnly && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
         {config.readOnly && <span className="admin-readonly-label"><AppIcon name="shield" />Read-only audit evidence</span>}
         <span className={`admin-refresh-state is-${refreshState}`}><i />{refreshState === 'stale' ? 'Update delayed' : 'Live data'}<small>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Connecting…'}</small></span>
@@ -1179,11 +1277,11 @@ function ResourceView({ groupKey }) {
           <table className="admin-table admin-resource-table">
             <thead><tr><th className="admin-index-column">#</th>{config.columns.map((column) => <th key={column.label}>{column.label}</th>)}{!config.readOnly && <th>Status</th>}<th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>{records.map((record, index) => (
-              <tr key={record.id}>
+              <tr className={record.deleted_at ? 'is-trashed' : ''} key={record.id}>
                 <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
                 {config.columns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
-                {!config.readOnly && <td>{config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-                <td><div className="admin-row-actions"><button type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!config.moderation && !config.readOnly && <button type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!config.readOnly && <button className="is-danger" type="button" aria-label={`Delete record #${record.id}`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}</div></td>
+                {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
+                <td><div className="admin-row-actions"><button type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -1191,9 +1289,9 @@ function ResourceView({ groupKey }) {
         {!loading && !records.length && <div className="admin-empty"><AppIcon name={config.icon} /><strong>No records found</strong><span>This database table does not have matching records yet.</span></div>}
       </section>
 
-      {pagination && <div className="admin-pagination"><button disabled={!pagination.prev_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination.current_page - 1 })}><AppIcon name="arrowBack" />Previous</button><span>Page {pagination.current_page} of {pagination.last_page}</span><button disabled={!pagination.next_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, page: pagination.current_page + 1 })}>Next<AppIcon name="arrowForward" /></button></div>}
-      {selectedRecord && <ResourceDetailsDrawer config={config} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
-      {editor && <ResourceEditor config={config} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await load(config.id, { search: appliedSearch, status: appliedFilter }) }} />}
+      {pagination && <div className="admin-pagination"><button disabled={!pagination.prev_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination.current_page - 1 })}><AppIcon name="arrowBack" />Previous</button><span>Page {pagination.current_page} of {pagination.last_page}</span><button disabled={!pagination.next_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination.current_page + 1 })}>Next<AppIcon name="arrowForward" /></button></div>}
+      {selectedRecord && <ResourceDetailsDrawer config={config} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onRestore={() => restoreRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
+      {editor && <ResourceEditor config={config} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, trashed })]); setLookups(lookupPayload.data ?? {}) }} />}
     </div>
   )
 }

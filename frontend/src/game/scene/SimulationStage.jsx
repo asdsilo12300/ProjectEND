@@ -122,7 +122,7 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
   )
 }
 
-export function SimulationStage({ actionMessage, availablePlantName = 'a plant', awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', expBurst = null, mode = 'greenhouse', nextCycleAt = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
+export function SimulationStage({ actionMessage, awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', expBurst = null, mode = 'greenhouse', nextCycleAt = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -239,7 +239,7 @@ export function SimulationStage({ actionMessage, availablePlantName = 'a plant',
         {!plantSelected && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[310px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-lime-100/20 bg-[#101511]/94 px-5 py-4 text-center shadow-[0_16px_38px_rgba(0,0,0,.42)]">
             <span className="mx-auto mb-2 inline-flex rounded-full bg-[#9bcf82]/14 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-lime-100">Step 2 of 3 · Choose plant</span>
-            <strong className="block text-base text-lime-50">Select {availablePlantName} to begin</strong>
+            <strong className="block text-base text-lime-50">Choose a plant to begin</strong>
             <span className="mt-1 block text-xs leading-5 text-slate-300">Open Lab assets and choose the plant card. Your simulation will be saved to this account.</span>
           </div>
         )}

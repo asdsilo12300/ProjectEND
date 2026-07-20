@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useRef } from 'react'
 import { Html, useAnimations, useGLTF } from '@react-three/drei'
-import { Box3, Color, DoubleSide, Vector3 } from 'three'
+import { AnimationMixer, Box3, Color, DoubleSide, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { resolveAssetUrl } from '../../lib/api'
 import { GltfPlant } from './GltfPlant'
@@ -11,6 +11,8 @@ const PLANT_PIVOT = [0.75, -0.105, 0]
 const PLANT_LOCAL_OFFSET = [0, -PLANT_BASE_LOCAL_Y, 0]
 const PLANT_ASSET_ALIGNMENT_POSITION = [-0.1, -0.026, 0.02]
 const PLANT_ASSET_ALIGNMENT_SCALE = 0.9
+const GENERIC_PLANT_TARGET_HEIGHT = 2.15
+const GENERIC_MATURE_ANIMATION_FRACTION = 0.95
 
 const STEM_LEAN_BY_STATE = {
   leaning: 0.095,
@@ -56,38 +58,167 @@ function PlantPresentationGroup({ children, visualOverrides = {} }) {
 function applyPlantOverrides(object, overrides = {}) {
   const leafColor = overrides.leafColor ? new Color(overrides.leafColor) : null
   const stemColor = overrides.stemColor ? new Color(overrides.stemColor) : null
+  const isStressState = (overrides.leafState && overrides.leafState !== 'upright')
+    || (overrides.stemState && overrides.stemState !== 'upright')
+  let targetedMaterialCount = 0
+
+  function cloneFromOriginal(material) {
+    if (!material?.clone) return material
+
+    const nextMaterial = material.clone()
+    if (nextMaterial.color) {
+      const originalColor = material.userData?.plantOriginalColor ?? `#${material.color.getHexString()}`
+      nextMaterial.userData = { ...nextMaterial.userData, plantOriginalColor: originalColor }
+      nextMaterial.color.set(originalColor)
+    }
+
+    return nextMaterial
+  }
 
   object.traverse((child) => {
     if (!child.isMesh || !child.material) return
 
-    const materialName = child.material.name?.toLowerCase?.() ?? ''
     const meshName = child.name?.toLowerCase?.() ?? ''
-    const isLeaf = materialName.includes('leaf') || meshName.includes('leaf')
-    const isStem = materialName.includes('stem') || materialName.includes('trunk') || meshName.includes('stem') || meshName.includes('trunk')
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    const nextMaterials = materials.map((material) => {
+      const materialName = material?.name?.toLowerCase?.() ?? ''
+      const isLeaf = materialName.includes('leaf') || meshName.includes('leaf')
+      const isStem = materialName.includes('stem') || materialName.includes('trunk') || meshName.includes('stem') || meshName.includes('trunk')
 
-    if (!isLeaf && !isStem) return
+      if ((!isLeaf && !isStem) || !material?.clone) return material
 
-    child.material = child.material.clone()
+      const nextMaterial = cloneFromOriginal(material)
+      if (nextMaterial.color && leafColor && isLeaf) nextMaterial.color.lerp(leafColor, 0.35)
+      if (nextMaterial.color && stemColor && isStem) nextMaterial.color.lerp(stemColor, 0.35)
+      targetedMaterialCount += 1
+      return nextMaterial
+    })
 
-    if (leafColor && isLeaf) {
-      child.material.color.lerp(leafColor, 0.35)
-    }
-
-    if (stemColor && isStem) {
-      child.material.color.lerp(stemColor, 0.35)
-    }
+    child.material = Array.isArray(child.material) ? nextMaterials : nextMaterials[0]
   })
+
+  // Some uploaded GLTF files use one material for petals, stems, and leaves.
+  // They have no leaf/stem names to target, so apply a restrained whole-model
+  // stress tint while preserving the artist's original healthy colours.
+  if (targetedMaterialCount === 0) {
+    object.traverse((child) => {
+      if (!child.isMesh || !child.material) return
+
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      const nextMaterials = materials.map((material) => {
+        const nextMaterial = cloneFromOriginal(material)
+        const stressColor = leafColor ?? stemColor
+        if (isStressState && nextMaterial.color && stressColor) nextMaterial.color.lerp(stressColor, 0.24)
+        return nextMaterial
+      })
+
+      child.material = Array.isArray(child.material) ? nextMaterials : nextMaterials[0]
+    })
+  }
 }
 
 function isBasePlantModel(modelUrl) {
   if (!modelUrl) return true
+  // The original Elephant Ear asset is served from either the bundled path or
+  // the API storage path. Both must use the purpose-built animated renderer.
   return modelUrl === '/plant.gltf' || modelUrl.endsWith('/plant.gltf')
 }
 
-function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaused = false, growthProgress = 0 }) {
+function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
-  const clonedScene = useMemo(() => scene.clone(true), [scene])
+  const clonedScene = useMemo(() => {
+    const clone = cloneSkeleton(scene)
+    const decorativeGroundMeshes = []
+    const planterGroups = []
+
+    clone.traverse((child) => {
+      const meshName = String(child.name ?? '').toLowerCase()
+      if (meshName === 'pot_0' || meshName === 'soil_1') {
+        planterGroups.push(child)
+        return
+      }
+
+      if (!child.isMesh) return
+
+      const materialNames = (Array.isArray(child.material) ? child.material : [child.material])
+        .map((material) => String(material?.name ?? '').toLowerCase())
+      const isPlanterMesh = meshName.includes('pot')
+        || materialNames.some((name) => name.includes('pot_mat') || name.includes('soil_mat'))
+      if (isPlanterMesh) {
+        planterGroups.push(child)
+      } else if (meshName.includes('ground') || materialNames.some((name) => name.includes('ground'))) {
+        decorativeGroundMeshes.push(child)
+      }
+
+      const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material]
+      const displayMaterials = sourceMaterials.map((sourceMaterial) => {
+        if (!sourceMaterial?.clone) return sourceMaterial
+
+        const material = sourceMaterial.clone()
+        // Some uploaded GLTF exports mark every plant material as blended.
+        // That makes foliage look translucent and render behind the ground.
+        // Keep texture cut-outs while rendering the plant as a solid model.
+        material.transparent = false
+        material.opacity = 1
+        material.depthWrite = true
+        material.alphaTest = material.alphaMap ? Math.max(material.alphaTest ?? 0, 0.02) : 0
+        material.side = DoubleSide
+        material.needsUpdate = true
+        return material
+      })
+      child.material = Array.isArray(child.material) ? displayMaterials : displayMaterials[0]
+    })
+
+    planterGroups.forEach((object) => object.parent?.remove(object))
+    decorativeGroundMeshes.forEach((mesh) => mesh.parent?.remove(mesh))
+
+    let measurementMixer = null
+    if (animations.length > 0) {
+      const clip = animations[0]
+      measurementMixer = new AnimationMixer(clone)
+      measurementMixer.clipAction(clip).play()
+      measurementMixer.setTime(clip.duration * GENERIC_MATURE_ANIMATION_FRACTION)
+      clone.updateMatrixWorld(true)
+    }
+
+    const sourceBox = new Box3().setFromObject(clone)
+    const sourceSize = new Vector3()
+    sourceBox.getSize(sourceSize)
+
+    // Uploaded assets are not always authored Y-up. Tulip/Sketchfab exports,
+    // for example, can arrive Z-up and otherwise appear flat or far too large.
+    if (sourceSize.z > sourceSize.y * 1.25 && sourceSize.z >= sourceSize.x) {
+      clone.rotation.x = Math.PI / 2
+    } else if (sourceSize.x > sourceSize.y * 1.25 && sourceSize.x > sourceSize.z) {
+      clone.rotation.z = Math.PI / 2
+    }
+    clone.updateMatrixWorld(true)
+
+    const box = new Box3().setFromObject(clone)
+    const size = new Vector3()
+    const center = new Vector3()
+    box.getSize(size)
+    box.getCenter(center)
+
+    const scale = GENERIC_PLANT_TARGET_HEIGHT / Math.max(size.y, 0.001)
+    clone.scale.setScalar(scale)
+    clone.position.set(
+      -center.x * scale,
+      PLANT_BASE_LOCAL_Y - box.min.y * scale,
+      -center.z * scale,
+    )
+    clone.updateMatrixWorld(true)
+
+    if (measurementMixer) {
+      measurementMixer.setTime(0)
+      measurementMixer.stopAllAction()
+      measurementMixer.uncacheRoot(clone)
+      clone.updateMatrixWorld(true)
+    }
+
+    return clone
+  }, [animations, scene])
   const { actions } = useAnimations(animations, group)
 
   useEffect(() => {
@@ -100,8 +231,10 @@ function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaus
 
       const duration = action.getClip().duration
       const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
+      const animationProgress = Math.min(GENERIC_MATURE_ANIMATION_FRACTION, progress * GENERIC_MATURE_ANIMATION_FRACTION)
       action.timeScale = isPaused ? 0 : 0.018
-      action.time = isMature ? duration : duration * progress
+      action.time = duration * (isMature ? GENERIC_MATURE_ANIMATION_FRACTION : animationProgress)
+      action.paused = false
       action.play()
       if (isMature || isPaused) {
         action.paused = true
@@ -112,11 +245,13 @@ function GenericPlantModel({ modelUrl, visualOverrides, isMature = false, isPaus
   }, [actions, growthProgress, isMature, isPaused])
 
   return (
-    <PlantPresentationGroup visualOverrides={visualOverrides}>
-      <group ref={group}>
-        <primitive object={clonedScene} />
-      </group>
-    </PlantPresentationGroup>
+    <group {...props}>
+      <PlantPresentationGroup visualOverrides={visualOverrides}>
+        <group ref={group}>
+          <primitive object={clonedScene} />
+        </group>
+      </PlantPresentationGroup>
+    </group>
   )
 }
 

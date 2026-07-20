@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PlantVisualVariant extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'plant_id',
         'stage_id',
@@ -33,11 +36,11 @@ class PlantVisualVariant extends Model
 
     public function plant(): BelongsTo
     {
-        return $this->belongsTo(Plant::class);
+        return $this->belongsTo(Plant::class)->withTrashed();
     }
 
     public function stage(): BelongsTo
     {
-        return $this->belongsTo(PlantGrowthStage::class, 'stage_id');
+        return $this->belongsTo(PlantGrowthStage::class, 'stage_id')->withTrashed();
     }
 }

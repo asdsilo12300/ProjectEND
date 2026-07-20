@@ -13,7 +13,7 @@ class PlantController extends Controller
     public function index(): AnonymousResourceCollection
     {
         return PlantResource::collection(
-            Plant::query()->with('stages')->orderBy('name_th')->get()
+            Plant::query()->playable()->with('stages')->orderBy('name_th')->get()
         );
     }
 

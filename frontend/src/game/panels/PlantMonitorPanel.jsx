@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { imageAssets, pestChances } from '../data/gameData'
+import { pestChances } from '../data/gameData'
 import { Panel } from '../components/Panel'
 import { PestChance } from '../components/PestChance'
 import { resolveAssetUrl } from '../../lib/api'
+import { AppIcon } from '../icons/IconifyIcon'
 
 const stageStops = [
   { label: 'Seedling', value: 0 },
@@ -18,6 +19,9 @@ const visualStateLabels = {
   heat_stress: 'Heat stress',
   burnt: 'Root burn',
   cold_stress: 'Cold stress',
+  low_light: 'Low-light stress',
+  dry_air: 'Dry-air stress',
+  botrytis: 'Fungal risk',
   stunted: 'Stunted',
 }
 
@@ -200,7 +204,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const growthHistory = simulationVisual?.growth_history ?? [growthProgress]
   const stageName = simulationVisual?.current_stage?.stage_name ?? 'Seedling'
   const plantName = readablePlantName(simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th)
-  const plantImageUrl = resolveAssetUrl(simulationVisual?.plant?.image_url ?? simulationVisual?.plant?.icon_url) ?? imageAssets.plant
+  const plantImageUrl = resolveAssetUrl(simulationVisual?.plant?.base_image_url ?? simulationVisual?.plant?.image_url ?? simulationVisual?.plant?.icon_url)
   const visualState = simulationVisual?.visual_state ?? 'healthy'
   const statusLabel = visualStateLabels[visualState] ?? 'Monitoring'
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
@@ -233,7 +237,11 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-lime-100/15 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.08)]">
-              <img className="h-full w-full object-cover object-center" src={plantImageUrl} alt="" draggable="false" />
+              {plantImageUrl ? (
+                <img className="h-full w-full object-cover object-center" src={plantImageUrl} alt="" draggable="false" />
+              ) : (
+                <AppIcon className="h-7 w-7 text-[#9bcf82]" name="plant" />
+              )}
             </span>
             <div className="min-w-0">
               <strong className="block text-[15px] font-black leading-5 text-lime-50">{plantName}</strong>

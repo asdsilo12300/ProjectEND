@@ -67,17 +67,17 @@ class Simulator extends Model
 
     public function plant(): BelongsTo
     {
-        return $this->belongsTo(Plant::class);
+        return $this->belongsTo(Plant::class)->withTrashed();
     }
 
     public function currentStage(): BelongsTo
     {
-        return $this->belongsTo(PlantGrowthStage::class, 'current_stage_id');
+        return $this->belongsTo(PlantGrowthStage::class, 'current_stage_id')->withTrashed();
     }
 
     public function visualVariant(): BelongsTo
     {
-        return $this->belongsTo(PlantVisualVariant::class, 'visual_variant_id');
+        return $this->belongsTo(PlantVisualVariant::class, 'visual_variant_id')->withTrashed();
     }
 
     public function logs(): HasMany
@@ -95,4 +95,3 @@ class Simulator extends Model
         return $this->hasMany(Post::class);
     }
 }
-

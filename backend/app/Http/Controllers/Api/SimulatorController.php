@@ -22,6 +22,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SimulatorController extends Controller
 {
@@ -29,10 +30,15 @@ class SimulatorController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $data = $request->validate([
+            'status' => ['nullable', Rule::in(['active', 'completed', 'failed', 'cancelled'])],
+        ]);
+
         return SimulatorResource::collection(
             Simulator::query()
                 ->with(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
                 ->where('user_id', $request->user()->id)
+                ->when($data['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
                 ->latest()
                 ->get()
         );
@@ -58,7 +64,7 @@ class SimulatorController extends Controller
     public function store(Request $request): SimulatorResource
     {
         $data = $request->validate([
-            'plant_id' => ['required', 'exists:plants,id'],
+            'plant_id' => ['required', Rule::exists('plants', 'id')->whereNull('deleted_at')],
             'mode' => ['required', Rule::in(['outdoor', 'greenhouse'])],
             'location_name' => ['nullable', 'string', 'max:191'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
@@ -66,19 +72,51 @@ class SimulatorController extends Controller
             'season' => ['nullable', Rule::in(['summer', 'rainy', 'winter'])],
         ]);
 
-        $plant = Plant::query()->with('stages')->findOrFail($data['plant_id']);
+        $plant = Plant::query()->playable()->with('stages')->find($data['plant_id']);
+        if (! $plant) {
+            throw ValidationException::withMessages([
+                'plant_id' => 'This plant is not ready for simulation. Configure a base model and growth stages from 0 to 100 first.',
+            ]);
+        }
         $firstStage = $plant->stages->first();
+        $initialEnvironment = $this->initialEnvironmentFor($plant);
 
-        $simulator = Simulator::query()->create([
-            ...$data,
-            'user_id' => $request->user()->id,
-            'current_stage_id' => $firstStage?->id,
-            'health' => 100,
-            'visual_state' => 'healthy',
-            'visual_overrides' => ['leafColor' => '#9bcf82', 'stemColor' => '#7a5a2f', 'scale' => 1],
-            'status' => 'active',
-            'started_at' => now(),
-        ]);
+        $simulator = DB::transaction(function () use ($data, $firstStage, $initialEnvironment, $request): Simulator {
+            $activeSimulators = Simulator::query()
+                ->where('user_id', $request->user()->id)
+                ->where('plant_id', $data['plant_id'])
+                ->where('status', 'active')
+                ->latest('updated_at')
+                ->latest('id')
+                ->lockForUpdate()
+                ->get();
+
+            $existing = $activeSimulators->first();
+            if ($existing) {
+                $duplicateIds = $activeSimulators->skip(1)->pluck('id');
+                if ($duplicateIds->isNotEmpty()) {
+                    Simulator::query()->whereKey($duplicateIds->all())->update([
+                        'status' => 'cancelled',
+                        'share_visibility' => 'private',
+                        'ended_at' => now(),
+                    ]);
+                }
+
+                return $existing;
+            }
+
+            return Simulator::query()->create([
+                ...$data,
+                'user_id' => $request->user()->id,
+                'current_stage_id' => $firstStage?->id,
+                'health' => 100,
+                'visual_state' => 'healthy',
+                'visual_overrides' => ['leafColor' => '#9bcf82', 'stemColor' => '#7a5a2f', 'scale' => 1],
+                'status' => 'active',
+                'started_at' => now(),
+                ...$initialEnvironment,
+            ]);
+        });
 
         return new SimulatorResource($simulator->load(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
     }
@@ -103,6 +141,7 @@ class SimulatorController extends Controller
             'soil_temp' => ['required', 'numeric', 'min:-20', 'max:80'],
             'air_temp' => ['required', 'numeric', 'min:-20', 'max:80'],
             'rain' => ['nullable', 'numeric', 'min:0', 'max:500'],
+            'root_temperature_controlled' => ['nullable', 'boolean'],
         ]);
 
         $updated = $engine->tick($simulator, $factors);
@@ -223,6 +262,7 @@ class SimulatorController extends Controller
     public function finish(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        abort_unless($simulator->status === 'active', 409, 'Only an active plant can be completed.');
 
         $simulator->update([
             'status' => 'completed',
@@ -239,6 +279,7 @@ class SimulatorController extends Controller
     public function uproot(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        abort_unless($simulator->status === 'active', 409, 'Only an active plant can be uprooted.');
 
         $simulator->forceFill([
             'status' => 'cancelled',
@@ -634,5 +675,42 @@ class SimulatorController extends Controller
             'gem' => $user->gem,
             'status' => $user->status,
         ];
+    }
+
+    /**
+     * Start every new simulation in the middle of its plant's healthy range.
+     * Values are stored on the plant record so the same behaviour applies to
+     * Tulip and to any future plant created from the admin catalog.
+     *
+     * @return array<string, int|float>
+     */
+    private function initialEnvironmentFor(Plant $plant): array
+    {
+        return [
+            'water' => $this->rangeMidpoint($plant->water_min, $plant->water_max, 55),
+            'light' => $this->rangeMidpoint($plant->light_min, $plant->light_max, 72),
+            'fertilizer' => $this->rangeMidpoint($plant->fertilizer_min, $plant->fertilizer_max, 35),
+            'soil_humidity' => $this->rangeMidpoint($plant->soil_humidity_min, $plant->soil_humidity_max, 62),
+            'air_humidity' => $this->rangeMidpoint($plant->air_humidity_min, $plant->air_humidity_max, 58),
+            'soil_temp' => $this->rangeMidpoint($plant->soil_temp_min, $plant->soil_temp_max, 25, false),
+            'air_temp' => $this->rangeMidpoint($plant->air_temp_min, $plant->air_temp_max, 29, false),
+        ];
+    }
+
+    private function rangeMidpoint(mixed $min, mixed $max, int|float $fallback, bool $asInteger = true): int|float
+    {
+        if (! is_numeric($min) || ! is_numeric($max)) {
+            return $fallback;
+        }
+
+        $minimum = (float) $min;
+        $maximum = (float) $max;
+        if ($minimum > $maximum) {
+            return $fallback;
+        }
+
+        $midpoint = max($minimum, min($maximum, ($minimum + $maximum) / 2));
+
+        return $asInteger ? (int) round($midpoint) : round($midpoint, 2);
     }
 }

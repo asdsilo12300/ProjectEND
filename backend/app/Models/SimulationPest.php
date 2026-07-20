@@ -32,6 +32,6 @@ class SimulationPest extends Model
 
     public function pest(): BelongsTo
     {
-        return $this->belongsTo(Pest::class);
+        return $this->belongsTo(Pest::class)->withTrashed();
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -55,5 +56,18 @@ class Plant extends Model
     public function conditionRules(): HasMany
     {
         return $this->hasMany(PlantConditionRule::class);
+    }
+
+    /**
+     * Only plants with a base model plus a complete 0-100 growth track are
+     * safe to expose to the simulation UI.
+     */
+    public function scopePlayable(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('base_model_url')
+            ->where('base_model_url', '<>', '')
+            ->whereHas('stages', fn (Builder $stages): Builder => $stages->where('required_growth_point', '<=', 0))
+            ->whereHas('stages', fn (Builder $stages): Builder => $stages->where('required_growth_point', '>=', 100));
     }
 }

@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\AdminContentController;
 use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminMediaController;
+use App\Http\Controllers\Api\AdminModelBundleController;
 use App\Http\Controllers\Api\AdminResourceController;
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AuthController;
@@ -39,11 +41,6 @@ Route::get('/shop/items', [ShopController::class, 'index']);
 Route::get('/posts', [PostController::class, 'index']);
 Route::get('/model-assets', [ModelAssetController::class, 'index']);
 Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
-
-// Dev-only test upload route (no auth); enabled only when APP_DEBUG is true.
-if (config('app.debug')) {
-    Route::post('/dev/upload-model', [PlantModelController::class, 'uploadTest']);
-}
 
 Route::middleware('jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
@@ -112,13 +109,17 @@ Route::middleware('jwt')->group(function (): void {
         Route::post('/contents/images', [AdminContentController::class, 'uploadImage']);
         Route::put('/contents/{content}', [AdminContentController::class, 'update']);
         Route::delete('/contents/{content}', [AdminContentController::class, 'destroy']);
+        Route::post('/contents/{content}/restore', [AdminContentController::class, 'restore']);
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::patch('/users/{user}', [AdminUserController::class, 'update']);
         Route::get('/resources/lookups', [AdminResourceController::class, 'lookups']);
+        Route::post('/media/images', [AdminMediaController::class, 'uploadImage']);
+        Route::post('/model-bundles', [AdminModelBundleController::class, 'store']);
         Route::get('/resources/{resource}', [AdminResourceController::class, 'index']);
         Route::post('/resources/{resource}', [AdminResourceController::class, 'store']);
         Route::put('/resources/{resource}/{record}', [AdminResourceController::class, 'update']);
         Route::delete('/resources/{resource}/{record}', [AdminResourceController::class, 'destroy']);
+        Route::post('/resources/{resource}/{record}/restore', [AdminResourceController::class, 'restore']);
 
     });
 });

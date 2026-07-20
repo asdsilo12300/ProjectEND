@@ -5,9 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PlantGrowthStage extends Model
 {
+    use SoftDeletes;
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -22,7 +25,7 @@ class PlantGrowthStage extends Model
 
     public function plant(): BelongsTo
     {
-        return $this->belongsTo(Plant::class);
+        return $this->belongsTo(Plant::class)->withTrashed();
     }
 
     public function visualVariants(): HasMany

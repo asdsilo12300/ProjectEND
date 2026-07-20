@@ -250,6 +250,7 @@ class AdminDashboardControllerTest extends TestCase
             $table->string('status')->default('draft');
             $table->unsignedInteger('version')->default(1);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         foreach (['plants', 'pests'] as $tableName) {
@@ -271,6 +272,7 @@ class AdminDashboardControllerTest extends TestCase
         ] as $tableName) {
             Schema::create($tableName, function (Blueprint $table): void {
                 $table->id();
+                $table->softDeletes();
             });
         }
 
@@ -279,6 +281,7 @@ class AdminDashboardControllerTest extends TestCase
             $table->string('asset_key');
             $table->string('url')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('admin_activity_logs', function (Blueprint $table): void {

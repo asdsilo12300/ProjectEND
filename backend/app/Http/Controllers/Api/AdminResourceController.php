@@ -20,9 +20,12 @@ use App\Models\Quest;
 use App\Models\ShopItem;
 use App\Models\Simulator;
 use App\Models\SimulatorComment;
+use App\Services\KnownPlantProfileService;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AdminResourceController extends Controller
@@ -43,6 +46,7 @@ class AdminResourceController extends Controller
 
         if ($config !== null) {
             $query = $config['model']::query();
+            $this->applyTrashedScope($query, $request);
             if ($config['with'] !== []) {
                 $query->with($config['with']);
             }
@@ -62,10 +66,27 @@ class AdminResourceController extends Controller
         $config = $this->catalogConfig($resource);
         abort_if($config === null, 404, 'This resource cannot be created here.');
 
-        $record = $config['model']::query()->create($request->validate($this->rules($resource)));
-        AdminActivityLog::record($request->user(), 'created', $resource, $record->id, ['after' => $record->toArray()]);
+        $data = $request->validate($this->rules($resource, null, $request));
+        $record = DB::transaction(function () use ($config, $data, $resource) {
+            $record = $config['model']::query()->create($data);
 
-        return response()->json(['data' => $record->fresh()], 201);
+            if ($resource === 'plants' && $record instanceof Plant) {
+                $record->stages()->createMany([
+                    ['stage_no' => 1, 'stage_name' => 'Seedling', 'required_growth_point' => 0, 'model_url' => $record->base_model_url, 'description' => 'Automatically created starting stage.'],
+                    ['stage_no' => 2, 'stage_name' => 'Sprout', 'required_growth_point' => 40, 'model_url' => $record->base_model_url, 'description' => 'Automatically created intermediate stage.'],
+                    ['stage_no' => 3, 'stage_name' => 'Mature', 'required_growth_point' => 100, 'model_url' => $record->base_model_url, 'description' => 'Automatically created mature stage.'],
+                ]);
+
+                app(KnownPlantProfileService::class)->apply($record);
+            }
+
+            return $record;
+        });
+
+        $freshRecord = $record->fresh($resource === 'plants' ? ['stages'] : []);
+        AdminActivityLog::record($request->user(), 'created', $resource, $record->id, ['after' => $freshRecord->toArray()]);
+
+        return response()->json(['data' => $freshRecord], 201);
     }
 
     public function update(Request $request, string $resource, int $record): JsonResponse
@@ -74,7 +95,7 @@ class AdminResourceController extends Controller
         if ($config !== null) {
             $model = $config['model']::query()->findOrFail($record);
             $before = $model->toArray();
-            $model->fill($request->validate($this->rules($resource, $record)))->save();
+            $model->fill($request->validate($this->rules($resource, $record, $request)))->save();
             AdminActivityLog::record($request->user(), 'updated', $resource, $model->id, ['before' => $before, 'after' => $model->fresh()->toArray()]);
 
             return response()->json(['data' => $model->fresh()]);
@@ -92,6 +113,7 @@ class AdminResourceController extends Controller
         $config = $this->catalogConfig($resource);
         $modelClass = $config['model'] ?? $this->moderationModel($resource);
         abort_if($modelClass === null, 404, 'Unknown management resource.');
+        abort_unless($this->usesSoftDeletes($modelClass), 409, 'This resource is not configured for safe deletion.');
         $model = $modelClass::query()->findOrFail($record);
         $before = $model->toArray();
 
@@ -101,9 +123,27 @@ class AdminResourceController extends Controller
             return response()->json(['message' => 'This record is still used by related data and cannot be deleted. Disable or archive it instead.'], 422);
         }
 
-        AdminActivityLog::record($request->user(), 'deleted', $resource, $record, ['before' => $before]);
+        AdminActivityLog::record($request->user(), 'soft_deleted', $resource, $record, ['before' => $before]);
 
-        return response()->json(['message' => 'Record deleted.']);
+        return response()->json(['message' => 'Record moved to trash.']);
+    }
+
+    public function restore(Request $request, string $resource, int $record): JsonResponse
+    {
+        abort_if($resource === 'activity-logs', 405, 'Audit logs cannot be changed.');
+
+        $config = $this->catalogConfig($resource);
+        $modelClass = $config['model'] ?? $this->moderationModel($resource);
+        abort_if($modelClass === null, 404, 'Unknown management resource.');
+        abort_unless($this->usesSoftDeletes($modelClass), 409, 'This resource does not support restoration.');
+
+        $model = $modelClass::onlyTrashed()->findOrFail($record);
+        $model->restore();
+        AdminActivityLog::record($request->user(), 'restored', $resource, $record, [
+            'after' => $model->fresh()->toArray(),
+        ]);
+
+        return response()->json(['message' => 'Record restored.', 'data' => $model->fresh()]);
     }
 
     private function catalogConfig(string $resource): ?array
@@ -124,29 +164,34 @@ class AdminResourceController extends Controller
         };
     }
 
-    private function rules(string $resource, ?int $id = null): array
+    private function rules(string $resource, ?int $id = null, ?Request $request = null): array
     {
         $requiredPercent = ['required', 'integer', 'between:0,100'];
         $nullableUrl = ['nullable', 'string', 'max:2048'];
+        $activePlant = Rule::exists('plants', 'id')->whereNull('deleted_at');
+        $plantId = (int) $request?->input('plant_id', 0);
+        $activeStageForPlant = Rule::exists('plant_growth_stages', 'id')->whereNull('deleted_at')->where('plant_id', $plantId);
+        $activePest = Rule::exists('pests', 'id')->whereNull('deleted_at');
+        $activeItem = Rule::exists('items', 'id')->whereNull('deleted_at');
 
         return match ($resource) {
             'plants' => [
                 'name_th' => ['required', 'string', 'max:191', Rule::unique('plants', 'name_th')->ignore($id)],
                 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'],
-                'base_image_url' => $nullableUrl, 'base_model_url' => $nullableUrl,
+                'base_image_url' => $nullableUrl, 'base_model_url' => ['required', 'string', 'max:2048'],
                 'water_min' => $requiredPercent, 'water_max' => $requiredPercent, 'light_min' => $requiredPercent, 'light_max' => $requiredPercent,
                 'fertilizer_min' => $requiredPercent, 'fertilizer_max' => $requiredPercent, 'soil_humidity_min' => $requiredPercent, 'soil_humidity_max' => $requiredPercent,
                 'air_humidity_min' => $requiredPercent, 'air_humidity_max' => $requiredPercent,
                 'soil_temp_min' => ['required', 'numeric', 'between:-50,100'], 'soil_temp_max' => ['required', 'numeric', 'between:-50,100'],
                 'air_temp_min' => ['required', 'numeric', 'between:-50,100'], 'air_temp_max' => ['required', 'numeric', 'between:-50,100'],
             ],
-            'plant-stages' => ['plant_id' => ['required', 'exists:plants,id'], 'stage_no' => ['required', 'integer', 'between:1,99'], 'stage_name' => ['required', 'string', 'max:191'], 'required_growth_point' => ['required', 'integer', 'min:0'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'description' => ['nullable', 'string', 'max:5000']],
-            'plant-rules' => ['plant_id' => ['required', 'exists:plants,id'], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'visual_state' => ['required', 'string', 'max:80'], 'severity' => ['required', 'integer', 'between:1,10'], 'health_delta' => ['required', 'integer', 'between:-100,100'], 'growth_delta' => ['required', 'integer', 'between:-100,100'], 'analysis_result' => ['nullable', 'string', 'max:2000'], 'direction' => ['nullable', 'string', 'max:2000'], 'is_active' => ['required', 'boolean']],
-            'plant-variants' => ['plant_id' => ['required', 'exists:plants,id'], 'stage_id' => ['nullable', 'exists:plant_growth_stages,id'], 'state_key' => ['required', 'string', 'max:100'], 'label' => ['nullable', 'string', 'max:191'], 'model_url' => $nullableUrl, 'leaf_color' => ['nullable', 'string', 'max:30'], 'stem_color' => ['nullable', 'string', 'max:30'], 'leaf_state' => ['nullable', 'string', 'max:80'], 'stem_state' => ['nullable', 'string', 'max:80'], 'scale' => ['required', 'numeric', 'between:0.01,20'], 'priority' => ['required', 'integer', 'between:0,999'], 'is_active' => ['required', 'boolean']],
+            'plant-stages' => ['plant_id' => ['required', $activePlant], 'stage_no' => ['required', 'integer', 'between:1,99', Rule::unique('plant_growth_stages', 'stage_no')->where('plant_id', $plantId)->ignore($id)], 'stage_name' => ['required', 'string', 'max:191'], 'required_growth_point' => ['required', 'integer', 'min:0'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'description' => ['nullable', 'string', 'max:5000']],
+            'plant-rules' => ['plant_id' => ['required', $activePlant], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'visual_state' => ['required', 'string', 'max:80'], 'severity' => ['required', 'integer', 'between:1,10'], 'health_delta' => ['required', 'integer', 'between:-100,100'], 'growth_delta' => ['required', 'integer', 'between:-100,100'], 'analysis_result' => ['nullable', 'string', 'max:2000'], 'direction' => ['nullable', 'string', 'max:2000'], 'is_active' => ['required', 'boolean']],
+            'plant-variants' => ['plant_id' => ['required', $activePlant], 'stage_id' => ['nullable', $activeStageForPlant], 'state_key' => ['required', 'string', 'max:100'], 'label' => ['nullable', 'string', 'max:191'], 'model_url' => $nullableUrl, 'leaf_color' => ['nullable', 'string', 'max:30'], 'stem_color' => ['nullable', 'string', 'max:30'], 'leaf_state' => ['nullable', 'string', 'max:80'], 'stem_state' => ['nullable', 'string', 'max:80'], 'scale' => ['required', 'numeric', 'between:0.01,20'], 'priority' => ['required', 'integer', 'between:0,999'], 'is_active' => ['required', 'boolean']],
             'pests' => ['name_th' => ['required', 'string', 'max:191', Rule::unique('pests', 'name_th')->ignore($id)], 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'base_chance' => ['required', 'numeric', 'between:0,100'], 'damage_per_turn' => ['required', 'integer', 'between:0,100'], 'behavior' => ['nullable', 'string', 'max:5000']],
-            'pest-rules' => ['pest_id' => ['required', 'exists:pests,id'], 'plant_id' => ['nullable', 'exists:plants,id'], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
+            'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
             'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
-            'shop-items' => ['item_id' => ['required', 'exists:items,id', Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at']],
+            'shop-items' => ['item_id' => ['required', $activeItem, Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at']],
             'model-assets' => ['asset_key' => ['required', 'string', 'max:191', Rule::unique('model_assets', 'asset_key')->ignore($id)], 'label' => ['nullable', 'string', 'max:191'], 'type' => ['required', 'string', 'max:80'], 'url' => ['required', 'string', 'max:2048'], 'metadata' => ['nullable', 'array']],
             'quests' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'quest_type' => ['required', Rule::in(['daily', 'weekly', 'story', 'event'])], 'target_type' => ['required', 'string', 'max:100'], 'target_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'reward_gem' => ['required', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],
             'achievements' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'condition_type' => ['required', 'string', 'max:100'], 'condition_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'badge_image_url' => $nullableUrl, 'is_active' => ['required', 'boolean']],
@@ -165,6 +210,10 @@ class AdminResourceController extends Controller
             'activity-logs' => AdminActivityLog::query()->with('admin:id,username,email'),
             default => abort(404, 'Unknown management resource.'),
         };
+
+        if ($resource !== 'activity-logs') {
+            $this->applyTrashedScope($query, $request);
+        }
 
         $search = trim((string) $request->query('search', ''));
         if ($search !== '') {
@@ -233,5 +282,19 @@ class AdminResourceController extends Controller
                 $nested->{$method}($column, '%'.$search.'%', caseSensitive: false);
             }
         });
+    }
+
+    private function applyTrashedScope($query, Request $request): void
+    {
+        if ($request->query('trashed') === 'only') {
+            $query->onlyTrashed();
+        } elseif ($request->query('trashed') === 'with') {
+            $query->withTrashed();
+        }
+    }
+
+    private function usesSoftDeletes(string $modelClass): bool
+    {
+        return in_array(SoftDeletes::class, class_uses_recursive($modelClass), true);
     }
 }

@@ -118,6 +118,7 @@ class HarvestSimulationTest extends TestCase
             $table->string('image_url')->nullable();
             $table->string('model_url')->nullable();
             $table->text('description')->nullable();
+            $table->softDeletes();
         });
 
         Schema::create('plant_visual_variants', function (Blueprint $table): void {
@@ -135,6 +136,7 @@ class HarvestSimulationTest extends TestCase
             $table->unsignedInteger('priority')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('plant_condition_rules', function (Blueprint $table): void {
@@ -152,6 +154,7 @@ class HarvestSimulationTest extends TestCase
             $table->text('direction')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('pests', function (Blueprint $table): void {
@@ -180,6 +183,7 @@ class HarvestSimulationTest extends TestCase
             $table->unsignedInteger('severity')->default(1);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('simulators', function (Blueprint $table): void {

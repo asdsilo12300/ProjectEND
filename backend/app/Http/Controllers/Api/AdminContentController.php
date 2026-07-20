@@ -18,6 +18,8 @@ class AdminContentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $contents = Content::query()
+            ->when($request->query('trashed') === 'only', fn ($query) => $query->onlyTrashed())
+            ->when($request->query('trashed') === 'with', fn ($query) => $query->withTrashed())
             ->when($request->string('search')->trim()->isNotEmpty(), function ($query) use ($request): void {
                 $search = '%'.$request->string('search')->trim().'%';
                 $query->where(fn ($nested) => $nested
@@ -83,9 +85,21 @@ class AdminContentController extends Controller
         $admin = request()->user();
         $before = $content->only(['title', 'slug', 'status', 'version']);
         $content->delete();
-        AdminActivityLog::record($admin, 'deleted', 'contents', $content->id, ['before' => $before]);
+        AdminActivityLog::record($admin, 'soft_deleted', 'contents', $content->id, ['before' => $before]);
 
-        return response()->json(['message' => 'Content deleted.']);
+        return response()->json(['message' => 'Content moved to trash.']);
+    }
+
+    public function restore(Request $request, int $content): JsonResponse
+    {
+        $record = Content::onlyTrashed()->findOrFail($content);
+        $record->restore();
+        AdminActivityLog::record($request->user(), 'restored', 'contents', $record->id, [
+            'title' => $record->title,
+            'slug' => $record->slug,
+        ]);
+
+        return response()->json(['message' => 'Content restored.', 'data' => $record->fresh()]);
     }
 
     private function validated(Request $request, ?Content $content = null): array

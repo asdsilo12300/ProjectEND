@@ -9,6 +9,7 @@ const climateLabels = {
   fertilizer: 'Fertilizer',
   soil: 'Soil',
   air: 'Air',
+  soilTemp: 'Soil temp',
   temp: 'Temp',
 }
 
@@ -18,6 +19,7 @@ const climateUnits = {
   fertilizer: 'g',
   soil: '%',
   air: '%RH',
+  soilTemp: 'C',
   temp: 'C',
 }
 
@@ -35,19 +37,21 @@ function ClimateValue({ climateKey, value }) {
 }
 
 function ClimateControl({ climateKey, value, onChange, compact = false, disabled = false }) {
-  const icon = climateIcons[climateKey]
-  const layout = compact ? 'grid-cols-[26px_34px_minmax(72px,1fr)_56px] sm:grid-cols-[28px_38px_minmax(78px,1fr)_60px]' : 'grid-cols-[28px_42px_minmax(88px,1fr)_64px]'
+  const icon = climateIcons[climateKey] ?? climateIcons.temp
+  const layout = compact ? 'grid-cols-[26px_34px_minmax(72px,1fr)_56px] sm:grid-cols-[28px_38px_minmax(78px,1fr)_60px]' : 'grid-cols-[28px_64px_minmax(72px,1fr)_58px]'
+  const isTemperature = climateKey === 'temp' || climateKey === 'soilTemp'
+  const rangeProgress = isTemperature ? (Number(value) / 45) * 100 : Number(value)
 
   return (
-    <label className={`grid ${layout} items-center gap-2 text-xs text-slate-300 ${disabled ? 'opacity-55' : ''}`}>
+    <label className={`grid ${layout} items-center gap-1.5 text-xs text-slate-300 ${disabled ? 'opacity-55' : ''}`}>
       <MetricIcon type={icon.icon} color={icon.color} imageUrl={icon.imageUrl} label={`${climateLabels[climateKey]} icon`} size="sm" />
       <span className="truncate">{climateLabels[climateKey]}</span>
       <input
         className="sim-range sim-range-compact"
-        style={{ '--range-progress': `${value}%` }}
+        style={{ '--range-progress': `${rangeProgress}%` }}
         type="range"
         min="0"
-        max="100"
+        max={isTemperature ? '45' : '100'}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(climateKey, Number(event.target.value))}
@@ -137,7 +141,7 @@ export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mod
       subtitle={isOutdoor ? 'weather data from Open-Meteo' : 'water light fertilizer'}
       windows={windows}
       setWindows={setWindows}
-      className={isOutdoor ? 'w-[390px] max-w-[calc(100vw-32px)]' : 'w-[540px] max-w-[calc(100vw-32px)]'}
+      className={isOutdoor ? 'w-[390px] max-w-[calc(100vw-32px)]' : 'w-[600px] max-w-[calc(100vw-32px)]'}
     >
       <div className={isOutdoor ? 'max-h-[186px] overflow-y-auto pr-1 sm:max-h-[330px]' : ''}>
         <div className={`mb-3 rounded-md border px-3 py-2 text-[11px] leading-4 ${plantSelected ? 'border-lime-100/10 bg-[#9bcf82]/[0.07] text-slate-300' : 'border-amber-200/15 bg-amber-300/[0.07] text-amber-100'}`}>

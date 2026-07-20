@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PestConditionRule extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'pest_id',
         'plant_id',
@@ -32,11 +35,11 @@ class PestConditionRule extends Model
 
     public function pest(): BelongsTo
     {
-        return $this->belongsTo(Pest::class);
+        return $this->belongsTo(Pest::class)->withTrashed();
     }
 
     public function plant(): BelongsTo
     {
-        return $this->belongsTo(Plant::class);
+        return $this->belongsTo(Plant::class)->withTrashed();
     }
 }

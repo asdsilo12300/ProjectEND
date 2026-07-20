@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PlantConditionRule extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'plant_id',
         'factor',
@@ -36,6 +39,6 @@ class PlantConditionRule extends Model
 
     public function plant(): BelongsTo
     {
-        return $this->belongsTo(Plant::class);
+        return $this->belongsTo(Plant::class)->withTrashed();
     }
 }
