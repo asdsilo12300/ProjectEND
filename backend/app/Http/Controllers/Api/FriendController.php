@@ -7,8 +7,10 @@ use App\Http\Resources\SimulatorResource;
 use App\Models\Friendship;
 use App\Models\Simulator;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class FriendController extends Controller
@@ -18,12 +20,37 @@ class FriendController extends Controller
         $user = $request->user();
 
         $friendships = Friendship::query()
-            ->with(['requester', 'addressee'])
+            ->with([
+                'requester' => fn ($query) => $this->withProfileCounts($query),
+                'addressee' => fn ($query) => $this->withProfileCounts($query),
+            ])
             ->where('requester_id', $user->id)
             ->orWhere('addressee_id', $user->id)
             ->latest()
-            ->get()
-            ->map(fn (Friendship $friendship) => $this->friendPayload($friendship, $user->id))
+            ->get();
+
+        $friendUserIds = $friendships
+            ->where('status', 'accepted')
+            ->map(fn (Friendship $friendship) => $this->otherUserId($friendship, (int) $user->id))
+            ->unique()
+            ->values();
+
+        $latestSimulators = $friendUserIds->isEmpty()
+            ? collect()
+            : Simulator::query()
+                ->with(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
+                ->whereIn('user_id', $friendUserIds)
+                ->whereNull('deleted_at')
+                ->where('status', 'active')
+                ->whereIn('share_visibility', ['friends', 'public'])
+                ->latest('updated_at')
+                ->latest('id')
+                ->get()
+                ->unique('user_id')
+                ->keyBy('user_id');
+
+        $friendships = $friendships
+            ->map(fn (Friendship $friendship) => $this->friendPayload($friendship, (int) $user->id, $latestSimulators))
             ->values();
 
         return response()->json([
@@ -53,7 +80,7 @@ class FriendController extends Controller
             ->values()
             ->all();
 
-        $results = User::query()
+        $results = $this->withProfileCounts(User::query())
             ->where('id', '<>', $user->id)
             ->where(function ($builder) use ($query): void {
                 $builder
@@ -153,10 +180,11 @@ class FriendController extends Controller
 
         return new SimulatorResource($simulator);
     }
-    private function friendPayload(Friendship $friendship, int $currentUserId): array
+    private function friendPayload(Friendship $friendship, int $currentUserId, ?Collection $latestSimulators = null): array
     {
-        $other = $friendship->requester_id === $currentUserId ? $friendship->addressee : $friendship->requester;
-        $direction = $friendship->requester_id === $currentUserId ? 'outgoing' : 'incoming';
+        $isRequester = (int) $friendship->requester_id === $currentUserId;
+        $other = $isRequester ? $friendship->addressee : $friendship->requester;
+        $direction = $isRequester ? 'outgoing' : 'incoming';
 
         return [
             'id' => $friendship->id,
@@ -165,7 +193,9 @@ class FriendController extends Controller
             'presence' => $this->presence($other),
             'user' => $this->userPayload($other),
             'latest_simulator' => $friendship->status === 'accepted'
-                ? $this->latestSimulatorPayload($other->id)
+                ? ($latestSimulators === null
+                    ? $this->latestSimulatorPayload($other->id)
+                    : $this->simulatorPayload($latestSimulators->get($other->id)))
                 : null,
         ];
     }
@@ -185,13 +215,15 @@ class FriendController extends Controller
 
     private function latestSimulatorPayload(int $userId): ?array
     {
-        $simulator = $this->latestSimulatorForUser($userId);
-
-        return $simulator ? (new SimulatorResource($simulator))->resolve() : null;
+        return $this->simulatorPayload($this->latestSimulatorForUser($userId));
     }
 
     private function userPayload(User $user, string $friendshipStatus = 'none'): array
     {
+        if (! array_key_exists('plant_histories_count', $user->getAttributes())) {
+            $user->loadCount($this->profileCounts());
+        }
+
         return [
             'id' => $user->id,
             'username' => $user->username,
@@ -203,24 +235,39 @@ class FriendController extends Controller
             'level' => $user->level,
             'experience' => $user->experience,
             'level_progress' => $user->levelProgress(),
-            'friends_count' => $this->acceptedFriendsCount($user),
-            'plant_histories_count' => $user->plantHistories()->count(),
-            'plants_count' => $user->plantHistories()->count(),
+            'friends_count' => (int) $user->accepted_requested_friendships_count
+                + (int) $user->accepted_received_friendships_count,
+            'plant_histories_count' => (int) $user->plant_histories_count,
+            'plants_count' => (int) $user->plant_histories_count,
             'presence' => $this->presence($user),
             'friendship_status' => $friendshipStatus,
         ];
     }
 
-    private function acceptedFriendsCount(User $user): int
+    private function withProfileCounts($query)
     {
-        return Friendship::query()
-            ->where('status', 'accepted')
-            ->where(function ($query) use ($user): void {
-                $query
-                    ->where('requester_id', $user->id)
-                    ->orWhere('addressee_id', $user->id);
-            })
-            ->count();
+        return $query->withCount($this->profileCounts());
+    }
+
+    private function profileCounts(): array
+    {
+        return [
+            'plantHistories',
+            'requestedFriendships as accepted_requested_friendships_count' => fn (Builder $query) => $query->where('status', 'accepted'),
+            'receivedFriendships as accepted_received_friendships_count' => fn (Builder $query) => $query->where('status', 'accepted'),
+        ];
+    }
+
+    private function otherUserId(Friendship $friendship, int $currentUserId): int
+    {
+        return (int) ((int) $friendship->requester_id === $currentUserId
+            ? $friendship->addressee_id
+            : $friendship->requester_id);
+    }
+
+    private function simulatorPayload(?Simulator $simulator): ?array
+    {
+        return $simulator ? (new SimulatorResource($simulator))->resolve() : null;
     }
 
     private function presence(User $user): string

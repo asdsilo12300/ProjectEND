@@ -6,12 +6,17 @@ if (!API_BASE_URL) {
 }
 
 const API_ROOT_URL = API_BASE_URL.replace(/\/api$/, '')
+const inflightGetRequests = new Map()
+const responseCache = new Map()
 
 export function getToken() {
   return window.localStorage.getItem('plant_game_token')
 }
 
 export function setToken(token) {
+  inflightGetRequests.clear()
+  responseCache.clear()
+
   if (token) {
     window.localStorage.setItem('plant_game_token', token)
   } else {
@@ -38,37 +43,68 @@ export function storageAsset(path) {
 }
 
 export async function apiFetch(path, options = {}) {
+  const { auth = true, cacheTtl = 0, ...fetchOptions } = options
   const token = getToken()
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers ?? {}),
-    },
-  })
+  const method = String(fetchOptions.method ?? 'GET').toUpperCase()
+  const canShareRequest = method === 'GET' && !fetchOptions.signal
+  const requestKey = canShareRequest ? `${auth ? token ?? 'guest' : 'public'}:${path}` : null
+  const cached = requestKey ? responseCache.get(requestKey) : null
 
-  const payload = await response.json().catch(() => ({}))
-
-  if (!response.ok) {
-    if (response.status === 401 && token && getToken() === token) {
-      clearToken()
-      window.dispatchEvent(new Event('plant-game:session-expired'))
-    }
-
-    const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
-    const error = new Error(validationMessage || payload.message || 'API request failed')
-    error.status = response.status
-    error.payload = payload
-    throw error
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.payload
   }
 
-  return payload
+  if (requestKey && inflightGetRequests.has(requestKey)) {
+    return inflightGetRequests.get(requestKey)
+  }
+
+  const request = (async () => {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...fetchOptions,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(fetchOptions.headers ?? {}),
+      },
+    })
+
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      if (response.status === 401 && token && getToken() === token) {
+        clearToken()
+        window.dispatchEvent(new Event('plant-game:session-expired'))
+      }
+
+      const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null
+      const error = new Error(validationMessage || payload.message || 'API request failed')
+      error.status = response.status
+      error.payload = payload
+      throw error
+    }
+
+    if (requestKey && cacheTtl > 0) {
+      responseCache.set(requestKey, { payload, expiresAt: Date.now() + cacheTtl })
+    }
+
+    return payload
+  })()
+
+  if (requestKey) {
+    inflightGetRequests.set(requestKey, request)
+    request.finally(() => {
+      if (inflightGetRequests.get(requestKey) === request) {
+        inflightGetRequests.delete(requestKey)
+      }
+    }).catch(() => {})
+  }
+
+  return request
 }
 
 export async function getShopItems() {
-  return apiFetch('/shop/items')
+  return apiFetch('/shop/items', { auth: false, cacheTtl: 15000 })
 }
 
 export async function getInventory() {
@@ -82,15 +118,15 @@ export async function buyShopItem(shopItemId, quantity = 1) {
   })
 }
 export async function getPlants() {
-  return apiFetch('/plants')
+  return apiFetch('/plants', { auth: false, cacheTtl: 15000 })
 }
 
 export async function getLearningContents() {
-  return apiFetch('/contents')
+  return apiFetch('/contents', { auth: false, cacheTtl: 30000 })
 }
 
 export async function getLearningContent(slug) {
-  return apiFetch(`/contents/${encodeURIComponent(slug)}`)
+  return apiFetch(`/contents/${encodeURIComponent(slug)}`, { auth: false, cacheTtl: 30000 })
 }
 
 export async function getAdminDashboard(days = 7) {
@@ -104,6 +140,10 @@ export async function getAdminContents({ search = '', status = '', trashed = '' 
   if (trashed) params.set('trashed', trashed)
   const query = params.toString()
   return apiFetch(`/admin/contents${query ? `?${query}` : ''}`)
+}
+
+export async function getAdminContent(contentId) {
+  return apiFetch(`/admin/contents/${contentId}`)
 }
 
 export async function saveAdminContent(content) {
@@ -247,7 +287,7 @@ export async function uploadAdminModelBundle({ model, resources = [] }) {
 }
 
 export async function getModelAssets() {
-  return apiFetch('/model-assets')
+  return apiFetch('/model-assets', { auth: false, cacheTtl: 15000 })
 }
 
 export async function getPlant(id) {

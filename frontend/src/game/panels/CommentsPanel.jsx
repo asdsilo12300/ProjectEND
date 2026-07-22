@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Panel } from '../components/Panel'
+import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { AppIcon } from '../icons/IconifyIcon'
 import { createSimulatorComment, getSimulatorComments, resolveAssetUrl } from '../../lib/api'
 
@@ -120,9 +121,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
           )}
 
           {simulatorId && status === 'loading' && (
-            <div className="rounded-md border border-sky-200/15 bg-[#132026]/78 px-3 py-4 text-center text-xs text-slate-300">
-              Loading comments...
-            </div>
+            <LoadingSkeleton count={3} label="Loading comments" variant="list" />
           )}
 
           {simulatorId && status !== 'loading' && visibleComments.length === 0 && !error && (

@@ -3,6 +3,7 @@ import { Html, useAnimations, useGLTF } from '@react-three/drei'
 import { AnimationMixer, Box3, Color, DoubleSide, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { resolveAssetUrl } from '../../lib/api'
+import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { GltfPlant } from './GltfPlant'
 
 const BASE_PLANT_SCALE = 1.1
@@ -561,8 +562,8 @@ function FungusSurfacePatch({ anchor, variant = 0 }) {
 export function Loading() {
   return (
     <Html center>
-      <div className="rounded-md border border-lime-200/20 bg-zinc-950/90 px-3 py-2 text-sm text-lime-50 shadow-md">
-        Loading model
+      <div className="w-56 rounded-lg border border-lime-200/20 bg-zinc-950/90 p-3 shadow-md">
+        <LoadingSkeleton count={1} label="Loading 3D plant model" variant="panel" />
       </div>
     </Html>
   )

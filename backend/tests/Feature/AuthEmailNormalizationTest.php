@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Item;
 use App\Models\User;
+use App\Models\UserItem;
+use App\Services\JwtService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -116,5 +119,34 @@ class AuthEmailNormalizationTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('email');
+    }
+
+    public function test_loading_me_does_not_restore_consumed_starter_items(): void
+    {
+        $user = User::query()->create([
+            'username' => 'inventory_user',
+            'email' => 'inventory@example.com',
+            'password' => Hash::make('password123'),
+        ]);
+        $item = Item::query()->create([
+            'name' => 'Insect Spray',
+            'is_active' => true,
+        ]);
+        UserItem::query()->create([
+            'user_id' => $user->id,
+            'item_id' => $item->id,
+            'quantity' => 1,
+        ]);
+
+        $this->withToken(app(JwtService::class)->issue($user))
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('data.id', $user->id);
+
+        $this->assertDatabaseHas('user_items', [
+            'user_id' => $user->id,
+            'item_id' => $item->id,
+            'quantity' => 1,
+        ]);
     }
 }

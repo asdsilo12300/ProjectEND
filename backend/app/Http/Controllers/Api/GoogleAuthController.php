@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\GoogleAvatarService;
 use App\Services\JwtService;
+use App\Services\StarterInventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -25,6 +26,7 @@ class GoogleAuthController extends Controller
     public function __construct(
         private readonly JwtService $jwt,
         private readonly GoogleAvatarService $googleAvatars,
+        private readonly StarterInventoryService $starterInventory,
     ) {
     }
 
@@ -179,6 +181,8 @@ class GoogleAuthController extends Controller
                     'role' => 'member',
                     'status' => 'active',
                 ]);
+
+                $this->starterInventory->grant($user);
 
                 return $user;
             }

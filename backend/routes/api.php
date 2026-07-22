@@ -105,6 +105,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::prefix('admin')->middleware('admin')->group(function (): void {
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/contents', [AdminContentController::class, 'index']);
+        Route::get('/contents/{content}', [AdminContentController::class, 'show']);
         Route::post('/contents', [AdminContentController::class, 'store']);
         Route::post('/contents/images', [AdminContentController::class, 'uploadImage']);
         Route::put('/contents/{content}', [AdminContentController::class, 'update']);

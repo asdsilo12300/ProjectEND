@@ -1,9 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { createPostComment, createPostCommentReply, getCommunityLeaderboard, getFriendPosts, getFriends, getMe, getNotifications, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, markNotificationRead, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
+import { createPostComment, createPostCommentReply, getCommunityLeaderboard, getFriendPosts, getFriends, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
+import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { AppIcon } from '../icons/IconifyIcon'
 
 const CommunityLanguageContext = createContext('en')
+const communityReturnStateKey = 'plant_game_community_return_state'
+
+function consumeCommunityReturnState() {
+  try {
+    const raw = window.sessionStorage.getItem(communityReturnStateKey)
+    window.sessionStorage.removeItem(communityReturnStateKey)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
 
 function useCommunityLanguage() {
   return useContext(CommunityLanguageContext)
@@ -164,12 +176,16 @@ function MobileNavItem({ active = false, badge = 0, icon, label, onClick }) {
   )
 }
 
-function CommunityState({ actionLabel, description, loading = false, onAction, title }) {
+function CommunityState({ actionLabel, description, loading = false, loadingVariant = 'list', onAction, title }) {
+  if (loading) {
+    return <LoadingSkeleton className="min-h-[420px]" count={loadingVariant === 'feed' ? 3 : 5} label={title} variant={loadingVariant} />
+  }
+
   return (
-    <div className="grid min-h-[420px] place-items-center px-6 py-12 text-center" role={loading ? 'status' : undefined} aria-live="polite">
+    <div className="grid min-h-[420px] place-items-center px-6 py-12 text-center" aria-live="polite">
       <div className="max-w-sm">
-        <span className={`mx-auto grid h-12 w-12 place-items-center rounded-full border border-lime-100/10 bg-white/[0.035] text-lime-100 ${loading ? 'animate-pulse' : ''}`}>
-          <AppIcon className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} name={loading ? 'restartAlt' : 'plant'} />
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full border border-lime-100/10 bg-white/[0.035] text-lime-100">
+          <AppIcon className="h-5 w-5" name="plant" />
         </span>
         <h2 className="mt-4 text-base font-black text-lime-50">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
@@ -504,7 +520,7 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
     </div>
   )
 }
-function PostModal({ commentBurstKeys, commentDraft, comments, currentUser, onClose, onCommentDraftChange, onOpenGame, onReplyDraftChange, onSelectUser, onStartReply, onSubmitComment, onSubmitReply, onToggleCommentLike, onToggleLike, post, postBurstKey, replyingToId, replyDrafts, submittingComment, submittingReply }) {
+function PostModal({ commentBurstKeys, commentDraft, comments, commentsLoading = false, currentUser, onClose, onCommentDraftChange, onOpenGame, onReplyDraftChange, onSelectUser, onStartReply, onSubmitComment, onSubmitReply, onToggleCommentLike, onToggleLike, post, postBurstKey, replyingToId, replyDrafts, submittingComment, submittingReply }) {
   if (!post) return null
 
   const postUser = post.user ?? { username: post.author, level: post.level }
@@ -570,7 +586,7 @@ function PostModal({ commentBurstKeys, commentDraft, comments, currentUser, onCl
           </div>
 
           <div className="mt-4 space-y-5">
-            {comments.length ? comments.map((comment) => (
+            {commentsLoading ? <LoadingSkeleton count={3} label="Loading post comments" variant="list" /> : comments.length ? comments.map((comment) => (
               <CommentItem
                 key={comment.id}
                 burstKeys={commentBurstKeys}
@@ -619,7 +635,7 @@ function PostModal({ commentBurstKeys, commentDraft, comments, currentUser, onCl
     </div>
   )
 }
-function ProfileCenter({ friendsCount, isOwnProfile = true, onAddFriend, onBack, onEditProfile, onOpenGame, onOpenPost, onSelectUser, onToggleLike, posts, reactionBursts, user }) {
+function ProfileCenter({ friendsCount, isOwnProfile = true, loading = false, onAddFriend, onBack, onEditProfile, onOpenGame, onOpenPost, onSelectUser, onToggleLike, posts, reactionBursts, user }) {
   const language = useCommunityLanguage()
   const name = displayName(user)
   const handle = '@' + (user?.username ?? name.replace(/\s+/g, '').toLowerCase())
@@ -696,10 +712,11 @@ function ProfileCenter({ friendsCount, isOwnProfile = true, onAddFriend, onBack,
         </div>
       </section>
 
-      {profilePosts.map((post) => (
+      {loading ? <LoadingSkeleton count={2} label="Loading profile posts" variant="feed" /> : null}
+      {!loading && profilePosts.map((post) => (
         <FeedPost key={post.id} onOpenGame={onOpenGame} onOpenPost={onOpenPost} onSelectUser={onSelectUser} onToggleLike={onToggleLike} post={post} reactionBurstKey={reactionBursts['post-' + post.id]} />
       ))}
-      {!profilePosts.length ? <div className="grid min-h-[320px] place-items-center border-t border-lime-100/10 px-8 text-center text-sm text-slate-400">{copy(language, 'Shared plant history posts will appear here.', 'โพสต์ประวัติพืชที่แชร์จะแสดงที่นี่')}</div> : null}
+      {!loading && !profilePosts.length ? <div className="grid min-h-[320px] place-items-center border-t border-lime-100/10 px-8 text-center text-sm text-slate-400">{copy(language, 'Shared plant history posts will appear here.', 'โพสต์ประวัติพืชที่แชร์จะแสดงที่นี่')}</div> : null}
     </main>
   )
 }
@@ -823,7 +840,7 @@ function SearchCenter({ error, query, results, loading, onQueryChange, onSelectU
       </div>
       <div className="divide-y divide-lime-100/10">
         {loading ? (
-          <CommunityState description={copy(language, 'Looking for matching learners.', 'กำลังค้นหาผู้เรียนที่ตรงกัน')} loading title={copy(language, 'Searching...', 'กำลังค้นหา...')} />
+          <CommunityState description={copy(language, 'Looking for matching learners.', 'กำลังค้นหาผู้เรียนที่ตรงกัน')} loading loadingVariant="list" title={copy(language, 'Searching...', 'กำลังค้นหา...')} />
         ) : error ? (
           <CommunityState description={error} title={copy(language, 'Search is unavailable', 'ไม่สามารถค้นหาได้')} />
         ) : results.length ? (
@@ -867,7 +884,7 @@ function LeaderboardCard({ title, subtitle, icon, users, metric }) {
   )
 }
 
-function RightDashboard({ leaderboard, onOpenSearch }) {
+function RightDashboard({ leaderboard, loading = false, onOpenSearch }) {
   const language = useCommunityLanguage()
 
   return (
@@ -886,20 +903,24 @@ function RightDashboard({ leaderboard, onOpenSearch }) {
       </button>
 
       <div className="mt-6 space-y-4">
-        <LeaderboardCard
-          icon="trophy"
-          metric={(user) => `Lv.${user.level ?? 1}`}
-          subtitle="top 10 Levels"
-          title="Level ranking"
-          users={leaderboard.levels}
-        />
-        <LeaderboardCard
-          icon="plant"
-          metric={(user) => user.plants_count ?? 0}
-          subtitle="most saved plants"
-          title="Grow ranking"
-          users={leaderboard.growers}
-        />
+        {loading ? <LoadingSkeleton count={2} label="Loading community rankings" variant="panel" /> : (
+          <>
+            <LeaderboardCard
+              icon="trophy"
+              metric={(user) => `Lv.${user.level ?? 1}`}
+              subtitle="top 10 Levels"
+              title="Level ranking"
+              users={leaderboard.levels}
+            />
+            <LeaderboardCard
+              icon="plant"
+              metric={(user) => user.plants_count ?? 0}
+              subtitle="most saved plants"
+              title="Grow ranking"
+              users={leaderboard.growers}
+            />
+          </>
+        )}
       </div>
     </aside>
   )
@@ -968,7 +989,7 @@ function NotificationsCenter({ error, items, loading, onOpen, onRetry }) {
       </header>
 
       {loading ? (
-        <CommunityState description={copy(language, 'Checking your latest activity.', 'กำลังตรวจสอบกิจกรรมล่าสุดของคุณ')} loading title={copy(language, 'Loading notifications', 'กำลังโหลดการแจ้งเตือน')} />
+        <CommunityState description={copy(language, 'Checking your latest activity.', 'กำลังตรวจสอบกิจกรรมล่าสุดของคุณ')} loading loadingVariant="list" title={copy(language, 'Loading notifications', 'กำลังโหลดการแจ้งเตือน')} />
       ) : error ? (
         <CommunityState actionLabel={copy(language, 'Try again', 'ลองอีกครั้ง')} description={error} onAction={onRetry} title={copy(language, 'Notifications are unavailable', 'ไม่สามารถโหลดการแจ้งเตือนได้')} />
       ) : visibleItems.length ? (
@@ -1012,7 +1033,7 @@ function FeedCenter({ activeFeed, error, friendPosts, onFeedChange, onOpenGame, 
         </button>
       </div>
       {status === 'loading' ? (
-        <CommunityState description={copy(language, 'Getting the latest plant stories ready.', 'กำลังเตรียมเรื่องราวพืชล่าสุด')} loading title={copy(language, 'Loading community', 'กำลังโหลดชุมชน')} />
+        <CommunityState description={copy(language, 'Getting the latest plant stories ready.', 'กำลังเตรียมเรื่องราวพืชล่าสุด')} loading loadingVariant="feed" title={copy(language, 'Loading community', 'กำลังโหลดชุมชน')} />
       ) : status === 'error' ? (
         <CommunityState actionLabel={copy(language, 'Try again', 'ลองอีกครั้ง')} description={error} onAction={onRetry} title={copy(language, 'Community is unavailable', 'ไม่สามารถโหลดชุมชนได้')} />
       ) : visiblePosts.map((post) => (
@@ -1029,26 +1050,29 @@ function FeedCenter({ activeFeed, error, friendPosts, onFeedChange, onOpenGame, 
   )
 }
 
-export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } = {}) {
+export function CommunityPage({ currentUser = null, notificationError = '', notificationItems = [], notificationStatus = 'idle', onNotificationRead, onNotificationsRefresh, onOpenGame, onUserChange, unreadCount = 0 } = {}) {
+  const [returnState] = useState(consumeCommunityReturnState)
   const [language, setLanguage] = useState(() => getAppLanguage())
-  const [activeView, setActiveView] = useState('home')
-  const [activeFeed, setActiveFeed] = useState('for-you')
+  const [activeView, setActiveView] = useState(returnState.activeView ?? 'home')
+  const [activeFeed, setActiveFeed] = useState(returnState.activeFeed ?? 'for-you')
   const [posts, setPosts] = useState([])
   const [friendPosts, setFriendPosts] = useState([])
   const [communityStatus, setCommunityStatus] = useState('loading')
   const [communityError, setCommunityError] = useState('')
   const [communityReloadKey, setCommunityReloadKey] = useState(0)
   const [user, setUser] = useState(currentUser)
-  const [selectedProfile, setSelectedProfile] = useState(null)
+  const [selectedProfile, setSelectedProfile] = useState(returnState.selectedProfile ?? null)
   const [friendsCount, setFriendsCount] = useState(0)
   const [, setFriendRows] = useState([])
   const [leaderboard, setLeaderboard] = useState({ levels: [], growers: [] })
+  const [leaderboardStatus, setLeaderboardStatus] = useState('loading')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [selectedPost, setSelectedPost] = useState(null)
   const [postComments, setPostComments] = useState([])
+  const [postCommentsLoading, setPostCommentsLoading] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
   const [replyingToId, setReplyingToId] = useState(null)
   const [replyDrafts, setReplyDrafts] = useState({})
@@ -1058,12 +1082,7 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
   const [editingProfile, setEditingProfile] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState('')
-  const [notificationItems, setNotificationItems] = useState([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [notificationStatus, setNotificationStatus] = useState('loading')
-  const [notificationError, setNotificationError] = useState('')
-  const [notificationReloadKey, setNotificationReloadKey] = useState(0)
-  const [homeScrollTop, setHomeScrollTop] = useState(0)
+  const [homeScrollTop, setHomeScrollTop] = useState(Number(returnState.homeScrollTop ?? 0))
   const sharedScrollRef = useRef(null)
 
   const navigateCommunityView = useCallback((nextView) => {
@@ -1073,6 +1092,12 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
 
     setActiveView(nextView)
   }, [activeView])
+
+  useEffect(() => {
+    const openNotifications = () => navigateCommunityView('notifications')
+    window.addEventListener('plant-community-open-notifications', openNotifications)
+    return () => window.removeEventListener('plant-community-open-notifications', openNotifications)
+  }, [navigateCommunityView])
 
   useLayoutEffect(() => {
     const scrollContainer = sharedScrollRef.current
@@ -1092,7 +1117,7 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
       window.cancelAnimationFrame(frame)
       window.clearTimeout(settleTimer)
     }
-  }, [activeView, homeScrollTop, selectedProfile?.id])
+  }, [activeView, communityStatus, homeScrollTop, posts.length, selectedProfile?.id])
 
   useEffect(() => {
     const handleSettingsChange = (event) => {
@@ -1109,40 +1134,50 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
     async function loadCommunity() {
       setCommunityStatus((current) => current === 'ready' ? current : 'loading')
       setCommunityError('')
-      try {
-        const [postPayload, friendPostPayload, userPayload, friendsPayload, leaderboardPayload] = await Promise.all([
-          getPosts(),
-          getToken() ? getFriendPosts().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
-          getToken() ? getMe().catch(() => null) : Promise.resolve(null),
-          getToken() ? getFriends().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
-          getToken() ? getCommunityLeaderboard().catch(() => ({ data: { levels: [], growers: [] } })) : Promise.resolve({ data: { levels: [], growers: [] } }),
-        ])
+      setLeaderboardStatus((current) => current === 'ready' ? current : 'loading')
 
-        if (cancelled) return
-        const loadedPosts = (postPayload.data ?? []).map(mapPost)
-        const loadedFriendPosts = (friendPostPayload.data ?? []).map(mapPost)
-        const friends = friendsPayload.data ?? []
-        setPosts(loadedPosts)
-        setFriendPosts(loadedFriendPosts)
-        setUser((current) => userPayload?.data ?? userPayload?.user ?? current)
-        setFriendsCount(friends.filter((friend) => !friend.status || friend.status === 'accepted').length)
-        setFriendRows(friends)
-        setLeaderboard({
-          levels: leaderboardPayload.data?.levels ?? [],
-          growers: leaderboardPayload.data?.growers ?? [],
-        })
-        setCommunityStatus('ready')
+      const postsRequest = getPosts()
+      const friendPostsRequest = getToken() ? getFriendPosts().catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+      const friendsRequest = getToken() ? getFriends().catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+      const leaderboardRequest = getToken()
+        ? getCommunityLeaderboard().catch(() => ({ data: { levels: [], growers: [] } }))
+        : Promise.resolve({ data: { levels: [], growers: [] } })
+
+      try {
+        const postPayload = await postsRequest
+
+        if (!cancelled) {
+          setPosts((postPayload.data ?? []).map(mapPost))
+          setCommunityStatus('ready')
+        }
       } catch {
         if (!cancelled) {
           setPosts([])
-          setFriendPosts([])
-          setFriendsCount(0)
-          setFriendRows([])
-          setLeaderboard({ levels: [], growers: [] })
           setCommunityError(copy(language, 'We could not load the community. Check your connection and try again.', 'ไม่สามารถโหลดชุมชนได้ โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง'))
           setCommunityStatus('error')
         }
       }
+
+      await Promise.allSettled([
+        friendPostsRequest.then((payload) => {
+          if (!cancelled) setFriendPosts((payload.data ?? []).map(mapPost))
+        }),
+        friendsRequest.then((payload) => {
+          if (cancelled) return
+          const friends = payload.data ?? []
+          setFriendsCount(friends.filter((friend) => !friend.status || friend.status === 'accepted').length)
+          setFriendRows(friends)
+        }),
+        leaderboardRequest.then((payload) => {
+          if (!cancelled) {
+            setLeaderboard({
+              levels: payload.data?.levels ?? [],
+              growers: payload.data?.growers ?? [],
+            })
+            setLeaderboardStatus('ready')
+          }
+        }),
+      ])
     }
 
     loadCommunity()
@@ -1151,36 +1186,6 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
       cancelled = true
     }
   }, [communityReloadKey, language])
-
-  useEffect(() => {
-    if (!getToken()) return undefined
-    let cancelled = false
-
-    async function loadNotifications() {
-      setNotificationStatus((current) => current === 'ready' ? current : 'loading')
-      setNotificationError('')
-      try {
-        const payload = await getNotifications()
-        if (!cancelled) {
-          setNotificationItems(payload.data ?? [])
-          setUnreadCount(Number(payload.unread_count ?? 0))
-          setNotificationStatus('ready')
-        }
-      } catch {
-        if (!cancelled) {
-          setNotificationError(copy(language, 'We could not load notifications. Please try again.', 'ไม่สามารถโหลดการแจ้งเตือนได้ โปรดลองอีกครั้ง'))
-          setNotificationStatus((current) => current === 'ready' ? current : 'error')
-        }
-      }
-    }
-
-    loadNotifications()
-    const interval = window.setInterval(loadNotifications, 15000)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
-  }, [language, notificationReloadKey])
 
   useEffect(() => {
     const query = searchQuery.trim()
@@ -1312,26 +1317,25 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
     setReplyingToId(null)
     setReplyDrafts({})
     setPostComments([])
+    setPostCommentsLoading(true)
 
     getPostComments(post.id)
       .then((payload) => setPostComments(payload.data ?? []))
       .catch(() => setPostComments([]))
+      .finally(() => setPostCommentsLoading(false))
   }, [])
 
   const handleClosePost = useCallback(() => {
     setSelectedPost(null)
     setPostComments([])
+    setPostCommentsLoading(false)
     setCommentDraft('')
     setReplyingToId(null)
     setReplyDrafts({})
   }, [])
 
   const handleOpenNotification = useCallback(async (notification) => {
-    if (!notification.is_read) {
-      setNotificationItems((current) => current.map((item) => String(item.id) === String(notification.id) ? { ...item, is_read: true, read_at: new Date().toISOString() } : item))
-      setUnreadCount((current) => Math.max(0, current - 1))
-      markNotificationRead(notification.id).catch(() => {})
-    }
+    onNotificationRead?.(notification)
 
     const post = combinedPosts.find((item) => String(item.id) === String(notification.post_id))
     if (post) {
@@ -1339,7 +1343,7 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
     } else if (notification.actor) {
       handleSelectUser(notification.actor)
     }
-  }, [combinedPosts, handleOpenPost, handleSelectUser])
+  }, [combinedPosts, handleOpenPost, handleSelectUser, onNotificationRead])
 
   const triggerReactionBurst = useCallback((key) => {
     setReactionBursts((current) => ({ ...current, [key]: (current[key] ?? 0) + 1 }))
@@ -1439,6 +1443,25 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
     }
   }, [commentDraft, selectedPost?.id, updatePostEverywhere])
 
+  const handleOpenCommunityGame = useCallback((post) => {
+    const nextHomeScrollTop = activeView === 'home'
+      ? sharedScrollRef.current?.scrollTop ?? homeScrollTop
+      : homeScrollTop
+
+    setHomeScrollTop(nextHomeScrollTop)
+    try {
+      window.sessionStorage.setItem(communityReturnStateKey, JSON.stringify({
+        activeFeed,
+        activeView,
+        homeScrollTop: nextHomeScrollTop,
+        selectedProfile,
+      }))
+    } catch {
+      // Returning still works when session storage is unavailable.
+    }
+    onOpenGame?.(post)
+  }, [activeFeed, activeView, homeScrollTop, onOpenGame, selectedProfile])
+
   const centerView = useMemo(() => {
     if (activeView === 'profile') {
       const shownProfile = selectedProfile ?? profileUser
@@ -1448,13 +1471,14 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
         <ProfileCenter
           friendsCount={friendsCount}
           isOwnProfile={isOwnProfile}
+          loading={communityStatus === 'loading'}
           onAddFriend={handleAddFriend}
           onBack={() => {
             setSelectedProfile(null)
             navigateCommunityView('home')
           }}
           onEditProfile={() => setEditingProfile(true)}
-          onOpenGame={onOpenGame}
+          onOpenGame={handleOpenCommunityGame}
           onOpenPost={handleOpenPost}
           onSelectUser={handleSelectUser}
           onToggleLike={handleToggleLike}
@@ -1471,7 +1495,7 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
           items={notificationItems}
           loading={notificationStatus === 'loading'}
           onOpen={handleOpenNotification}
-          onRetry={() => setNotificationReloadKey((current) => current + 1)}
+          onRetry={() => onNotificationsRefresh?.()}
         />
       )
     }
@@ -1488,8 +1512,8 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
       )
     }
 
-    return <FeedCenter activeFeed={activeFeed} error={communityError} friendPosts={friendPosts} onFeedChange={setActiveFeed} onOpenGame={onOpenGame} onOpenPost={handleOpenPost} onRetry={() => setCommunityReloadKey((current) => current + 1)} onSelectUser={handleSelectUser} onToggleLike={handleToggleLike} posts={posts} reactionBursts={reactionBursts} status={communityStatus} />
-  }, [activeFeed, activeView, combinedPosts, communityError, communityStatus, friendPosts, friendsCount, handleAddFriend, handleOpenNotification, handleOpenPost, handleSearchQueryChange, handleSelectUser, handleToggleLike, navigateCommunityView, notificationError, notificationItems, notificationStatus, onOpenGame, posts, profileUser, searchError, searchLoading, searchQuery, reactionBursts, searchResults, selectedProfile, user])
+    return <FeedCenter activeFeed={activeFeed} error={communityError} friendPosts={friendPosts} onFeedChange={setActiveFeed} onOpenGame={handleOpenCommunityGame} onOpenPost={handleOpenPost} onRetry={() => setCommunityReloadKey((current) => current + 1)} onSelectUser={handleSelectUser} onToggleLike={handleToggleLike} posts={posts} reactionBursts={reactionBursts} status={communityStatus} />
+  }, [activeFeed, activeView, combinedPosts, communityError, communityStatus, friendPosts, friendsCount, handleAddFriend, handleOpenCommunityGame, handleOpenNotification, handleOpenPost, handleSearchQueryChange, handleSelectUser, handleToggleLike, navigateCommunityView, notificationError, notificationItems, notificationStatus, onNotificationsRefresh, posts, profileUser, searchError, searchLoading, searchQuery, reactionBursts, searchResults, selectedProfile, user])
 
   return (
     <CommunityLanguageContext.Provider value={language}>
@@ -1511,6 +1535,7 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
 
           <RightDashboard
             leaderboard={leaderboard}
+            loading={leaderboardStatus === 'loading'}
             onOpenSearch={handleOpenSearch}
           />
         </div>
@@ -1536,10 +1561,11 @@ export function CommunityPage({ currentUser = null, onOpenGame, onUserChange } =
           commentBurstKeys={reactionBursts}
           commentDraft={commentDraft}
           comments={postComments}
+          commentsLoading={postCommentsLoading}
           currentUser={profileUser}
           onClose={handleClosePost}
           onCommentDraftChange={setCommentDraft}
-          onOpenGame={onOpenGame}
+          onOpenGame={handleOpenCommunityGame}
           onReplyDraftChange={handleReplyDraftChange}
           onSelectUser={handleSelectUser}
           onStartReply={handleStartReply}

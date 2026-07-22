@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\AdminDataCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -31,5 +32,7 @@ class AdminActivityLog extends Model
             'detail' => $detail === [] ? null : json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'created_at' => now(),
         ]);
+
+        app(AdminDataCache::class)->clear();
     }
 }

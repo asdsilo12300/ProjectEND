@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '../icons/IconifyIcon'
 import { NavIcon } from '../icons/NavIcon'
+import { LoadingSkeleton } from './LoadingSkeleton'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 import { resolveAssetUrl } from '../../lib/api'
 
@@ -40,9 +41,28 @@ const navPages = {
   Community: 'community',
 }
 
-export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, onNavigate, openWindow, profileOpen, setProfileOpen, user, onAuthRequired, onLogout }) {
+function notificationAction(type) {
+  if (type === 'like') return 'liked your post'
+  if (type === 'comment_like') return 'liked your comment'
+  if (type === 'reply') return 'replied to your comment'
+  return 'commented on your post'
+}
+
+function notificationTime(value) {
+  const timestamp = new Date(value).getTime()
+  if (!Number.isFinite(timestamp)) return ''
+  const elapsed = Math.max(0, Date.now() - timestamp)
+  if (elapsed < 60_000) return 'now'
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m`
+  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h`
+  return `${Math.floor(elapsed / 86_400_000)}d`
+}
+
+export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, notificationError = '', notifications = [], notificationStatus = 'idle', onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const accountMenuRef = useRef(null)
+  const notificationMenuRef = useRef(null)
   const displayName = user?.username ?? 'Learner'
   const learnerLevel = user?.level ?? 1
   const learnerExperience = Number(user?.experience ?? user?.level_progress?.experience ?? 0)
@@ -50,16 +70,19 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
   const learnerExpPercent = Math.max(0, Math.min(100, Number(user?.level_progress?.percent ?? ((learnerExperience / learnerNextExperience) * 100)) || 0))
   const initial = displayName.slice(0, 1).toUpperCase()
   const shownCoins = Number(user?.coin ?? coinBalance ?? 0).toLocaleString()
+  const notificationBadge = unreadNotificationCount > 99 ? '99+' : String(unreadNotificationCount)
 
   useEffect(() => {
     function handlePointerDown(event) {
       if (profileOpen && !accountMenuRef.current?.contains(event.target)) setProfileOpen(false)
+      if (notificationsOpen && !notificationMenuRef.current?.contains(event.target)) setNotificationsOpen(false)
     }
 
     function handleKeyDown(event) {
       if (event.key !== 'Escape') return
       setProfileOpen(false)
       setMobileNavOpen(false)
+      setNotificationsOpen(false)
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
@@ -68,7 +91,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [profileOpen, setProfileOpen])
+  }, [notificationsOpen, profileOpen, setProfileOpen])
 
   function handleProfileClick() {
     if (!user) {
@@ -83,8 +106,27 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
     const page = navPages[item] ?? 'lab'
     setMobileNavOpen(false)
     setProfileOpen(false)
+    setNotificationsOpen(false)
     onNavigate?.(page)
     if (page === 'lab' && navTargets[item]) openWindow?.(navTargets[item])
+  }
+
+  function openNotificationsCenter() {
+    setNotificationsOpen(false)
+
+    try {
+      window.sessionStorage.setItem('plant_game_community_return_state', JSON.stringify({ activeView: 'notifications' }))
+    } catch {
+      // Community navigation still works when session storage is unavailable.
+    }
+
+    onNavigate?.('community')
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent('plant-community-open-notifications')), 0)
+  }
+
+  function openNotification(notification) {
+    onNotificationRead?.(notification)
+    openNotificationsCenter()
   }
 
   function renderNavItems(mobile = false) {
@@ -96,14 +138,19 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         <li className={mobile ? '' : 'me-1'} key={item}>
           <button
             className={mobile
-              ? `flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${active ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100' : 'border-white/[0.07] bg-white/[0.035] text-slate-300 hover:bg-white/[0.07] hover:text-lime-50'}`
-              : `group inline-flex min-h-12 items-center justify-center border-b px-2.5 py-4 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-lime-200 ${active ? 'border-[#9bcf82] text-lime-100' : 'border-transparent text-slate-300 hover:border-[#9bcf82]/80 hover:text-lime-100'}`}
+              ? `relative flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${active ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100' : 'border-white/[0.07] bg-white/[0.035] text-slate-300 hover:bg-white/[0.07] hover:text-lime-50'}`
+              : `group relative inline-flex min-h-12 items-center justify-center border-b px-2.5 py-4 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-lime-200 ${active ? 'border-[#9bcf82] text-lime-100' : 'border-transparent text-slate-300 hover:border-[#9bcf82]/80 hover:text-lime-100'}`}
             type="button"
             aria-current={active ? 'page' : undefined}
             onClick={() => navigate(item)}
           >
             <NavIcon className={`${mobile ? 'h-5 w-5' : 'me-2 h-4 w-4'} ${active ? 'text-[#9bcf82]' : 'text-slate-400 group-hover:text-[#9bcf82]'}`} type={item} />
             {item}
+            {item === 'Community' && unreadNotificationCount > 0 ? (
+              <span className={`${mobile ? 'ms-auto' : 'ms-2'} inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_#101511]`} aria-label={`${unreadNotificationCount} unread notifications`}>
+                {notificationBadge}
+              </span>
+            ) : null}
           </button>
         </li>
       )
@@ -131,6 +178,88 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       </div>
 
       <div ref={accountMenuRef} className="relative flex items-center gap-2 text-sm">
+        {user && (
+          <div className="relative" ref={notificationMenuRef}>
+            <button
+              className={`relative grid h-11 w-11 place-items-center rounded-md border text-slate-200 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 sm:h-12 sm:w-12 ${notificationsOpen ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100' : 'border-lime-100/10 bg-white/[0.04] hover:bg-white/[0.075]'}`}
+              type="button"
+              aria-label={`Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ''}`}
+              aria-haspopup="dialog"
+              aria-expanded={notificationsOpen}
+              onClick={() => {
+                setProfileOpen(false)
+                setMobileNavOpen(false)
+                setNotificationsOpen((value) => !value)
+                if (!notificationsOpen && notificationStatus !== 'loading') onNotificationsRefresh?.({ silent: true })
+              }}
+            >
+              <AppIcon className="h-5 w-5" name="notifications" />
+              {unreadNotificationCount > 0 ? (
+                <span className="absolute -right-1.5 -top-1.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#101511] bg-red-500 px-1 text-[9px] font-black leading-none text-white shadow-[0_5px_12px_rgba(0,0,0,.35)]">
+                  {notificationBadge}
+                </span>
+              ) : null}
+            </button>
+
+            {notificationsOpen && (
+              <section className="absolute right-0 top-14 z-[80] w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-xl border border-lime-100/15 bg-[#101511]/98 shadow-[0_22px_55px_rgba(0,0,0,.52)] backdrop-blur-xl" aria-label="Notifications" role="dialog">
+                <header className="flex items-center justify-between border-b border-lime-100/10 px-4 py-3">
+                  <span>
+                    <strong className="block text-sm text-lime-50">Notifications</strong>
+                    <small className="mt-0.5 block text-[10px] text-slate-400">Likes, comments, and replies</small>
+                  </span>
+                  {unreadNotificationCount > 0 ? <span className="rounded-full bg-red-500/15 px-2 py-1 text-[10px] font-black text-red-300">{notificationBadge} new</span> : null}
+                </header>
+
+                <div className="max-h-[min(430px,calc(100vh-150px))] overflow-y-auto">
+                  {notificationStatus === 'loading' ? <LoadingSkeleton count={4} label="Loading notifications" variant="list" /> : null}
+                  {notificationStatus !== 'loading' && notificationError && !notifications.length ? (
+                    <div className="px-5 py-8 text-center">
+                      <AppIcon className="mx-auto h-6 w-6 text-red-300" name="notifications" />
+                      <p className="mt-2 text-xs text-slate-400">{notificationError}</p>
+                      <button className="mt-3 rounded-md border border-lime-100/15 px-3 py-2 text-xs font-bold text-lime-100 hover:bg-white/[0.05]" type="button" onClick={() => onNotificationsRefresh?.()}>Try again</button>
+                    </div>
+                  ) : null}
+                  {notificationStatus !== 'loading' && !notificationError && !notifications.length ? (
+                    <div className="px-6 py-10 text-center">
+                      <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-white/[0.04] text-slate-400"><AppIcon className="h-5 w-5" name="notifications" /></span>
+                      <strong className="mt-3 block text-sm text-lime-50">You're all caught up</strong>
+                      <span className="mt-1 block text-xs text-slate-400">New activity will appear here.</span>
+                    </div>
+                  ) : null}
+                  {notifications.slice(0, 8).map((notification) => {
+                    const actorName = notification.actor?.username ?? 'Learner'
+                    return (
+                      <button
+                        className={`relative flex w-full items-start gap-3 border-b border-lime-100/[0.08] px-4 py-3.5 text-left transition hover:bg-white/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 ${notification.is_read ? 'bg-transparent' : 'bg-red-500/[0.035]'}`}
+                        key={notification.id}
+                        type="button"
+                        onClick={() => openNotification(notification)}
+                      >
+                        {!notification.is_read ? <span className="absolute right-3 top-4 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,.12)]" aria-label="Unread" /> : null}
+                        <ProfileAvatar initial={actorName.slice(0, 1).toUpperCase()} user={notification.actor} />
+                        <span className="min-w-0 flex-1 pr-5">
+                          <span className="block text-xs leading-5">
+                            <strong className="text-lime-50">{actorName}</strong>{' '}
+                            <span className={notification.is_read ? 'text-slate-400' : 'text-slate-200'}>{notificationAction(notification.type)}</span>
+                          </span>
+                          {notification.excerpt ? <span className="mt-0.5 block truncate text-[11px] text-slate-400">“{notification.excerpt}”</span> : null}
+                          <span className={`mt-1 block text-[10px] ${notification.is_read ? 'text-slate-500' : 'font-bold text-red-300'}`}>{notificationTime(notification.created_at)}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <button className="flex w-full items-center justify-center gap-2 border-t border-lime-100/10 px-4 py-3 text-xs font-black text-[#9bcf82] transition hover:bg-[#9bcf82]/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200" type="button" onClick={openNotificationsCenter}>
+                  View all notifications
+                  <AppIcon className="h-4 w-4" name="arrowForward" />
+                </button>
+              </section>
+            )}
+          </div>
+        )}
+
         {user && (
           <div className="relative flex h-11 items-center gap-1.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-2 shadow-[0_8px_18px_rgba(0,0,0,.18)] sm:h-12 sm:gap-2 sm:px-3" aria-label="Coin balance">
             <img className="h-6 w-6 shrink-0 object-contain sm:h-7 sm:w-7" src={imageAssets.coin} alt="Coin" />

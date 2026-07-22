@@ -11,6 +11,11 @@ class NotificationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $unreadCount = SocialNotification::query()
+            ->where('recipient_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->count();
+
         $notifications = SocialNotification::query()
             ->with(['actor', 'post.plantHistory.plant', 'post.simulator.plant', 'comment'])
             ->where('recipient_id', $request->user()->id)
@@ -21,7 +26,7 @@ class NotificationController extends Controller
 
         return response()->json([
             'data' => $notifications,
-            'unread_count' => $notifications->where('is_read', false)->count(),
+            'unread_count' => $unreadCount,
             'server_time' => now()->toISOString(),
         ]);
     }

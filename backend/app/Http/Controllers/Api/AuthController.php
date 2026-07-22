@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Friendship;
-use App\Models\Item;
 use App\Models\User;
-use App\Models\UserItem;
 use App\Services\JwtService;
 use App\Services\MediaStorage;
+use App\Services\StarterInventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +19,7 @@ class AuthController extends Controller
     public function __construct(
         private readonly JwtService $jwt,
         private readonly MediaStorage $media,
+        private readonly StarterInventoryService $starterInventory,
     ) {}
 
     public function register(Request $request): JsonResponse
@@ -43,7 +42,7 @@ class AuthController extends Controller
                 'status' => 'active',
             ]);
 
-            $this->grantStarterItems($user);
+            $this->starterInventory->grant($user);
 
             return $user;
         });
@@ -74,7 +73,6 @@ class AuthController extends Controller
         }
 
         $user->forceFill(['last_login_at' => now()])->save();
-        $this->grantStarterItems($user);
 
         return response()->json([
             'token' => $this->jwt->issue($user),
@@ -84,8 +82,6 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $this->grantStarterItems($request->user());
-
         return response()->json(['data' => $this->userPayload($request->user())]);
     }
 
@@ -126,30 +122,6 @@ class AuthController extends Controller
         return response()->json(['data' => $this->userPayload($user->fresh())]);
     }
 
-    private function grantStarterItems(User $user): void
-    {
-        $starterQuantities = [
-            'Hand Pick' => 10,
-            'Insect Spray' => 7,
-            'Snail Spray' => 7,
-            'Fungus Spray' => 7,
-        ];
-
-        Item::query()
-            ->where('is_active', true)
-            ->whereIn('name', array_keys($starterQuantities))
-            ->get()
-            ->each(function (Item $item) use ($starterQuantities, $user): void {
-                $inventory = UserItem::query()->firstOrNew([
-                    'user_id' => $user->id,
-                    'item_id' => $item->id,
-                ]);
-
-                $inventory->quantity = max($starterQuantities[$item->name] ?? 0, (int) ($inventory->quantity ?? 0));
-                $inventory->save();
-            });
-    }
-
     private function normalizeEmailInput(Request $request): void
     {
         $email = $request->input('email');
@@ -170,6 +142,12 @@ class AuthController extends Controller
 
     private function userPayload(User $user): array
     {
+        $user->loadCount([
+            'plantHistories',
+            'requestedFriendships as accepted_requested_friendships_count' => fn ($query) => $query->where('status', 'accepted'),
+            'receivedFriendships as accepted_received_friendships_count' => fn ($query) => $query->where('status', 'accepted'),
+        ]);
+
         return [
             'id' => $user->id,
             'username' => $user->username,
@@ -181,24 +159,14 @@ class AuthController extends Controller
             'level' => $user->level,
             'experience' => $user->experience,
             'level_progress' => $user->levelProgress(),
-            'friends_count' => $this->acceptedFriendsCount($user),
-            'plant_histories_count' => $user->plantHistories()->count(),
-            'plants_count' => $user->plantHistories()->count(),
+            'friends_count' => (int) $user->accepted_requested_friendships_count
+                + (int) $user->accepted_received_friendships_count,
+            'plant_histories_count' => (int) $user->plant_histories_count,
+            'plants_count' => (int) $user->plant_histories_count,
             'coin' => $user->coin,
             'gem' => $user->gem,
             'status' => $user->status,
         ];
     }
 
-    private function acceptedFriendsCount(User $user): int
-    {
-        return Friendship::query()
-            ->where('status', 'accepted')
-            ->where(function ($query) use ($user): void {
-                $query
-                    ->where('requester_id', $user->id)
-                    ->orWhere('addressee_id', $user->id);
-            })
-            ->count();
-    }
 }

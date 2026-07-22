@@ -5,6 +5,7 @@ import './App.css'
 import { defaultClimate, imageAssets } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
 import { LibrarySidebar } from './game/components/LibrarySidebar'
+import { CircularLoader } from './game/components/LoadingSkeleton'
 import { TopBar } from './game/components/TopBar'
 import { CommentsPanel } from './game/panels/CommentsPanel'
 import { EnvironmentPanel } from './game/panels/EnvironmentPanel'
@@ -19,7 +20,7 @@ import { AdminPage } from './admin/AdminPage'
 import { PasswordResetPage } from './game/settings/PasswordResetPage'
 import { LoginPage } from './auth/LoginPage'
 import { LandingPage } from './landing/LandingPage'
-import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
+import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
@@ -38,7 +39,7 @@ const initialGrowthTrack = {
 }
 
 const growthAnimationDurationMs = 1600
-const autosaveIntervalMs = 10000
+const autosaveIntervalMs = 30000
 const simulationTickIntervalMs = 30000
 const initialSimulationTickDelayMs = simulationTickIntervalMs
 const simulationTickMarkerPrefix = 'plant_game_last_tick:'
@@ -206,13 +207,11 @@ function ModeLoadingOverlay({ mode }) {
 
   return (
     <div className="absolute inset-0 z-[90] grid place-items-center bg-black/55 px-4 backdrop-blur-md">
-      <div className="rounded-lg border border-lime-100/15 bg-[#101511]/95 px-6 py-5 text-center shadow-[0_18px_44px_rgba(0,0,0,.42)]">
-        <div className="mx-auto mb-3 h-1.5 w-32 overflow-hidden rounded-full bg-lime-100/10">
-          <div className="h-full w-2/3 animate-pulse rounded-full bg-[#9bcf82]" />
-        </div>
-        <strong className="block text-sm text-lime-50">Loading {label}</strong>
-        <span className="mt-1 block text-xs text-slate-400">Preparing the simulation environment...</span>
-      </div>
+      <CircularLoader
+        className="min-h-52 w-full max-w-sm rounded-2xl border border-lime-100/15 bg-[#101511]/95 px-6 py-8 shadow-[0_18px_44px_rgba(0,0,0,.42)]"
+        description="Preparing the simulation environment..."
+        label={`Loading ${label}`}
+      />
     </div>
   )
 }
@@ -222,13 +221,7 @@ function SessionLoadingScreen() {
     <main className="relative grid h-screen w-screen place-items-center overflow-hidden bg-[#0b0f0c] px-5 text-slate-100">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
-      <div className="relative w-full max-w-sm rounded-2xl border border-lime-100/15 bg-[#101511]/95 px-7 py-8 text-center shadow-[0_24px_70px_rgba(0,0,0,.45)]">
-        <div className="mx-auto mb-4 h-1.5 w-36 overflow-hidden rounded-full bg-lime-100/10">
-          <div className="h-full w-2/3 animate-pulse rounded-full bg-[#9bcf82]" />
-        </div>
-        <strong className="block text-sm text-lime-50">Checking your session</strong>
-        <span className="mt-1 block text-xs text-slate-400">Preparing your Plant Growth Academy account...</span>
-      </div>
+      <CircularLoader className="relative min-h-48 w-full max-w-sm" description="Preparing your Plant Growth Academy account..." label="Checking your session" />
     </main>
   )
 }
@@ -286,7 +279,53 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [inventoryItems, setInventoryItems] = useState([])
   const [shopCatalog, setShopCatalog] = useState([])
+  const [inventoryStatus, setInventoryStatus] = useState('loading')
+  const [plantCatalogStatus, setPlantCatalogStatus] = useState('loading')
   const [shareBusy, setShareBusy] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [notificationStatus, setNotificationStatus] = useState('idle')
+  const [notificationError, setNotificationError] = useState('')
+  const notificationRequestRef = useRef(0)
+
+  const refreshNotifications = useCallback(async ({ silent = false } = {}) => {
+    if (!getToken()) return
+
+    const requestId = notificationRequestRef.current + 1
+    notificationRequestRef.current = requestId
+    if (!silent) setNotificationStatus((current) => current === 'ready' ? current : 'loading')
+
+    try {
+      const payload = await getNotifications()
+      if (notificationRequestRef.current !== requestId || !getToken()) return
+      setNotifications(payload.data ?? [])
+      setUnreadNotificationCount(Number(payload.unread_count ?? 0))
+      setNotificationError('')
+      setNotificationStatus('ready')
+    } catch (error) {
+      if (notificationRequestRef.current !== requestId) return
+      setNotificationError(error.message || 'Unable to load notifications.')
+      setNotificationStatus((current) => current === 'ready' ? current : 'error')
+    }
+  }, [])
+
+  const readNotification = useCallback(async (notification) => {
+    if (!notification?.id || notification.is_read) return
+
+    const readAt = new Date().toISOString()
+    setUnreadNotificationCount((current) => Math.max(0, current - 1))
+    setNotifications((current) => current.map((item) => (
+      String(item.id) === String(notification.id)
+        ? { ...item, is_read: true, read_at: readAt }
+        : item
+    )))
+
+    try {
+      await markNotificationRead(notification.id)
+    } catch {
+      refreshNotifications({ silent: true })
+    }
+  }, [refreshNotifications])
 
   const enqueueSimulationMutation = useCallback((operation, options = {}) => {
     if (options.skipIfBusy && simulationMutationPendingRef.current > 0) {
@@ -370,6 +409,10 @@ function App() {
         clearToken()
         if (!isCancelled) {
           setUser(null)
+          setNotifications([])
+          setUnreadNotificationCount(0)
+          setNotificationStatus('idle')
+          setNotificationError('')
           setSaveHydrated(true)
           setSessionStatus('guest')
           setActivePage('auth')
@@ -383,6 +426,24 @@ function App() {
       isCancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!user || !getToken() || user.role === 'admin') return undefined
+
+    const initialRefresh = window.setTimeout(() => refreshNotifications(), 0)
+
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshNotifications({ silent: true })
+    }
+    const interval = window.setInterval(refreshWhenVisible, 30_000)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+
+    return () => {
+      window.clearTimeout(initialRefresh)
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [refreshNotifications, user])
 
   useEffect(() => {
     if (!actionMessage) return undefined
@@ -457,7 +518,7 @@ function App() {
   }, [growingMode])
 
   useEffect(() => {
-    if (!growingMode || !selectedPlant || modeLoading) return undefined
+    if (activePage === 'admin' || !growingMode || !selectedPlant || modeLoading) return undefined
 
     const targetProgress = clampSimulationProgress(simulationVisual.growth_point)
     const animationStartedAt = performance.now()
@@ -495,7 +556,7 @@ function App() {
     return () => {
       if (interval !== null) window.clearInterval(interval)
     }
-  }, [growingMode, modeLoading, selectedPlant, simulationVisual.growth_point])
+  }, [activePage, growingMode, modeLoading, selectedPlant, simulationVisual.growth_point])
 
   const previewSimulationVisual = useMemo(() => {
     if (!growingMode || !selectedPlant) {
@@ -582,16 +643,22 @@ function App() {
   useEffect(() => {
     let cancelled = false
 
-    if (!user || !getToken()) {
+    if (user?.role === 'admin' || !user || !getToken()) {
       return undefined
     }
 
     getInventory()
       .then((payload) => {
-        if (!cancelled) setInventoryItems(payload.data ?? [])
+        if (!cancelled) {
+          setInventoryItems(payload.data ?? [])
+          setInventoryStatus('ready')
+        }
       })
       .catch(() => {
-        if (!cancelled) setInventoryItems([])
+        if (!cancelled) {
+          setInventoryItems([])
+          setInventoryStatus('error')
+        }
       })
 
     return () => {
@@ -616,7 +683,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!user || !getToken()) {
+    if (activePage !== 'lab' || !user || !getToken()) {
       return undefined
     }
 
@@ -625,9 +692,13 @@ function App() {
     async function syncPlantCatalog() {
       try {
         const payload = await getPlants()
-        if (!cancelled) setPlantCatalog(payload.data ?? payload)
+        if (!cancelled) {
+          setPlantCatalog(payload.data ?? payload)
+          setPlantCatalogStatus('ready')
+        }
       } catch {
         // Keep the last usable catalog during a brief backend or network outage.
+        if (!cancelled) setPlantCatalogStatus((current) => current === 'ready' ? current : 'error')
       }
     }
 
@@ -638,7 +709,7 @@ function App() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [user])
+  }, [activePage, user])
 
   useEffect(() => {
     function handleExpiredSession() {
@@ -654,6 +725,10 @@ function App() {
       setPendingPlant(null)
       setPlantingBusy(false)
       setUser(null)
+      setNotifications([])
+      setUnreadNotificationCount(0)
+      setNotificationStatus('idle')
+      setNotificationError('')
       setProfileOpen(false)
       setSessionStatus('guest')
       setActivePage('auth')
@@ -1020,7 +1095,7 @@ function App() {
 
   useEffect(() => {
     const simulatorId = simulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
-    if (!simulatorId || !selectedPlant || !growingMode || visitingFriend || !getToken() || simulationVisual?.status !== 'active') {
+    if (activePage === 'admin' || !simulatorId || !selectedPlant || !growingMode || visitingFriend || !getToken() || simulationVisual?.status !== 'active') {
       return undefined
     }
 
@@ -1070,17 +1145,18 @@ function App() {
       if (statusTimer !== null) window.clearTimeout(statusTimer)
       if (timer !== null) window.clearTimeout(timer)
     }
-  }, [growingMode, runSimulationTick, selectedPlant, simulationVisual?.id, simulationVisual?.status, visitingFriend])
+  }, [activePage, growingMode, runSimulationTick, selectedPlant, simulationVisual?.id, simulationVisual?.status, visitingFriend])
 
   useEffect(() => {
-    if (!selectedPlant || !growingMode || !getToken()) return undefined
+    if (activePage !== 'lab' || !selectedPlant || !growingMode || !getToken()) return undefined
 
     const interval = window.setInterval(() => {
+      if (document.hidden) return
       persistCurrentSimulation({ silent: true, background: true }).catch(() => {})
     }, autosaveIntervalMs)
 
     return () => window.clearInterval(interval)
-  }, [growingMode, persistCurrentSimulation, selectedPlant])
+  }, [activePage, growingMode, persistCurrentSimulation, selectedPlant])
 
   useEffect(() => {
     function saveBeforeLeaving() {
@@ -1845,7 +1921,7 @@ function App() {
     }
   }
 
-  async function viewCommunityGame(post) {
+  async function viewCommunityGame(post, source = 'community') {
     const liveSimulator = post?.live_simulator
     const savedSimulator = post?.plant_history?.game_state?.simulator
     const owner = post?.user ?? null
@@ -1881,8 +1957,8 @@ function App() {
     }))
 
     if (liveSimulator?.id) {
-      autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: { user: owner, simulatorId: liveSimulator.id, source: 'community' } }
-      setVisitingFriend({ user: owner, simulatorId: liveSimulator.id, source: 'community' })
+      autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: { user: owner, simulatorId: liveSimulator.id, source } }
+      setVisitingFriend({ user: owner, simulatorId: liveSimulator.id, source })
       setActionMessage('Connecting to the live garden...')
       try {
         const payload = await getSpectatorSimulator(liveSimulator.id)
@@ -1891,15 +1967,15 @@ function App() {
         setActionMessage(`Watching ${owner?.username ?? 'this learner'} live`)
       } catch (error) {
         if (spectatorRequestRef.current !== requestId) return
-        leaveFriendGarden()
+        leaveFriendGarden(source)
         setActionMessage(error.status === 410 ? 'This garden is no longer live.' : (error.message || 'Unable to open this live garden'))
       }
       return
     }
 
     if (savedSimulator) {
-      autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: { user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id } }
-      setVisitingFriend({ user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id })
+      autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: { user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id, source } }
+      setVisitingFriend({ user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id, source })
       applySimulatorSnapshot(savedSimulator, { persistLocalId: false })
       setActionMessage('Viewing a saved game state')
       return
@@ -1914,11 +1990,17 @@ function App() {
       return
     }
 
-    viewCommunityGame({ plant_history: save, user })
+    viewCommunityGame({ plant_history: save, user }, 'history')
   }
 
-  const leaveFriendGarden = useCallback(() => {
+  const leaveFriendGarden = useCallback((sourceOverride = null) => {
     const snapshot = ownGardenSnapshotRef.current
+    const returnSource = typeof sourceOverride === 'string' ? sourceOverride : visitingFriend?.source
+    const returnPage = returnSource === 'community'
+      ? 'community'
+      : returnSource === 'history'
+        ? 'history'
+        : null
     spectatorRequestRef.current += 1
     autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: null }
     setVisitingFriend(null)
@@ -1956,12 +2038,13 @@ function App() {
     }
 
     ownGardenSnapshotRef.current = null
-    setActionMessage('Back to your garden')
-  }, [])
+    if (returnPage) setActivePage(returnPage)
+    setActionMessage(returnPage === 'community' ? 'Back to Community' : returnPage === 'history' ? 'Back to History' : 'Back to your garden')
+  }, [visitingFriend?.source])
 
   useEffect(() => {
     const simulatorId = visitingFriend?.simulatorId
-    if (!simulatorId || visitingFriend?.historyReplay) return undefined
+    if (activePage === 'admin' || !simulatorId || visitingFriend?.historyReplay) return undefined
 
     let cancelled = false
     let requestRunning = false
@@ -1988,7 +2071,7 @@ function App() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [applySimulatorSnapshot, leaveFriendGarden, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
+  }, [activePage, applySimulatorSnapshot, leaveFriendGarden, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
 
   function navigateToPage(page) {
     if (sessionStatus !== 'authenticated' || !user) {
@@ -2039,6 +2122,11 @@ function App() {
     setPendingPlant(null)
     setPlantingBusy(false)
     setUser(null)
+    notificationRequestRef.current += 1
+    setNotifications([])
+    setUnreadNotificationCount(0)
+    setNotificationStatus('idle')
+    setNotificationError('')
     setSessionStatus('guest')
     setProfileOpen(false)
     setAuthMode('login')
@@ -2051,6 +2139,11 @@ function App() {
 
   const labReady = Boolean(saveHydrated && growingMode && !modeLoading)
   const visitorName = visitingFriend?.user?.username ?? visitingFriend?.user?.email?.split('@')[0] ?? 'Friend'
+  const visitorReturnLabel = visitingFriend?.source === 'community'
+    ? 'Back to Community'
+    : visitingFriend?.source === 'history'
+      ? 'Back to History'
+      : 'Back to my garden'
 
   if (sessionStatus === 'checking') {
     return <SessionLoadingScreen />
@@ -2102,7 +2195,7 @@ function App() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
-      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} onNavigate={navigateToPage} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={unreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
       {saveCompleteHistory && (
         <div className="absolute inset-0 z-50 grid place-items-center bg-black/45 px-4 backdrop-blur-sm">
           <div className="animate-[saveModalIn_.24s_ease-out] w-full max-w-[420px] overflow-hidden rounded-xl border border-lime-100/20 bg-[#101511]/96 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.5)]">
@@ -2136,7 +2229,7 @@ function App() {
       ) : activePage === 'history' ? (
         <HistoryPage onOpenGameState={viewSavedGameState} onStartGrowing={() => navigateToPage('lab')} />
       ) : activePage === 'community' ? (
-        <CommunityPage currentUser={user} onOpenGame={viewCommunityGame} onUserChange={setUser} />
+        <CommunityPage currentUser={user} notificationError={notificationError} notificationItems={notifications} notificationStatus={notificationStatus} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} onOpenGame={viewCommunityGame} onUserChange={setUser} unreadCount={unreadNotificationCount} />
       ) : activePage === 'settings' ? (
         <SettingsPage
           backLabel={`Back to ${settingsReturnPage === 'lab' ? 'Plant Lab' : settingsReturnPage[0].toUpperCase() + settingsReturnPage.slice(1)}`}
@@ -2150,7 +2243,7 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar busy={plantingBusy || modeLoading} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
+              <LibrarySidebar busy={plantingBusy || modeLoading} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
               <SimulationStage
                 actionMessage={actionMessage}
                 coinBurst={coinBurst}
@@ -2182,7 +2275,7 @@ function App() {
                     type="button"
                     onClick={leaveFriendGarden}
                   >
-                    Back to my garden
+                    {visitorReturnLabel}
                   </button>
                 </div>
               )}

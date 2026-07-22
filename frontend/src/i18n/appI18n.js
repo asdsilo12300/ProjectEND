@@ -11,7 +11,7 @@ const thaiMessages = {
   'Checking your session': 'กำลังตรวจสอบเซสชัน',
   'Preparing your Plant Growth Academy account...': 'กำลังเตรียมบัญชี Plant Growth Academy ของคุณ...',
   'Loading saved simulation': 'กำลังโหลดการจำลองที่บันทึกไว้',
-  'Loading greenhouse lab': 'กำลังโหลดห้องทดลองเรือนกระจก',
+  'Loading  lab': 'กำลังโหลดห้องทดลอง',
   'Loading outdoor field': 'กำลังโหลดพื้นที่กลางแจ้ง',
   'Preparing the simulation environment...': 'กำลังเตรียมสภาพแวดล้อมการจำลอง...',
 

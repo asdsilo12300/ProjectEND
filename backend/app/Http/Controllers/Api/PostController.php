@@ -11,24 +11,23 @@ use App\Models\PlantHistory;
 use App\Models\Post;
 use App\Models\PostLike;
 use App\Models\SocialNotification;
+use App\Services\JwtService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Throwable;
 
 class PostController extends Controller
 {
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        return PostResource::collection(
-            Post::query()
-                ->with(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage', 'simulator.plant'])
-                ->withCount(['comments', 'likes'])
-                ->where('visibility', 'public')
-                ->latest()
-                ->get()
-        );
+        return PostResource::collection($this->feedQuery($this->viewerId($request))
+            ->where('visibility', 'public')
+            ->latest()
+            ->paginate($this->perPage($request)));
     }
 
     public function friends(Request $request): AnonymousResourceCollection
@@ -41,22 +40,18 @@ class PostController extends Controller
                     ->where('requester_id', $user->id)
                     ->orWhere('addressee_id', $user->id);
             })
-            ->get()
+            ->get(['requester_id', 'addressee_id'])
             ->map(fn (Friendship $friendship) => $friendship->requester_id === $user->id ? $friendship->addressee_id : $friendship->requester_id)
-            ->push($user->id)
-            ->unique()
-            ->values()
             ->all();
 
-        return PostResource::collection(
-            Post::query()
-                ->with(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage', 'simulator.plant'])
-                ->withCount(['comments', 'likes'])
-                ->whereIn('user_id', $friendIds)
-                ->whereIn('visibility', ['public', 'friends'])
-                ->latest()
-                ->get()
-        );
+        $friendIds[] = $user->id;
+        $friendIds = array_values(array_unique(array_map('intval', $friendIds)));
+
+        return PostResource::collection($this->feedQuery((int) $user->id)
+            ->whereIn('user_id', $friendIds)
+            ->whereIn('visibility', ['public', 'friends'])
+            ->latest()
+            ->paginate($this->perPage($request)));
     }
 
     public function store(Request $request): PostResource
@@ -94,7 +89,9 @@ class PostController extends Controller
             ]);
         }
 
-        return new PostResource($post->load(['user', 'plantHistory.plant.stages', 'plantHistory.finalStage', 'simulator.plant']));
+        $post->load($this->feedRelations())->loadCount(['comments', 'likes']);
+
+        return new PostResource($post);
     }
 
     public function comment(Request $request, Post $post): JsonResponse
@@ -314,5 +311,51 @@ class PostController extends Controller
             'type' => $type,
             'excerpt' => $excerpt ? Str::limit(trim($excerpt), 220) : null,
         ]);
+    }
+
+    private function feedQuery(?int $viewerId): Builder
+    {
+        return Post::query()
+            ->with($this->feedRelations())
+            ->withCount(['comments', 'likes'])
+            ->when($viewerId, fn (Builder $query, int $id) => $query->withExists([
+                'likes as liked_by_me' => fn (Builder $likes) => $likes->where('user_id', $id),
+            ]));
+    }
+
+    private function feedRelations(): array
+    {
+        return [
+            'user' => fn ($query) => $query->withCount([
+                'plantHistories',
+                'requestedFriendships as accepted_requested_friendships_count' => fn (Builder $friendships) => $friendships->where('status', 'accepted'),
+                'receivedFriendships as accepted_received_friendships_count' => fn (Builder $friendships) => $friendships->where('status', 'accepted'),
+            ]),
+            'plantHistory',
+            'simulator.plant',
+        ];
+    }
+
+    private function viewerId(Request $request): ?int
+    {
+        if ($request->user()) {
+            return (int) $request->user()->id;
+        }
+
+        $token = $request->bearerToken();
+        if (! $token) {
+            return null;
+        }
+
+        try {
+            return app(JwtService::class)->userIdFromToken($token);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function perPage(Request $request): int
+    {
+        return max(1, min(30, (int) $request->integer('per_page', 15)));
     }
 }

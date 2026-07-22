@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\AdminDashboardController;
+use App\Services\AdminDataCache;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class AdminDashboardControllerTest extends TestCase
         CarbonImmutable::setTestNow($this->now);
         $this->buildSchema();
         $this->seedDashboardData();
+        app(AdminDataCache::class)->clear();
     }
 
     protected function tearDown(): void
@@ -89,6 +91,24 @@ class AdminDashboardControllerTest extends TestCase
         );
         $this->assertSame('admin-user', $actions[0]['admin']['username']);
         $this->assertSame('admin@example.test', $actions[0]['admin']['email']);
+    }
+
+    public function test_dashboard_uses_a_compact_query_set_and_returns_identical_cached_data(): void
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $controller = app(AdminDashboardController::class);
+        $request = Request::create('/api/admin/dashboard?days=7', 'GET');
+        $first = $controller->index($request)->getData(true);
+        $coldQueryCount = count(DB::getQueryLog());
+        $second = $controller->index($request)->getData(true);
+
+        $this->assertLessThanOrEqual(5, $coldQueryCount);
+        $this->assertCount($coldQueryCount, DB::getQueryLog());
+        $this->assertSame($first, $second);
+        $this->assertCount(2, $second['data']['recent_users']);
+        $this->assertCount(2, $second['data']['recent_contents']);
     }
 
     private function seedDashboardData(): void

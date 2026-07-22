@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Panel } from '../components/Panel'
+import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { AppIcon } from '../icons/IconifyIcon'
 import { acceptFriend, deleteFriend, getFriends, getToken, inviteFriend, resolveAssetUrl, searchUsers } from '../../lib/api'
 
@@ -374,7 +375,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
             })}
           </ul>
 
-          {status === 'loading' && <p className="rounded-md border border-lime-100/10 bg-[#0b0f0c]/60 px-3 py-3 text-center text-xs text-slate-400">Loading friends</p>}
+          {status === 'loading' && <LoadingSkeleton count={3} label="Loading friends" variant="list" />}
           {status !== 'loading' && currentRows.length === 0 && !error && (
             <p className="rounded-md border border-lime-100/10 bg-[#0b0f0c]/60 px-3 py-3 text-center text-xs text-slate-400">
               {mode === 'requests' ? 'No friend requests right now.' : mode === 'online' ? 'No friends online right now.' : 'No friends yet. Invite a classmate to start.'}

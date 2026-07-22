@@ -98,6 +98,9 @@ return [
             'search_path' => env('DB_SEARCH_PATH', 'public'),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
             'sslrootcert' => env('DB_SSLROOTCERT'),
+            'options' => filter_var(env('DB_PERSISTENT', false), FILTER_VALIDATE_BOOL)
+                ? [PDO::ATTR_PERSISTENT => true]
+                : [],
         ],
 
         'sqlsrv' => [

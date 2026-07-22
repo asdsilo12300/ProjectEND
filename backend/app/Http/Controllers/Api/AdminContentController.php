@@ -30,9 +30,17 @@ class AdminContentController extends Controller
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->orderBy('sort_order')
             ->orderBy('id')
-            ->get();
+            ->get([
+                'id', 'slug', 'category', 'title', 'title_th', 'cover_image_url',
+                'status', 'version', 'sort_order', 'published_at', 'updated_at', 'deleted_at',
+            ]);
 
         return response()->json(['data' => $contents]);
+    }
+
+    public function show(Content $content): JsonResponse
+    {
+        return response()->json(['data' => $content]);
     }
 
     public function store(Request $request): JsonResponse

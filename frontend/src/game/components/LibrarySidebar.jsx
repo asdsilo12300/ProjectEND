@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AppIcon } from '../icons/IconifyIcon'
 import { LibraryThumb } from './LibraryThumb'
+import { LoadingSkeleton } from './LoadingSkeleton'
 
 function hasBrokenEncoding(value) {
   const text = String(value ?? '')
@@ -13,7 +14,7 @@ function readableItemName(item) {
   return name || 'Plant'
 }
 
-export function LibrarySidebar({ busy = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply }) {
+export function LibrarySidebar({ busy = false, loading = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
@@ -59,13 +60,18 @@ export function LibrarySidebar({ busy = false, readOnly = false, mockItems = fal
 
               {expanded && (
                 <div className={`mt-2 rounded-md border border-lime-100/10 bg-black/20 p-2 ${section === 'Plants' ? 'grid gap-1.5' : 'grid grid-cols-2 gap-2'}`}>
-                  {visibleItems.length === 0 && (
+                  {loading && (
+                    <div className={section === 'Items' ? 'col-span-2' : ''}>
+                      <LoadingSkeleton count={section === 'Plants' ? 2 : 4} label={`Loading ${section.toLowerCase()}`} variant="list" />
+                    </div>
+                  )}
+                  {!loading && visibleItems.length === 0 && (
                     <div className={`${section === 'Items' ? 'col-span-2' : ''} rounded-md border border-dashed border-lime-100/15 bg-[#101511]/70 px-3 py-3 text-center`}>
                       <strong className="block text-[11px] text-lime-50">No {section.toLowerCase()} in database</strong>
                       <span className="mt-0.5 block text-[10px] leading-relaxed text-slate-400">Run the seeder or add records to enable this section.</span>
                     </div>
                   )}
-                  {visibleItems.map((item) => {
+                  {!loading && visibleItems.map((item) => {
                     const itemName = readableItemName(item)
                     const itemQuantity = section === 'Items' ? (inventoryMap[item.itemKey ?? item.id] ?? item.quantity) : null
                     const hasInventoryQuantity = Number.isFinite(Number(itemQuantity))

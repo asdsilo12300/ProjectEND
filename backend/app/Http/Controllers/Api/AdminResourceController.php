@@ -20,6 +20,7 @@ use App\Models\Quest;
 use App\Models\ShopItem;
 use App\Models\Simulator;
 use App\Models\SimulatorComment;
+use App\Services\AdminDataCache;
 use App\Services\KnownPlantProfileService;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\QueryException;
@@ -30,14 +31,18 @@ use Illuminate\Validation\Rule;
 
 class AdminResourceController extends Controller
 {
+    public function __construct(private readonly AdminDataCache $cache) {}
+
     public function lookups(): JsonResponse
     {
-        return response()->json(['data' => [
-            'plants' => Plant::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en']),
-            'stages' => PlantGrowthStage::query()->orderBy('plant_id')->orderBy('stage_no')->get(['id', 'plant_id', 'stage_no', 'stage_name']),
-            'pests' => Pest::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en']),
-            'items' => Item::query()->orderBy('name')->get(['id', 'name', 'type']),
-        ]]);
+        $lookups = $this->cache->rememberLookups(fn (): array => [
+            'plants' => Plant::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en'])->toArray(),
+            'stages' => PlantGrowthStage::query()->orderBy('plant_id')->orderBy('stage_no')->get(['id', 'plant_id', 'stage_no', 'stage_name'])->toArray(),
+            'pests' => Pest::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en'])->toArray(),
+            'items' => Item::query()->orderBy('name')->get(['id', 'name', 'type'])->toArray(),
+        ]);
+
+        return response()->json(['data' => $lookups]);
     }
 
     public function index(Request $request, string $resource): JsonResponse
@@ -55,7 +60,9 @@ class AdminResourceController extends Controller
             }
             $this->applySearch($query, $request, $config['search']);
 
-            return response()->json(['data' => $query->orderBy('id')->get(), 'resource' => $resource, 'mode' => 'catalog']);
+            $payload = $query->orderBy('id')->paginate(25)->toArray();
+
+            return response()->json([...$payload, 'resource' => $resource, 'mode' => 'catalog']);
         }
 
         return $this->moderationIndex($request, $resource);

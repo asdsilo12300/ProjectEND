@@ -9,6 +9,7 @@ import { ModelBundleField } from './ModelBundleField'
 import {
   deleteAdminContent,
   deleteAdminResource,
+  getAdminContent,
   getAdminContents,
   getAdminDashboard,
   getAdminResource,
@@ -29,6 +30,8 @@ import './AdminPage.css'
 const ContentRichEditor = lazy(() => import('./ContentRichEditor').then((module) => ({ default: module.ContentRichEditor })))
 
 const adminPreferenceKey = 'plant-growth-admin-preferences'
+const ADMIN_DASHBOARD_REFRESH_MS = 15_000
+const ADMIN_TABLE_REFRESH_MS = 10_000
 
 function adminAlertTheme() {
   const isLight = document.querySelector('.admin-shell')?.classList.contains('admin-theme--light')
@@ -198,6 +201,9 @@ const navigationGroups = [
   ] },
 ]
 
+// Keep these sections available in the codebase while their admin tools are not ready to expose.
+const hiddenAdminNavigationItems = new Set(['progression', 'models'])
+
 const lookupLabel = {
   plants: (row) => row.name_en || row.name_th,
   stages: (row) => `${row.stage_no}. ${row.stage_name}`,
@@ -316,8 +322,114 @@ function formatDate(value, includeTime = false) {
     : { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value))
 }
 
+function AdminSkeletonBlock({ className = '' }) {
+  return <span aria-hidden="true" className={`admin-skeleton-block ${className}`} />
+}
+
+function AdminDashboardSkeleton() {
+  return (
+    <div className="admin-view admin-dashboard-skeleton" role="status" aria-busy="true" aria-label="Loading dashboard data">
+      <div className="admin-metric-grid">
+        {Array.from({ length: 8 }, (_, index) => (
+          <article className="admin-skeleton-metric" key={index}>
+            <AdminSkeletonBlock className="is-icon" />
+            <AdminSkeletonBlock className="is-label" />
+            <AdminSkeletonBlock className="is-value" />
+            <AdminSkeletonBlock className="is-detail" />
+          </article>
+        ))}
+      </div>
+
+      <section className="admin-skeleton-attention">
+        <div><AdminSkeletonBlock className="is-eyebrow" /><AdminSkeletonBlock className="is-heading" /></div>
+        <AdminSkeletonBlock className="is-badge" />
+        <div className="admin-skeleton-attention-grid">
+          {Array.from({ length: 6 }, (_, index) => <AdminSkeletonBlock className="is-action" key={index} />)}
+        </div>
+      </section>
+
+      <div className="admin-dashboard-grid">
+        <section className="admin-skeleton-panel is-chart">
+          <div className="admin-skeleton-panel-heading"><span><AdminSkeletonBlock className="is-eyebrow" /><AdminSkeletonBlock className="is-heading" /></span><AdminSkeletonBlock className="is-tools" /></div>
+          <div className="admin-skeleton-chart" aria-hidden="true">
+            {Array.from({ length: 14 }, (_, index) => <span key={index} style={{ height: `${28 + ((index * 17) % 58)}%` }} />)}
+          </div>
+        </section>
+        <section className="admin-skeleton-panel is-overview">
+          <div className="admin-skeleton-panel-heading"><span><AdminSkeletonBlock className="is-eyebrow" /><AdminSkeletonBlock className="is-heading" /></span></div>
+          <AdminSkeletonBlock className="is-ring" />
+          <div className="admin-skeleton-overview-lines">{Array.from({ length: 5 }, (_, index) => <AdminSkeletonBlock key={index} />)}</div>
+        </section>
+      </div>
+      <span className="sr-only">Loading management data</span>
+    </div>
+  )
+}
+
+function AdminTableSkeleton({ embedded = false }) {
+  return (
+    <div className={`admin-table-skeleton ${embedded ? 'is-embedded' : ''}`} role="status" aria-busy="true" aria-label="Loading table records">
+      {!embedded ? (
+        <div className="admin-table-skeleton-toolbar">
+          <AdminSkeletonBlock className="is-search" />
+          <AdminSkeletonBlock className="is-filter" />
+          <AdminSkeletonBlock className="is-create" />
+        </div>
+      ) : null}
+      <div className="admin-table-skeleton-frame">
+        <div className="admin-table-skeleton-head">{Array.from({ length: 5 }, (_, index) => <AdminSkeletonBlock key={index} />)}</div>
+        {Array.from({ length: 7 }, (_, index) => (
+          <div className="admin-table-skeleton-row" key={index}>
+            <AdminSkeletonBlock className="is-index" />
+            <span className="admin-table-skeleton-copy"><AdminSkeletonBlock /><AdminSkeletonBlock /></span>
+            <AdminSkeletonBlock className="is-secondary" />
+            <AdminSkeletonBlock className="is-status" />
+            <AdminSkeletonBlock className="is-actions" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Loading records</span>
+    </div>
+  )
+}
+
 function StatusBadge({ status }) {
   return <span className={`admin-status admin-status--${status}`}>{status}</span>
+}
+
+function AdminPagination({ currentPage = 1, lastPage = 1, onPageChange }) {
+  const pageCount = Math.max(1, Math.trunc(Number(lastPage) || 1))
+  const page = Math.min(pageCount, Math.max(1, Math.trunc(Number(currentPage) || 1)))
+
+  function submitPage(event) {
+    event.preventDefault()
+    const input = event.currentTarget.elements.namedItem('page')
+    const requestedPage = Number.parseInt(input?.value ?? '', 10)
+
+    if (!Number.isInteger(requestedPage)) {
+      if (input) input.value = String(page)
+      return
+    }
+
+    const targetPage = Math.min(pageCount, Math.max(1, requestedPage))
+    if (input) input.value = String(targetPage)
+    if (targetPage !== page) onPageChange(targetPage)
+  }
+
+  return (
+    <nav className="admin-pagination" aria-label="Table pagination">
+      <button disabled={page <= 1} type="button" onClick={() => onPageChange(page - 1)}><AppIcon name="arrowBack" />Previous</button>
+      <span className="admin-pagination__summary" aria-live="polite">Page <strong>{page}</strong> of <strong>{pageCount}</strong></span>
+      <form className="admin-pagination__jump" onSubmit={submitPage} noValidate>
+        <label>
+          <span>Go to page</span>
+          <input key={`${page}-${pageCount}`} name="page" type="number" min="1" max={pageCount} step="1" inputMode="numeric" defaultValue={page} aria-label={`Go to page, from 1 to ${pageCount}`} />
+        </label>
+        <button type="submit" disabled={pageCount <= 1}>Go</button>
+      </form>
+      <button disabled={page >= pageCount} type="button" onClick={() => onPageChange(page + 1)}>Next<AppIcon name="arrowForward" /></button>
+    </nav>
+  )
 }
 
 function MetricCard({ icon, label, value, detail, tone = 'green' }) {
@@ -385,25 +497,63 @@ function AttentionCenter({ attention, onOpenSection }) {
 
 function TrendChart({ trend = [], activeSeries }) {
   const selectedSeries = trendSeriesConfig.filter((series) => activeSeries.includes(series.key))
-  const maximum = Math.max(1, ...trend.flatMap((day) => selectedSeries.map((series) => day[series.key] ?? 0)))
+  const maximum = Math.max(1, ...trend.flatMap((day) => selectedSeries.map((series) => Number(day[series.key] ?? 0))))
   const seriesLabel = selectedSeries.map((series) => series.label).join(', ')
+  const chartWidth = Math.max(680, trend.length * 44)
+  const chartHeight = 320
+  const plotTop = 14
+  const plotBottom = 42
+  const plotLeft = 22
+  const plotRight = 22
+  const plotHeight = chartHeight - plotTop - plotBottom
+  const plotWidth = chartWidth - plotLeft - plotRight
+  const baseline = plotTop + plotHeight
+  const xForIndex = (index) => trend.length <= 1 ? chartWidth / 2 : plotLeft + (index / (trend.length - 1)) * plotWidth
+  const yForValue = (value) => plotTop + plotHeight - (Number(value ?? 0) / maximum) * plotHeight
+  const pointsForSeries = (series) => trend.map((day, index) => ({
+    date: day.date,
+    label: day.label,
+    value: Number(day[series.key] ?? 0),
+    x: xForIndex(index),
+    y: yForValue(day[series.key]),
+  }))
+  const linePath = (points) => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+  const formatTick = (value) => Number.isInteger(value) ? value : value.toFixed(1)
 
   return (
-    <div className="admin-trend" role="img" aria-label={`${trend.length} day activity chart showing ${seriesLabel}`}>
-      <div className="admin-trend__axis"><span>{maximum}</span><span>{Math.ceil(maximum / 2)}</span><span>0</span></div>
+    <div className="admin-trend" role="img" aria-label={`${trend.length} day line chart showing ${seriesLabel}`}>
+      <div className="admin-trend__axis"><span>{formatTick(maximum)}</span><span>{formatTick(maximum / 2)}</span><span>0</span></div>
       <div className="admin-trend__scroller">
-        <div className="admin-trend__plot" style={{ gridTemplateColumns: `repeat(${Math.max(trend.length, 1)}, minmax(28px, 1fr))`, minWidth: trend.length > 14 ? `${trend.length * 32}px` : undefined }}>
-          {[0, 1, 2].map((line) => <i className="admin-trend__gridline" key={line} />)}
-          {trend.map((day) => (
-            <div className="admin-trend__day" key={day.date}>
-              <div className="admin-trend__bars">
-                {selectedSeries.map((series) => (
-                  <span className={`admin-trend__bar admin-trend__bar--${series.key}`} key={series.key} style={{ height: `${Math.max(4, ((day[series.key] ?? 0) / maximum) * 100)}%` }} title={`${day[series.key] ?? 0} ${series.label.toLowerCase()} on ${day.date}`} />
-                ))}
-              </div>
-              <small>{day.label}</small>
-            </div>
-          ))}
+        <div className="admin-trend__plot" style={{ minWidth: trend.length > 14 ? `${chartWidth}px` : undefined }}>
+          <svg className="admin-trend__svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              {selectedSeries.map((series) => (
+                <linearGradient id={`admin-trend-fill-${series.key}`} x1="0" x2="0" y1="0" y2="1" key={series.key}>
+                  <stop offset="0%" stopColor={series.color} stopOpacity=".16" />
+                  <stop offset="100%" stopColor={series.color} stopOpacity="0" />
+                </linearGradient>
+              ))}
+            </defs>
+            {[plotTop, plotTop + plotHeight / 2, baseline].map((y) => <line className="admin-trend__gridline" x1={plotLeft} x2={chartWidth - plotRight} y1={y} y2={y} key={y} />)}
+            {selectedSeries.map((series) => {
+              const points = pointsForSeries(series)
+              const path = linePath(points)
+              const areaPath = points.length ? `${path} L ${points.at(-1).x} ${baseline} L ${points[0].x} ${baseline} Z` : ''
+
+              return (
+                <g className={`admin-trend__series admin-trend__series--${series.key}`} key={series.key} style={{ color: series.color }}>
+                  <path className="admin-trend__area" d={areaPath} fill={`url(#admin-trend-fill-${series.key})`} />
+                  <path className="admin-trend__line" d={path} pathLength="1" stroke={series.color} />
+                  {points.map((point) => (
+                    <circle className="admin-trend__point" cx={point.x} cy={point.y} fill={series.color} key={point.date} r="3.6">
+                      <title>{`${series.label}: ${point.value} · ${point.date}`}</title>
+                    </circle>
+                  ))}
+                </g>
+              )
+            })}
+            {trend.map((day, index) => <text className="admin-trend__label" x={xForIndex(index)} y={chartHeight - 10} key={day.date} textAnchor="middle">{day.label}</text>)}
+          </svg>
         </div>
       </div>
     </div>
@@ -751,11 +901,25 @@ function ContentsView({ contents, onRefresh }) {
   const [filter, setFilter] = useState('')
   const [trashed, setTrashed] = useState('')
   const [editor, setEditor] = useState(null)
+  const [editingContentId, setEditingContentId] = useState(null)
   const [actionError, setActionError] = useState('')
 
   async function runSearch(event) {
     event?.preventDefault()
     await onRefresh({ search, status: filter, trashed })
+  }
+
+  async function editContent(content) {
+    setActionError('')
+    setEditingContentId(content.id)
+    try {
+      const payload = await getAdminContent(content.id)
+      setEditor(payload.data)
+    } catch (error) {
+      setActionError(error.message || 'Unable to load this article for editing.')
+    } finally {
+      setEditingContentId(null)
+    }
   }
 
   async function remove(content) {
@@ -796,7 +960,12 @@ function ContentsView({ contents, onRefresh }) {
   return (
     <div className="admin-view">
       <div className="admin-content-toolbar">
-        <form onSubmit={runSearch}><AppIcon name="search" /><input placeholder="Search title or slug" value={search} onChange={(event) => setSearch(event.target.value)} /><select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option><option value="published">Published</option><option value="draft">Draft</option></select><select aria-label="Filter content by trash status" value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); onRefresh({ search, status: filter, trashed: value }) }}><option value="">Active content</option><option value="only">Trash</option><option value="with">Active + trash</option></select><button type="submit">Filter</button></form>
+        <form onSubmit={runSearch}>
+          <input aria-label="Search learning content" placeholder="Search title or slug" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <select aria-label="Filter content by publication status" value={filter} onChange={(event) => { const value = event.target.value; setFilter(value); onRefresh({ search, status: value, trashed }) }}><option value="">All status</option><option value="published">Published</option><option value="draft">Draft</option></select>
+          <select aria-label="Filter content by trash status" value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); onRefresh({ search, status: filter, trashed: value }) }}><option value="">Active content</option><option value="only">Trash</option><option value="with">Active + trash</option></select>
+          <button className="admin-search-submit" type="submit" aria-label="Search learning content" title="Search"><AppIcon name="search" /></button>
+        </form>
         <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...emptyContent })}><AppIcon name="plus" />New content</button>
       </div>
       {actionError && <div className="admin-inline-error">{actionError}</div>}
@@ -809,7 +978,7 @@ function ContentsView({ contents, onRefresh }) {
                 <td className="admin-index-cell">{index + 1}</td>
                 <td><div className="admin-content-cell">{content.cover_image_url ? <img src={content.cover_image_url} alt="" /> : <span><AppIcon name="bookmark" /></span>}<div><strong>{content.title}</strong><small>/{content.slug}</small></div></div></td>
                 <td>{content.category}</td><td><StatusBadge status={content.deleted_at ? 'archived' : content.status} /></td><td>v{content.version}</td><td>{formatDate(content.updated_at, true)}</td>
-                <td><div className="admin-row-actions">{!content.deleted_at && <button type="button" onClick={() => setEditor(content)}><AppIcon name="settings" />Edit</button>}{!content.deleted_at && <button className="is-danger" type="button" aria-label={`Move ${content.title} to trash`} onClick={() => remove(content)}><AppIcon name="trash" /></button>}{content.deleted_at && <button type="button" onClick={() => restore(content)}><AppIcon name="history" />Restore</button>}</div></td>
+                <td><div className="admin-row-actions">{!content.deleted_at && <button disabled={editingContentId !== null} type="button" onClick={() => editContent(content)}><AppIcon name="settings" />{editingContentId === content.id ? 'Loading…' : 'Edit'}</button>}{!content.deleted_at && <button className="is-danger" type="button" aria-label={`Move ${content.title} to trash`} onClick={() => remove(content)}><AppIcon name="trash" /></button>}{content.deleted_at && <button type="button" onClick={() => restore(content)}><AppIcon name="history" />Restore</button>}</div></td>
               </tr>
             ))}
           </tbody>
@@ -854,7 +1023,11 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
   return (
     <div className="admin-view">
       <div className="admin-content-toolbar">
-        <form onSubmit={(event) => { event.preventDefault(); onRefresh({ search, role, page: 1 }) }}><AppIcon name="search" /><input placeholder="Search name or email" value={search} onChange={(event) => setSearch(event.target.value)} /><select value={role} onChange={(event) => setRole(event.target.value)}><option value="">All roles</option><option value="member">Member</option><option value="admin">Admin</option></select><button type="submit">Filter</button></form>
+        <form onSubmit={(event) => { event.preventDefault(); onRefresh({ search, role, page: 1 }) }}>
+          <input aria-label="Search user accounts" placeholder="Search name or email" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <select aria-label="Filter accounts by role" value={role} onChange={(event) => { const value = event.target.value; setRole(value); onRefresh({ search, role: value, page: 1 }) }}><option value="">All roles</option><option value="member">Member</option><option value="admin">Admin</option></select>
+          <button className="admin-search-submit" type="submit" aria-label="Search user accounts" title="Search"><AppIcon name="search" /></button>
+        </form>
         <span className="admin-result-count">{usersPayload?.total ?? 0} accounts</span>
       </div>
       {error && <div className="admin-inline-error">{error}</div>}
@@ -873,7 +1046,7 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
           ))}</tbody>
         </table>
       </section>
-      <div className="admin-pagination"><button disabled={!usersPayload?.prev_page_url} type="button" onClick={() => onRefresh({ search, role, page: usersPayload.current_page - 1 })}><AppIcon name="arrowBack" />Previous</button><span>Page {usersPayload?.current_page ?? 1} of {usersPayload?.last_page ?? 1}</span><button disabled={!usersPayload?.next_page_url} type="button" onClick={() => onRefresh({ search, role, page: usersPayload.current_page + 1 })}>Next<AppIcon name="arrowForward" /></button></div>
+      <AdminPagination currentPage={usersPayload?.current_page} lastPage={usersPayload?.last_page} onPageChange={(page) => onRefresh({ search, role, page })} />
     </div>
   )
 }
@@ -1135,7 +1308,7 @@ function ResourceView({ groupKey }) {
   const refreshInFlightRef = useRef(false)
   const config = configs.find((item) => item.id === activeResource) ?? configs[0]
   const records = payload?.data ?? []
-  const pagination = payload?.mode === 'catalog' ? null : payload
+  const pagination = payload?.current_page ? payload : null
 
   async function load(resource = activeResource, options = {}, { silent = false } = {}) {
     if (!silent) { setLoading(true); setError('') }
@@ -1165,23 +1338,41 @@ function ResourceView({ groupKey }) {
   }, [configs])
 
   useEffect(() => {
-    const refreshTimer = window.setInterval(async () => {
+    let cancelled = false
+    let refreshTimer
+
+    const scheduleRefresh = () => {
+      if (!cancelled) refreshTimer = window.setTimeout(refresh, ADMIN_TABLE_REFRESH_MS)
+    }
+
+    const refresh = async () => {
       const activeElement = document.activeElement
       const isEditingFilter = activeElement?.closest?.('.admin-resource-view') && activeElement.matches('input, select, textarea')
-      if (refreshInFlightRef.current || editor || selectedRecord || isEditingFilter || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]')) return
+      if (refreshInFlightRef.current || editor || selectedRecord || isEditingFilter || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]')) {
+        scheduleRefresh()
+        return
+      }
       refreshInFlightRef.current = true
       try {
         const result = await getAdminResource(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
-        setPayload(result)
-        setLastUpdatedAt(new Date())
-        setRefreshState('connected')
+        if (!cancelled) {
+          setPayload(result)
+          setLastUpdatedAt(new Date())
+          setRefreshState('connected')
+        }
       } catch {
-        setRefreshState('stale')
+        if (!cancelled) setRefreshState('stale')
       } finally {
         refreshInFlightRef.current = false
+        scheduleRefresh()
       }
-    }, 2000)
-    return () => window.clearInterval(refreshTimer)
+    }
+
+    scheduleRefresh()
+    return () => {
+      cancelled = true
+      window.clearTimeout(refreshTimer)
+    }
   }, [appliedFilter, appliedSearch, config.id, editor, pagination?.current_page, selectedRecord, trashed])
 
   async function chooseResource(resource) {
@@ -1265,7 +1456,12 @@ function ResourceView({ groupKey }) {
       </div>
 
       <div className="admin-content-toolbar">
-        <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed, page: 1 }) }}><AppIcon name="search" /><input placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />{config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}{!config.readOnly && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); load(config.id, { search: appliedSearch, status: appliedFilter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}<button type="submit">Filter</button></form>
+        <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed, page: 1 }) }}>
+          <input aria-label={`Search ${config.label}`} placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />
+          {config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => { const value = event.target.value; setFilter(value); setAppliedSearch(search); setAppliedFilter(value); load(config.id, { search, status: value, trashed, page: 1 }) }}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}
+          {!config.readOnly && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}
+          <button className="admin-search-submit" type="submit" aria-label={`Search ${config.label}`} title="Search"><AppIcon name="search" /></button>
+        </form>
         {!config.moderation && !config.readOnly && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
         {config.readOnly && <span className="admin-readonly-label"><AppIcon name="shield" />Read-only audit evidence</span>}
         <span className={`admin-refresh-state is-${refreshState}`}><i />{refreshState === 'stale' ? 'Update delayed' : 'Live data'}<small>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Connecting…'}</small></span>
@@ -1273,7 +1469,7 @@ function ResourceView({ groupKey }) {
 
       {error && <div className="admin-inline-error">{error}</div>}
       <section className="admin-panel admin-table-panel">
-        {loading ? <div className="admin-resource-loading"><span /><strong>Loading records…</strong></div> : (
+        {loading ? <div className="admin-resource-loading"><AdminTableSkeleton embedded /></div> : (
           <table className="admin-table admin-resource-table">
             <thead><tr><th className="admin-index-column">#</th>{config.columns.map((column) => <th key={column.label}>{column.label}</th>)}{!config.readOnly && <th>Status</th>}<th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>{records.map((record, index) => (
@@ -1289,7 +1485,7 @@ function ResourceView({ groupKey }) {
         {!loading && !records.length && <div className="admin-empty"><AppIcon name={config.icon} /><strong>No records found</strong><span>This database table does not have matching records yet.</span></div>}
       </section>
 
-      {pagination && <div className="admin-pagination"><button disabled={!pagination.prev_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination.current_page - 1 })}><AppIcon name="arrowBack" />Previous</button><span>Page {pagination.current_page} of {pagination.last_page}</span><button disabled={!pagination.next_page_url} type="button" onClick={() => load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination.current_page + 1 })}>Next<AppIcon name="arrowForward" /></button></div>}
+      {pagination && <AdminPagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={(page) => load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page })} />}
       {selectedRecord && <ResourceDetailsDrawer config={config} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onRestore={() => restoreRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
       {editor && <ResourceEditor config={config} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, trashed })]); setLookups(lookupPayload.data ?? {}) }} />}
     </div>
@@ -1323,6 +1519,8 @@ export function AdminPage({ user, onLogout }) {
   const [refreshState, setRefreshState] = useState('connecting')
   const contentFiltersRef = useRef({})
   const userFiltersRef = useRef({})
+  const usersPayloadRef = useRef(null)
+  const usersRequestRef = useRef(null)
   const trendDaysRef = useRef(7)
   const refreshInFlightRef = useRef(false)
   const initialSectionRef = useRef(section)
@@ -1340,6 +1538,7 @@ export function AdminPage({ user, onLogout }) {
     simulations: ['Simulation records', 'Review simulation runs and harvested plant histories.'],
     activity: ['Administrator activity', 'Review an immutable audit trail of management actions.'],
   }[section]), [section])
+  const refreshIntervalSeconds = section === 'dashboard' ? ADMIN_DASHBOARD_REFRESH_MS / 1000 : ADMIN_TABLE_REFRESH_MS / 1000
 
   const loadDashboard = useCallback(async ({ silent = false, days = trendDaysRef.current } = {}) => {
     trendDaysRef.current = days
@@ -1372,19 +1571,35 @@ export function AdminPage({ user, onLogout }) {
     }
   }, [])
 
-  const loadUsers = useCallback(async (filters, { silent = false } = {}) => {
-    if (filters) userFiltersRef.current = filters
+  const loadUsers = useCallback(async (filters, { silent = false, affectRefreshState = true } = {}) => {
     const activeFilters = filters ?? userFiltersRef.current
-    if (!silent) { setStatus('loading'); setError('') }
+    const normalizedFilters = {
+      search: activeFilters.search ?? '',
+      role: activeFilters.role ?? '',
+      page: Number(activeFilters.page ?? 1),
+    }
+    userFiltersRef.current = normalizedFilters
+    const requestKey = JSON.stringify(normalizedFilters)
+    if (!silent) { setStatus(usersPayloadRef.current ? 'ready' : 'loading'); setError('') }
+
     try {
-      const payload = await getAdminUsers(activeFilters)
+      if (!usersRequestRef.current || usersRequestRef.current.key !== requestKey) {
+        usersRequestRef.current = { key: requestKey, promise: getAdminUsers(normalizedFilters) }
+      }
+      const activeRequest = usersRequestRef.current.promise
+      const payload = await activeRequest
+      usersPayloadRef.current = payload
       setUsers(payload)
-      setLastUpdatedAt(new Date())
-      setRefreshState('connected')
+      if (affectRefreshState) {
+        setLastUpdatedAt(new Date())
+        setRefreshState('connected')
+      }
       if (!silent) setStatus('ready')
     } catch (loadError) {
-      setRefreshState('stale')
+      if (affectRefreshState) setRefreshState('stale')
       if (!silent) { setError(loadError.message || 'Unable to load users.'); setStatus('error') }
+    } finally {
+      if (usersRequestRef.current?.key === requestKey) usersRequestRef.current = null
     }
   }, [])
 
@@ -1429,10 +1644,29 @@ export function AdminPage({ user, onLogout }) {
   }, [loadSection])
 
   useEffect(() => {
-    const refreshTimer = window.setInterval(async () => {
+    if (section !== 'dashboard' || usersPayloadRef.current) return undefined
+    const preloadTimer = window.setTimeout(() => {
+      loadUsers(undefined, { silent: true, affectRefreshState: false })
+    }, 1200)
+    return () => window.clearTimeout(preloadTimer)
+  }, [loadUsers, section])
+
+  useEffect(() => {
+    let cancelled = false
+    let refreshTimer
+    const refreshDelay = section === 'dashboard' ? ADMIN_DASHBOARD_REFRESH_MS : ADMIN_TABLE_REFRESH_MS
+
+    const scheduleRefresh = () => {
+      if (!cancelled) refreshTimer = window.setTimeout(refresh, refreshDelay)
+    }
+
+    const refresh = async () => {
       const activeElement = document.activeElement
       const isEditing = activeElement?.matches?.('input, select, textarea, [contenteditable="true"]')
-      if (refreshInFlightRef.current || isEditing || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]') || document.querySelector('.admin-users-table tr.is-busy')) return
+      if (refreshInFlightRef.current || isEditing || document.visibilityState === 'hidden' || document.querySelector('[role="dialog"]') || document.querySelector('.admin-users-table tr.is-busy')) {
+        scheduleRefresh()
+        return
+      }
       refreshInFlightRef.current = true
       try {
         if (section === 'dashboard') await loadDashboard({ silent: true })
@@ -1440,9 +1674,15 @@ export function AdminPage({ user, onLogout }) {
         if (section === 'users') await loadUsers(undefined, { silent: true })
       } finally {
         refreshInFlightRef.current = false
+        scheduleRefresh()
       }
-    }, 2000)
-    return () => window.clearInterval(refreshTimer)
+    }
+
+    scheduleRefresh()
+    return () => {
+      cancelled = true
+      window.clearTimeout(refreshTimer)
+    }
   }, [loadContents, loadDashboard, loadUsers, section])
 
   function changeTrendPeriod(days) {
@@ -1459,7 +1699,7 @@ export function AdminPage({ user, onLogout }) {
           {navigationGroups.map((group) => (
             <div className="admin-nav-group" key={group.label}>
               <small>{group.label}</small>
-              {group.items.map((item) => <button className={section === item.id ? 'is-active' : ''} type="button" key={item.id} title={preferences.collapsed ? item.label : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{item.label}</b><span /></button>)}
+              {group.items.filter((item) => !hiddenAdminNavigationItems.has(item.id)).map((item) => <button className={section === item.id ? 'is-active' : ''} type="button" key={item.id} title={preferences.collapsed ? item.label : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{item.label}</b><span /></button>)}
             </div>
           ))}
         </nav>
@@ -1470,7 +1710,7 @@ export function AdminPage({ user, onLogout }) {
         <header className="admin-topbar">
           <div><small>ADMINISTRATION / {section.toUpperCase()}</small><h1>{sectionMeta[0]}</h1><p>{sectionMeta[1]}</p></div>
           <div className="admin-topbar__actions">
-            <span className={`admin-system-status is-${refreshState}`}><AppIcon name="live" /><i />{refreshState === 'connecting' ? 'Connecting data' : refreshState === 'stale' ? 'Update delayed' : 'Live data'}<em>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · Auto 2s` : 'Auto refresh · 2s'}</em></span>
+            <span className={`admin-system-status is-${refreshState}`}><AppIcon name="live" /><i />{refreshState === 'connecting' ? 'Connecting data' : refreshState === 'stale' ? 'Update delayed' : 'Live data'}<em>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · Auto ${refreshIntervalSeconds}s` : `Auto refresh · ${refreshIntervalSeconds}s`}</em></span>
             <div className="admin-language-switch" role="group" aria-label="Interface language"><AppIcon name="translate" /><button className={language === 'en' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('en')} aria-pressed={language === 'en'}>EN</button><button className={language === 'th' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('th')} aria-pressed={language === 'th'}>ไทย</button></div>
             <button className="admin-text-size-button" type="button" onClick={() => updatePreferences({ textSize: preferences.textSize === 'large' ? 'default' : 'large' })} aria-label={preferences.textSize === 'large' ? 'Use standard text size' : 'Use large text size'} aria-pressed={preferences.textSize === 'large'} title={preferences.textSize === 'large' ? 'Standard text size' : 'Large text size'}>{preferences.textSize === 'large' ? 'A' : 'A+'}</button>
             <button type="button" onClick={() => updatePreferences({ theme: preferences.theme === 'dark' ? 'light' : 'dark' })} aria-label={preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme'} title={preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme'}><AppIcon name={preferences.theme === 'dark' ? 'lightMode' : 'darkMode'} /></button>
@@ -1479,7 +1719,7 @@ export function AdminPage({ user, onLogout }) {
         </header>
 
         <div className="admin-content">
-          {status === 'loading' && <div className="admin-loading"><span /><strong>Loading management data…</strong></div>}
+          {status === 'loading' && <div className="admin-loading">{section === 'dashboard' ? <AdminDashboardSkeleton /> : <AdminTableSkeleton />}</div>}
           {status === 'error' && <div className="admin-error"><AppIcon name="shield" /><h2>Unable to load this section</h2><p>{error}</p><button type="button" onClick={() => openSection(section)}>Try again</button></div>}
           {status === 'ready' && section === 'dashboard' && <DashboardView data={dashboard} days={trendDays} onChangeDays={changeTrendPeriod} onOpenSection={openSection} />}
           {status === 'ready' && section === 'contents' && <ContentsView contents={contents} onRefresh={loadContents} />}
