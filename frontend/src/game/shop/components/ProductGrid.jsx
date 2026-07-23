@@ -1,5 +1,5 @@
 import { ProductCard } from './ProductCard'
-import { AppIcon } from '../../icons/IconifyIcon'
+import { AppIcon } from '../../icons/FontAwesomeIcon'
 
 function ShopState({ actionLabel, description, icon, onAction, title }) {
   return (

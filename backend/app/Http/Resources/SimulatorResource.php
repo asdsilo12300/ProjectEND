@@ -40,6 +40,7 @@ class SimulatorResource extends JsonResource
             'shared_at' => $this->shared_at,
             'live_snapshot_url' => $this->publicUrl($this->live_snapshot_url),
             'updated_at' => $this->updated_at,
+            'active_seconds' => max(0, (int) ($this->active_seconds ?? 0)),
             'owner' => $this->whenLoaded('user', fn () => [
                 'id' => $this->user->id,
                 'username' => $this->user->username,

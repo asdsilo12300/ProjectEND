@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AppIcon } from '../game/icons/FontAwesomeIcon'
 
 const supportedDependencyExtensions = new Set(['bin', 'png', 'jpg', 'jpeg', 'webp'])
 
@@ -115,11 +116,13 @@ export function ModelBundleField({ label, value, required = false, disabled = fa
         </div>
         <div className="admin-model-bundle-actions">
           <label className="admin-file-button">
-            Choose files
+            <AppIcon name="uploadFile" />
+            <span>Choose files</span>
             <input accept=".gltf,.bin,.png,.jpg,.jpeg,.webp" disabled={disabled} multiple type="file" onChange={(event) => { choosePackage(event.target.files); event.target.value = '' }} />
           </label>
           <label className="admin-file-button is-secondary">
-            Choose folder
+            <AppIcon name="folderOpen" />
+            <span>Choose folder</span>
             <input disabled={disabled} multiple ref={folderInputRef} type="file" onChange={(event) => { choosePackage(event.target.files); event.target.value = '' }} />
           </label>
           {bundle?.model && <button disabled={disabled} type="button" onClick={() => { setError(''); setInspection(null); onChange(null) }}>Clear</button>}

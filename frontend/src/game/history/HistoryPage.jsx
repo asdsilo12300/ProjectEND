@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { deletePlantHistory, getPlantHistories, getToken, resolveAssetUrl, updatePlantHistoryVisibility } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
-import { AppIcon } from '../icons/IconifyIcon'
+import { ParticleNetworkBackground } from '../components/ParticleNetworkBackground'
+import { AppIcon } from '../icons/FontAwesomeIcon'
+import { formatPlantDuration } from '../../utils/plantDuration'
 
 const historyMessages = {
   en: {
@@ -143,8 +145,7 @@ function saveStage(save, language, copy) {
 
 function saveSubtitle(save, language, copy) {
   if (save.subtitle) return save.subtitle
-  const days = Number(save.duration_days || 1)
-  return `${saveStage(save, language, copy)} · ${copy.day(days)}`
+  return `${saveStage(save, language, copy)} · ${formatPlantDuration(save, language)}`
 }
 
 function localizedField(save, field, language) {
@@ -219,7 +220,7 @@ function SaveCard({ copy, language, onDelete, onOpen, onToggleVisibility, save, 
             <div className="min-w-0">
               <h2 className="truncate text-base font-black text-slate-50">{saveTitle(save, language, copy)}</h2>
               <p className="mt-1 truncate text-xs text-[#8eeab4]">{saveSubtitle(save, language, copy)}</p>
-              <p className="mt-1.5 text-[11px] text-slate-500">{formatDate(save.created_at || save.updated_at || save.started_at, language, copy)}</p>
+              <p className="mt-1.5 text-xs text-slate-500">{formatDate(save.created_at || save.updated_at || save.started_at, language, copy)}</p>
             </div>
           </div>
           <div className="mt-4 flex gap-2">
@@ -284,7 +285,7 @@ function HistoryDetailModal({ copy, language, onClose, onDelete, onOpenGameState
         </div>
         <div className="grid gap-5 p-4 sm:p-6 md:grid-cols-[1fr_220px]">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#75dca0]">{copy.savedPlant}</p>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#75dca0]">{copy.savedPlant}</p>
             <h2 className="mt-1 break-words text-2xl font-black text-white" id="history-detail-title">{saveTitle(save, language, copy)}</h2>
             <p className="mt-1 text-sm leading-6 text-slate-400">{saveSubtitle(save, language, copy)} · {formatDate(save.created_at, language, copy)}</p>
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><strong className="text-sm text-lime-50">{copy.analysis}</strong><p className="mt-2 text-sm leading-6 text-slate-300">{analysis || copy.noAnalysis}</p></div>
@@ -296,7 +297,7 @@ function HistoryDetailModal({ copy, language, onClose, onDelete, onOpenGameState
             ) : null}
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.score}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{score}</strong></div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.health}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{health}%</strong></div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.duration}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{copy.day(save.duration_days ?? 1)}</strong></div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.duration}</span><strong className="mt-1 block text-xl leading-snug text-[#b8f5ce]">{formatPlantDuration(save, language)}</strong></div>
           </div>
         </div>
       </div>
@@ -459,12 +460,13 @@ export function HistoryPage({ onOpenGameState, onStartGrowing }) {
   }
 
   return (
-    <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7" aria-label={copy.pageLabel}>
-      <div className="mx-auto max-w-[1220px]">
+    <section className="particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7" aria-label={copy.pageLabel}>
+      <ParticleNetworkBackground variant="history" />
+      <div className="relative z-[1] mx-auto max-w-[1220px]">
         <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-start gap-3.5">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#55dc91]/12 text-[#78eda8] ring-1 ring-[#55dc91]/20"><AppIcon className="h-6 w-6" name="history" /></span>
-            <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#75dca0]">{copy.eyebrow}</p><h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">{copy.title}</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{copy.subtitle}</p></div>
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#6ca7ef]/12 text-[#91b9f4] ring-1 ring-[#6ca7ef]/25"><AppIcon className="h-6 w-6" name="history" /></span>
+            <div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#91b9f4]">{copy.eyebrow}</p><h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">{copy.title}</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{copy.subtitle}</p></div>
           </div>
           <span className="text-xs font-semibold text-slate-500">{copy.recordCount(saves.length)}</span>
         </header>

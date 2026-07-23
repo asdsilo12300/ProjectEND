@@ -3,7 +3,7 @@ import { pestChances } from '../data/gameData'
 import { Panel } from '../components/Panel'
 import { PestChance } from '../components/PestChance'
 import { resolveAssetUrl } from '../../lib/api'
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 
 const stageStops = [
   { label: 'Seedling', value: 0 },
@@ -154,7 +154,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, progres
       <div className="mb-2 flex items-center justify-between">
         <div>
           <strong className="text-xs text-lime-50">Growth timeline</strong>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-xs text-slate-400">
             {cycleStatus === 'updating'
               ? 'Applying simulation update…'
               : cycleSeconds != null
@@ -162,7 +162,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, progres
                 : `${pace.detail}${rate > 0 ? ` · +${Math.round(rate)} pts/cycle` : ''}`}
           </p>
         </div>
-        <span className="shrink-0 whitespace-nowrap rounded bg-[#9bcf82]/12 px-2 py-1 text-[10px] font-bold leading-none text-lime-100">{pace.label}</span>
+        <span className="shrink-0 whitespace-nowrap rounded bg-[#9bcf82]/12 px-2 py-1 text-xs font-bold leading-none text-lime-100">{pace.label}</span>
       </div>
       <svg className="h-24 w-full" viewBox="0 0 300 116" role="img" aria-label="Plant growth timeline">
         <defs>
@@ -180,7 +180,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, progres
           return (
             <g key={stage.label}>
               <circle cx={x} cy="98" r={active ? 4 : 3} fill={active ? '#d8f3c9' : 'rgba(216,243,201,.28)'} />
-              <text x={x} y="113" textAnchor="middle" className="fill-slate-400 text-[9px]">
+              <text x={x} y="113" textAnchor="middle" className="fill-slate-400 text-xs">
                 {stage.label}
               </text>
             </g>
@@ -254,7 +254,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
         </div>
 
         <div className="mb-3 rounded-md border border-lime-100/10 bg-[#9bcf82]/[0.07] px-3 py-2.5">
-          <span className="block text-[10px] font-black uppercase tracking-[0.1em] text-[#9bcf82]">Recommended next action</span>
+          <span className="block text-xs font-black uppercase tracking-[0.1em] text-[#9bcf82]">Recommended next action</span>
           <span className="mt-1 block text-xs leading-5 text-slate-200">{nextAction}</span>
         </div>
 
@@ -263,7 +263,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
         <div className="mt-3 border-t border-lime-100/10 pt-3">
           <div className="lab-pest-monitor-heading mb-2 flex items-center justify-between">
             <strong className="text-xs text-lime-50">Pest monitoring</strong>
-            <span className="text-[10px] text-slate-400">risk · {cycleSeconds != null ? `updates in ${cycleSeconds}s` : 'next update'}</span>
+            <span className="text-xs text-slate-400">risk · {cycleSeconds != null ? `updates in ${cycleSeconds}s` : 'next update'}</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {visiblePestChances.map((pest) => (

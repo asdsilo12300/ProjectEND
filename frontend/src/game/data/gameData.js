@@ -11,6 +11,7 @@ export const imageAssets = {
   fertilizer: storageAsset('icon picture/fertilizer-Photoroom.png'),
   soil: storageAsset('icon picture/Soil moisture-Photoroom.png'),
   air: storageAsset('icon picture/Air humidity-Photoroom.png'),
+  soilTemp: storageAsset('icon picture/soil-temp.jpg'),
   temp: storageAsset('icon picture/temp-Photoroom.png'),
   aphid: storageAsset('icon picture/aphid-Photoroom.png'),
   snail: storageAsset('icon picture/snails-Photoroom.png'),
@@ -36,6 +37,7 @@ export const climateIcons = {
   fertilizer: { icon: 'plus', color: '#9bcf82', imageUrl: imageAssets.fertilizer },
   soil: { icon: 'soil', color: '#b58a5a', imageUrl: imageAssets.soil },
   air: { icon: 'wind', color: '#9fd7ff', imageUrl: imageAssets.air },
+  soilTemp: { icon: 'temp', color: '#d2a06d', imageUrl: imageAssets.soilTemp },
   temp: { icon: 'temp', color: '#f29b72', imageUrl: imageAssets.temp },
 }
 

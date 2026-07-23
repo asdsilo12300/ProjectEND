@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Panel } from '../components/Panel'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 import { createSimulatorComment, getSimulatorComments, resolveAssetUrl } from '../../lib/api'
+import { getAppLanguage } from '../../i18n/appI18n'
 
 function displayName(user) {
   return user?.username ?? user?.email?.split('@')[0] ?? 'Learner'
@@ -39,12 +40,23 @@ function postedLabel(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return 'Just now'
 
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(getAppLanguage() === 'th' ? 'th-TH' : 'en-GB', {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function exactPostedLabel(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return new Intl.DateTimeFormat(getAppLanguage() === 'th' ? 'th-TH' : 'en-GB', {
+    dateStyle: 'full',
+    timeStyle: 'medium',
+  }).format(date)
 }
 
 export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, windows, setWindows, title = 'Comments' }) {
@@ -139,7 +151,16 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
                   <CommentAvatar className="h-8 w-8" user={author} />
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-lime-50">{displayName(author)}</h3>
-                    <p className="text-[11px] text-slate-400">{author.role ?? 'Learner'} · {postedLabel(comment.created_at)}</p>
+                    <p className="text-xs text-slate-400">
+                      {author.role ?? 'Learner'} ·{' '}
+                      <time
+                        className="cursor-help decoration-dotted underline-offset-4 hover:text-slate-200 hover:underline"
+                        dateTime={comment.created_at || undefined}
+                        title={exactPostedLabel(comment.created_at)}
+                      >
+                        {postedLabel(comment.created_at)}
+                      </time>
+                    </p>
                   </div>
                 </div>
                 <p className="whitespace-pre-wrap text-xs leading-5 text-slate-200">{comment.comment_text}</p>
@@ -148,7 +169,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
           })}
         </div>
 
-        {error && <p className="mt-2 rounded-md border border-red-300/20 bg-red-400/10 px-3 py-2 text-[11px] text-red-100">{error}</p>}
+        {error && <p className="mt-2 rounded-md border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100">{error}</p>}
 
         <form className="mt-3 flex items-end gap-2.5 rounded-lg border border-sky-200/15 bg-[#122026]/86 p-2.5" onSubmit={submitComment}>
           <CommentAvatar className="mb-1 h-8 w-8" user={avatarUser} />

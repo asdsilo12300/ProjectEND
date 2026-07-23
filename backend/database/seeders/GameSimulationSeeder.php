@@ -182,6 +182,28 @@ class GameSimulationSeeder extends Seeder
                 'is_active' => true,
                 'price_coin' => 50,
             ],
+            [
+                'name' => 'Aphid Prank',
+                'type' => 'cosmetic',
+                'description' => 'Send aphids to one active plant in a friend garden.',
+                'image_url' => '/storage/icon%20picture/aphid-Photoroom.png',
+                'effect_type' => 'friend_pest:aphid',
+                'effect_value' => 1,
+                'rarity' => 'common',
+                'is_active' => true,
+                'price_coin' => 100,
+            ],
+            [
+                'name' => 'Snail Prank',
+                'type' => 'cosmetic',
+                'description' => 'Send a snail to one active plant in a friend garden.',
+                'image_url' => '/storage/icon%20picture/snails-Photoroom.png',
+                'effect_type' => 'friend_pest:snail',
+                'effect_value' => 1,
+                'rarity' => 'common',
+                'is_active' => true,
+                'price_coin' => 100,
+            ],
         ];
 
         foreach ($items as $itemData) {

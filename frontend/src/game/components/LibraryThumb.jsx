@@ -1,4 +1,4 @@
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 
 const libraryIconMap = {
   sprout: 'sprout',
@@ -6,6 +6,8 @@ const libraryIconMap = {
   leaf: 'leaf',
   fern: 'fern',
   hand: 'tool',
+  bug: 'bug',
+  snail: 'snail',
 }
 
 function TargetBadges({ targets }) {

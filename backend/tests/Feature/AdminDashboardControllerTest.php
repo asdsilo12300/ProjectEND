@@ -43,7 +43,7 @@ class AdminDashboardControllerTest extends TestCase
         $this->assertArrayHasKey('system_overview', $data);
         $this->assertArrayHasKey('trend', $data);
         $this->assertArrayHasKey('recent_users', $data);
-        $this->assertArrayHasKey('recent_contents', $data);
+        $this->assertArrayHasKey('recent_user_activities', $data);
         $this->assertSame(7, $data['trend_days']);
         $this->assertCount(7, $data['trend']);
 
@@ -77,6 +77,35 @@ class AdminDashboardControllerTest extends TestCase
         $this->assertSame('models', $attentionByKey['missing_model_assets']['section']);
     }
 
+    public function test_dashboard_can_group_activity_by_selected_day_month_and_year(): void
+    {
+        $day = app(AdminDashboardController::class)
+            ->index(Request::create('/api/admin/dashboard?period=day&value=2026-07-16', 'GET'))
+            ->getData(true)['data'];
+        $month = app(AdminDashboardController::class)
+            ->index(Request::create('/api/admin/dashboard?period=month&value=2026-07', 'GET'))
+            ->getData(true)['data'];
+        $year = app(AdminDashboardController::class)
+            ->index(Request::create('/api/admin/dashboard?period=year&value=2026', 'GET'))
+            ->getData(true)['data'];
+
+        $this->assertSame('day', $day['trend_period']);
+        $this->assertSame('2026-07-16', $day['trend_value']);
+        $this->assertCount(24, $day['trend']);
+        $this->assertSame('00:00', $day['trend'][0]['label']);
+        $this->assertSame('23:00', $day['trend'][23]['label']);
+
+        $this->assertSame('month', $month['trend_period']);
+        $this->assertSame('2026-07', $month['trend_value']);
+        $this->assertCount(31, $month['trend']);
+
+        $this->assertSame('year', $year['trend_period']);
+        $this->assertSame('2026', $year['trend_value']);
+        $this->assertCount(12, $year['trend']);
+        $this->assertSame('Jan', $year['trend'][0]['label']);
+        $this->assertSame('Dec', $year['trend'][11]['label']);
+    }
+
     public function test_dashboard_returns_only_the_five_most_recent_admin_actions_with_admin_context(): void
     {
         $response = app(AdminDashboardController::class)->index(
@@ -91,6 +120,53 @@ class AdminDashboardControllerTest extends TestCase
         );
         $this->assertSame('admin-user', $actions[0]['admin']['username']);
         $this->assertSame('admin@example.test', $actions[0]['admin']['email']);
+    }
+
+    public function test_dashboard_returns_a_filterable_chronological_user_activity_feed(): void
+    {
+        DB::table('posts')->insert([
+            'id' => 20,
+            'user_id' => 2,
+            'caption' => 'My newest plant update',
+            'created_at' => $this->now->subMinutes(4),
+            'updated_at' => $this->now->subMinutes(4),
+        ]);
+        DB::table('comments')->insert([
+            'id' => 20,
+            'user_id' => 2,
+            'comment_text' => 'The leaves look healthy.',
+            'status' => 'visible',
+            'created_at' => $this->now->subMinutes(3),
+            'updated_at' => $this->now->subMinutes(3),
+        ]);
+        DB::table('post_likes')->insert([
+            'id' => 20,
+            'post_id' => 20,
+            'user_id' => 2,
+            'created_at' => $this->now->subMinutes(2),
+        ]);
+        DB::table('wallet_transactions')->insert([
+            'id' => 20,
+            'user_id' => 2,
+            'currency' => 'coin',
+            'amount' => -25,
+            'type' => 'spend',
+            'reference_type' => 'shop_item',
+            'created_at' => $this->now->subMinute(),
+        ]);
+        app(AdminDataCache::class)->clear();
+
+        $activities = app(AdminDashboardController::class)
+            ->index(Request::create('/api/admin/dashboard', 'GET'))
+            ->getData(true)['data']['recent_user_activities'];
+
+        $this->assertSame(
+            ['shop_purchase', 'post_liked', 'post_commented', 'post_created'],
+            array_slice(array_column($activities, 'type'), 0, 4),
+        );
+        $this->assertSame('suspended-user', $activities[0]['user']['username']);
+        $this->assertSame('inventory', $activities[0]['category']);
+        $this->assertSame('shop_item', $activities[0]['subject']);
     }
 
     public function test_dashboard_uses_a_compact_query_set_and_returns_identical_cached_data(): void
@@ -108,7 +184,7 @@ class AdminDashboardControllerTest extends TestCase
         $this->assertCount($coldQueryCount, DB::getQueryLog());
         $this->assertSame($first, $second);
         $this->assertCount(2, $second['data']['recent_users']);
-        $this->assertCount(2, $second['data']['recent_contents']);
+        $this->assertCount(2, $second['data']['recent_user_activities']);
     }
 
     private function seedDashboardData(): void
@@ -199,6 +275,10 @@ class AdminDashboardControllerTest extends TestCase
     private function buildSchema(): void
     {
         foreach ([
+            'wallet_transactions',
+            'item_usages',
+            'comment_likes',
+            'post_likes',
             'admin_activity_logs',
             'model_assets',
             'achievements',
@@ -235,6 +315,8 @@ class AdminDashboardControllerTest extends TestCase
 
         Schema::create('simulators', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('plant_id')->nullable();
             $table->string('status')->default('active');
             $table->timestamp('started_at')->nullable();
             $table->timestamps();
@@ -243,12 +325,16 @@ class AdminDashboardControllerTest extends TestCase
 
         Schema::create('plant_histories', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('plant_id')->nullable();
             $table->timestamp('created_at')->nullable();
             $table->softDeletes();
         });
 
         Schema::create('posts', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->text('caption')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -256,6 +342,8 @@ class AdminDashboardControllerTest extends TestCase
         foreach (['comments', 'simulator_comments'] as $tableName) {
             Schema::create($tableName, function (Blueprint $table): void {
                 $table->id();
+                $table->unsignedBigInteger('user_id')->nullable();
+                $table->text('comment_text')->nullable();
                 $table->string('status')->default('visible');
                 $table->timestamps();
                 $table->softDeletes();
@@ -274,8 +362,12 @@ class AdminDashboardControllerTest extends TestCase
         });
 
         foreach (['plants', 'pests'] as $tableName) {
-            Schema::create($tableName, function (Blueprint $table): void {
+            Schema::create($tableName, function (Blueprint $table) use ($tableName): void {
                 $table->id();
+                if ($tableName === 'plants') {
+                    $table->string('name_en')->nullable();
+                    $table->string('name_th')->nullable();
+                }
                 $table->softDeletes();
             });
         }
@@ -290,11 +382,45 @@ class AdminDashboardControllerTest extends TestCase
             'quests',
             'achievements',
         ] as $tableName) {
-            Schema::create($tableName, function (Blueprint $table): void {
+            Schema::create($tableName, function (Blueprint $table) use ($tableName): void {
                 $table->id();
+                if ($tableName === 'items') {
+                    $table->string('name')->nullable();
+                }
                 $table->softDeletes();
             });
         }
+
+        Schema::create('post_likes', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('post_id');
+            $table->unsignedBigInteger('user_id');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('comment_likes', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('comment_id');
+            $table->unsignedBigInteger('user_id');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('item_usages', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('item_id')->nullable();
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('wallet_transactions', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('currency');
+            $table->integer('amount');
+            $table->string('type');
+            $table->string('reference_type')->nullable();
+            $table->timestamp('created_at')->nullable();
+        });
 
         Schema::create('model_assets', function (Blueprint $table): void {
             $table->id();

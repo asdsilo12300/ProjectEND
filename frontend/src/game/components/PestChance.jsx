@@ -1,4 +1,4 @@
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 
 const pestIconMap = {
   snail: 'snail',
@@ -17,8 +17,8 @@ export function PestChance({ label, value, icon, color, imageUrl, active = false
             <AppIcon className="h-4 w-4" name={pestIconMap[icon] ?? 'pest'} />
           )}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-lime-50">{label}</span>
-        {active && <span className="rounded bg-amber-300/15 px-1 py-0.5 text-[8px] font-black tracking-wide text-amber-200">ACTIVE</span>}
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-lime-50">{label}</span>
+        {active && <span className="rounded bg-amber-300/15 px-1 py-0.5 text-xs font-black tracking-wide text-amber-200">ACTIVE</span>}
       </div>
       <div className="flex items-center gap-2">
         <div
@@ -31,7 +31,7 @@ export function PestChance({ label, value, icon, color, imageUrl, active = false
         >
           <div className="h-full rounded-[2px]" style={{ width: `${value}%`, backgroundColor: color }} />
         </div>
-        <strong className="w-7 text-right text-[11px] text-lime-50">{value}%</strong>
+        <strong className="w-7 text-right text-xs text-lime-50">{value}%</strong>
       </div>
     </div>
   )

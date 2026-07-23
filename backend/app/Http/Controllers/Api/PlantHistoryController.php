@@ -10,6 +10,7 @@ use App\Models\PlantHistory;
 use App\Models\Post;
 use App\Models\Simulator;
 use App\Services\MediaStorage;
+use App\Services\SimulationActivityTracker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -20,7 +21,10 @@ use Illuminate\Validation\Rule;
 
 class PlantHistoryController extends Controller
 {
-    public function __construct(private readonly MediaStorage $media) {}
+    public function __construct(
+        private readonly MediaStorage $media,
+        private readonly SimulationActivityTracker $activity,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -76,19 +80,26 @@ class PlantHistoryController extends Controller
                 ->latest('id')
                 ->first();
 
+            if ($lockedSimulator->status === 'active') {
+                $lockedSimulator->forceFill([
+                    ...$this->activity->attributes($lockedSimulator),
+                    'status' => 'completed',
+                    'share_visibility' => 'private',
+                    'state_version' => ((int) $lockedSimulator->state_version) + 1,
+                    'ended_at' => now(),
+                ])->save();
+            }
+
             if ($existingHistory) {
                 if ($existingHistory->trashed()) {
                     $existingHistory->restore();
                 }
 
-                if ($lockedSimulator->status !== 'completed') {
-                    $lockedSimulator->forceFill([
-                        'status' => 'completed',
-                        'share_visibility' => 'private',
-                        'state_version' => ((int) $lockedSimulator->state_version) + 1,
-                        'ended_at' => $lockedSimulator->ended_at ?? now(),
-                    ])->save();
-                }
+                $durationSeconds = $this->durationSeconds($lockedSimulator);
+                $existingHistory->forceFill([
+                    'duration_seconds' => $durationSeconds,
+                    'duration_days' => intdiv($durationSeconds, 86400),
+                ])->save();
 
                 Post::query()->where('simulator_id', $lockedSimulator->id)->delete();
 
@@ -103,14 +114,7 @@ class PlantHistoryController extends Controller
             $direction = $this->directionText($matchedRules, $activePestCount);
             $snapshotImageUrl = $data['snapshot_image_url'] ?? $this->storeSnapshotImage($data['snapshot_image_data'] ?? null, $lockedSimulator->id);
 
-            if ($lockedSimulator->status !== 'completed') {
-                $lockedSimulator->forceFill([
-                    'status' => 'completed',
-                    'share_visibility' => 'private',
-                    'state_version' => ((int) $lockedSimulator->state_version) + 1,
-                    'ended_at' => now(),
-                ])->save();
-            }
+            $durationSeconds = $this->durationSeconds($lockedSimulator);
 
             $history = PlantHistory::query()->create([
                 'simulator_id' => $lockedSimulator->id,
@@ -119,7 +123,8 @@ class PlantHistoryController extends Controller
                 'final_stage_id' => $lockedSimulator->current_stage_id,
                 'final_health' => (int) round((float) $lockedSimulator->health),
                 'total_score' => $score,
-                'duration_days' => $this->durationDays($lockedSimulator),
+                'duration_days' => intdiv($durationSeconds, 86400),
+                'duration_seconds' => $durationSeconds,
                 'visibility' => $data['visibility'] ?? 'private',
                 'snapshot_image_url' => $snapshotImageUrl,
                 'game_state' => $this->gameState($lockedSimulator),
@@ -275,13 +280,9 @@ class PlantHistoryController extends Controller
         return (int) min(100, max(0, round(($growthPercent * 0.45) + ($health * 0.35) + ($environmentFit * 0.20))));
     }
 
-    private function durationDays(Simulator $simulator): int
+    private function durationSeconds(Simulator $simulator): int
     {
-        if (! $simulator->started_at) {
-            return 1;
-        }
-
-        return max(1, (int) ceil(max(1, $simulator->started_at->diffInHours(now())) / 24));
+        return max(0, (int) ($simulator->active_seconds ?? 0));
     }
 
     private function matchedRules(Simulator $simulator): Collection

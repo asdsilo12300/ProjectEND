@@ -1,4 +1,4 @@
-import { AppIcon } from '../../icons/IconifyIcon'
+import { AppIcon } from '../../icons/FontAwesomeIcon'
 
 function formatPage(page) {
   return String(page).padStart(2, '0')

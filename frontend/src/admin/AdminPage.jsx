@@ -2,8 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
-import { AppIcon } from '../game/icons/IconifyIcon'
+import { AppIcon } from '../game/icons/FontAwesomeIcon'
 import { loadSettings, saveSettings } from '../game/settings/settingsPreferences'
+import { formatPlantDuration } from '../utils/plantDuration'
 import { ImageUploadField } from './ImageUploadField'
 import { ModelBundleField } from './ModelBundleField'
 import {
@@ -28,10 +29,24 @@ import {
 import './AdminPage.css'
 
 const ContentRichEditor = lazy(() => import('./ContentRichEditor').then((module) => ({ default: module.ContentRichEditor })))
+const ReactApexChart = lazy(() => import('react-apexcharts'))
 
 const adminPreferenceKey = 'plant-growth-admin-preferences'
 const ADMIN_DASHBOARD_REFRESH_MS = 15_000
 const ADMIN_TABLE_REFRESH_MS = 10_000
+
+function currentTrendValue(period, now = new Date()) {
+  const year = String(now.getFullYear())
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  if (period === 'day') return `${year}-${month}-${day}`
+  if (period === 'year') return year
+  return `${year}-${month}`
+}
+
+function defaultTrendSelection() {
+  return { period: 'month', value: currentTrendValue('month') }
+}
 
 function adminAlertTheme() {
   const isLight = document.querySelector('.admin-shell')?.classList.contains('admin-theme--light')
@@ -273,7 +288,7 @@ const resourceGroups = {
   ],
   simulations: [
     { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${row.plant?.name_en || row.plant?.name_th || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
-    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Grow time', render: (row) => formatPlantDuration(row, 'en', { compact: true }) }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   activity: [
     { id: 'activity-logs', label: 'Admin activity log', icon: 'history', readOnly: true, columns: [{ label: 'Administrator', render: (row) => row.admin?.username }, { label: 'Action', render: (row) => row.action }, { label: 'Target', render: (row) => `${row.target_type || 'system'} #${row.target_id || '—'}` }, { label: 'Time', render: (row) => formatDate(row.created_at, true) }] },
@@ -444,10 +459,10 @@ function MetricCard({ icon, label, value, detail, tone = 'green' }) {
 }
 
 const trendSeriesConfig = [
-  { key: 'users', label: 'New users', color: '#5bd296' },
-  { key: 'simulations', label: 'Simulations', color: '#6c94ef' },
-  { key: 'posts', label: 'Posts', color: '#e8be67' },
-  { key: 'harvests', label: 'Harvests', color: '#ee8b72' },
+  { key: 'users', label: 'New users', color: '#53e39a' },
+  { key: 'simulations', label: 'Simulations', color: '#6f9fff' },
+  { key: 'posts', label: 'Posts', color: '#f2c653' },
+  { key: 'harvests', label: 'Harvests', color: '#f1846d' },
 ]
 
 const overviewColors = {
@@ -457,6 +472,19 @@ const overviewColors = {
   activity: '#4cc7c9',
   community: '#ac87eb',
   audit: '#ee8b72',
+}
+
+const userActivityMeta = {
+  user_registered: { label: 'Joined the academy', filterLabel: 'New accounts', badge: 'Account', icon: 'person', tone: 'account' },
+  simulation_started: { label: 'Started a plant simulation', filterLabel: 'Simulation started', badge: 'Simulation', icon: 'controller', tone: 'simulation' },
+  plant_saved: { label: 'Saved a plant result', filterLabel: 'Plant results saved', badge: 'Result', icon: 'plant', tone: 'simulation' },
+  post_created: { label: 'Published a community post', filterLabel: 'Posts created', badge: 'Post', icon: 'chat', tone: 'community' },
+  post_commented: { label: 'Commented on a post', filterLabel: 'Post comments', badge: 'Comment', icon: 'chat', tone: 'community' },
+  simulation_commented: { label: 'Commented on a shared simulation', filterLabel: 'Game comments', badge: 'Comment', icon: 'controller', tone: 'community' },
+  post_liked: { label: 'Liked a community post', filterLabel: 'Post likes', badge: 'Like', icon: 'heart', tone: 'reaction' },
+  comment_liked: { label: 'Liked a comment', filterLabel: 'Comment likes', badge: 'Like', icon: 'thumbUp', tone: 'reaction' },
+  item_used: { label: 'Used an item in the lab', filterLabel: 'Items used', badge: 'Item', icon: 'tool', tone: 'inventory' },
+  shop_purchase: { label: 'Spent currency in the shop', filterLabel: 'Shop purchases', badge: 'Shop', icon: 'shop', tone: 'inventory' },
 }
 
 const attentionItemMeta = {
@@ -495,78 +523,221 @@ function AttentionCenter({ attention, onOpenSection }) {
   )
 }
 
-function TrendChart({ trend = [], activeSeries }) {
-  const selectedSeries = trendSeriesConfig.filter((series) => activeSeries.includes(series.key))
-  const maximum = Math.max(1, ...trend.flatMap((day) => selectedSeries.map((series) => Number(day[series.key] ?? 0))))
+function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = '', theme = 'dark' }) {
+  const selectedSeries = useMemo(
+    () => trendSeriesConfig.filter((series) => activeSeries.includes(series.key)),
+    [activeSeries],
+  )
   const seriesLabel = selectedSeries.map((series) => series.label).join(', ')
-  const chartWidth = Math.max(680, trend.length * 44)
-  const chartHeight = 320
-  const plotTop = 14
-  const plotBottom = 42
-  const plotLeft = 22
-  const plotRight = 22
-  const plotHeight = chartHeight - plotTop - plotBottom
-  const plotWidth = chartWidth - plotLeft - plotRight
-  const baseline = plotTop + plotHeight
-  const xForIndex = (index) => trend.length <= 1 ? chartWidth / 2 : plotLeft + (index / (trend.length - 1)) * plotWidth
-  const yForValue = (value) => plotTop + plotHeight - (Number(value ?? 0) / maximum) * plotHeight
-  const pointsForSeries = (series) => trend.map((day, index) => ({
-    date: day.date,
-    label: day.label,
-    value: Number(day[series.key] ?? 0),
-    x: xForIndex(index),
-    y: yForValue(day[series.key]),
-  }))
-  const linePath = (points) => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
-  const formatTick = (value) => Number.isInteger(value) ? value : value.toFixed(1)
+  const isLight = theme === 'light'
+  const parseTimestamp = (value, index) => {
+    const normalized = typeof value === 'string' ? value.replace(' ', 'T') : value
+    const timestamp = new Date(normalized).getTime()
+    return Number.isFinite(timestamp) ? timestamp : Date.UTC(2000, 0, index + 1)
+  }
+  const chartSeries = useMemo(() => selectedSeries.map((series) => ({
+    name: series.label,
+    data: trend.map((entry, index) => ({
+      x: parseTimestamp(entry.date, index),
+      y: Number(entry[series.key] ?? 0),
+    })),
+  })), [selectedSeries, trend])
+  const visibleMaximum = useMemo(() => {
+    const highestValue = Math.max(
+      0,
+      ...selectedSeries.flatMap((series) => trend.map((entry) => Number(entry[series.key] ?? 0))),
+    )
+    if (highestValue <= 10) return 10
+    return Math.min(100, Math.ceil(highestValue / 10) * 10)
+  }, [selectedSeries, trend])
+  const options = useMemo(() => {
+    const axisDate = new Intl.DateTimeFormat('en-US', period === 'day'
+      ? { hour: '2-digit', minute: '2-digit' }
+      : period === 'year'
+        ? { month: 'short' }
+        : { day: 'numeric', month: 'short' })
+    const tooltipDate = new Intl.DateTimeFormat('en-US', period === 'day'
+      ? { dateStyle: 'medium', timeStyle: 'short' }
+      : period === 'year'
+        ? { month: 'long', year: 'numeric' }
+        : { day: 'numeric', month: 'long', year: 'numeric' })
+
+    return {
+      chart: {
+        id: 'admin-academy-growth-chart',
+        type: 'line',
+        height: '100%',
+        background: 'transparent',
+        fontFamily: 'Inter, "Noto Sans Thai", sans-serif',
+        foreColor: isLight ? '#526259' : '#7f8d84',
+        animations: {
+          enabled: true,
+          easing: 'easeinout',
+          speed: 520,
+          dynamicAnimation: { enabled: true, speed: 320 },
+        },
+        toolbar: {
+          show: true,
+          autoSelected: 'zoom',
+          tools: {
+            download: false,
+            selection: false,
+            zoom: true,
+            zoomin: true,
+            zoomout: true,
+            pan: true,
+            reset: true,
+          },
+        },
+        zoom: {
+          enabled: true,
+          type: 'x',
+          autoScaleYaxis: false,
+          allowMouseWheelZoom: true,
+        },
+      },
+      colors: selectedSeries.map((series) => series.color),
+      series: chartSeries,
+      stroke: {
+        curve: 'smooth',
+        lineCap: 'round',
+        colors: selectedSeries.map((series) => series.color),
+        width: 5,
+      },
+      dataLabels: { enabled: false },
+      markers: {
+        size: 0,
+        colors: selectedSeries.map((series) => series.color),
+        strokeWidth: 2,
+        strokeColors: isLight ? '#ffffff' : '#131915',
+        hover: { size: 7, sizeOffset: 0 },
+      },
+      grid: {
+        show: true,
+        borderColor: isLight ? 'rgba(25,52,37,.18)' : 'rgba(225,240,230,.17)',
+        strokeDashArray: 5,
+        padding: { left: 12, right: 18, top: 18, bottom: 6 },
+      },
+      fill: {
+        type: 'solid',
+        colors: selectedSeries.map((series) => series.color),
+        opacity: 1,
+      },
+      legend: { show: false },
+      tooltip: {
+        enabled: true,
+        shared: true,
+        intersect: false,
+        followCursor: false,
+        theme: isLight ? 'light' : 'dark',
+        onDatasetHover: {
+          highlightDataSeries: false,
+        },
+        x: {
+          show: true,
+          formatter: (value) => tooltipDate.format(new Date(Number(value))),
+        },
+        y: {
+          formatter: (value) => `${Number(value ?? 0).toLocaleString()} records`,
+        },
+        marker: { show: true },
+      },
+      xaxis: {
+        type: 'datetime',
+        tickAmount: trend.length > 20 ? 10 : Math.max(2, trend.length - 1),
+        labels: {
+          show: true,
+          hideOverlappingLabels: true,
+          rotate: 0,
+          style: {
+            colors: isLight ? '#405248' : '#9ba9a1',
+            fontSize: '11px',
+            fontWeight: 650,
+          },
+          formatter: (value, timestamp) => axisDate.format(new Date(Number(timestamp ?? value))),
+        },
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+        crosshairs: {
+          show: true,
+          position: 'back',
+          stroke: {
+            color: isLight ? 'rgba(35,80,51,.28)' : 'rgba(210,228,217,.32)',
+            width: 1,
+            dashArray: 4,
+          },
+        },
+        tooltip: { enabled: false },
+      },
+      yaxis: {
+        show: true,
+        min: 0,
+        max: visibleMaximum,
+        tickAmount: 5,
+        forceNiceScale: false,
+        decimalsInFloat: 0,
+        title: {
+          text: 'Records',
+          style: {
+            color: isLight ? '#526259' : '#718078',
+            fontSize: '11px',
+            fontWeight: 700,
+          },
+        },
+        labels: {
+          minWidth: 28,
+          formatter: (value) => Math.round(value),
+          style: {
+            colors: isLight ? '#405248' : '#9ba9a1',
+            fontSize: '11px',
+            fontWeight: 650,
+          },
+        },
+      },
+      noData: {
+        text: 'No activity data for this period',
+        align: 'center',
+        verticalAlign: 'middle',
+        style: {
+          color: isLight ? '#526259' : '#839087',
+          fontSize: '13px',
+        },
+      },
+    }
+  }, [chartSeries, isLight, period, selectedSeries, trend.length, visibleMaximum])
 
   return (
-    <div className="admin-trend" role="img" aria-label={`${trend.length} day line chart showing ${seriesLabel}`}>
-      <div className="admin-trend__axis"><span>{formatTick(maximum)}</span><span>{formatTick(maximum / 2)}</span><span>0</span></div>
-      <div className="admin-trend__scroller">
-        <div className="admin-trend__plot" style={{ minWidth: trend.length > 14 ? `${chartWidth}px` : undefined }}>
-          <svg className="admin-trend__svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              {selectedSeries.map((series) => (
-                <linearGradient id={`admin-trend-fill-${series.key}`} x1="0" x2="0" y1="0" y2="1" key={series.key}>
-                  <stop offset="0%" stopColor={series.color} stopOpacity=".16" />
-                  <stop offset="100%" stopColor={series.color} stopOpacity="0" />
-                </linearGradient>
-              ))}
-            </defs>
-            {[plotTop, plotTop + plotHeight / 2, baseline].map((y) => <line className="admin-trend__gridline" x1={plotLeft} x2={chartWidth - plotRight} y1={y} y2={y} key={y} />)}
-            {selectedSeries.map((series) => {
-              const points = pointsForSeries(series)
-              const path = linePath(points)
-              const areaPath = points.length ? `${path} L ${points.at(-1).x} ${baseline} L ${points[0].x} ${baseline} Z` : ''
-
-              return (
-                <g className={`admin-trend__series admin-trend__series--${series.key}`} key={series.key} style={{ color: series.color }}>
-                  <path className="admin-trend__area" d={areaPath} fill={`url(#admin-trend-fill-${series.key})`} />
-                  <path className="admin-trend__line" d={path} pathLength="1" stroke={series.color} />
-                  {points.map((point) => (
-                    <circle className="admin-trend__point" cx={point.x} cy={point.y} fill={series.color} key={point.date} r="3.6">
-                      <title>{`${series.label}: ${point.value} · ${point.date}`}</title>
-                    </circle>
-                  ))}
-                </g>
-              )
-            })}
-            {trend.map((day, index) => <text className="admin-trend__label" x={xForIndex(index)} y={chartHeight - 10} key={day.date} textAnchor="middle">{day.label}</text>)}
-          </svg>
-        </div>
-      </div>
+    <div className="admin-trend" role="group" aria-label={`${periodLabel || 'Selected period'} line chart showing ${seriesLabel}`}>
+      <Suspense fallback={<div className="admin-trend__loading"><span aria-hidden="true" />Loading chart…</div>}>
+        <ReactApexChart className="admin-trend__chart" options={options} series={chartSeries} type="line" height="100%" />
+      </Suspense>
     </div>
   )
 }
 
-function DashboardView({ data, days, onChangeDays, onOpenSection }) {
+function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSection, theme = 'dark' }) {
   const metrics = data?.metrics ?? {}
   const totalContent = (metrics.published_contents ?? 0) + (metrics.draft_contents ?? 0)
   const totalComments = (metrics.post_comments ?? 0) + (metrics.simulator_comments ?? 0)
   const totalSpecies = (metrics.plants ?? 0) + (metrics.pests ?? 0)
   const totalGameCatalog = (metrics.items ?? 0) + (metrics.shop_items ?? 0) + (metrics.quests ?? 0) + (metrics.achievements ?? 0) + (metrics.model_assets ?? 0)
   const [activeSeries, setActiveSeries] = useState(['users', 'simulations'])
+  const [activityType, setActivityType] = useState('all')
+  const [activityUser, setActivityUser] = useState('all')
+  const recentActivities = useMemo(() => data?.recent_user_activities ?? [], [data?.recent_user_activities])
+  const activityTypeCounts = useMemo(() => recentActivities.reduce((counts, activity) => ({
+    ...counts,
+    [activity.type]: (counts[activity.type] ?? 0) + 1,
+  }), {}), [recentActivities])
+  const activityUsers = useMemo(() => [...new Map(
+    recentActivities
+      .filter((activity) => activity.user?.id)
+      .map((activity) => [String(activity.user.id), activity.user]),
+  ).values()].sort((left, right) => String(left.username).localeCompare(String(right.username))), [recentActivities])
+  const filteredActivities = useMemo(() => recentActivities.filter((activity) => (
+    (activityType === 'all' || activity.type === activityType)
+    && (activityUser === 'all' || String(activity.user?.id) === activityUser)
+  )), [activityType, activityUser, recentActivities])
   const overview = data?.system_overview ?? { total: 0, groups: [] }
   let overviewAngle = 0
   const overviewSegments = (overview.groups ?? []).map((group) => {
@@ -577,12 +748,22 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
   const overviewBackground = overview.total && overviewSegments.length
     ? `conic-gradient(${overviewSegments.join(',')})`
     : 'conic-gradient(#29312c 0deg 360deg)'
+  const selectedYear = Number(trendSelection.value) || new Date().getFullYear()
+  const currentYear = new Date().getFullYear()
+  const firstYear = Math.min(currentYear - 9, selectedYear)
+  const lastYear = Math.max(currentYear, selectedYear)
+  const yearOptions = Array.from({ length: lastYear - firstYear + 1 }, (_, index) => lastYear - index)
 
   function toggleSeries(seriesKey) {
     setActiveSeries((current) => {
       if (current.includes(seriesKey)) return current.length === 1 ? current : current.filter((key) => key !== seriesKey)
       return [...current, seriesKey]
     })
+  }
+
+  function changeTrendPeriod(period) {
+    if (period === trendSelection.period) return
+    onChangeTrendSelection({ period, value: currentTrendValue(period) })
   }
 
   return (
@@ -608,12 +789,30 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
               <div className="admin-series-picker" role="group" aria-label="Chart data">
                 {trendSeriesConfig.map((series) => <button className={activeSeries.includes(series.key) ? 'is-active' : ''} type="button" aria-pressed={activeSeries.includes(series.key)} key={series.key} onClick={() => toggleSeries(series.key)}><i style={{ background: series.color }} />{series.label}</button>)}
               </div>
-              <div className="admin-range-switch" role="group" aria-label="Activity period">
-                {[7, 14, 30].map((period) => <button className={days === period ? 'is-active' : ''} type="button" aria-pressed={days === period} key={period} onClick={() => onChangeDays(period)}>{period}D</button>)}
+              <div className="admin-trend-filter">
+                <div className="admin-range-switch" role="group" aria-label="Chart period type">
+                  {['day', 'month', 'year'].map((period) => <button className={trendSelection.period === period ? 'is-active' : ''} type="button" aria-pressed={trendSelection.period === period} key={period} onClick={() => changeTrendPeriod(period)}>{period}</button>)}
+                </div>
+                <label className="admin-trend-picker">
+                  <span className="sr-only">Select {trendSelection.period}</span>
+                  {trendSelection.period === 'year' ? (
+                    <select value={trendSelection.value} onChange={(event) => onChangeTrendSelection({ period: 'year', value: event.target.value })}>
+                      {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      aria-label={`Select ${trendSelection.period}`}
+                      type={trendSelection.period === 'day' ? 'date' : 'month'}
+                      value={trendSelection.value}
+                      onChange={(event) => event.target.value && onChangeTrendSelection({ ...trendSelection, value: event.target.value })}
+                    />
+                  )}
+                </label>
               </div>
             </div>
           </header>
-          <TrendChart trend={data?.trend} activeSeries={activeSeries} />
+          <div className="admin-trend-context"><span>{data?.trend_label || trendSelection.value}</span><small>{data?.trend?.length ?? 0} data points</small></div>
+          <TrendChart trend={data?.trend} activeSeries={activeSeries} period={data?.trend_period || trendSelection.period} periodLabel={data?.trend_label} theme={theme} />
         </section>
 
         <section className="admin-panel admin-system-panel">
@@ -648,17 +847,45 @@ function DashboardView({ data, days, onChangeDays, onOpenSection }) {
           </div>
         </section>
 
-        <section className="admin-panel">
-          <header className="admin-panel__header"><div><small>RECENTLY EDITED</small><h2>Learning content</h2></div><button type="button" onClick={() => onOpenSection('contents')}>View all</button></header>
-          <div className="admin-list">
-            {(data?.recent_contents ?? []).map((content) => (
-              <div className="admin-list__row admin-list__row--content" key={content.id}>
-                <span className="admin-list__content-icon"><AppIcon name="bookmark" /></span>
-                <span><strong>{content.title}</strong><small>Version {content.version}</small></span>
-                <StatusBadge status={content.status} />
-                <time>{formatDate(content.updated_at)}</time>
-              </div>
-            ))}
+        <section className="admin-panel admin-user-activity-panel">
+          <header className="admin-panel__header">
+            <div><small>LEARNER ACTIVITY</small><h2>Latest user activity</h2></div>
+            <span className="admin-activity-live"><i />Live feed</span>
+          </header>
+          <div className="admin-activity-filters">
+            <label>
+              <span>Activity type</span>
+              <select value={activityType} onChange={(event) => setActivityType(event.target.value)}>
+                <option value="all">All activities ({recentActivities.length})</option>
+                {Object.entries(userActivityMeta).map(([type, meta]) => (
+                  <option value={type} key={type}>{meta.filterLabel} ({activityTypeCounts[type] ?? 0})</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>User</span>
+              <select value={activityUser} onChange={(event) => setActivityUser(event.target.value)}>
+                <option value="all">All users</option>
+                {activityUsers.map((user) => <option value={String(user.id)} key={user.id}>{user.username}</option>)}
+              </select>
+            </label>
+            <span className="admin-activity-result">{filteredActivities.length} shown</span>
+          </div>
+          <div className="admin-list admin-user-activity-list" aria-live="polite">
+            {filteredActivities.map((activity) => {
+              const meta = userActivityMeta[activity.type] ?? { label: 'Completed an activity', badge: 'Activity', icon: 'history', tone: 'default' }
+              const detail = activity.subject ? `${meta.label} · ${activity.subject}` : meta.label
+
+              return (
+                <div className="admin-list__row admin-list__row--activity" key={activity.id}>
+                  <AdminAvatar user={activity.user} />
+                  <span><strong>{activity.user?.username || 'Unknown user'}</strong><small title={detail}>{detail}</small></span>
+                  <span className={`admin-activity-kind is-${meta.tone}`}><AppIcon name={meta.icon} />{meta.badge}</span>
+                  <time title={formatDate(activity.occurred_at, true)}>{formatDate(activity.occurred_at, true)}</time>
+                </div>
+              )
+            })}
+            {!filteredActivities.length && <div className="admin-list__empty">No user activity matches these filters.</div>}
           </div>
         </section>
 
@@ -880,7 +1107,7 @@ function ContentEditor({ content, onClose, onSaved }) {
           {editorMode === 'html' && <aside className="admin-editor__preview">
             <div><span>LIVE PREVIEW</span><strong>{language === 'th' ? form.title_th : form.title || 'Untitled article'}</strong></div>
             {form.cover_image_url && <img src={form.cover_image_url} alt="" />}
-            <iframe title="Article HTML preview" sandbox="" srcDoc={`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;padding:28px;font-family:Arial,sans-serif;color:#1c2b21;line-height:1.7}h1,h2,h3,h4{margin:1.4em 0 .55em;color:#163b23;line-height:1.25}p{margin:.6em 0 1em}img{display:block;max-width:100%;height:auto;border-radius:10px}figure{max-width:100%;margin:1.5em auto}figcaption{margin-top:.5em;color:#647168;font-size:12px;text-align:center}table{width:100%;margin:1.5em 0;border-collapse:collapse}th,td{padding:10px;border:1px solid #ccd8cf;text-align:left;vertical-align:top}th{background:#edf4ef}blockquote,.article-callout,.article-science-note{margin:1.5em 0;padding:16px 18px;border-left:4px solid #75b45c;background:#edf6e9}.article-science-note{border-left-color:#4e8eae;background:#edf5f8}pre{overflow:auto;padding:16px;border-radius:9px;background:#132119;color:#e9f5eb}code{font-family:Consolas,monospace}.media{position:relative;overflow:hidden;padding-top:56.25%}.media iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style>${previewHtml}`} />
+            <iframe title="Article HTML preview" sandbox="" srcDoc={`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;padding:28px;font-family:"Inter Variable","Noto Sans Thai Variable",Inter,"Noto Sans Thai",ui-sans-serif,system-ui,"Segoe UI",sans-serif;color:#1c2b21;line-height:1.7}h1,h2,h3,h4{margin:1.4em 0 .55em;color:#163b23;line-height:1.25}p{margin:.6em 0 1em}img{display:block;max-width:100%;height:auto;border-radius:10px}figure{max-width:100%;margin:1.5em auto}figcaption{margin-top:.5em;color:#647168;font-size:12px;text-align:center}table{width:100%;margin:1.5em 0;border-collapse:collapse}th,td{padding:10px;border:1px solid #ccd8cf;text-align:left;vertical-align:top}th{background:#edf4ef}blockquote,.article-callout,.article-science-note{margin:1.5em 0;padding:16px 18px;border-left:4px solid #75b45c;background:#edf6e9}.article-science-note{border-left-color:#4e8eae;background:#edf5f8}pre{overflow:auto;padding:16px;border-radius:9px;background:#132119;color:#e9f5eb}code{font-family:Consolas,monospace}.media{position:relative;overflow:hidden;padding-top:56.25%}.media iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style>${previewHtml}`} />
           </aside>}
         </div>
 
@@ -1074,6 +1301,37 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
     return value ?? ''
   }
 
+  function updateField(key, value) {
+    setForm((current) => {
+      const next = { ...current, [key]: value }
+
+      if (key === 'plant_id' && Object.prototype.hasOwnProperty.call(current, 'stage_id')) {
+        const selectedStage = (lookups.stages ?? []).find((stage) => String(stage.id) === String(current.stage_id))
+        if (!value || !selectedStage || String(selectedStage.plant_id) !== String(value)) {
+          next.stage_id = ''
+        }
+      }
+
+      return next
+    })
+  }
+
+  function lookupOptions(field) {
+    const options = lookups[field.lookup] ?? []
+    if (field.lookup !== 'stages') return options
+    if (!form.plant_id) return []
+    return options.filter((stage) => String(stage.plant_id) === String(form.plant_id))
+  }
+
+  function lookupPlaceholder(field) {
+    if (field.lookup === 'stages') {
+      if (!form.plant_id) return 'Select a plant first'
+      if (!lookupOptions(field).length) return 'No stages available for this plant'
+      return 'All stages / not specified'
+    }
+    return field.required ? 'Select a record' : 'All / not specified'
+  }
+
   async function submit(event) {
     event.preventDefault()
     setError('')
@@ -1165,7 +1423,18 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
                 ) : field.type === 'select' ? (
                   <select required={field.required} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select>
                 ) : field.type === 'lookup' ? (
-                  <select required={field.required} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}><option value="">{field.required ? 'Select a record' : 'All / not specified'}</option>{(lookups[field.lookup] ?? []).map((option) => <option key={option.id} value={option.id}>{lookupLabel[field.lookup](option)}</option>)}</select>
+                  <>
+                    <select
+                      disabled={field.lookup === 'stages' && (!form.plant_id || !lookupOptions(field).length)}
+                      required={field.required}
+                      value={fieldValue(field)}
+                      onChange={(event) => updateField(field.key, event.target.value)}
+                    >
+                      <option value="">{lookupPlaceholder(field)}</option>
+                      {lookupOptions(field).map((option) => <option key={option.id} value={option.id}>{lookupLabel[field.lookup](option)}</option>)}
+                    </select>
+                    {field.lookup === 'stages' && !form.plant_id && <small className="admin-field-hint">Choose a plant to show only its growth stages.</small>}
+                  </>
                 ) : field.type === 'boolean' ? (
                   <button className={`admin-toggle ${form[field.key] ? 'is-active' : ''}`} type="button" role="switch" aria-checked={Boolean(form[field.key])} onClick={() => setForm((current) => ({ ...current, [field.key]: !current[field.key] }))}><i /><span>{form[field.key] ? 'Enabled' : 'Disabled'}</span></button>
                 ) : (
@@ -1202,7 +1471,7 @@ const detailFieldMap = {
   ],
   'plant-histories': [
     ['Record ID', 'id'], ['Visibility', 'visibility'], ['Final health', 'final_health', 'percent'], ['Total score', 'total_score'],
-    ['Duration', 'duration_days', 'days'], ['Analysis result', 'analysis_result'], ['Player guidance', 'direction'], ['Created', 'created_at', 'date'],
+    ['Grow time', 'duration_seconds', 'duration'], ['Analysis result', 'analysis_result'], ['Player guidance', 'direction'], ['Created', 'created_at', 'date'],
   ],
   'activity-logs': [
     ['Log ID', 'id'], ['Action', 'action'], ['Target type', 'target_type'], ['Target ID', 'target_id'], ['Details', 'detail'], ['Recorded', 'created_at', 'date'],
@@ -1214,7 +1483,7 @@ function recordDetailValue(record, field, format) {
   if (value === null || value === undefined || value === '') return '—'
   if (format === 'date') return formatDate(value, true)
   if (format === 'percent') return `${value}%`
-  if (format === 'days') return `${value} days`
+  if (format === 'duration') return formatPlantDuration(record, 'en')
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   return String(value)
 }
@@ -1514,14 +1783,15 @@ export function AdminPage({ user, onLogout }) {
   const [error, setError] = useState('')
   const [preferences, setPreferences] = useState(loadAdminPreferences)
   const [language, setLanguage] = useState(() => loadSettings().language === 'th' ? 'th' : 'en')
-  const [trendDays, setTrendDays] = useState(7)
+  const [trendSelection, setTrendSelection] = useState(defaultTrendSelection)
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
   const [refreshState, setRefreshState] = useState('connecting')
   const contentFiltersRef = useRef({})
   const userFiltersRef = useRef({})
   const usersPayloadRef = useRef(null)
   const usersRequestRef = useRef(null)
-  const trendDaysRef = useRef(7)
+  const dashboardRequestRef = useRef(0)
+  const trendSelectionRef = useRef(defaultTrendSelection())
   const refreshInFlightRef = useRef(false)
   const initialSectionRef = useRef(section)
 
@@ -1540,16 +1810,19 @@ export function AdminPage({ user, onLogout }) {
   }[section]), [section])
   const refreshIntervalSeconds = section === 'dashboard' ? ADMIN_DASHBOARD_REFRESH_MS / 1000 : ADMIN_TABLE_REFRESH_MS / 1000
 
-  const loadDashboard = useCallback(async ({ silent = false, days = trendDaysRef.current } = {}) => {
-    trendDaysRef.current = days
+  const loadDashboard = useCallback(async ({ silent = false, selection = trendSelectionRef.current } = {}) => {
+    const requestId = ++dashboardRequestRef.current
+    trendSelectionRef.current = selection
     if (!silent) { setStatus('loading'); setError('') }
     try {
-      const payload = await getAdminDashboard(days)
+      const payload = await getAdminDashboard(selection)
+      if (requestId !== dashboardRequestRef.current) return
       setDashboard(payload.data)
       setLastUpdatedAt(new Date())
       setRefreshState('connected')
       if (!silent) setStatus('ready')
     } catch (loadError) {
+      if (requestId !== dashboardRequestRef.current) return
       setRefreshState('stale')
       if (!silent) { setError(loadError.message || 'Unable to load admin dashboard.'); setStatus('error') }
     }
@@ -1685,10 +1958,11 @@ export function AdminPage({ user, onLogout }) {
     }
   }, [loadContents, loadDashboard, loadUsers, section])
 
-  function changeTrendPeriod(days) {
-    setTrendDays(days)
-    trendDaysRef.current = days
-    loadDashboard({ silent: true, days })
+  function changeTrendSelection(selection) {
+    setTrendSelection(selection)
+    trendSelectionRef.current = selection
+    setRefreshState('connecting')
+    loadDashboard({ silent: true, selection })
   }
 
   return (
@@ -1721,7 +1995,7 @@ export function AdminPage({ user, onLogout }) {
         <div className="admin-content">
           {status === 'loading' && <div className="admin-loading">{section === 'dashboard' ? <AdminDashboardSkeleton /> : <AdminTableSkeleton />}</div>}
           {status === 'error' && <div className="admin-error"><AppIcon name="shield" /><h2>Unable to load this section</h2><p>{error}</p><button type="button" onClick={() => openSection(section)}>Try again</button></div>}
-          {status === 'ready' && section === 'dashboard' && <DashboardView data={dashboard} days={trendDays} onChangeDays={changeTrendPeriod} onOpenSection={openSection} />}
+          {status === 'ready' && section === 'dashboard' && <DashboardView data={dashboard} trendSelection={trendSelection} onChangeTrendSelection={changeTrendSelection} onOpenSection={openSection} theme={preferences.theme} />}
           {status === 'ready' && section === 'contents' && <ContentsView contents={contents} onRefresh={loadContents} />}
           {status === 'ready' && section === 'users' && <UsersView currentUser={user} usersPayload={users} onRefresh={loadUsers} />}
           {status === 'ready' && resourceGroups[section] && <ResourceView key={section} groupKey={section} />}

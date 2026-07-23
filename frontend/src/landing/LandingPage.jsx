@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import heroImage from '../assets/hero.png'
+import learnAboutPlantsBanner from '../assets/learn-about-plants-banner.jpg'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
-import { AppIcon } from '../game/icons/IconifyIcon'
+import { AppIcon } from '../game/icons/FontAwesomeIcon'
+import { ParticleNetworkBackground } from '../game/components/ParticleNetworkBackground'
 import { loadSettings, saveSettings } from '../game/settings/settingsPreferences'
 import { getLearningContent, getLearningContents } from '../lib/api'
 import './LandingPage.css'
@@ -87,7 +89,7 @@ function BrandButton({ onClick, compact = false }) {
   )
 }
 
-function LandingHeader({ language, onLanguageChange, page, user, onHome, onLearn, onStart, onSignIn }) {
+function LandingHeader({ language, onLanguageChange, page, user, onHome, onLearn, onOpenPage, onStart, onSignIn }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   function run(action) {
@@ -102,6 +104,13 @@ function LandingHeader({ language, onLanguageChange, page, user, onHome, onLearn
         <nav className={`landing-nav ${menuOpen ? 'landing-nav--open' : ''}`} aria-label="Main navigation">
           <button className={page === 'home' ? 'is-active' : ''} type="button" onClick={() => run(onHome)}>Home</button>
           <button className={page === 'learn' ? 'is-active' : ''} type="button" onClick={() => run(onLearn)}>Learn about</button>
+          {user ? (
+            <>
+              <button type="button" onClick={() => run(() => onOpenPage?.('shop'))}>Shop</button>
+              <button type="button" onClick={() => run(() => onOpenPage?.('history'))}>History</button>
+              <button type="button" onClick={() => run(() => onOpenPage?.('community'))}>Community</button>
+            </>
+          ) : null}
           <div className="landing-language-toggle" role="group" aria-label="Interface language">
             <button className={language === 'en' ? 'is-active' : ''} type="button" aria-pressed={language === 'en'} onClick={() => onLanguageChange('en')}>EN</button>
             <button className={language === 'th' ? 'is-active' : ''} type="button" aria-pressed={language === 'th'} onClick={() => onLanguageChange('th')}>ไทย</button>
@@ -109,7 +118,7 @@ function LandingHeader({ language, onLanguageChange, page, user, onHome, onLearn
           {!user && <button type="button" onClick={() => run(onSignIn)}>Log in</button>}
           <button className="landing-nav__cta" type="button" onClick={() => run(onStart)}>
             <AppIcon name="sprout" />
-            Start growing
+            {user ? 'Open Plant Lab' : 'Start growing'}
           </button>
         </nav>
         <button
@@ -258,14 +267,17 @@ function HomePage({ user, onStart, onLearn, onOpenPage }) {
         </div>
       </section>
 
-      <section className="landing-game-summary" aria-label="Game highlights">
-        <div className="landing-container landing-game-summary__grid">
-          <div><strong>3D</strong><span>living plant simulation</span></div>
-          <div><strong>6</strong><span>connected growth factors</span></div>
-          <div><strong>2</strong><span>growing modes to explore</span></div>
-          <div><strong>∞</strong><span>experiments to compare</span></div>
-        </div>
-      </section>
+      <div className="landing-home-content particle-network-surface">
+        <ParticleNetworkBackground variant="green" />
+
+        <section className="landing-game-summary" aria-label="Game highlights">
+          <div className="landing-container landing-game-summary__grid">
+            <div><strong>3D</strong><span>living plant simulation</span></div>
+            <div><strong>6</strong><span>connected growth factors</span></div>
+            <div><strong>2</strong><span>growing modes to explore</span></div>
+            <div><strong>∞</strong><span>experiments to compare</span></div>
+          </div>
+        </section>
 
       <section className="landing-section landing-game-intro" id="about">
         <div className="landing-container">
@@ -344,7 +356,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage }) {
                   <h3>{space.title}</h3>
                   <p>{space.description}</p>
                   <button type="button" onClick={() => space.page === 'learn' ? onLearn() : onOpenPage(space.page)}>
-                    Explore {space.title}<AppIcon name="arrowForward" />
+                    {`Explore ${space.title}`}<AppIcon name="arrowForward" />
                   </button>
                 </div>
               </article>
@@ -386,6 +398,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage }) {
           </button>
         </div>
       </section>
+      </div>
     </>
   )
 }
@@ -405,6 +418,52 @@ const articleAllowedStyles = new Set([
   'margin', 'margin-left', 'margin-right', 'max-width', 'min-width',
   'text-align', 'width',
 ])
+
+function articleColorLuminance(value) {
+  const color = String(value ?? '').trim().toLowerCase()
+  if (!color || color === 'transparent') return null
+
+  const namedColors = {
+    black: 0,
+    white: 1,
+  }
+  if (Object.hasOwn(namedColors, color)) return namedColors[color]
+
+  const hexMatch = color.match(/^#([\da-f]{3,8})$/i)
+  if (hexMatch) {
+    let hex = hexMatch[1]
+    if (hex.length === 3 || hex.length === 4) hex = hex.split('').map((part) => part + part).join('')
+    if (hex.length === 6 || hex.length === 8) {
+      const red = Number.parseInt(hex.slice(0, 2), 16)
+      const green = Number.parseInt(hex.slice(2, 4), 16)
+      const blue = Number.parseInt(hex.slice(4, 6), 16)
+      return ((red * 0.2126) + (green * 0.7152) + (blue * 0.0722)) / 255
+    }
+  }
+
+  const rgbMatch = color.match(/^rgba?\(\s*([\d.]+)%?\s*[, ]\s*([\d.]+)%?\s*[, ]\s*([\d.]+)%?/i)
+  if (rgbMatch) {
+    const usesPercent = color.slice(0, color.indexOf(')')).includes('%')
+    const scale = usesPercent ? 2.55 : 1
+    const red = Math.min(255, Number(rgbMatch[1]) * scale)
+    const green = Math.min(255, Number(rgbMatch[2]) * scale)
+    const blue = Math.min(255, Number(rgbMatch[3]) * scale)
+    return ((red * 0.2126) + (green * 0.7152) + (blue * 0.0722)) / 255
+  }
+
+  const hslMatch = color.match(/^hsla?\(\s*[-\d.]+(?:deg)?\s*[, ]\s*[\d.]+%\s*[, ]\s*([\d.]+)%/i)
+  if (hslMatch) return Math.min(1, Number(hslMatch[1]) / 100)
+
+  return null
+}
+
+function articleStyleConflictsWithDarkTheme(property, value) {
+  const luminance = articleColorLuminance(value)
+  if (luminance === null) return false
+  if (property === 'background-color') return luminance >= 0.78
+  if (property === 'color') return luminance <= 0.28
+  return false
+}
 
 function articleMediaEmbedUrl(value) {
   try {
@@ -496,7 +555,11 @@ function sanitizeArticleHtml(html) {
       const safeDeclarations = []
       Array.from(element.style).forEach((property) => {
         const value = element.style.getPropertyValue(property).trim()
-        if (articleAllowedStyles.has(property) && !/(url\s*\(|expression|javascript:)/i.test(value)) {
+        if (
+          articleAllowedStyles.has(property)
+          && !/(url\s*\(|expression|javascript:)/i.test(value)
+          && !articleStyleConflictsWithDarkTheme(property, value)
+        ) {
           safeDeclarations.push(`${property}:${value}`)
         }
       })
@@ -737,6 +800,8 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
   return (
     <>
       <section className="landing-learn-hero">
+        <img className="landing-learn-hero__image" src={learnAboutPlantsBanner} alt="" aria-hidden="true" />
+        <div className="landing-learn-hero__shade" aria-hidden="true" />
         <div className="landing-container">
           <button className="landing-text-link landing-text-link--back" type="button" onClick={onHome}>
             <AppIcon name="arrowBack" /> Back to home
@@ -747,60 +812,64 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
         </div>
       </section>
 
-      <LearningLibrary onOpenArticle={onOpenArticle} />
+      <div className="landing-learn-content particle-network-surface">
+        <ParticleNetworkBackground />
 
-      <section className="landing-section landing-section--intro">
-        <div className="landing-container landing-split">
-          <div data-reveal="left">
-            <SectionEyebrow icon="bolt">The essential process</SectionEyebrow>
-            <h2>Photosynthesis powers plant life.</h2>
-            <p className="landing-lead">
-              Plants combine light energy, water, and carbon dioxide to produce glucose for growth and release oxygen.
-              Healthy leaves and balanced conditions help this process work efficiently.
-            </p>
-            <div className="landing-equation">6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂</div>
-          </div>
-          <div className="landing-process-card" data-reveal="right">
-            <div><AppIcon name="bolt" /><span>Light energy</span></div>
-            <AppIcon className="landing-process-card__arrow" name="arrowDown" />
-            <div><AppIcon name="eco" /><span>Leaves create food</span></div>
-            <AppIcon className="landing-process-card__arrow" name="arrowDown" />
-            <div><AppIcon name="air" /><span>Oxygen is released</span></div>
-          </div>
-        </div>
-      </section>
+        <LearningLibrary onOpenArticle={onOpenArticle} />
 
-      <section className="landing-section landing-section--factors">
-        <div className="landing-container">
-          <div className="landing-section-heading landing-section-heading--center" data-reveal="up">
-            <SectionEyebrow icon="eco">Plant growth essentials</SectionEyebrow>
-            <h2>Six factors, one connected system.</h2>
-            <p>Use these principles to diagnose problems and make better decisions inside the plant lab.</p>
+        <section className="landing-section landing-section--intro">
+          <div className="landing-container landing-split">
+            <div data-reveal="left">
+              <SectionEyebrow icon="bolt">The essential process</SectionEyebrow>
+              <h2>Photosynthesis powers plant life.</h2>
+              <p className="landing-lead">
+                Plants combine light energy, water, and carbon dioxide to produce glucose for growth and release oxygen.
+                Healthy leaves and balanced conditions help this process work efficiently.
+              </p>
+              <div className="landing-equation">6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂</div>
+            </div>
+            <div className="landing-process-card" data-reveal="right">
+              <div><AppIcon name="bolt" /><span>Light energy</span></div>
+              <AppIcon className="landing-process-card__arrow" name="arrowDown" />
+              <div><AppIcon name="eco" /><span>Leaves create food</span></div>
+              <AppIcon className="landing-process-card__arrow" name="arrowDown" />
+              <div><AppIcon name="air" /><span>Oxygen is released</span></div>
+            </div>
           </div>
-          <div className="landing-factor-grid">
-            {factors.map((factor, index) => (
-              <article className="landing-factor-card" data-reveal="up" key={factor.title} style={{ '--reveal-delay': `${index * 65}ms` }}>
-                <div className="landing-icon-box"><AppIcon name={factor.icon} /></div>
-                <div className="landing-factor-card__title"><h3>{factor.title}</h3><strong>{factor.value}</strong></div>
-                <p>{factor.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="landing-section landing-final-cta">
-        <div className="landing-container landing-final-cta__inner" data-reveal="up">
-          <div className="landing-final-cta__icon"><AppIcon name="controller" /></div>
-          <h2>Put the science into practice.</h2>
-          <p>Enter the simulation, tune the environment, and observe how every decision changes your plant.</p>
-          <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
-            <AppIcon name="sprout" />
-            {user ? 'Enter the plant lab' : 'Log in to start'}
-            <AppIcon name="arrowForward" />
-          </button>
-        </div>
-      </section>
+        <section className="landing-section landing-section--factors">
+          <div className="landing-container">
+            <div className="landing-section-heading landing-section-heading--center" data-reveal="up">
+              <SectionEyebrow icon="eco">Plant growth essentials</SectionEyebrow>
+              <h2>Six factors, one connected system.</h2>
+              <p>Use these principles to diagnose problems and make better decisions inside the plant lab.</p>
+            </div>
+            <div className="landing-factor-grid">
+              {factors.map((factor, index) => (
+                <article className="landing-factor-card" data-reveal="up" key={factor.title} style={{ '--reveal-delay': `${index * 65}ms` }}>
+                  <div className="landing-icon-box"><AppIcon name={factor.icon} /></div>
+                  <div className="landing-factor-card__title"><h3>{factor.title}</h3><strong>{factor.value}</strong></div>
+                  <p>{factor.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-section landing-final-cta">
+          <div className="landing-container landing-final-cta__inner" data-reveal="up">
+            <div className="landing-final-cta__icon"><AppIcon name="controller" /></div>
+            <h2>Put the science into practice.</h2>
+            <p>Enter the simulation, tune the environment, and observe how every decision changes your plant.</p>
+            <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
+              <AppIcon name="sprout" />
+              {user ? 'Enter the plant lab' : 'Log in to start'}
+              <AppIcon name="arrowForward" />
+            </button>
+          </div>
+        </section>
+      </div>
     </>
   )
 }
@@ -868,7 +937,7 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
 
   return (
     <main className="landing-shell">
-      <LandingHeader language={language} onLanguageChange={changeLanguage} page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onStart={onStart} onSignIn={onSignIn} />
+      <LandingHeader language={language} onLanguageChange={changeLanguage} page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onStart={onStart} onSignIn={onSignIn} />
       {page === 'learn'
         ? articleSlug
           ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />

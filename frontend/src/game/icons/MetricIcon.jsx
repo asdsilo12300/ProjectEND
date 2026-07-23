@@ -1,4 +1,4 @@
-import { AppIcon } from './IconifyIcon'
+import { AppIcon } from './FontAwesomeIcon'
 
 const metricIconMap = {
   heart: 'heart',

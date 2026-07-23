@@ -2,13 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\SimulatorController;
+use App\Models\Friendship;
+use App\Models\Item;
 use App\Models\Plant;
+use App\Models\Pest;
 use App\Models\SimulationLog;
+use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Models\User;
+use App\Models\UserItem;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -142,6 +149,90 @@ class SimulatorSnapshotTest extends TestCase
         $this->assertEquals(14.0, (float) $firstTulip->air_temp);
     }
 
+    public function test_accepted_friend_can_discover_and_spectate_a_private_active_simulation(): void
+    {
+        [$simulator] = $this->seedSimulator();
+        $owner = User::query()->forceCreate([
+            'id' => 99,
+            'username' => 'garden-owner',
+            'email' => 'owner@example.test',
+            'password' => 'password',
+        ]);
+        $viewer = User::query()->forceCreate([
+            'id' => 100,
+            'username' => 'garden-friend',
+            'email' => 'friend@example.test',
+            'password' => 'password',
+        ]);
+        $friendship = Friendship::query()->create([
+            'requester_id' => $owner->id,
+            'addressee_id' => $viewer->id,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+
+        $request = Request::create('/api/friends/'.$friendship->id.'/simulator/latest', 'GET');
+        $request->setUserResolver(fn () => $viewer);
+
+        $latest = app(FriendController::class)->latestSimulator($request, $friendship);
+        $spectator = app(SimulatorController::class)->spectate($request, $simulator->fresh());
+
+        $this->assertSame($simulator->id, $latest->resource->id);
+        $this->assertSame($simulator->id, $spectator->resource->id);
+        $this->assertSame('private', $spectator->resource->share_visibility);
+    }
+
+    public function test_item_usage_returns_a_small_pest_delta_without_reloading_the_simulator_graph(): void
+    {
+        [$simulator] = $this->seedSimulator();
+        $item = Item::query()->create([
+            'name' => 'Fungus Spray',
+            'type' => 'spray',
+            'effect_type' => 'pest_control:fungus',
+            'is_active' => true,
+        ]);
+        $pest = Pest::query()->create([
+            'name_th' => 'Fungus',
+            'name_en' => 'Fungus',
+            'base_chance' => 20,
+            'damage_per_turn' => 3,
+        ]);
+        $activePest = SimulationPest::query()->create([
+            'simulator_id' => $simulator->id,
+            'pest_id' => $pest->id,
+            'status' => 'active',
+            'appeared_at' => now(),
+        ]);
+        UserItem::query()->create([
+            'user_id' => 99,
+            'item_id' => $item->id,
+            'quantity' => 3,
+        ]);
+        $request = Request::create('/api/simulators/'.$simulator->id.'/use-item', 'POST', [
+            'item_id' => $item->id,
+            'item_key' => 'antifungal-spray',
+            'quantity' => 1,
+        ]);
+        $user = new User;
+        $user->id = 99;
+        $request->setUserResolver(fn () => $user);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $response = app(SimulatorController::class)->useItem($request, $simulator);
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+        $data = $response->getData(true)['data'];
+
+        $this->assertTrue($data['success']);
+        $this->assertSame([$activePest->id], $data['removed_pest_ids']);
+        $this->assertSame($simulator->id, $data['simulator']['id']);
+        $this->assertArrayNotHasKey('plant', $data['simulator']);
+        $this->assertSame(2, $data['inventory']['quantity']);
+        $this->assertSame('treated', $activePest->fresh()->status);
+        $this->assertLessThanOrEqual(7, $queryCount);
+    }
+
     /** @return array{0: Simulator, 1: array<int, int>} */
     private function seedSimulator(): array
     {
@@ -251,15 +342,76 @@ class SimulatorSnapshotTest extends TestCase
         foreach ([
             'simulation_pests',
             'simulation_logs',
+            'item_usages',
+            'user_items',
+            'items',
             'pest_condition_rules',
             'pests',
             'plant_visual_variants',
             'simulators',
             'plant_growth_stages',
             'plants',
+            'friendships',
+            'users',
         ] as $table) {
             Schema::dropIfExists($table);
         }
+
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+            $table->string('username')->unique();
+            $table->string('email')->unique();
+            $table->string('password');
+            $table->string('role')->default('member');
+            $table->unsignedInteger('level')->default(1);
+            $table->unsignedInteger('experience')->default(0);
+            $table->unsignedInteger('coin')->default(0);
+            $table->unsignedInteger('gem')->default(0);
+            $table->string('status')->default('active');
+            $table->timestamp('last_login_at')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('friendships', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('requester_id');
+            $table->unsignedBigInteger('addressee_id');
+            $table->string('status')->default('pending');
+            $table->timestamp('accepted_at')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('items', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name')->unique();
+            $table->string('type')->nullable();
+            $table->text('description')->nullable();
+            $table->string('image_url')->nullable();
+            $table->string('effect_type')->nullable();
+            $table->decimal('effect_value', 8, 2)->nullable();
+            $table->string('rarity')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('user_items', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('item_id');
+            $table->unsignedInteger('quantity')->default(0);
+            $table->timestamp('updated_at')->nullable();
+        });
+
+        Schema::create('item_usages', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('item_id');
+            $table->unsignedBigInteger('simulator_id');
+            $table->unsignedInteger('quantity')->default(0);
+            $table->text('effect_result')->nullable();
+            $table->timestamp('created_at')->nullable();
+        });
 
         Schema::create('plants', function (Blueprint $table): void {
             $table->id();
@@ -364,6 +516,8 @@ class SimulatorSnapshotTest extends TestCase
             $table->unsignedBigInteger('state_version')->default(1);
             $table->timestamp('shared_at')->nullable();
             $table->string('live_snapshot_url')->nullable();
+            $table->unsignedBigInteger('active_seconds')->default(0);
+            $table->timestamp('last_active_at')->nullable();
             $table->timestamp('started_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->timestamp('maturity_reward_claimed_at')->nullable();

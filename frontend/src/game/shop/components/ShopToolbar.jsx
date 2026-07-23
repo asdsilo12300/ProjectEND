@@ -80,7 +80,7 @@ export function ShopToolbar({ copy, endIndex, sortMode, startIndex, totalCount, 
                   onClick={() => chooseSort(option.value)}
                 >
                   <span>{option.label}</span>
-                  {active && <span className="text-[10px] font-black uppercase text-[#55dc91]">{copy.selected}</span>}
+                  {active && <span className="text-xs font-black uppercase text-[#55dc91]">{copy.selected}</span>}
                 </button>
               )
             })}

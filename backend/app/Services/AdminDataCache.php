@@ -10,12 +10,10 @@ use Throwable;
 
 class AdminDataCache
 {
-    private const DASHBOARD_PERIODS = [7, 14, 30];
-
-    public function rememberDashboard(int $days, Closure $callback): array
+    public function rememberDashboard(string $selection, Closure $callback): array
     {
         return $this->rememberArray(
-            $this->dashboardKey($days),
+            $this->dashboardKey($selection),
             max(1, (int) config('admin.dashboard_cache_seconds', 30)),
             $callback,
         );
@@ -45,10 +43,7 @@ class AdminDataCache
     public function clear(): void
     {
         try {
-            foreach (self::DASHBOARD_PERIODS as $days) {
-                $this->store()->forget($this->dashboardKey($days));
-            }
-
+            $this->store()->put('admin-data:dashboard:version', (string) hrtime(true), 86400);
             $this->store()->forget('admin-data:lookups:v2');
             $this->store()->put('admin-data:users:version', (string) hrtime(true), 86400);
         } catch (Throwable $error) {
@@ -56,9 +51,12 @@ class AdminDataCache
         }
     }
 
-    private function dashboardKey(int $days): string
+    private function dashboardKey(string $selection): string
     {
-        return "admin-data:dashboard:v3:{$days}";
+        $version = $this->dashboardVersion();
+        $signature = hash('sha256', "{$version}:{$selection}");
+
+        return "admin-data:dashboard:v5:{$signature}";
     }
 
     private function store(): Repository
@@ -70,6 +68,17 @@ class AdminDataCache
     {
         try {
             return (string) $this->store()->get('admin-data:users:version', '1');
+        } catch (Throwable $error) {
+            report($error);
+
+            return 'uncached';
+        }
+    }
+
+    private function dashboardVersion(): string
+    {
+        try {
+            return (string) $this->store()->get('admin-data:dashboard:version', '1');
         } catch (Throwable $error) {
             report($error);
 

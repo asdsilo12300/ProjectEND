@@ -465,6 +465,8 @@ class PlantSimulationEngineTest extends TestCase
             $table->decimal('air_temp', 5, 2)->default(0);
             $table->string('status')->default('active');
             $table->unsignedBigInteger('state_version')->default(1);
+            $table->unsignedBigInteger('active_seconds')->default(0);
+            $table->timestamp('last_active_at')->nullable();
             $table->timestamp('started_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->timestamps();

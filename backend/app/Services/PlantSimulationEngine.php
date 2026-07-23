@@ -16,6 +16,8 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PlantSimulationEngine
 {
+    public function __construct(private readonly SimulationActivityTracker $activity) {}
+
     /**
      * @param  array<string, int|float|null>  $factors
      */
@@ -116,6 +118,7 @@ class PlantSimulationEngine
                 'soil_temp' => (float) Arr::get($factors, 'soil_temp', $simulator->soil_temp),
                 'air_temp' => (float) Arr::get($factors, 'air_temp', $simulator->air_temp),
                 'state_version' => ((int) $simulator->state_version) + 1,
+                ...$this->activity->attributes($simulator),
             ];
 
             $latestLog = $simulator->logs()

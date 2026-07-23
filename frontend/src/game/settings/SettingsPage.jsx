@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 import { defaultSettings, loadSettings, saveSettings } from './settingsPreferences'
 
 function Toggle({ checked, label, onChange }) {
@@ -125,7 +125,7 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
               {backLabel}
             </button>
             <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#9bcf82] text-[#101511] shadow-[0_8px_24px_rgba(155,207,130,.16)]">
+              <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#69c8b5] text-[#0d1714] shadow-[0_8px_24px_rgba(105,200,181,.18)]">
                 <AppIcon className="h-6 w-6" name="settings" />
               </span>
               <div>
@@ -158,7 +158,7 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
               <div className="min-w-0">
                 <div className="mb-1 flex items-center gap-2">
                   <strong className="truncate text-sm text-slate-100">{user?.username ?? 'Learner'}</strong>
-                  <span className="rounded-full bg-[#9bcf82]/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-[#bdeba7]">Account</span>
+                  <span className="rounded-full bg-[#9bcf82]/10 px-2 py-0.5 text-xs font-black uppercase tracking-wider text-[#bdeba7]">Account</span>
                 </div>
                 <span className="block truncate text-xs text-slate-400">{user?.email ?? 'Sign in to manage your account'}</span>
                 <span className="mt-1 block text-xs leading-5 text-slate-400">Verify your email with OTP before changing your password.</span>
@@ -199,7 +199,7 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
             </SettingRow>
           </Section>
 
-          <Section icon="groups" title="Language" description="Choose the preferred language for learning content.">
+          <Section icon="translate" title="Language" description="Choose the preferred language for learning content.">
             <SettingRow title="Preferred language" description="The academy will use this preference as translated content becomes available.">
               <ChoiceGroup
                 label="Preferred language"

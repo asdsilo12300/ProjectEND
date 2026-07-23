@@ -129,8 +129,15 @@ export async function getLearningContent(slug) {
   return apiFetch(`/contents/${encodeURIComponent(slug)}`, { auth: false, cacheTtl: 30000 })
 }
 
-export async function getAdminDashboard(days = 7) {
-  return apiFetch(`/admin/dashboard?days=${encodeURIComponent(days)}`)
+export async function getAdminDashboard(selection = 7) {
+  const params = new URLSearchParams()
+  if (typeof selection === 'number') {
+    params.set('days', String(selection))
+  } else {
+    params.set('period', selection?.period || 'month')
+    params.set('value', selection?.value || '')
+  }
+  return apiFetch(`/admin/dashboard?${params.toString()}`)
 }
 
 export async function getAdminContents({ search = '', status = '', trashed = '' } = {}) {
@@ -629,10 +636,17 @@ export async function claimMaturityReward(simulatorId) {
   })
 }
 
-export async function applySimulatorItem(simulatorId, itemKey, quantity = 1) {
+export async function applySimulatorItem(simulatorId, itemKey, quantity = 1, itemId = null) {
   return apiFetch(`/simulators/${simulatorId}/use-item`, {
     method: 'POST',
-    body: JSON.stringify({ item_key: itemKey, quantity }),
+    body: JSON.stringify({ item_id: itemId || undefined, item_key: itemKey, quantity }),
+  })
+}
+
+export async function prankFriendSimulator(simulatorId, itemKey) {
+  return apiFetch(`/simulators/${simulatorId}/prank`, {
+    method: 'POST',
+    body: JSON.stringify({ item_key: itemKey }),
   })
 }
 

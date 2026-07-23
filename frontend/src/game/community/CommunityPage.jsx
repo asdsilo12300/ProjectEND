@@ -1,11 +1,36 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import Swal from 'sweetalert2'
 import { createPostComment, createPostCommentReply, getCommunityLeaderboard, getFriendPosts, getFriends, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
-import { AppIcon } from '../icons/IconifyIcon'
+import { ParticleNetworkBackground } from '../components/ParticleNetworkBackground'
+import { AppIcon } from '../icons/FontAwesomeIcon'
+import { formatPlantDuration } from '../../utils/plantDuration'
 
 const CommunityLanguageContext = createContext('en')
 const communityReturnStateKey = 'plant_game_community_return_state'
+const hiddenCommunityPostsStoragePrefix = 'plant_game_hidden_community_posts'
+
+function hiddenCommunityPostsStorageKey(userId) {
+  return `${hiddenCommunityPostsStoragePrefix}:${userId ?? 'guest'}`
+}
+
+function loadHiddenCommunityPostIds(userId) {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(hiddenCommunityPostsStorageKey(userId)) ?? '[]')
+    return Array.isArray(saved) ? [...new Set(saved.map(String).filter(Boolean))] : []
+  } catch {
+    return []
+  }
+}
+
+function saveHiddenCommunityPostIds(userId, ids) {
+  try {
+    window.localStorage.setItem(hiddenCommunityPostsStorageKey(userId), JSON.stringify(ids.slice(-500)))
+  } catch {
+    // Hiding still works for the current session when storage is unavailable.
+  }
+}
 
 function consumeCommunityReturnState() {
   try {
@@ -33,13 +58,13 @@ function avatarLabel(value) {
   return String(value ?? 'L').slice(0, 1).toUpperCase()
 }
 
-function UserAvatar({ user, fallback, className = '' }) {
+function UserAvatar({ user, fallback, className = '', imageClassName = '', showRing = true }) {
   const label = fallback ?? avatarLabel(displayName(user))
 
   return (
-    <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#263022] font-black text-lime-100 ring-1 ring-lime-100/10 ${className}`}>
+    <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#263022] font-black text-lime-100 ${showRing ? 'ring-1 ring-lime-100/10' : ''} ${className}`}>
       {label}
-      {user?.avatar_url && <img className="absolute inset-0 h-full w-full object-cover object-center" src={resolveAssetUrl(user.avatar_url)} alt="" onError={(event) => { event.currentTarget.hidden = true }} />}
+      {user?.avatar_url && <img className={`absolute inset-0 h-full w-full object-cover object-center ${imageClassName}`} src={resolveAssetUrl(user.avatar_url)} alt="" onError={(event) => { event.currentTarget.hidden = true }} />}
     </span>
   )
 }
@@ -49,7 +74,7 @@ function CoverImage({ user, preview = '' }) {
 
   if (!src) return null
 
-  return <img className="absolute inset-0 z-0 h-full w-full object-cover object-center" src={src} alt="" />
+  return <img className="absolute inset-0 z-0 h-full w-full object-cover object-center" src={src} alt="" onError={(event) => { event.currentTarget.hidden = true }} />
 }
 
 function formatTime(value, language = getAppLanguage()) {
@@ -58,6 +83,17 @@ function formatTime(value, language = getAppLanguage()) {
   if (Number.isNaN(date.getTime())) return copy(language, 'recently', 'เมื่อไม่นานมานี้')
 
   return date.toLocaleDateString(language === 'th' ? 'th-TH' : 'en-GB', { day: '2-digit', month: 'short' })
+}
+
+function formatExactDateTime(value, language = getAppLanguage()) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-GB', {
+    dateStyle: 'full',
+    timeStyle: 'medium',
+  }).format(date)
 }
 
 function formatNotificationTime(value, language = getAppLanguage()) {
@@ -134,15 +170,18 @@ function LeftNavItem({ active = false, badge = 0, icon, label, onClick }) {
   return (
     <button
       type="button"
-      className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${
-        active ? 'bg-white/[0.055] font-bold text-lime-50' : 'text-slate-300 hover:bg-white/[0.04] hover:text-lime-50'
+      className={`flex min-h-11 w-full items-center gap-3 rounded-lg border px-3 py-2 text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${
+        active
+          ? 'border-[#9bcf82]/20 bg-[#22301f] font-bold text-lime-50 shadow-[inset_3px_0_0_#9bcf82,0_6px_18px_rgba(0,0,0,.16)]'
+          : 'border-transparent text-slate-400 hover:border-lime-100/10 hover:bg-white/[0.035] hover:text-lime-50'
       }`}
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
     >
       <span className="relative shrink-0">
         <AppIcon className={`h-4 w-4 ${active ? 'text-lime-100' : 'text-slate-400'}`} name={icon} />
         {badge > 0 ? (
-          <span className="absolute -right-2 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-black leading-none text-white ring-2 ring-[#151817]">
+          <span className="absolute -right-2 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-xs font-black leading-none text-white ring-2 ring-[#151817]">
             {badge > 99 ? '99+' : badge}
           </span>
         ) : null}
@@ -156,7 +195,7 @@ function MobileNavItem({ active = false, badge = 0, icon, label, onClick }) {
   return (
     <button
       type="button"
-      className={`relative flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 ${
+      className={`relative flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 ${
         active ? 'bg-[#9bcf82]/10 text-lime-100' : 'text-slate-400 hover:bg-white/[0.04] hover:text-lime-50'
       }`}
       onClick={onClick}
@@ -165,7 +204,7 @@ function MobileNavItem({ active = false, badge = 0, icon, label, onClick }) {
       <span className="relative">
         <AppIcon className="h-5 w-5" name={icon} />
         {badge > 0 ? (
-          <span className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-black leading-none text-white ring-2 ring-[#101412]">
+          <span className="absolute -right-3 -top-2 grid min-h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-xs font-black leading-none text-white ring-2 ring-[#101412]">
             {badge > 99 ? '99+' : badge}
           </span>
         ) : null}
@@ -260,16 +299,35 @@ function CommunityMotionStyles() {
         .game-preview:focus-visible .game-preview-eye { animation-duration: 1ms !important; }
       }
       .community-shared-scroll {
-        scrollbar-color: rgba(155,207,130,.34) transparent;
+        scrollbar-color: rgba(155,207,130,.62) rgba(8,13,10,.72);
+        scrollbar-gutter: stable;
         scrollbar-width: thin;
       }
-      .community-shared-scroll::-webkit-scrollbar { width: 8px; }
-      .community-shared-scroll::-webkit-scrollbar-track { background: transparent; }
+      .community-shared-scroll::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      .community-shared-scroll::-webkit-scrollbar-track {
+        border-radius: 999px;
+        background: rgba(8,13,10,.72);
+      }
       .community-shared-scroll::-webkit-scrollbar-thumb {
         border: 2px solid transparent;
         border-radius: 999px;
-        background: rgba(155,207,130,.34);
+        background: rgba(155,207,130,.62);
         background-clip: padding-box;
+      }
+      .community-shared-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgba(175,224,154,.84);
+        background-clip: padding-box;
+      }
+      .community-shared-scroll::-webkit-scrollbar-button {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+      .community-shared-scroll::-webkit-scrollbar-corner {
+        background: transparent;
       }
     `}</style>
   )
@@ -323,7 +381,7 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
         ) : (
           <div className="grid h-full place-items-center text-sm text-slate-400">{isLive ? copy(language, 'Live plant garden', 'สวนพืชแบบสด') : copy(language, 'Saved game state', 'สถานะเกมที่บันทึกไว้')}</div>
         )}
-        <span className={`absolute left-3 top-3 inline-flex items-center gap-2 rounded-md px-2 py-1 text-[10px] font-black ${isLive ? 'bg-[#9bcf82] text-[#101511]' : 'bg-[#101511]/90 text-lime-100'}`}>
+        <span className={`absolute left-3 top-3 inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-black ${isLive ? 'bg-[#9bcf82] text-[#101511]' : 'bg-[#101511]/90 text-lime-100'}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-[#101511]' : 'bg-slate-400'}`} />
           {isLive ? copy(language, 'LIVE GARDEN', 'สวนแบบสด') : copy(language, 'SAVED GAME STATE', 'สถานะเกมที่บันทึก')}
         </span>
@@ -336,7 +394,7 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
       <div className="grid grid-cols-3 gap-2 p-3 text-xs">
         <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{copy(language, 'Score', 'คะแนน')} <strong className="text-lime-100">{score}</strong></span>
         <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{copy(language, 'Health', 'สุขภาพ')} <strong className="text-lime-100">{health}%</strong></span>
-        <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{isLive ? copy(language, 'Growth', 'การเติบโต') : copy(language, 'Days', 'วัน')} <strong className="text-lime-100">{isLive ? `${Math.round(score)}%` : history?.duration_days ?? 1}</strong></span>
+        <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{isLive ? copy(language, 'Growth', 'การเติบโต') : copy(language, 'Grow time', 'เวลาปลูก')} <strong className="text-lime-100">{isLive ? `${Math.round(score)}%` : formatPlantDuration(history, language, { compact: true })}</strong></span>
       </div>
       <span className="flex w-full items-center justify-center gap-2 border-t border-lime-100/10 bg-[#9bcf82]/10 px-3 py-3 text-xs font-black text-lime-100 transition group-hover:bg-[#9bcf82]/18">
         <AppIcon className="h-4 w-4" name="eye" />
@@ -346,7 +404,7 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
   )
 }
 
-function ProfileHoverCard({ onSelectUser, user }) {
+function ProfileHoverCard({ align = 'left', onSelectUser, user }) {
   const language = useCommunityLanguage()
   const normalized = normalizeUser(user)
   const bio = user?.bio || copy(language, 'Plant Growth Academy learner sharing saved simulations and classroom observations.', 'ผู้เรียน Plant Growth Academy ที่แบ่งปันการจำลองและข้อสังเกตจากห้องเรียน')
@@ -354,28 +412,58 @@ function ProfileHoverCard({ onSelectUser, user }) {
   const friendCount = Number(user?.friends_count ?? 0)
 
   return (
-    <div className="pointer-events-none absolute left-0 top-full z-30 mt-3 w-72 translate-y-1 rounded-xl border border-lime-100/10 bg-[#101312] p-4 text-left opacity-0 shadow-[0_14px_34px_rgba(0,0,0,0.36)] transition duration-200 group-hover/profile:pointer-events-auto group-hover/profile:translate-y-0 group-hover/profile:opacity-100 group-focus-within/profile:pointer-events-auto group-focus-within/profile:translate-y-0 group-focus-within/profile:opacity-100">
-      <button className="flex w-full items-start gap-3 text-left" onClick={() => onSelectUser?.(user)} type="button">
-        <UserAvatar className="h-12 w-12 text-base" fallback={normalized.avatar} user={user} />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <strong className="truncate text-sm text-lime-50">{normalized.name}</strong>
-            <span className="rounded-md border border-lime-100/10 bg-white/[0.035] px-1.5 py-0.5 text-[10px] font-bold text-lime-100">Lv.{normalized.levelInfo.level}</span>
+    <div className={`pointer-events-none absolute top-full z-50 mt-3 w-[min(18rem,calc(100vw-2rem))] translate-y-1 overflow-hidden rounded-xl border border-lime-100/10 bg-[#101312] text-left opacity-0 shadow-[0_18px_42px_rgba(0,0,0,0.44)] transition duration-200 group-hover/profile:pointer-events-auto group-hover/profile:translate-y-0 group-hover/profile:opacity-100 group-focus-within/profile:pointer-events-auto group-focus-within/profile:translate-y-0 group-focus-within/profile:opacity-100 ${align === 'right' ? 'right-0' : 'left-0'}`}>
+      <div className="relative h-20 overflow-hidden bg-gradient-to-br from-[#34482d] via-[#253322] to-[#151b16]">
+        <CoverImage user={user} />
+        <span className="absolute inset-0 z-10 bg-gradient-to-t from-[#101312]/90 via-transparent to-black/10" />
+      </div>
+      <div className="relative z-20 px-4 pb-4">
+        <button className="-mt-7 flex w-full items-end gap-3 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" onClick={() => onSelectUser?.(user)} type="button">
+          <UserAvatar className="h-14 w-14 bg-[#263022] text-base" fallback={normalized.avatar} imageClassName="scale-[1.12]" showRing={false} user={user} />
+          <span className="min-w-0 flex-1 pb-1">
+            <span className="flex items-center gap-2">
+              <strong className="truncate text-sm text-lime-50">{normalized.name}</strong>
+              <span className="shrink-0 rounded-md border border-lime-100/10 bg-[#1b241a] px-1.5 py-0.5 text-xs font-bold text-lime-100">Lv.{normalized.levelInfo.level}</span>
+            </span>
+            <span className="block truncate text-xs text-slate-400">{normalized.handle}</span>
           </span>
-          <span className="block truncate text-xs text-slate-500">{normalized.handle}</span>
-        </span>
-      </button>
+        </button>
       <p className="mt-3 line-clamp-2 text-xs leading-5 text-slate-400">{bio}</p>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-400">
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-slate-400">
         <span className="rounded-md bg-white/[0.04] px-2 py-2"><strong className="text-lime-100">{friendCount}</strong> {copy(language, 'friends', 'เพื่อน')}</span>
         <span className="rounded-md bg-white/[0.04] px-2 py-2"><strong className="text-lime-100">{plantCount}</strong> {copy(language, 'plants', 'พืช')}</span>
+      </div>
       </div>
     </div>
   )
 }
 
-function FeedPost({ onOpenGame, onOpenPost, onSelectUser, onToggleLike, post, reactionBurstKey }) {
+function FeedPost({ hidden = false, onHide, onOpenGame, onOpenPost, onRestore, onSelectUser, onToggleLike, post, reactionBurstKey }) {
+  const language = useCommunityLanguage()
   const postUser = post.user ?? { username: post.author, level: post.level }
+
+  if (hidden) {
+    return (
+      <article className="border-b border-lime-100/10 px-8 py-5">
+        <div className="flex min-h-24 items-center gap-4 rounded-xl border border-dashed border-lime-100/15 bg-white/[0.025] px-5 py-4">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-lime-100/10 bg-[#101511] text-slate-400">
+            <AppIcon className="h-4 w-4" name="eyeOff" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-sm text-lime-50">{copy(language, 'You hid this post', 'คุณได้ปิดการมองเห็นโพสต์นี้แล้ว')}</strong>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">{copy(language, 'This only affects your Community feed.', 'การตั้งค่านี้มีผลเฉพาะหน้าชุมชนของคุณ')}</span>
+          </span>
+          <button
+            className="min-h-10 shrink-0 rounded-lg border border-[#9bcf82]/30 bg-[#9bcf82]/10 px-4 text-xs font-black text-lime-100 transition hover:bg-[#9bcf82]/18 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+            onClick={() => onRestore?.(post)}
+            type="button"
+          >
+            {copy(language, 'Undo', 'ยกเลิก')}
+          </button>
+        </div>
+      </article>
+    )
+  }
 
   return (
     <article
@@ -401,16 +489,33 @@ function FeedPost({ onOpenGame, onOpenPost, onSelectUser, onToggleLike, post, re
         </div>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-start justify-between gap-3">
-            <div className="group/profile relative min-w-0" onClick={(event) => event.stopPropagation()}>
-              <button className="min-w-0 text-left" onClick={() => onSelectUser?.(postUser)} type="button">
-                <strong className="mr-1 text-sm text-lime-50">{post.author}</strong>
-                <span className="text-xs text-slate-400">{post.handle}</span>
-                {post.level ? <span className="ml-2 rounded-md border border-lime-100/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] font-bold text-slate-500">Lv.{post.level}</span> : null}
-                <span className="ml-2 text-xs text-slate-500">{formatTime(post.created_at)}</span>
-              </button>
-              <ProfileHoverCard onSelectUser={onSelectUser} user={postUser} />
+            <div className="flex min-w-0 flex-wrap items-center" onClick={(event) => event.stopPropagation()}>
+              <div className="group/profile relative min-w-0">
+                <button className="min-w-0 text-left" onClick={() => onSelectUser?.(postUser)} type="button">
+                  <strong className="mr-1 text-sm text-lime-50">{post.author}</strong>
+                  <span className="text-xs text-slate-400">{post.handle}</span>
+                  {post.level ? <span className="ml-2 rounded-md border border-lime-100/10 bg-white/[0.03] px-1.5 py-0.5 text-xs font-bold text-slate-500">Lv.{post.level}</span> : null}
+                </button>
+                <ProfileHoverCard onSelectUser={onSelectUser} user={postUser} />
+              </div>
+              <time
+                className="ml-2 cursor-help text-xs text-slate-500 decoration-dotted underline-offset-4 hover:text-slate-300 hover:underline"
+                dateTime={post.created_at || undefined}
+                title={formatExactDateTime(post.created_at, language)}
+              >
+                {formatTime(post.created_at, language)}
+              </time>
             </div>
-            <button type="button" className="grid min-h-11 min-w-11 place-items-center rounded-md text-slate-400 transition hover:bg-white/[0.06] hover:text-lime-50" onClick={(event) => event.stopPropagation()} aria-label="Post menu">
+            <button
+              type="button"
+              className="grid min-h-11 min-w-11 place-items-center rounded-md text-slate-400 transition hover:bg-white/[0.06] hover:text-lime-50"
+              onClick={(event) => {
+                event.stopPropagation()
+                onHide?.(post)
+              }}
+              aria-label={copy(language, 'Hide this post', 'ปิดการมองเห็นโพสต์นี้')}
+              title={copy(language, 'Hide this post', 'ปิดการมองเห็นโพสต์นี้')}
+            >
               <AppIcon className="h-4 w-4" name="more" />
             </button>
           </div>
@@ -429,6 +534,7 @@ function FeedPost({ onOpenGame, onOpenPost, onSelectUser, onToggleLike, post, re
 }
 
 function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSelectUser, onStartReply, onSubmitReply, onToggleCommentLike, replyingToId, replyDrafts, submittingReply }) {
+  const language = useCommunityLanguage()
   const author = displayName(comment.user)
   const replies = comment.replies ?? []
   const isReplying = String(replyingToId) === String(comment.id)
@@ -450,11 +556,20 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
         </div>
         <div className="min-w-0 flex-1">
           <div className="inline-block max-w-full rounded-2xl rounded-tl-md bg-white/[0.075] px-3 py-2">
-            <button className="block text-left text-xs font-black text-lime-50 transition hover:text-[#9bcf82] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" onClick={() => onSelectUser?.(comment.user)} type="button">{author}</button>
+            <div className="group/profile relative w-fit">
+              <button className="block text-left text-xs font-black text-lime-50 transition hover:text-[#9bcf82] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" onClick={() => onSelectUser?.(comment.user)} type="button">{author}</button>
+              <ProfileHoverCard onSelectUser={onSelectUser} user={comment.user} />
+            </div>
             <p className="whitespace-pre-line text-sm leading-5 text-slate-100">{comment.comment_text}</p>
           </div>
-          <div className="mt-1 flex items-center gap-3 px-2 text-[11px] font-semibold text-slate-500">
-            <span>{formatTime(comment.created_at)}</span>
+          <div className="mt-1 flex items-center gap-3 px-2 text-xs font-semibold text-slate-500">
+            <time
+              className="cursor-help decoration-dotted underline-offset-4 hover:text-slate-300 hover:underline"
+              dateTime={comment.created_at || undefined}
+              title={formatExactDateTime(comment.created_at, language)}
+            >
+              {formatTime(comment.created_at, language)}
+            </time>
             <button
               className={`relative transition ${comment.liked_by_me ? 'text-rose-400' : 'hover:text-lime-100'}`}
               onClick={() => onToggleCommentLike(comment)}
@@ -520,7 +635,8 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
     </div>
   )
 }
-function PostModal({ commentBurstKeys, commentDraft, comments, commentsLoading = false, currentUser, onClose, onCommentDraftChange, onOpenGame, onReplyDraftChange, onSelectUser, onStartReply, onSubmitComment, onSubmitReply, onToggleCommentLike, onToggleLike, post, postBurstKey, replyingToId, replyDrafts, submittingComment, submittingReply }) {
+function PostModal({ actionError = '', commentBurstKeys, commentDraft, comments, commentsLoading = false, currentUser, onClose, onCommentDraftChange, onOpenGame, onReplyDraftChange, onSelectUser, onStartReply, onSubmitComment, onSubmitReply, onToggleCommentLike, onToggleLike, post, postBurstKey, replyingToId, replyDrafts, submittingComment, submittingReply }) {
+  const language = useCommunityLanguage()
   if (!post) return null
 
   const postUser = post.user ?? { username: post.author, level: post.level }
@@ -542,7 +658,16 @@ function PostModal({ commentBurstKeys, commentDraft, comments, commentsLoading =
         <div className="flex items-center justify-between border-b border-lime-100/10 px-5 py-3">
           <div>
             <h2 className="text-sm font-black text-lime-50">{post.author}&apos;s post</h2>
-            <p className="text-xs text-slate-500">{post.handle} - {formatTime(post.created_at)}</p>
+            <p className="text-xs text-slate-500">
+              {post.handle} <span aria-hidden="true">·</span>{' '}
+              <time
+                className="cursor-help decoration-dotted underline-offset-4 hover:text-slate-300 hover:underline"
+                dateTime={post.created_at || undefined}
+                title={formatExactDateTime(post.created_at, language)}
+              >
+                {formatTime(post.created_at, language)}
+              </time>
+            </p>
           </div>
           <button
             className="grid h-11 w-11 place-items-center rounded-md border border-lime-100/10 text-slate-400 transition hover:bg-white/[0.05] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
@@ -609,6 +734,12 @@ function PostModal({ commentBurstKeys, commentDraft, comments, commentsLoading =
         </div>
 
         <form className="border-t border-lime-100/10 bg-[#151817] px-4 py-3" onSubmit={onSubmitComment}>
+          {actionError ? (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs leading-5 text-red-100" role="alert">
+              <AppIcon className="mt-0.5 h-4 w-4 shrink-0" name="warning" />
+              <span>{actionError}</span>
+            </div>
+          ) : null}
           <div className="flex items-end gap-3">
             <UserAvatar className="h-9 w-9 bg-[#8fbf78] text-xs text-[#101511]" fallback={avatarLabel(displayName(currentUser))} user={currentUser} />
             <label className="min-w-0 flex-1">
@@ -635,7 +766,7 @@ function PostModal({ commentBurstKeys, commentDraft, comments, commentsLoading =
     </div>
   )
 }
-function ProfileCenter({ friendsCount, isOwnProfile = true, loading = false, onAddFriend, onBack, onEditProfile, onOpenGame, onOpenPost, onSelectUser, onToggleLike, posts, reactionBursts, user }) {
+function ProfileCenter({ actionBusy = false, actionError = '', friendsCount, hiddenPostIds = [], isOwnProfile = true, loading = false, onAddFriend, onBack, onEditProfile, onHidePost, onOpenGame, onOpenPost, onRestorePost, onSelectUser, onToggleLike, posts, reactionBursts, user }) {
   const language = useCommunityLanguage()
   const name = displayName(user)
   const handle = '@' + (user?.username ?? name.replace(/\s+/g, '').toLowerCase())
@@ -678,23 +809,29 @@ function ProfileCenter({ friendsCount, isOwnProfile = true, loading = false, onA
             <UserAvatar className="h-20 w-20 border-4 border-[#141817] bg-[#f4f7f2] text-3xl text-[#111827]" fallback={avatarLabel(name)} user={user} />
             <div className="mb-1 mt-4 flex items-center gap-2">
               <button
-                className={'min-h-11 rounded-full px-5 text-xs font-black transition focus:outline-none focus:ring-2 ' + (isOwnProfile ? 'border border-sky-200/80 bg-sky-100 text-sky-950 hover:bg-sky-200 focus:ring-sky-300/70' : canAddFriend ? 'border border-lime-200/80 bg-lime-200 text-[#101511] hover:bg-lime-100 focus:ring-lime-300/70' : 'border border-lime-100/10 bg-white/[0.05] text-slate-300')}
-                disabled={!isOwnProfile && !canAddFriend}
+                className={'min-h-11 rounded-full px-5 text-xs font-black transition focus:outline-none focus:ring-2 ' + (isOwnProfile ? 'border border-[#9bcf82] bg-[#9bcf82] text-[#101511] shadow-[0_6px_16px_rgba(91,145,77,.2)] hover:border-[#afe09a] hover:bg-[#afe09a] focus:ring-[#9bcf82]/50' : canAddFriend ? 'border border-lime-200/80 bg-lime-200 text-[#101511] hover:bg-lime-100 focus:ring-lime-300/70' : 'border border-lime-100/10 bg-white/[0.05] text-slate-300')}
+                disabled={actionBusy || (!isOwnProfile && !canAddFriend)}
                 onClick={isOwnProfile ? onEditProfile : canAddFriend ? onAddFriend : undefined}
                 type="button"
               >
-                {actionLabel}
+                {actionBusy ? copy(language, 'Adding...', 'กำลังเพิ่ม...') : actionLabel}
               </button>
             </div>
           </div>
+          {actionError ? (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs leading-5 text-red-100" role="alert">
+              <AppIcon className="mt-0.5 h-4 w-4 shrink-0" name="warning" />
+              <span>{actionError}</span>
+            </div>
+          ) : null}
           <div className="mt-3">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-black text-lime-50">{name}</h1>
-              <span className="rounded-md border border-lime-100/10 bg-white/[0.04] px-2 py-0.5 text-[11px] font-bold text-lime-100">Lv.{levelInfo.level}</span>
-              <span className="grid h-4 w-4 place-items-center rounded-full bg-[#8fbf78] text-[10px] text-[#101511]"><AppIcon className="h-3 w-3" name="check" /></span>
+              <span className="rounded-md border border-lime-100/10 bg-white/[0.04] px-2 py-0.5 text-xs font-bold text-lime-100">Lv.{levelInfo.level}</span>
+              <span className="grid h-4 w-4 place-items-center rounded-full bg-[#8fbf78] text-xs text-[#101511]"><AppIcon className="h-3 w-3" name="check" /></span>
             </div>
             <p className="text-xs text-slate-500">{handle}</p>
-            <div className="mt-2 flex max-w-[240px] items-center gap-2 text-[10px] font-semibold text-slate-500">
+            <div className="mt-2 flex max-w-[240px] items-center gap-2 text-xs font-semibold text-slate-500">
               <span>EXP</span>
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><span className="block h-full rounded-full bg-gradient-to-r from-[#78d67a] to-[#b8ec9e] transition-[width] duration-500" style={{ width: String(levelInfo.percent) + '%' }} /></span>
               <span>{levelInfo.exp}/{levelInfo.nextExp}</span>
@@ -714,7 +851,18 @@ function ProfileCenter({ friendsCount, isOwnProfile = true, loading = false, onA
 
       {loading ? <LoadingSkeleton count={2} label="Loading profile posts" variant="feed" /> : null}
       {!loading && profilePosts.map((post) => (
-        <FeedPost key={post.id} onOpenGame={onOpenGame} onOpenPost={onOpenPost} onSelectUser={onSelectUser} onToggleLike={onToggleLike} post={post} reactionBurstKey={reactionBursts['post-' + post.id]} />
+        <FeedPost
+          key={post.id}
+          hidden={hiddenPostIds.includes(String(post.id))}
+          onHide={onHidePost}
+          onOpenGame={onOpenGame}
+          onOpenPost={onOpenPost}
+          onRestore={onRestorePost}
+          onSelectUser={onSelectUser}
+          onToggleLike={onToggleLike}
+          post={post}
+          reactionBurstKey={reactionBursts['post-' + post.id]}
+        />
       ))}
       {!loading && !profilePosts.length ? <div className="grid min-h-[320px] place-items-center border-t border-lime-100/10 px-8 text-center text-sm text-slate-400">{copy(language, 'Shared plant history posts will appear here.', 'โพสต์ประวัติพืชที่แชร์จะแสดงที่นี่')}</div> : null}
     </main>
@@ -809,11 +957,11 @@ function UserSearchRow({ user, compact = false, onSelect }) {
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <strong className="truncate text-sm text-lime-50">{normalized.name}</strong>
-          <span className="rounded-md border border-lime-100/10 bg-white/[0.035] px-1.5 py-0.5 text-[10px] font-bold text-lime-100">Lv.{normalized.levelInfo.level}</span>
+          <span className="rounded-md border border-lime-100/10 bg-white/[0.035] px-1.5 py-0.5 text-xs font-bold text-lime-100">Lv.{normalized.levelInfo.level}</span>
         </span>
         <span className="block truncate text-xs text-slate-500">{normalized.handle}</span>
       </span>
-      {plantCount > 0 ? <span className="text-[11px] font-semibold text-slate-500">{plantCount} {copy(language, 'saves', 'รายการที่บันทึก')}</span> : null}
+      {plantCount > 0 ? <span className="text-xs font-semibold text-slate-500">{plantCount} {copy(language, 'saves', 'รายการที่บันทึก')}</span> : null}
     </button>
   )
 }
@@ -857,25 +1005,35 @@ function SearchCenter({ error, query, results, loading, onQueryChange, onSelectU
   )
 }
 
-function LeaderboardCard({ title, subtitle, icon, users, metric }) {
+function LeaderboardCard({ title, subtitle, icon, users, metric, onSelectUser }) {
+  const language = useCommunityLanguage()
+
   return (
-    <section className="rounded-lg bg-[#171b1a] p-4">
+    <section className="rounded-xl border border-lime-100/10 bg-[#18201b] p-4 shadow-[0_10px_26px_rgba(0,0,0,.16)]">
       <div className="mb-3 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-md bg-[#22301f] text-lime-100">
+        <span className="grid h-9 w-9 place-items-center rounded-lg border border-[#9bcf82]/15 bg-[#263822] text-lime-100">
           <AppIcon className="h-4 w-4" name={icon} />
         </span>
         <div>
           <h2 className="text-sm font-black text-lime-50">{title}</h2>
-          <p className="text-[11px] text-slate-500">{subtitle}</p>
+          <p className="text-xs text-slate-500">{subtitle}</p>
         </div>
       </div>
       <div className="space-y-1">
         {users.slice(0, 10).map((user, index) => (
-          <div key={user.id} className="flex items-center gap-2 rounded-md px-2 py-2">
-            <span className={`w-5 text-center text-xs font-black ${index < 3 ? 'text-lime-100' : 'text-slate-500'}`}>{index + 1}</span>
-            <UserAvatar className="h-7 w-7 text-[11px]" fallback={avatarLabel(displayName(user))} user={user} />
-            <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-200">{displayName(user)}</span>
-            <span className="text-[11px] font-black text-lime-100">{metric(user)}</span>
+          <div key={user.id} className="group/profile relative">
+            <button
+              aria-label={`${copy(language, 'Open profile for', 'เปิดโปรไฟล์ของ')} ${displayName(user)}`}
+              className="flex w-full items-center gap-2 rounded-lg border border-transparent px-2 py-2 text-left transition hover:border-lime-100/10 hover:bg-[#223027] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+              onClick={() => onSelectUser?.(user)}
+              type="button"
+            >
+              <span className={`w-5 text-center text-xs font-black ${index < 3 ? 'text-lime-100' : 'text-slate-500'}`}>{index + 1}</span>
+              <UserAvatar className="h-7 w-7 text-xs" fallback={avatarLabel(displayName(user))} user={user} />
+              <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-200">{displayName(user)}</span>
+              <span className="text-xs font-black text-lime-100">{metric(user)}</span>
+            </button>
+            <ProfileHoverCard align="right" onSelectUser={onSelectUser} user={user} />
           </div>
         ))}
         {!users.length ? <p className="py-4 text-xs text-slate-500">No ranking data yet.</p> : null}
@@ -884,13 +1042,13 @@ function LeaderboardCard({ title, subtitle, icon, users, metric }) {
   )
 }
 
-function RightDashboard({ leaderboard, loading = false, onOpenSearch }) {
+function RightDashboard({ leaderboard, loading = false, onOpenSearch, onSelectUser }) {
   const language = useCommunityLanguage()
 
   return (
-    <aside className="sticky top-0 self-start border-l border-lime-100/10 bg-[#151817] px-5 py-6 max-lg:hidden">
+    <aside className="sticky top-0 min-h-[calc(100dvh-4rem)] self-start border-l border-lime-100/10 bg-[#101713] px-5 py-6 max-lg:hidden">
       <button
-        className="relative block h-11 w-full min-w-0 rounded-full border border-lime-100/10 bg-[#101312] pl-11 pr-4 text-left text-sm text-slate-500 outline-none transition hover:border-[#8fbf78] hover:text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+        className="relative block h-11 w-full min-w-0 rounded-xl border border-lime-100/15 bg-[#18201b] pl-11 pr-4 text-left text-sm text-slate-400 shadow-[0_8px_20px_rgba(0,0,0,.12)] outline-none transition hover:border-[#8fbf78]/60 hover:bg-[#1c2720] hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
         onClick={onOpenSearch}
         type="button"
         title={copy(language, 'Search the community...', 'ค้นหาในชุมชน...')}
@@ -911,6 +1069,7 @@ function RightDashboard({ leaderboard, loading = false, onOpenSearch }) {
               subtitle="top 10 Levels"
               title="Level ranking"
               users={leaderboard.levels}
+              onSelectUser={onSelectUser}
             />
             <LeaderboardCard
               icon="plant"
@@ -918,6 +1077,7 @@ function RightDashboard({ leaderboard, loading = false, onOpenSearch }) {
               subtitle="most saved plants"
               title="Grow ranking"
               users={leaderboard.growers}
+              onSelectUser={onSelectUser}
             />
           </>
         )}
@@ -929,7 +1089,9 @@ function RightDashboard({ leaderboard, loading = false, onOpenSearch }) {
 function NotificationRow({ item, onOpen }) {
   const language = useCommunityLanguage()
   const actorName = displayName(item.actor)
-  const action = item.type === 'like'
+  const action = item.type === 'garden_prank'
+    ? copy(language, 'sent a prank to your garden', 'ส่งของแกล้งมายังสวนของคุณ')
+    : item.type === 'like'
     ? copy(language, 'liked your post', 'ถูกใจโพสต์ของคุณ')
     : item.type === 'comment_like'
       ? copy(language, 'liked your comment', 'ถูกใจความคิดเห็นของคุณ')
@@ -949,7 +1111,13 @@ function NotificationRow({ item, onOpen }) {
         <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm leading-5">
           <strong className="text-lime-50">{actorName}</strong>
           <span className={item.is_read ? 'text-slate-400' : 'text-slate-200'}>{action}</span>
-          <span className="text-xs text-[#78906f]">{formatNotificationTime(item.created_at, language)}</span>
+          <time
+            className="cursor-help text-xs text-[#78906f] decoration-dotted underline-offset-4 hover:text-slate-300 hover:underline"
+            dateTime={item.created_at || undefined}
+            title={formatExactDateTime(item.created_at, language)}
+          >
+            {formatNotificationTime(item.created_at, language)}
+          </time>
         </span>
         <span className="mt-1 block text-xs text-[#8fa38a]">{copy(language, 'On', 'ใน')} {item.plant_name || copy(language, 'your plant update', 'อัปเดตพืชของคุณ')}</span>
         {item.excerpt ? <span className="mt-1 block truncate text-xs text-slate-300">“{item.excerpt}”</span> : null}
@@ -1008,7 +1176,7 @@ function NotificationsCenter({ error, items, loading, onOpen, onRetry }) {
   )
 }
 
-function FeedCenter({ activeFeed, error, friendPosts, onFeedChange, onOpenGame, onOpenPost, onRetry, onSelectUser, onToggleLike, posts, reactionBursts, status }) {
+function FeedCenter({ activeFeed, error, friendPosts, hiddenPostIds = [], onFeedChange, onHidePost, onOpenGame, onOpenPost, onRestorePost, onRetry, onSelectUser, onToggleLike, posts, reactionBursts, status }) {
   const language = useCommunityLanguage()
   const visiblePosts = activeFeed === 'friends' ? friendPosts : posts
 
@@ -1037,7 +1205,18 @@ function FeedCenter({ activeFeed, error, friendPosts, onFeedChange, onOpenGame, 
       ) : status === 'error' ? (
         <CommunityState actionLabel={copy(language, 'Try again', 'ลองอีกครั้ง')} description={error} onAction={onRetry} title={copy(language, 'Community is unavailable', 'ไม่สามารถโหลดชุมชนได้')} />
       ) : visiblePosts.map((post) => (
-        <FeedPost key={post.id} onOpenGame={onOpenGame} onOpenPost={onOpenPost} onSelectUser={onSelectUser} onToggleLike={onToggleLike} post={post} reactionBurstKey={reactionBursts[`post-${post.id}`]} />
+        <FeedPost
+          key={post.id}
+          hidden={hiddenPostIds.includes(String(post.id))}
+          onHide={onHidePost}
+          onOpenGame={onOpenGame}
+          onOpenPost={onOpenPost}
+          onRestore={onRestorePost}
+          onSelectUser={onSelectUser}
+          onToggleLike={onToggleLike}
+          post={post}
+          reactionBurstKey={reactionBursts[`post-${post.id}`]}
+        />
       ))}
       {status === 'ready' && !visiblePosts.length ? (
         <div className="grid min-h-[420px] place-items-center px-8 text-center text-sm text-slate-400">
@@ -1082,6 +1261,10 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
   const [editingProfile, setEditingProfile] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState('')
+  const [profileActionBusy, setProfileActionBusy] = useState(false)
+  const [profileActionError, setProfileActionError] = useState('')
+  const [postActionError, setPostActionError] = useState('')
+  const [hiddenPostIds, setHiddenPostIds] = useState(() => loadHiddenCommunityPostIds(currentUser?.id))
   const [homeScrollTop, setHomeScrollTop] = useState(Number(returnState.homeScrollTop ?? 0))
   const sharedScrollRef = useRef(null)
 
@@ -1277,6 +1460,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
   }, [navigateCommunityView])
 
   const handleSelectUser = useCallback((selectedUser) => {
+    setProfileActionError('')
     if (user?.id && selectedUser?.id && String(user.id) === String(selectedUser.id)) {
       setSelectedProfile(null)
       navigateCommunityView('profile')
@@ -1288,6 +1472,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
   }, [navigateCommunityView, user])
 
   const handleOpenOwnProfile = useCallback(() => {
+    setProfileActionError('')
     setSelectedProfile(null)
     navigateCommunityView('profile')
   }, [navigateCommunityView])
@@ -1295,13 +1480,62 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
   const handleAddFriend = useCallback(async () => {
     if (!selectedProfile?.id) return
 
+    setProfileActionBusy(true)
+    setProfileActionError('')
     try {
       await inviteFriend(selectedProfile.id)
       setSelectedProfile((current) => current ? { ...current, friendship_status: 'connected' } : current)
-    } catch {
-      setSelectedProfile((current) => current ? { ...current, friendship_status: 'connected' } : current)
+    } catch (error) {
+      setProfileActionError(error.message || copy(language, 'Could not add this friend. Please try again.', 'ไม่สามารถเพิ่มเพื่อนได้ โปรดลองอีกครั้ง'))
+    } finally {
+      setProfileActionBusy(false)
     }
-  }, [selectedProfile])
+  }, [language, selectedProfile])
+
+  const updateHiddenPostIds = useCallback((updater) => {
+    setHiddenPostIds((current) => {
+      const next = updater(current)
+      saveHiddenCommunityPostIds(user?.id, next)
+      return next
+    })
+  }, [user?.id])
+
+  const handleHidePost = useCallback(async (post) => {
+    if (!post?.id || hiddenPostIds.includes(String(post.id))) return
+
+    const confirmation = await Swal.fire({
+      title: copy(language, 'Hide this post?', 'ปิดการมองเห็นโพสต์นี้หรือไม่'),
+      text: copy(
+        language,
+        `The post from ${post.author} will only be hidden from your Community feed. You can undo this afterward.`,
+        `โพสต์ของ ${post.author} จะถูกซ่อนเฉพาะจากหน้าชุมชนของคุณ และสามารถยกเลิกได้ภายหลัง`,
+      ),
+      icon: 'question',
+      showCancelButton: true,
+      focusCancel: true,
+      reverseButtons: true,
+      buttonsStyling: false,
+      confirmButtonText: copy(language, 'Hide post', 'ปิดการมองเห็น'),
+      cancelButtonText: copy(language, 'Cancel', 'ยกเลิก'),
+      background: '#101511',
+      color: '#eaf7df',
+      customClass: {
+        popup: 'plantsim-shop-alert',
+        title: 'plantsim-shop-alert__title',
+        actions: 'plantsim-shop-alert__actions',
+        confirmButton: 'plantsim-shop-alert__confirm',
+        cancelButton: 'plantsim-shop-alert__cancel',
+      },
+    })
+
+    if (!confirmation.isConfirmed) return
+    updateHiddenPostIds((current) => [...new Set([...current, String(post.id)])])
+  }, [hiddenPostIds, language, updateHiddenPostIds])
+
+  const handleRestorePost = useCallback((post) => {
+    if (!post?.id) return
+    updateHiddenPostIds((current) => current.filter((id) => id !== String(post.id)))
+  }, [updateHiddenPostIds])
 
   const updatePostEverywhere = useCallback((postId, updater) => {
     const updateList = (list) => list.map((post) => (String(post.id) === String(postId) ? updater(post) : post))
@@ -1312,6 +1546,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
   }, [])
 
   const handleOpenPost = useCallback((post) => {
+    setPostActionError('')
     setSelectedPost(post)
     setCommentDraft('')
     setReplyingToId(null)
@@ -1326,6 +1561,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
   }, [])
 
   const handleClosePost = useCallback(() => {
+    setPostActionError('')
     setSelectedPost(null)
     setPostComments([])
     setPostCommentsLoading(false)
@@ -1410,6 +1646,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
     if (!selectedPost?.id || !text) return
 
     setSubmittingReply(true)
+    setPostActionError('')
     try {
       const payload = await createPostCommentReply(selectedPost.id, parentId, text)
       if (payload.data) setPostComments((current) => addReplyToTree(current, parentId, { ...payload.data, replies: payload.data.replies ?? [] }))
@@ -1419,10 +1656,12 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
       }))
       setReplyDrafts((current) => ({ ...current, [parentId]: '' }))
       setReplyingToId(null)
+    } catch (error) {
+      setPostActionError(error.message || copy(language, 'Your reply could not be posted. Please try again.', 'ไม่สามารถส่งคำตอบได้ โปรดลองอีกครั้ง'))
     } finally {
       setSubmittingReply(false)
     }
-  }, [replyDrafts, selectedPost?.id, updatePostEverywhere])
+  }, [language, replyDrafts, selectedPost, updatePostEverywhere])
   const handleSubmitComment = useCallback(async (event) => {
     event.preventDefault()
     const text = commentDraft.trim()
@@ -1430,6 +1669,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
     if (!selectedPost?.id || !text) return
 
     setSubmittingComment(true)
+    setPostActionError('')
     try {
       const payload = await createPostComment(selectedPost.id, text)
       if (payload.data) setPostComments((current) => [...current, { ...payload.data, replies: payload.data.replies ?? [] }])
@@ -1438,10 +1678,12 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
         replies: Number(payload.comments_count ?? current.replies + 1),
       }))
       setCommentDraft('')
+    } catch (error) {
+      setPostActionError(error.message || copy(language, 'Your comment could not be posted. Please try again.', 'ไม่สามารถส่งความคิดเห็นได้ โปรดลองอีกครั้ง'))
     } finally {
       setSubmittingComment(false)
     }
-  }, [commentDraft, selectedPost?.id, updatePostEverywhere])
+  }, [commentDraft, language, selectedPost, updatePostEverywhere])
 
   const handleOpenCommunityGame = useCallback((post) => {
     const nextHomeScrollTop = activeView === 'home'
@@ -1469,17 +1711,23 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
 
       return (
         <ProfileCenter
+          actionBusy={profileActionBusy}
+          actionError={profileActionError}
           friendsCount={friendsCount}
+          hiddenPostIds={hiddenPostIds}
           isOwnProfile={isOwnProfile}
           loading={communityStatus === 'loading'}
           onAddFriend={handleAddFriend}
           onBack={() => {
+            setProfileActionError('')
             setSelectedProfile(null)
             navigateCommunityView('home')
           }}
           onEditProfile={() => setEditingProfile(true)}
+          onHidePost={handleHidePost}
           onOpenGame={handleOpenCommunityGame}
           onOpenPost={handleOpenPost}
+          onRestorePost={handleRestorePost}
           onSelectUser={handleSelectUser}
           onToggleLike={handleToggleLike}
           posts={combinedPosts}
@@ -1512,14 +1760,15 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
       )
     }
 
-    return <FeedCenter activeFeed={activeFeed} error={communityError} friendPosts={friendPosts} onFeedChange={setActiveFeed} onOpenGame={handleOpenCommunityGame} onOpenPost={handleOpenPost} onRetry={() => setCommunityReloadKey((current) => current + 1)} onSelectUser={handleSelectUser} onToggleLike={handleToggleLike} posts={posts} reactionBursts={reactionBursts} status={communityStatus} />
-  }, [activeFeed, activeView, combinedPosts, communityError, communityStatus, friendPosts, friendsCount, handleAddFriend, handleOpenCommunityGame, handleOpenNotification, handleOpenPost, handleSearchQueryChange, handleSelectUser, handleToggleLike, navigateCommunityView, notificationError, notificationItems, notificationStatus, onNotificationsRefresh, posts, profileUser, searchError, searchLoading, searchQuery, reactionBursts, searchResults, selectedProfile, user])
+    return <FeedCenter activeFeed={activeFeed} error={communityError} friendPosts={friendPosts} hiddenPostIds={hiddenPostIds} onFeedChange={setActiveFeed} onHidePost={handleHidePost} onOpenGame={handleOpenCommunityGame} onOpenPost={handleOpenPost} onRestorePost={handleRestorePost} onRetry={() => setCommunityReloadKey((current) => current + 1)} onSelectUser={handleSelectUser} onToggleLike={handleToggleLike} posts={posts} reactionBursts={reactionBursts} status={communityStatus} />
+  }, [activeFeed, activeView, combinedPosts, communityError, communityStatus, friendPosts, friendsCount, handleAddFriend, handleHidePost, handleOpenCommunityGame, handleOpenNotification, handleOpenPost, handleRestorePost, handleSearchQueryChange, handleSelectUser, handleToggleLike, hiddenPostIds, navigateCommunityView, notificationError, notificationItems, notificationStatus, onNotificationsRefresh, posts, profileActionBusy, profileActionError, profileUser, searchError, searchLoading, searchQuery, reactionBursts, searchResults, selectedProfile, user])
 
   return (
     <CommunityLanguageContext.Provider value={language}>
-      <section className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-hidden bg-[#111514] text-slate-100">
+      <section className="particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-hidden bg-[#111514] text-slate-100">
+        <ParticleNetworkBackground variant="community" />
         <div
-          className="community-shared-scroll mx-auto grid h-full max-w-[1180px] items-start overflow-y-auto overscroll-contain border-x border-lime-100/10 grid-cols-[220px_minmax(420px,1fr)_260px] max-lg:grid-cols-[180px_minmax(0,1fr)] max-md:grid-cols-1 max-md:pb-20"
+          className="community-shared-scroll relative z-[1] mx-auto grid h-full max-w-[1180px] items-start overflow-y-auto overscroll-contain border-x border-lime-100/10 grid-cols-[220px_minmax(420px,1fr)_260px] max-lg:grid-cols-[180px_minmax(0,1fr)] max-md:grid-cols-1 max-md:pb-20"
           ref={sharedScrollRef}
         >
           <aside className="sticky top-0 min-h-[calc(100dvh-4rem)] self-start border-r border-lime-100/10 bg-[#151817] px-5 py-8 max-md:hidden">
@@ -1537,6 +1786,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
             leaderboard={leaderboard}
             loading={leaderboardStatus === 'loading'}
             onOpenSearch={handleOpenSearch}
+            onSelectUser={handleSelectUser}
           />
         </div>
 
@@ -1558,6 +1808,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
           />
         ) : null}
         <PostModal
+          actionError={postActionError}
           commentBurstKeys={reactionBursts}
           commentDraft={commentDraft}
           comments={postComments}

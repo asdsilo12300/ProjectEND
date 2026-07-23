@@ -3,14 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AdminActivityLog;
-use App\Models\Content;
 use App\Models\User;
 use App\Services\AdminDataCache;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class AdminDashboardController extends Controller
 {
@@ -20,17 +19,16 @@ class AdminDashboardController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $days = (int) $request->query('days', 7);
-        $days = in_array($days, [7, 14, 30], true) ? $days : 7;
+        $selection = $this->trendSelection($request);
+        $cacheKey = "{$selection['period']}:{$selection['value']}";
 
-        $data = $this->cache->rememberDashboard($days, fn (): array => $this->dashboardData($days));
+        $data = $this->cache->rememberDashboard($cacheKey, fn (): array => $this->dashboardData($selection));
 
         return response()->json(['data' => $data]);
     }
 
-    private function dashboardData(int $days): array
+    private function dashboardData(array $trendSelection): array
     {
-        $start = CarbonImmutable::today()->subDays($days - 1);
         $now = CarbonImmutable::now();
         $summary = $this->summary($now->subDays(self::STALE_ACTIVE_SIMULATION_DAYS));
 
@@ -75,21 +73,106 @@ class AdminDashboardController extends Controller
                 'total' => collect($systemGroups)->sum('value'),
                 'groups' => $systemGroups,
             ],
-            'trend_days' => $days,
-            'trend' => $this->trend($start, $days),
+            'trend_days' => $trendSelection['days'],
+            'trend_period' => $trendSelection['period'],
+            'trend_value' => $trendSelection['value'],
+            'trend_label' => $trendSelection['label'],
+            'trend' => $this->trend($trendSelection),
             'attention' => $this->attention($now, $summary),
             'recent_users' => User::query()
                 ->latest()
                 ->limit(5)
                 ->get(['id', 'username', 'email', 'avatar_url', 'role', 'status', 'level', 'created_at'])
                 ->toArray(),
-            'recent_contents' => Content::query()
-                ->latest('updated_at')
-                ->limit(5)
-                ->get(['id', 'slug', 'title', 'title_th', 'status', 'version', 'updated_at'])
-                ->toArray(),
+            'recent_user_activities' => $this->recentUserActivities(),
             'generated_at' => $now->toIso8601String(),
         ];
+    }
+
+    private function trendSelection(Request $request): array
+    {
+        $period = strtolower((string) $request->query('period', ''));
+        $today = CarbonImmutable::today();
+
+        if (!in_array($period, ['day', 'month', 'year'], true)) {
+            $days = (int) $request->query('days', 7);
+            $days = in_array($days, [7, 14, 30], true) ? $days : 7;
+            $start = $today->subDays($days - 1);
+
+            return [
+                'period' => 'range',
+                'value' => (string) $days,
+                'label' => "Last {$days} days",
+                'unit' => 'day',
+                'start' => $start,
+                'end' => $today->addDay(),
+                'days' => $days,
+            ];
+        }
+
+        $rawValue = trim((string) $request->query('value', ''));
+
+        if ($period === 'day') {
+            $date = $this->parseTrendValue($rawValue, '!Y-m-d', 'Y-m-d', $today);
+
+            return [
+                'period' => 'day',
+                'value' => $date->format('Y-m-d'),
+                'label' => $date->format('j M Y'),
+                'unit' => 'hour',
+                'start' => $date->startOfDay(),
+                'end' => $date->addDay()->startOfDay(),
+                'days' => 1,
+            ];
+        }
+
+        if ($period === 'month') {
+            $month = $this->parseTrendValue($rawValue, '!Y-m', 'Y-m', $today->startOfMonth())->startOfMonth();
+
+            return [
+                'period' => 'month',
+                'value' => $month->format('Y-m'),
+                'label' => $month->format('F Y'),
+                'unit' => 'day',
+                'start' => $month,
+                'end' => $month->addMonth(),
+                'days' => $month->daysInMonth,
+            ];
+        }
+
+        $yearNumber = ctype_digit($rawValue) ? (int) $rawValue : $today->year;
+        if ($yearNumber < 2000 || $yearNumber > 2100) {
+            $yearNumber = $today->year;
+        }
+        $year = CarbonImmutable::create($yearNumber, 1, 1)->startOfYear();
+
+        return [
+            'period' => 'year',
+            'value' => $year->format('Y'),
+            'label' => $year->format('Y'),
+            'unit' => 'month',
+            'start' => $year,
+            'end' => $year->addYear(),
+            'days' => $year->daysInYear,
+        ];
+    }
+
+    private function parseTrendValue(
+        string $value,
+        string $parseFormat,
+        string $outputFormat,
+        CarbonImmutable $fallback,
+    ): CarbonImmutable {
+        try {
+            $parsed = CarbonImmutable::createFromFormat($parseFormat, $value);
+            if ($parsed instanceof CarbonImmutable && $parsed->format($outputFormat) === $value) {
+                return $parsed;
+            }
+        } catch (Throwable) {
+            // Invalid picker values fall back to the matching current period.
+        }
+
+        return $fallback;
     }
 
     private function attention(CarbonImmutable $now, array $summary): array
@@ -211,35 +294,278 @@ class AdminDashboardController extends Controller
             ->all();
     }
 
-    private function trend(CarbonImmutable $start, int $days): array
+    /**
+     * Build one chronological feed from the main learner activity tables.
+     * UNION ALL keeps this to one database round trip even as more activity
+     * types are displayed and filtered on the dashboard.
+     */
+    private function recentUserActivities(): array
     {
+        $activity = DB::table('users as actors')
+            ->selectRaw("
+                actors.id AS event_id,
+                'user_registered' AS type,
+                'accounts' AS category,
+                actors.id AS user_id,
+                actors.username,
+                actors.email,
+                actors.avatar_url,
+                actors.email AS subject,
+                actors.created_at AS occurred_at
+            ");
+
+        $activity
+            ->unionAll(
+                DB::table('simulators as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->leftJoin('plants', 'plants.id', '=', 'events.plant_id')
+                    ->whereNull('events.deleted_at')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'simulation_started' AS type,
+                        'simulation' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        COALESCE(plants.name_en, plants.name_th, events.status) AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('plant_histories as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->leftJoin('plants', 'plants.id', '=', 'events.plant_id')
+                    ->whereNull('events.deleted_at')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'plant_saved' AS type,
+                        'simulation' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        COALESCE(plants.name_en, plants.name_th) AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('posts as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->whereNull('events.deleted_at')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'post_created' AS type,
+                        'community' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        SUBSTR(events.caption, 1, 100) AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('comments as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->whereNull('events.deleted_at')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'post_commented' AS type,
+                        'community' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        SUBSTR(events.comment_text, 1, 100) AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('simulator_comments as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->whereNull('events.deleted_at')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'simulation_commented' AS type,
+                        'community' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        SUBSTR(events.comment_text, 1, 100) AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('post_likes as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'post_liked' AS type,
+                        'reaction' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        NULL AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('comment_likes as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'comment_liked' AS type,
+                        'reaction' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        NULL AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('item_usages as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->leftJoin('items', 'items.id', '=', 'events.item_id')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'item_used' AS type,
+                        'inventory' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        items.name AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            )
+            ->unionAll(
+                DB::table('wallet_transactions as events')
+                    ->join('users as actors', 'actors.id', '=', 'events.user_id')
+                    ->where('events.type', 'spend')
+                    ->selectRaw("
+                        events.id AS event_id,
+                        'shop_purchase' AS type,
+                        'inventory' AS category,
+                        actors.id AS user_id,
+                        actors.username,
+                        actors.email,
+                        actors.avatar_url,
+                        events.reference_type AS subject,
+                        events.created_at AS occurred_at
+                    "),
+            );
+
+        return DB::query()
+            ->fromSub($activity, 'user_activity')
+            ->latest('occurred_at')
+            ->latest('event_id')
+            ->limit(60)
+            ->get()
+            ->map(static fn (object $event): array => [
+                'id' => "{$event->type}:{$event->event_id}",
+                'type' => $event->type,
+                'category' => $event->category,
+                'subject' => $event->subject,
+                'occurred_at' => $event->occurred_at,
+                'user' => [
+                    'id' => $event->user_id,
+                    'username' => $event->username,
+                    'email' => $event->email,
+                    'avatar_url' => $event->avatar_url,
+                ],
+            ])
+            ->all();
+    }
+
+    private function trend(array $selection): array
+    {
+        /** @var CarbonImmutable $start */
+        $start = $selection['start'];
+        /** @var CarbonImmutable $end */
+        $end = $selection['end'];
+        $unit = $selection['unit'];
         $activity = DB::table('users')
             ->selectRaw("'users' AS source, created_at")
             ->where('created_at', '>=', $start)
-            ->unionAll(DB::table('simulators')->selectRaw("'simulations' AS source, created_at")->where('created_at', '>=', $start))
-            ->unionAll(DB::table('posts')->selectRaw("'posts' AS source, created_at")->where('created_at', '>=', $start))
-            ->unionAll(DB::table('plant_histories')->selectRaw("'harvests' AS source, created_at")->where('created_at', '>=', $start));
+            ->where('created_at', '<', $end)
+            ->unionAll(DB::table('simulators')->selectRaw("'simulations' AS source, created_at")->where('created_at', '>=', $start)->where('created_at', '<', $end))
+            ->unionAll(DB::table('posts')->selectRaw("'posts' AS source, created_at")->where('created_at', '>=', $start)->where('created_at', '<', $end))
+            ->unionAll(DB::table('plant_histories')->selectRaw("'harvests' AS source, created_at")->where('created_at', '>=', $start)->where('created_at', '<', $end));
+
+        $bucketExpression = $this->trendBucketExpression($unit);
 
         $series = DB::query()
             ->fromSub($activity, 'activity')
-            ->selectRaw('source, DATE(created_at) AS trend_date, COUNT(*) AS aggregate')
-            ->groupBy('source', 'trend_date')
+            ->selectRaw("source, {$bucketExpression} AS trend_bucket, COUNT(*) AS aggregate")
+            ->groupBy('source', 'trend_bucket')
             ->get()
             ->groupBy('source')
-            ->map(static fn ($rows) => $rows->pluck('aggregate', 'trend_date'));
+            ->map(static fn ($rows) => $rows->pluck('aggregate', 'trend_bucket'));
 
-        return collect(range(0, $days - 1))->map(function (int $offset) use ($start, $series, $days): array {
-            $day = $start->addDays($offset);
-            $key = $day->toDateString();
+        $points = match ($unit) {
+            'hour' => collect(range(0, 23))->map(fn (int $hour): array => [
+                'at' => $start->addHours($hour),
+                'key' => $start->addHours($hour)->format('Y-m-d H'),
+                'label' => $start->addHours($hour)->format('H:00'),
+            ])->all(),
+            'month' => collect(range(0, 11))->map(fn (int $month): array => [
+                'at' => $start->addMonths($month),
+                'key' => $start->addMonths($month)->format('Y-m'),
+                'label' => $start->addMonths($month)->format('M'),
+            ])->all(),
+            default => collect(range(0, $start->diffInDays($end) - 1))->map(fn (int $day): array => [
+                'at' => $start->addDays($day),
+                'key' => $start->addDays($day)->format('Y-m-d'),
+                'label' => $selection['period'] === 'range' && $selection['days'] === 7
+                    ? $start->addDays($day)->format('D')
+                    : $start->addDays($day)->format('j M'),
+            ])->all(),
+        };
 
+        return collect($points)->map(function (array $point) use ($series): array {
+            /** @var CarbonImmutable $date */
+            $date = $point['at'];
+            $key = $point['key'];
             return [
-                'date' => $key,
-                'label' => $days === 7 ? $day->format('D') : $day->format('d M'),
+                'date' => $date->toIso8601String(),
+                'label' => $point['label'],
                 'users' => (int) ($series->get('users', collect())[$key] ?? 0),
                 'simulations' => (int) ($series->get('simulations', collect())[$key] ?? 0),
                 'posts' => (int) ($series->get('posts', collect())[$key] ?? 0),
                 'harvests' => (int) ($series->get('harvests', collect())[$key] ?? 0),
             ];
         })->all();
+    }
+
+    private function trendBucketExpression(string $unit): string
+    {
+        $driver = DB::connection()->getDriverName();
+
+        if ($driver === 'pgsql') {
+            return match ($unit) {
+                'hour' => "TO_CHAR(created_at, 'YYYY-MM-DD HH24')",
+                'month' => "TO_CHAR(created_at, 'YYYY-MM')",
+                default => "TO_CHAR(created_at, 'YYYY-MM-DD')",
+            };
+        }
+
+        if ($driver === 'mysql') {
+            return match ($unit) {
+                'hour' => "DATE_FORMAT(created_at, '%Y-%m-%d %H')",
+                'month' => "DATE_FORMAT(created_at, '%Y-%m')",
+                default => "DATE_FORMAT(created_at, '%Y-%m-%d')",
+            };
+        }
+
+        return match ($unit) {
+            'hour' => "STRFTIME('%Y-%m-%d %H', created_at)",
+            'month' => "STRFTIME('%Y-%m', created_at)",
+            default => "STRFTIME('%Y-%m-%d', created_at)",
+        };
     }
 }

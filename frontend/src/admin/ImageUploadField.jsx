@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppIcon } from '../game/icons/IconifyIcon'
+import { AppIcon } from '../game/icons/FontAwesomeIcon'
 import { resolveAssetUrl } from '../lib/api'
 
 const acceptedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])

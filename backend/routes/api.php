@@ -73,6 +73,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/spectator/simulators/{simulator}', [SimulatorController::class, 'spectate']);
     Route::post('/simulators/{simulator}/claim-maturity-reward', [SimulatorController::class, 'claimMaturityReward']);
     Route::post('/simulators/{simulator}/use-item', [SimulatorController::class, 'useItem']);
+    Route::post('/simulators/{simulator}/prank', [SimulatorController::class, 'prank']);
 
     Route::get('/inventory', [ShopController::class, 'inventory']);
     Route::post('/shop/items/{shopItem}/buy', [ShopController::class, 'buy']);

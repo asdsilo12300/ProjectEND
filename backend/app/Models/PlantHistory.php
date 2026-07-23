@@ -20,6 +20,7 @@ class PlantHistory extends Model
         'final_health',
         'total_score',
         'duration_days',
+        'duration_seconds',
         'visibility',
         'snapshot_image_url',
         'game_state',
@@ -29,7 +30,11 @@ class PlantHistory extends Model
 
     protected function casts(): array
     {
-        return ['game_state' => 'array'];
+        return [
+            'duration_days' => 'integer',
+            'duration_seconds' => 'integer',
+            'game_state' => 'array',
+        ];
     }
 
     public function user(): BelongsTo

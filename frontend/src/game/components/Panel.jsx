@@ -1,4 +1,4 @@
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 
 export function Panel({ id, title, subtitle, windows, setWindows, children, className = '', headerActions = null }) {
   const current = windows[id]
@@ -124,21 +124,19 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
       style={{ transform: `translate(${current.x}px, ${current.y}px)` }}
     >
       <header className={`group flex h-11 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3 ${canDrag ? 'cursor-grab select-none active:cursor-grabbing' : ''}`} onPointerDown={startDrag}>
-        <span className="h-6 w-1.5 rounded-full bg-[#9bcf82]" />
+        <span className="lab-panel__accent h-6 w-1.5 rounded-full" />
         <span className="min-w-0 flex-1 leading-none">
           <strong className="block truncate text-sm font-bold text-lime-50">{title}</strong>
-          <small className="mt-1 block truncate text-[11px] text-slate-300">{subtitle}</small>
+          <small className="mt-1 block truncate text-xs text-slate-300">{subtitle}</small>
         </span>
         {headerActions && <div className="mr-1 flex items-center gap-1">{headerActions}</div>}
         {canDrag && (
           <span
-            className="mr-1 grid h-6 w-6 grid-cols-2 place-items-center gap-x-0.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-1 py-1 text-lime-100/70 transition group-hover:text-lime-100"
+            className="mr-1 grid h-7 w-7 place-items-center rounded-md border border-lime-100/10 bg-white/[0.04] text-lime-100/70 transition group-hover:border-lime-100/20 group-hover:bg-white/[0.07] group-hover:text-lime-100"
             aria-label={`Drag ${title} panel`}
             title="Drag to move"
           >
-            {Array.from({ length: 6 }, (_, index) => (
-              <span key={index} className="h-1 w-1 rounded-full bg-current" />
-            ))}
+            <AppIcon className="h-3.5 w-3.5" name="move" />
           </span>
         )}
         <button

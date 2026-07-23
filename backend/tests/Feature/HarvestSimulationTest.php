@@ -46,7 +46,9 @@ class HarvestSimulationTest extends TestCase
             'status' => 'active',
             'share_visibility' => 'private',
             'state_version' => 1,
-            'started_at' => now()->subHours(3),
+            'active_seconds' => 0,
+            'last_active_at' => now()->subSeconds(45),
+            'started_at' => now()->subSeconds(45),
         ]);
         $request = Request::create('/api/simulators/1/histories', 'POST', ['visibility' => 'private']);
         $request->setUserResolver(fn () => $user);
@@ -60,6 +62,9 @@ class HarvestSimulationTest extends TestCase
         $this->assertSame('completed', $simulator->fresh()->status);
         $this->assertSame(2, (int) $simulator->fresh()->state_version);
         $this->assertNotNull($simulator->fresh()->ended_at);
+        $this->assertGreaterThanOrEqual(45, (int) $first->resource->duration_seconds);
+        $this->assertLessThan(50, (int) $first->resource->duration_seconds);
+        $this->assertSame(0, (int) $first->resource->duration_days);
     }
 
     private function buildSchema(): void
@@ -211,6 +216,8 @@ class HarvestSimulationTest extends TestCase
             $table->unsignedBigInteger('state_version')->default(1);
             $table->timestamp('shared_at')->nullable();
             $table->string('live_snapshot_url')->nullable();
+            $table->unsignedBigInteger('active_seconds')->default(0);
+            $table->timestamp('last_active_at')->nullable();
             $table->timestamp('started_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->timestamp('maturity_reward_claimed_at')->nullable();
@@ -237,6 +244,7 @@ class HarvestSimulationTest extends TestCase
             $table->unsignedInteger('final_health')->default(100);
             $table->unsignedInteger('total_score')->default(0);
             $table->unsignedInteger('duration_days')->default(1);
+            $table->unsignedBigInteger('duration_seconds')->nullable();
             $table->string('visibility')->default('private');
             $table->string('snapshot_image_url')->nullable();
             $table->json('game_state')->nullable();

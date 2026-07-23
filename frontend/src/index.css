@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+:root {
+  --pg-bg: #0b0f0c;
+  --pg-surface: #121914;
+  --pg-surface-raised: #18221b;
+  --pg-border: rgba(216, 243, 201, 0.13);
+  --pg-text: #f2f7ee;
+  --pg-text-muted: #aebbb1;
+  --pg-primary: #9bcf82;
+  --pg-shop: #e9b95f;
+  --pg-history: #6ca7ef;
+  --pg-community: #ac87eb;
+  --pg-settings: #69c8b5;
+  --pg-warning: #f0b45d;
+  --pg-danger: #ef7d73;
+  --pg-font-sans: "Inter Variable", "Noto Sans Thai Variable", Inter, "Noto Sans Thai", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+}
+
 html,
 body,
 #root {
@@ -11,7 +28,9 @@ body,
 body {
   background: #020304;
   color: #ecfeff;
-  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  font-family: var(--pg-font-sans);
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
 }
 
 html.settings-large-text {
@@ -43,6 +62,44 @@ html.settings-reduced-motion *::after {
 button,
 input {
   font: inherit;
+}
+
+.game-themed-scrollbar {
+  scrollbar-color: rgb(155 207 130 / 62%) rgb(8 13 10 / 72%);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.game-themed-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.game-themed-scrollbar::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgb(8 13 10 / 72%);
+}
+
+.game-themed-scrollbar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgb(155 207 130 / 62%);
+  background-clip: padding-box;
+}
+
+.game-themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(175 224 154 / 84%);
+  background-clip: padding-box;
+}
+
+.game-themed-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.game-themed-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 @keyframes saveModalIn {

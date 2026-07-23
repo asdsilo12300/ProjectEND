@@ -1,0 +1,11 @@
+Model Information:
+* title:	grass
+* source:	https://sketchfab.com/3d-models/grass-5bd2b5c524c841feadee1f60858caa0a
+* author:	lev26 (https://sketchfab.com/levandreev23032010)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "grass" (https://sketchfab.com/3d-models/grass-5bd2b5c524c841feadee1f60858caa0a) by lev26 (https://sketchfab.com/levandreev23032010) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

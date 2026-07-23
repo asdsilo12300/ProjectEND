@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import './App.css'
@@ -6,24 +6,26 @@ import { defaultClimate, imageAssets } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
 import { LibrarySidebar } from './game/components/LibrarySidebar'
 import { CircularLoader } from './game/components/LoadingSkeleton'
+import { ToastStack } from './game/components/ToastStack'
 import { TopBar } from './game/components/TopBar'
 import { CommentsPanel } from './game/panels/CommentsPanel'
 import { EnvironmentPanel } from './game/panels/EnvironmentPanel'
 import { FriendsPanel } from './game/panels/FriendsPanel'
 import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
-import { SimulationStage } from './game/scene/SimulationStage'
-import { CommunityPage } from './game/community/CommunityPage'
-import { HistoryPage } from './game/history/HistoryPage'
-import { ShopPage } from './game/shop/ShopPage'
-import { SettingsPage } from './game/settings/SettingsPage'
-import { AdminPage } from './admin/AdminPage'
-import { PasswordResetPage } from './game/settings/PasswordResetPage'
 import { LoginPage } from './auth/LoginPage'
 import { LandingPage } from './landing/LandingPage'
-import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
+import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
 import { defaultWindows } from './game/utils/windows'
+
+const AdminPage = lazy(() => import('./admin/AdminPage').then((module) => ({ default: module.AdminPage })))
+const CommunityPage = lazy(() => import('./game/community/CommunityPage').then((module) => ({ default: module.CommunityPage })))
+const HistoryPage = lazy(() => import('./game/history/HistoryPage').then((module) => ({ default: module.HistoryPage })))
+const PasswordResetPage = lazy(() => import('./game/settings/PasswordResetPage').then((module) => ({ default: module.PasswordResetPage })))
+const SettingsPage = lazy(() => import('./game/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+const ShopPage = lazy(() => import('./game/shop/ShopPage').then((module) => ({ default: module.ShopPage })))
+const SimulationStage = lazy(() => import('./game/scene/SimulationStage').then((module) => ({ default: module.SimulationStage })))
 
 const initialOutdoorWeather = {
   status: 'idle',
@@ -44,12 +46,15 @@ const simulationTickIntervalMs = 30000
 const initialSimulationTickDelayMs = simulationTickIntervalMs
 const simulationTickMarkerPrefix = 'plant_game_last_tick:'
 const resetMarkerKey = 'plant_game_reset_marker'
+const communityNotificationTypes = new Set(['like', 'comment', 'reply', 'comment_like'])
 
 const itemNameToKey = {
   'Hand Pick': 'hand-pick',
   'Insect Spray': 'insecticide-spray',
   'Snail Spray': 'snail-spray',
   'Fungus Spray': 'antifungal-spray',
+  'Aphid Prank': 'aphid-prank',
+  'Snail Prank': 'snail-prank',
 }
 
 const itemImageByKey = {
@@ -57,6 +62,8 @@ const itemImageByKey = {
   'insecticide-spray': imageAssets.insecticide,
   'snail-spray': imageAssets.snailSpray,
   'antifungal-spray': imageAssets.antifungal,
+  'aphid-prank': imageAssets.aphid,
+  'snail-prank': imageAssets.snail,
 }
 
 const itemTargetsByKey = {
@@ -64,6 +71,8 @@ const itemTargetsByKey = {
   'insecticide-spray': [{ label: 'Aphid', imageUrl: imageAssets.aphid }],
   'snail-spray': [{ label: 'Snail', imageUrl: imageAssets.snail }],
   'antifungal-spray': [{ label: 'Fungus', imageUrl: imageAssets.fungus }],
+  'aphid-prank': [],
+  'snail-prank': [],
 }
 
 const itemMetaByKey = {
@@ -91,6 +100,34 @@ const itemMetaByKey = {
     failText: 'Fail 0%',
     help: 'Spray for fungus. Removes active fungus with 100% success.',
   },
+  'aphid-prank': {
+    detail: 'send aphids to a friend',
+    successText: 'Friend garden only',
+    failText: 'Cannot stack on active aphids',
+    help: 'Use this in a friend garden to add aphids to the selected plant.',
+    icon: 'bug',
+  },
+  'snail-prank': {
+    detail: 'send a snail to a friend',
+    successText: 'Friend garden only',
+    failText: 'Cannot stack on an active snail',
+    help: 'Use this in a friend garden to add a snail to the selected plant.',
+    icon: 'snail',
+  },
+}
+
+function getActionToastType(message) {
+  const value = String(message ?? '').toLowerCase()
+  if (/unable|error|failed|missing|not available|out of stock|no active|ไม่สามารถ|ผิดพลาด|ไม่พบ|หมด/.test(value)) return 'error'
+  if (/using|saving|preparing|loading|connecting|resetting|confirming|กำลัง/.test(value)) return 'progress'
+  if (/applied|complete|saved|planted|restored|visible|stopped|switched|level up|reward|success|เรียบร้อย|สำเร็จ|บันทึกแล้ว/.test(value)) return 'success'
+  if (/choose|select|log in|view-only|cancelled|pending|before|เลือก|เข้าสู่ระบบ|ยกเลิก/.test(value)) return 'warning'
+  return 'info'
+}
+
+function isCommunityNotification(notification) {
+  if (notification?.category) return notification.category === 'community'
+  return communityNotificationTypes.has(notification?.type)
 }
 
 function inventoryItemKey(entry) {
@@ -140,6 +177,7 @@ function itemAssetFromApi(entry, quantity = null) {
   const item = entry?.item ?? entry
   const itemKey = inventoryItemKey(item)
   const meta = itemMetaByKey[itemKey] ?? {}
+  const friendUsable = String(item?.effect_type ?? '').startsWith('friend_pest:')
 
   return {
     id: itemKey,
@@ -149,7 +187,7 @@ function itemAssetFromApi(entry, quantity = null) {
     detail: meta.detail ?? item?.description ?? 'lab item',
     color: '#9bcf82',
     type: 'item',
-    icon: 'hand',
+    icon: meta.icon ?? 'hand',
     imageUrl: resolveAssetUrl(item?.image_url) ?? itemImageByKey[itemKey],
     targetImages: itemTargetsByKey[itemKey] ?? [],
     quantity: Number.isFinite(Number(quantity)) ? Number(quantity) : 0,
@@ -157,6 +195,7 @@ function itemAssetFromApi(entry, quantity = null) {
     successText: meta.successText,
     failText: meta.failText,
     help: meta.help ?? item?.description,
+    friendUsable,
   }
 }
 
@@ -182,6 +221,21 @@ function mergeSimulatorState(currentState, simulator, options = {}) {
     current_stage: simulator?.current_stage ?? current.current_stage ?? defaultSimulationVisual.current_stage,
     current_model_url: simulator?.current_model_url ?? current.current_model_url ?? defaultSimulationVisual.current_model_url,
   }
+}
+
+function applyPestDelta(currentPests = [], { addedPest = null, removedPestIds = [] } = {}) {
+  const removedIds = new Set(removedPestIds.map((id) => String(id)))
+  const next = currentPests.filter((entry) => !removedIds.has(String(entry?.id)))
+
+  if (!addedPest?.id) return next
+
+  return [
+    ...next.filter((entry) => (
+      String(entry?.id) !== String(addedPest.id)
+      && Number(entry?.pest?.id) !== Number(addedPest?.pest?.id)
+    )),
+    addedPest,
+  ]
 }
 
 function wait(ms) {
@@ -226,6 +280,18 @@ function SessionLoadingScreen() {
   )
 }
 
+function GamePageLoading({ label = 'Loading academy workspace' }) {
+  return (
+    <div className="absolute inset-x-0 bottom-0 top-16 z-20 grid place-items-center bg-[#0b0f0c]/92 px-5 backdrop-blur-sm">
+      <CircularLoader
+        className="min-h-48 w-full max-w-sm"
+        description="Preparing this section without reloading the whole academy."
+        label={label}
+      />
+    </div>
+  )
+}
+
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
   const [activeMobileLabPanel, setActiveMobileLabPanel] = useState('monitor')
@@ -233,7 +299,8 @@ function App() {
   const [openSections, setOpenSections] = useState({ Plants: true, Items: true })
   const [appliedAsset, setAppliedAsset] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [actionMessage, setActionMessage] = useState('')
+  const [actionToasts, setActionToasts] = useState([])
+  const actionToastTimersRef = useRef(new Map())
   const [activePage, setActivePage] = useState('home')
   const [settingsReturnPage, setSettingsReturnPage] = useState('lab')
   const [pendingPageAfterAuth, setPendingPageAfterAuth] = useState(null)
@@ -257,6 +324,7 @@ function App() {
   const latestSaveLoadedRef = useRef(false)
   const autosaveStateRef = useRef({})
   const canonicalSimulationRef = useRef(defaultSimulationVisual)
+  const recentlyRemovedPestIdsRef = useRef(new Map())
   const isResettingRef = useRef(false)
   const isEndingSimulationRef = useRef(false)
   const simulationMutationQueueRef = useRef(Promise.resolve())
@@ -283,10 +351,50 @@ function App() {
   const [plantCatalogStatus, setPlantCatalogStatus] = useState('loading')
   const [shareBusy, setShareBusy] = useState(false)
   const [notifications, setNotifications] = useState([])
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   const [notificationStatus, setNotificationStatus] = useState('idle')
   const [notificationError, setNotificationError] = useState('')
   const notificationRequestRef = useRef(0)
+  const itemUseBusyRef = useRef(false)
+  const prankBusyRef = useRef(false)
+  const communityNotifications = useMemo(
+    () => notifications.filter(isCommunityNotification),
+    [notifications],
+  )
+  const communityUnreadNotificationCount = useMemo(
+    () => communityNotifications.filter((notification) => !notification.is_read).length,
+    [communityNotifications],
+  )
+  const allUnreadNotificationCount = useMemo(
+    () => notifications.filter((notification) => !notification.is_read).length,
+    [notifications],
+  )
+
+  const dismissActionToast = useCallback((toastId) => {
+    const timer = actionToastTimersRef.current.get(toastId)
+    if (timer) window.clearTimeout(timer)
+    actionToastTimersRef.current.delete(toastId)
+    setActionToasts((current) => current.filter((toast) => toast.id !== toastId))
+  }, [])
+
+  const setActionMessage = useCallback((message) => {
+    const text = String(message ?? '').trim()
+    if (!text) {
+      actionToastTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+      actionToastTimersRef.current.clear()
+      setActionToasts([])
+      return
+    }
+
+    const toastId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const toast = { id: toastId, message: text, type: getActionToastType(text) }
+    setActionToasts((current) => [toast, ...current.filter((item) => item.message !== text)].slice(0, 5))
+
+    const timer = window.setTimeout(() => {
+      actionToastTimersRef.current.delete(toastId)
+      setActionToasts((current) => current.filter((item) => item.id !== toastId))
+    }, 4200)
+    actionToastTimersRef.current.set(toastId, timer)
+  }, [])
 
   const refreshNotifications = useCallback(async ({ silent = false } = {}) => {
     if (!getToken()) return
@@ -299,7 +407,6 @@ function App() {
       const payload = await getNotifications()
       if (notificationRequestRef.current !== requestId || !getToken()) return
       setNotifications(payload.data ?? [])
-      setUnreadNotificationCount(Number(payload.unread_count ?? 0))
       setNotificationError('')
       setNotificationStatus('ready')
     } catch (error) {
@@ -313,7 +420,6 @@ function App() {
     if (!notification?.id || notification.is_read) return
 
     const readAt = new Date().toISOString()
-    setUnreadNotificationCount((current) => Math.max(0, current - 1))
     setNotifications((current) => current.map((item) => (
       String(item.id) === String(notification.id)
         ? { ...item, is_read: true, read_at: readAt }
@@ -365,7 +471,14 @@ function App() {
   const mergeCanonicalSimulator = useCallback((simulator, options = {}) => {
     if (!simulator) return null
 
+    const now = Date.now()
+    recentlyRemovedPestIdsRef.current.forEach((expiresAt, pestId) => {
+      if (expiresAt <= now) recentlyRemovedPestIdsRef.current.delete(pestId)
+    })
+    const suppressedPestIds = recentlyRemovedPestIdsRef.current
     const next = mergeSimulatorState(canonicalSimulationRef.current, simulator, options)
+    next.active_pests = (next.active_pests ?? [])
+      .filter((entry) => !suppressedPestIds.has(String(entry?.id)))
 
     canonicalSimulationRef.current = next
     setSimulationVisual(next)
@@ -410,7 +523,6 @@ function App() {
         if (!isCancelled) {
           setUser(null)
           setNotifications([])
-          setUnreadNotificationCount(0)
           setNotificationStatus('idle')
           setNotificationError('')
           setSaveHydrated(true)
@@ -445,12 +557,10 @@ function App() {
     }
   }, [refreshNotifications, user])
 
-  useEffect(() => {
-    if (!actionMessage) return undefined
-
-    const timeout = window.setTimeout(() => setActionMessage(''), 1800)
-    return () => window.clearTimeout(timeout)
-  }, [actionMessage])
+  useEffect(() => () => {
+    actionToastTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+    actionToastTimersRef.current.clear()
+  }, [])
 
   useEffect(() => {
     if (growingMode !== 'outdoor') return undefined
@@ -606,7 +716,10 @@ function App() {
 
   const labSections = useMemo(() => {
     const currentPlantId = Number(selectedPlant?.backendId ?? simulationVisual?.plant?.id ?? 0)
-    const plantedPlantIds = new Set(activeSimulators.map((simulator) => Number(simulator.plant_id)))
+    const plantedSimulators = visitingFriend
+      ? (visitingFriend.planted_simulators ?? [])
+      : activeSimulators
+    const plantedPlantIds = new Set(plantedSimulators.map((simulator) => Number(simulator.plant_id)))
     if (simulationVisual?.status === 'active' && currentPlantId) plantedPlantIds.add(currentPlantId)
     const plants = plantCatalog.map((plant) => ({
       ...plantAssetFromApi(plant, plantedPlantIds.has(Number(plant.id))),
@@ -618,17 +731,19 @@ function App() {
       ...inventoryItems.map((entry) => entry.item).filter(Boolean),
     ]
     const uniqueItems = Array.from(new Map(itemSource.map((item) => [inventoryItemKey(item), item])).values())
-    const items = uniqueItems.map((item) => {
-      const key = inventoryItemKey(item)
-      const inventoryEntry = inventoryItemsByKey.get(key)
-      return itemAssetFromApi(item, inventoryEntry?.quantity ?? 0)
-    })
+    const items = uniqueItems
+      .map((item) => {
+        const key = inventoryItemKey(item)
+        const inventoryEntry = inventoryItemsByKey.get(key)
+        return itemAssetFromApi(item, inventoryEntry?.quantity ?? 0)
+      })
+      .filter((item) => !visitingFriend || item.friendUsable)
 
     return {
       Plants: plants,
       Items: items,
     }
-  }, [activeSimulators, inventoryItems, plantCatalog, selectedPlant, shopCatalog, simulationVisual?.plant?.id, simulationVisual?.status])
+  }, [activeSimulators, inventoryItems, plantCatalog, selectedPlant, shopCatalog, simulationVisual?.plant?.id, simulationVisual?.status, visitingFriend])
 
   function upsertInventoryItem(entry) {
     if (!entry?.item_id && !entry?.item?.id) return
@@ -726,7 +841,6 @@ function App() {
       setPlantingBusy(false)
       setUser(null)
       setNotifications([])
-      setUnreadNotificationCount(0)
       setNotificationStatus('idle')
       setNotificationError('')
       setProfileOpen(false)
@@ -741,7 +855,10 @@ function App() {
     return () => window.removeEventListener('plant-game:session-expired', handleExpiredSession)
   }, [])
 
-  const selectedItemCursorUrl = appliedAsset?.type === 'item' && !visitingFriend ? appliedAsset.imageUrl : null
+  const selectedItemCursorUrl = appliedAsset?.type === 'item'
+    && (!visitingFriend || appliedAsset.friendUsable)
+    ? appliedAsset.imageUrl
+    : null
   const applySimulatorSnapshot = useCallback((simulator, options = {}) => {
     if (!simulator) return
 
@@ -767,7 +884,7 @@ function App() {
       }))
     }
     setModeLoading(false)
-    setAppliedAsset(restoredPlant)
+    if (!options.preserveAppliedAsset) setAppliedAsset(restoredPlant)
     if (simulator.plant) {
       setPlantCatalog((current) => current.some((plant) => plant.id === simulator.plant.id) ? current : [simulator.plant, ...current])
     }
@@ -1006,7 +1123,7 @@ function App() {
     return () => {
       isCancelled = true
     }
-  }, [enqueueSimulationMutation, mergeCanonicalSimulator, persistCurrentSimulation, previewSimulationVisual?.growth_point, previewSimulationVisual?.id, previewSimulationVisual?.maturity_reward_claimed_at, selectedPlant, stashOwnGardenSimulator, user, visitingFriend])
+  }, [enqueueSimulationMutation, mergeCanonicalSimulator, persistCurrentSimulation, previewSimulationVisual?.growth_point, previewSimulationVisual?.id, previewSimulationVisual?.maturity_reward_claimed_at, selectedPlant, setActionMessage, stashOwnGardenSimulator, user, visitingFriend])
   useEffect(() => {
     if (!user || latestSaveLoadedRef.current) return undefined
 
@@ -1091,7 +1208,7 @@ function App() {
       isCancelled = true
       if (retryTimeout !== null) window.clearTimeout(retryTimeout)
     }
-  }, [applySimulatorSnapshot, user])
+  }, [applySimulatorSnapshot, setActionMessage, user])
 
   useEffect(() => {
     const simulatorId = simulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
@@ -1109,6 +1226,15 @@ function App() {
 
     async function tickCycle() {
       if (cancelled) return
+
+      if (document.hidden) {
+        const nextTickAt = Date.now() + simulationTickIntervalMs
+        setCycleStatus('waiting')
+        setNextSimulationTickAt(nextTickAt)
+        timer = window.setTimeout(tickCycle, simulationTickIntervalMs)
+        return
+      }
+
       setCycleStatus('updating')
       setNextSimulationTickAt(null)
       try {
@@ -1221,12 +1347,82 @@ function App() {
     setOpenSections((value) => ({ ...value, [section]: !value[section] }))
   }
 
+  async function prankFriendPlant(asset) {
+    const simulatorId = visitingFriend?.simulatorId ?? simulationVisual?.id
+
+    if (!asset?.friendUsable) {
+      setActionMessage('Choose an aphid or snail prank item for a friend garden')
+      return
+    }
+    if (!simulatorId || !selectedPlant) {
+      setActionMessage(`${visitingFriend?.user?.username ?? 'This friend'} has not planted this plant yet`)
+      return
+    }
+    if (prankBusyRef.current) return
+
+    const targetName = visitingFriend?.user?.username ?? 'your friend'
+    const plantName = selectedPlant?.name ?? 'plant'
+    const confirmation = await Swal.fire({
+      title: `Use ${asset.name}?`,
+      text: `Send this prank to ${targetName}'s ${plantName}? One item will be used.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Send prank',
+      cancelButtonText: 'Cancel',
+      background: '#101511',
+      color: '#eaf7df',
+      buttonsStyling: false,
+      reverseButtons: true,
+      customClass: {
+        popup: 'plantsim-shop-alert',
+        title: 'plantsim-shop-alert__title',
+        actions: 'plantsim-shop-alert__actions',
+        confirmButton: 'plantsim-shop-alert__confirm',
+        cancelButton: 'plantsim-shop-alert__cancel',
+      },
+    })
+    if (!confirmation.isConfirmed) return
+
+    prankBusyRef.current = true
+    setActionMessage(`Sending ${asset.name} to ${targetName}...`)
+
+    try {
+      const payload = await prankFriendSimulator(simulatorId, asset.itemKey ?? asset.id)
+      const result = payload.data ?? payload
+      const simulator = result.simulator ?? null
+
+      if (result.inventory) upsertInventoryItem(result.inventory)
+      if (simulator) {
+        const simulatorWithPests = {
+          ...simulator,
+          active_pests: applyPestDelta(canonicalSimulationRef.current?.active_pests ?? [], {
+            addedPest: result.simulation_pest,
+          }),
+        }
+        const nextSpectatorState = mergeSimulatorState(
+          canonicalSimulationRef.current,
+          simulatorWithPests,
+          { preservePestRisks: true },
+        )
+        applySimulatorSnapshot(nextSpectatorState, { persistLocalId: false, preserveAppliedAsset: true })
+        setVisitingFriend((current) => current ? { ...current, simulatorId: simulator.id } : current)
+      }
+
+      setAppliedAsset(null)
+      setActionMessage(result.message ?? `${asset.name} sent successfully`)
+    } catch (error) {
+      setActionMessage(error.message || 'Unable to send this prank')
+    } finally {
+      prankBusyRef.current = false
+    }
+  }
+
   async function applySelectedItem() {
     const asset = appliedAsset?.type === 'item' ? appliedAsset : null
     if (!asset) return
 
     if (visitingFriend) {
-      setActionMessage('Friend tools are view-only for now')
+      await prankFriendPlant(asset)
       return
     }
 
@@ -1246,25 +1442,27 @@ function App() {
       setActionMessage('Save or plant first, then use items')
       return
     }
+    if (itemUseBusyRef.current) return
 
+    itemUseBusyRef.current = true
     setActionMessage(`Using ${asset.name}...`)
 
     try {
       const accountSession = accountSessionRef.current
-      const payload = await enqueueSimulationMutation(async () => {
-        if (
-          accountSession !== accountSessionRef.current
-          || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
-          || autosaveStateRef.current.visitingFriend
-          || isResettingRef.current
-          || isEndingSimulationRef.current
-          || !getToken()
-        ) {
-          return null
-        }
+      if (
+        autosaveStateRef.current.visitingFriend
+        || isResettingRef.current
+        || isEndingSimulationRef.current
+      ) return
 
-        return applySimulatorItem(simulatorId, asset.itemKey ?? asset.id)
-      })
+      // Item usage only mutates inventory and pest records. It can safely run
+      // beside environment autosaves instead of waiting behind their network queue.
+      const payload = await applySimulatorItem(
+        simulatorId,
+        asset.itemKey ?? asset.id,
+        1,
+        asset.backendId,
+      )
       if (
         !payload
         || accountSession !== accountSessionRef.current
@@ -1286,12 +1484,25 @@ function App() {
         return
       }
 
-      if (simulator) mergeCanonicalSimulator(simulator, { preservePestRisks: true })
+      if (simulator) {
+        const removedPestIds = result.removed_pest_ids ?? []
+        removedPestIds.forEach((pestId) => {
+          recentlyRemovedPestIdsRef.current.set(String(pestId), Date.now() + 60_000)
+        })
+        mergeCanonicalSimulator({
+          ...simulator,
+          active_pests: applyPestDelta(canonicalSimulationRef.current?.active_pests ?? [], {
+            removedPestIds,
+          }),
+        }, { preservePestRisks: true })
+      }
 
       setAppliedAsset(null)
       setActionMessage(result.message ?? `${asset.name} applied`)
     } catch (error) {
       setActionMessage(error.message || 'Unable to use this item')
+    } finally {
+      itemUseBusyRef.current = false
     }
   }
 
@@ -1397,6 +1608,46 @@ function App() {
     }
   }
 
+  async function switchFriendSpecies(asset) {
+    if (!visitingFriend || plantingBusy) return
+
+    const simulatorSummary = (visitingFriend.planted_simulators ?? [])
+      .find((simulator) => Number(simulator.plant_id) === Number(asset.backendId))
+
+    if (!simulatorSummary?.id) {
+      setActionMessage(`${visitingFriend.user?.username ?? 'This friend'} has not planted ${asset.name} yet`)
+      return
+    }
+    if (String(visitingFriend.simulatorId ?? '') === String(simulatorSummary.id)) {
+      setActionMessage(`Already viewing ${asset.name}`)
+      return
+    }
+
+    const requestId = spectatorRequestRef.current + 1
+    spectatorRequestRef.current = requestId
+    setPlantingBusy(true)
+    setModeLoading(true)
+    setAppliedAsset(null)
+    setActionMessage(`Opening ${visitingFriend.user?.username ?? 'friend'}'s ${asset.name}...`)
+
+    try {
+      const payload = await getSpectatorSimulator(simulatorSummary.id)
+      if (spectatorRequestRef.current !== requestId) return
+
+      const simulator = payload.data ?? payload
+      applySimulatorSnapshot(simulator, { persistLocalId: false })
+      setVisitingFriend((current) => current ? { ...current, simulatorId: simulator.id } : current)
+      setActionMessage(`Viewing ${visitingFriend.user?.username ?? 'friend'}'s ${asset.name}`)
+    } catch (error) {
+      if (spectatorRequestRef.current === requestId) {
+        setActionMessage(error.message || `Unable to open ${asset.name}`)
+      }
+    } finally {
+      setModeLoading(false)
+      setPlantingBusy(false)
+    }
+  }
+
   async function applyLabAsset(asset) {
     if (asset.type === 'item') {
       if (Number(inventoryMap[asset.itemKey ?? asset.id] ?? asset.quantity ?? 0) <= 0) {
@@ -1414,7 +1665,17 @@ function App() {
       setAppliedAsset(asset)
 
       if (visitingFriend) {
-        setActionMessage('Friend tools are view-only for now')
+        if (!asset.friendUsable) {
+          setAppliedAsset(null)
+          setActionMessage('Only aphid and snail prank items can be used in a friend garden')
+          return
+        }
+        if (!visitingFriend.simulatorId || !selectedPlant) {
+          setAppliedAsset(null)
+          setActionMessage(`${visitingFriend.user?.username ?? 'This friend'} has not planted a plant yet`)
+          return
+        }
+        setActionMessage(`Selected ${asset.name}. Click the friend's plant to send it.`)
         return
       }
 
@@ -1424,7 +1685,7 @@ function App() {
 
     if (asset.type === 'plant') {
       if (visitingFriend) {
-        setActionMessage('Friend gardens are view-only')
+        await switchFriendSpecies(asset)
         return
       }
       if (plantingBusy) return
@@ -1771,6 +2032,7 @@ function App() {
     isResettingRef.current = false
     isEndingSimulationRef.current = false
     ownGardenSnapshotRef.current = null
+    recentlyRemovedPestIdsRef.current.clear()
     rewardClaimingRef.current = null
 
     if (simulatorId) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulatorId}`)
@@ -1881,6 +2143,7 @@ function App() {
     }
     autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: friend }
     setVisitingFriend({ ...friend, simulatorId: friend.latest_simulator?.id ?? null })
+    setAppliedAsset(null)
     setActivePage('lab')
     setWindows((value) => ({
       ...value,
@@ -1901,7 +2164,20 @@ function App() {
       if (spectatorRequestRef.current !== requestId) return
 
       if (simulator) {
-        setVisitingFriend((current) => ({ ...current, simulatorId: simulator.id }))
+        setVisitingFriend((current) => {
+          if (!current) return current
+          const plantedSimulators = [
+            simulator,
+            ...(current.planted_simulators ?? [])
+              .filter((entry) => String(entry.id) !== String(simulator.id)),
+          ]
+          return {
+            ...current,
+            latest_simulator: simulator,
+            planted_simulators: plantedSimulators,
+            simulatorId: simulator.id,
+          }
+        })
         applySimulatorSnapshot(simulator, { persistLocalId: false })
         setActionMessage(`Viewing ${friend?.user?.username ?? 'friend'}'s plant`)
       } else {
@@ -2040,7 +2316,7 @@ function App() {
     ownGardenSnapshotRef.current = null
     if (returnPage) setActivePage(returnPage)
     setActionMessage(returnPage === 'community' ? 'Back to Community' : returnPage === 'history' ? 'Back to History' : 'Back to your garden')
-  }, [visitingFriend?.source])
+  }, [setActionMessage, visitingFriend?.source])
 
   useEffect(() => {
     const simulatorId = visitingFriend?.simulatorId
@@ -2054,7 +2330,7 @@ function App() {
       requestRunning = true
       try {
         const payload = await getSpectatorSimulator(simulatorId)
-        if (!cancelled) applySimulatorSnapshot(payload.data ?? payload, { persistLocalId: false })
+        if (!cancelled) applySimulatorSnapshot(payload.data ?? payload, { persistLocalId: false, preserveAppliedAsset: true })
       } catch (error) {
         if (!cancelled && (error.status === 410 || error.status === 403 || error.status === 404)) {
           const ownerName = visitingFriend?.user?.username ?? 'The owner'
@@ -2071,7 +2347,7 @@ function App() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [activePage, applySimulatorSnapshot, leaveFriendGarden, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
+  }, [activePage, applySimulatorSnapshot, leaveFriendGarden, setActionMessage, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
 
   function navigateToPage(page) {
     if (sessionStatus !== 'authenticated' || !user) {
@@ -2124,7 +2400,6 @@ function App() {
     setUser(null)
     notificationRequestRef.current += 1
     setNotifications([])
-    setUnreadNotificationCount(0)
     setNotificationStatus('idle')
     setNotificationError('')
     setSessionStatus('guest')
@@ -2187,7 +2462,11 @@ function App() {
       return null
     }
 
-    return <AdminPage user={user} onLogout={logoutUser} />
+    return (
+      <Suspense fallback={<SessionLoadingScreen />}>
+        <AdminPage user={user} onLogout={logoutUser} />
+      </Suspense>
+    )
   }
 
   return (
@@ -2195,7 +2474,8 @@ function App() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
-      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={unreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      <ToastStack onDismiss={dismissActionToast} toasts={actionToasts} />
       {saveCompleteHistory && (
         <div className="absolute inset-0 z-50 grid place-items-center bg-black/45 px-4 backdrop-blur-sm">
           <div className="animate-[saveModalIn_.24s_ease-out] w-full max-w-[420px] overflow-hidden rounded-xl border border-lime-100/20 bg-[#101511]/96 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.5)]">
@@ -2224,12 +2504,13 @@ function App() {
         </div>
       )}
 
+      <Suspense fallback={<GamePageLoading />}>
       {activePage === 'shop' ? (
         <ShopPage onInventoryItemChange={upsertInventoryItem} onUserUpdate={setUser} />
       ) : activePage === 'history' ? (
         <HistoryPage onOpenGameState={viewSavedGameState} onStartGrowing={() => navigateToPage('lab')} />
       ) : activePage === 'community' ? (
-        <CommunityPage currentUser={user} notificationError={notificationError} notificationItems={notifications} notificationStatus={notificationStatus} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} onOpenGame={viewCommunityGame} onUserChange={setUser} unreadCount={unreadNotificationCount} />
+        <CommunityPage currentUser={user} notificationError={notificationError} notificationItems={communityNotifications} notificationStatus={notificationStatus} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} onOpenGame={viewCommunityGame} onUserChange={setUser} unreadCount={communityUnreadNotificationCount} />
       ) : activePage === 'settings' ? (
         <SettingsPage
           backLabel={`Back to ${settingsReturnPage === 'lab' ? 'Plant Lab' : settingsReturnPage[0].toUpperCase() + settingsReturnPage.slice(1)}`}
@@ -2243,10 +2524,10 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar busy={plantingBusy || modeLoading} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} readOnly={Boolean(visitingFriend)} mockItems={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
+              <LibrarySidebar busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
               <SimulationStage
-                actionMessage={actionMessage}
                 coinBurst={coinBurst}
+                emptyGardenOwnerName={visitingFriend ? visitorName : ''}
                 expBurst={expBurst}
                 mode={growingMode}
                 plantSelected={Boolean(selectedPlant)}
@@ -2269,7 +2550,7 @@ function App() {
               {visitingFriend && (
                 <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
-                  <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved game state' : `${visitorName}'s plant`}</strong> - view only</span>
+                  <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved game state' : `${visitorName}'s garden`}</strong> - view only</span>
                   <button
                     className="rounded-md border border-lime-100/15 bg-white/[0.055] px-2 py-1 font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                     type="button"
@@ -2312,6 +2593,7 @@ function App() {
                   <button
                     type="button"
                     key={id}
+                    data-panel-target={id}
                     aria-pressed={Boolean(activeMobileLabPanel === id && windows[id]?.visible && !windows[id]?.collapsed)}
                     onClick={() => openWindow(id)}
                   >
@@ -2336,6 +2618,7 @@ function App() {
           {(!saveHydrated || modeLoading) && <ModeLoadingOverlay mode={growingMode} />}
         </>
       )}
+      </Suspense>
     </main>
   )
 }

@@ -1,10 +1,11 @@
-﻿import { imageAssets, navItems, navTargets } from '../data/gameData'
+import { imageAssets, navItems, navTargets } from '../data/gameData'
 import { useEffect, useRef, useState } from 'react'
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 import { NavIcon } from '../icons/NavIcon'
 import { LoadingSkeleton } from './LoadingSkeleton'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 import { resolveAssetUrl } from '../../lib/api'
+import { getAppLanguage } from '../../i18n/appI18n'
 
 function ProfileAvatar({ user, initial, size = 'sm' }) {
   const sizeClass = size === 'md' ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-sm'
@@ -45,7 +46,13 @@ function notificationAction(type) {
   if (type === 'like') return 'liked your post'
   if (type === 'comment_like') return 'liked your comment'
   if (type === 'reply') return 'replied to your comment'
+  if (type === 'garden_prank') return 'sent a prank to your garden'
   return 'commented on your post'
+}
+
+function isCommunityNotification(notification) {
+  if (notification?.category) return notification.category === 'community'
+  return ['like', 'comment', 'reply', 'comment_like'].includes(notification?.type)
 }
 
 function notificationTime(value) {
@@ -58,7 +65,18 @@ function notificationTime(value) {
   return `${Math.floor(elapsed / 86_400_000)}d`
 }
 
-export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, notificationError = '', notifications = [], notificationStatus = 'idle', onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
+function notificationExactTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return new Intl.DateTimeFormat(getAppLanguage() === 'th' ? 'th-TH' : 'en-GB', {
+    dateStyle: 'full',
+    timeStyle: 'medium',
+  }).format(date)
+}
+
+export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, communityUnreadNotificationCount = 0, notificationError = '', notifications = [], notificationStatus = 'idle', onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const accountMenuRef = useRef(null)
@@ -71,6 +89,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
   const initial = displayName.slice(0, 1).toUpperCase()
   const shownCoins = Number(user?.coin ?? coinBalance ?? 0).toLocaleString()
   const notificationBadge = unreadNotificationCount > 99 ? '99+' : String(unreadNotificationCount)
+  const communityNotificationBadge = communityUnreadNotificationCount > 99 ? '99+' : String(communityUnreadNotificationCount)
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -111,9 +130,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
     if (page === 'lab' && navTargets[item]) openWindow?.(navTargets[item])
   }
 
-  function openNotificationsCenter() {
-    setNotificationsOpen(false)
-
+  function openCommunityNotifications() {
     try {
       window.sessionStorage.setItem('plant_game_community_return_state', JSON.stringify({ activeView: 'notifications' }))
     } catch {
@@ -126,7 +143,12 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
 
   function openNotification(notification) {
     onNotificationRead?.(notification)
-    openNotificationsCenter()
+    setNotificationsOpen(false)
+    if (isCommunityNotification(notification)) {
+      openCommunityNotifications()
+    } else {
+      onNavigate?.('lab')
+    }
   }
 
   function renderNavItems(mobile = false) {
@@ -146,9 +168,9 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           >
             <NavIcon className={`${mobile ? 'h-5 w-5' : 'me-2 h-4 w-4'} ${active ? 'text-[#9bcf82]' : 'text-slate-400 group-hover:text-[#9bcf82]'}`} type={item} />
             {item}
-            {item === 'Community' && unreadNotificationCount > 0 ? (
-              <span className={`${mobile ? 'ms-auto' : 'ms-2'} inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_#101511]`} aria-label={`${unreadNotificationCount} unread notifications`}>
-                {notificationBadge}
+            {item === 'Community' && communityUnreadNotificationCount > 0 ? (
+              <span className={`${mobile ? 'ms-auto' : 'ms-2'} inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-black leading-none text-white shadow-[0_0_0_2px_#101511]`} aria-label={`${communityUnreadNotificationCount} unread Community notifications`}>
+                {communityNotificationBadge}
               </span>
             ) : null}
           </button>
@@ -167,7 +189,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           onClick={() => navigate('Home')}
         >
           <img
-            className="h-20 w-auto max-w-[120px] object-contain sm:h-24 sm:max-w-[180px]"
+            className="h-14 w-auto max-w-[112px] object-contain sm:h-16 sm:max-w-[150px]"
             src={plantGrowthLogo}
             alt="Plant Growth Academy"
           />
@@ -195,7 +217,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             >
               <AppIcon className="h-5 w-5" name="notifications" />
               {unreadNotificationCount > 0 ? (
-                <span className="absolute -right-1.5 -top-1.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#101511] bg-red-500 px-1 text-[9px] font-black leading-none text-white shadow-[0_5px_12px_rgba(0,0,0,.35)]">
+                <span className="absolute -right-1.5 -top-1.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#101511] bg-red-500 px-1 text-xs font-black leading-none text-white shadow-[0_5px_12px_rgba(0,0,0,.35)]">
                   {notificationBadge}
                 </span>
               ) : null}
@@ -206,12 +228,12 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 <header className="flex items-center justify-between border-b border-lime-100/10 px-4 py-3">
                   <span>
                     <strong className="block text-sm text-lime-50">Notifications</strong>
-                    <small className="mt-0.5 block text-[10px] text-slate-400">Likes, comments, and replies</small>
+                    <small className="mt-0.5 block text-xs text-slate-400">Community, garden, and game updates</small>
                   </span>
-                  {unreadNotificationCount > 0 ? <span className="rounded-full bg-red-500/15 px-2 py-1 text-[10px] font-black text-red-300">{notificationBadge} new</span> : null}
+                  {unreadNotificationCount > 0 ? <span className="rounded-full bg-red-500/15 px-2 py-1 text-xs font-black text-red-300">{notificationBadge} new</span> : null}
                 </header>
 
-                <div className="max-h-[min(430px,calc(100vh-150px))] overflow-y-auto">
+                <div className="game-themed-scrollbar max-h-[min(430px,calc(100vh-150px))] overflow-y-auto">
                   {notificationStatus === 'loading' ? <LoadingSkeleton count={4} label="Loading notifications" variant="list" /> : null}
                   {notificationStatus !== 'loading' && notificationError && !notifications.length ? (
                     <div className="px-5 py-8 text-center">
@@ -227,34 +249,58 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                       <span className="mt-1 block text-xs text-slate-400">New activity will appear here.</span>
                     </div>
                   ) : null}
-                  {notifications.slice(0, 8).map((notification) => {
+                  {notifications.map((notification) => {
                     const actorName = notification.actor?.username ?? 'Learner'
+                    const isPlantDanger = notification.type === 'garden_prank'
                     return (
                       <button
-                        className={`relative flex w-full items-start gap-3 border-b border-lime-100/[0.08] px-4 py-3.5 text-left transition hover:bg-white/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 ${notification.is_read ? 'bg-transparent' : 'bg-red-500/[0.035]'}`}
+                        className={`relative flex w-full items-start gap-3 border-b border-lime-100/[0.08] px-4 py-3.5 text-left transition hover:bg-white/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 ${
+                          isPlantDanger
+                            ? notification.is_read ? 'bg-red-950/[0.08]' : 'bg-red-500/[0.055]'
+                            : notification.is_read ? 'bg-transparent' : 'bg-red-500/[0.035]'
+                        }`}
                         key={notification.id}
                         type="button"
                         onClick={() => openNotification(notification)}
                       >
-                        {!notification.is_read ? <span className="absolute right-3 top-4 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,.12)]" aria-label="Unread" /> : null}
+                        {isPlantDanger ? (
+                          <span
+                            className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-300"
+                            aria-label="Plant at risk from pests"
+                            title="Plant at risk from pests"
+                          >
+                            <AppIcon className="h-4 w-4" name="warning" />
+                            {!notification.is_read ? <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_#101511]" aria-label="Unread" /> : null}
+                          </span>
+                        ) : !notification.is_read ? (
+                          <span className="absolute right-3 top-4 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,.12)]" aria-label="Unread" />
+                        ) : null}
                         <ProfileAvatar initial={actorName.slice(0, 1).toUpperCase()} user={notification.actor} />
-                        <span className="min-w-0 flex-1 pr-5">
+                        <span className={`min-w-0 flex-1 ${isPlantDanger ? 'pr-10' : 'pr-5'}`}>
                           <span className="block text-xs leading-5">
                             <strong className="text-lime-50">{actorName}</strong>{' '}
                             <span className={notification.is_read ? 'text-slate-400' : 'text-slate-200'}>{notificationAction(notification.type)}</span>
                           </span>
-                          {notification.excerpt ? <span className="mt-0.5 block truncate text-[11px] text-slate-400">“{notification.excerpt}”</span> : null}
-                          <span className={`mt-1 block text-[10px] ${notification.is_read ? 'text-slate-500' : 'font-bold text-red-300'}`}>{notificationTime(notification.created_at)}</span>
+                          {notification.excerpt ? <span className="mt-0.5 block truncate text-xs text-slate-400">“{notification.excerpt}”</span> : null}
+                          {isPlantDanger ? (
+                            <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-red-400/20 bg-red-500/10 px-2 py-1 text-xs font-black text-red-300">
+                              <AppIcon className="h-3 w-3" name="warning" />
+                              {getAppLanguage() === 'th' ? 'พืชอยู่ในอันตราย' : 'Plant at risk'}
+                            </span>
+                          ) : null}
+                          <time
+                            className={`mt-1 block cursor-help text-xs decoration-dotted underline-offset-4 hover:text-slate-200 hover:underline ${notification.is_read ? 'text-slate-500' : 'font-bold text-red-300'}`}
+                            dateTime={notification.created_at || undefined}
+                            title={notificationExactTime(notification.created_at)}
+                          >
+                            {notificationTime(notification.created_at)}
+                          </time>
                         </span>
                       </button>
                     )
                   })}
                 </div>
 
-                <button className="flex w-full items-center justify-center gap-2 border-t border-lime-100/10 px-4 py-3 text-xs font-black text-[#9bcf82] transition hover:bg-[#9bcf82]/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200" type="button" onClick={openNotificationsCenter}>
-                  View all notifications
-                  <AppIcon className="h-4 w-4" name="arrowForward" />
-                </button>
               </section>
             )}
           </div>
@@ -265,7 +311,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             <img className="h-6 w-6 shrink-0 object-contain sm:h-7 sm:w-7" src={imageAssets.coin} alt="Coin" />
             <span className="min-w-6 text-right text-xs font-black tabular-nums text-lime-50 sm:min-w-10 sm:text-sm">{shownCoins}</span>
             {coinDelta ? (
-              <span className="coin-pop pointer-events-none absolute -top-3 right-2 rounded-full border border-amber-100/25 bg-[#1b1a10] px-2 py-0.5 text-[11px] font-black text-amber-200 shadow-[0_8px_18px_rgba(0,0,0,.28)]" aria-live="polite" title="Simulation reward">
+              <span className="coin-pop pointer-events-none absolute -top-3 right-2 rounded-full border border-amber-100/25 bg-[#1b1a10] px-2 py-0.5 text-xs font-black text-amber-200 shadow-[0_8px_18px_rgba(0,0,0,.28)]" aria-live="polite" title="Simulation reward">
                 +{coinDelta}
               </span>
             ) : null}
@@ -295,7 +341,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           <ProfileAvatar user={user} initial={initial} />
           <span className="hidden leading-none md:block">
             <strong className="block text-xs text-lime-50">{user ? `${displayName} Lv.${learnerLevel}` : 'Sign in'}</strong>
-            <small className="mt-1 block text-[10px] text-slate-400">{user ? 'profile' : 'Login or create account'}</small>
+            <small className="mt-1 block text-xs text-slate-400">{user ? 'profile' : 'Login or create account'}</small>
           </span>
           <AppIcon className={`h-4 w-4 text-slate-300 transition ${profileOpen && user ? 'rotate-180' : ''}`} name="arrowDown" />
         </button>
@@ -307,13 +353,13 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 <ProfileAvatar user={user} initial={initial} size="md" />
                 <div className="min-w-0">
                   <strong className="block truncate text-sm text-lime-50">{displayName} Lv.{learnerLevel}</strong>
-                  <span className="truncate text-[11px] text-slate-400">{user.email}</span>
+                  <span className="truncate text-xs text-slate-400">{user.email}</span>
                 </div>
               </div>
               <div className="mt-3 rounded-md border border-cyan-200/10 bg-[#0b1020]/65 px-2.5 py-2 shadow-[inset_0_0_18px_rgba(0,214,255,.08)]">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <span className="font-mono text-[13px] font-black tabular-nums text-cyan-300">{learnerExpPercent.toFixed(0)}%</span>
-                  <span className="text-[10px] font-semibold text-slate-400">
+                  <span className="text-xs font-semibold text-slate-400">
                     EXP {learnerExperience}/{learnerNextExperience}
                   </span>
                 </div>
@@ -329,7 +375,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                     <span className="absolute right-4 top-1 h-1.5 w-1.5 rounded-full bg-white/20" />
                   </div>
                 </div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] text-slate-500">
+                <div className="mt-1.5 flex items-center justify-between text-xs text-slate-500">
                   <span>Lv.{learnerLevel}</span>
                   <span>Lv.{Number(learnerLevel) + 1}</span>
                 </div>

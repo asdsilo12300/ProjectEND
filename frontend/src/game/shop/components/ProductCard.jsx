@@ -1,4 +1,4 @@
-import { AppIcon } from '../../icons/IconifyIcon'
+import { AppIcon } from '../../icons/FontAwesomeIcon'
 import { imageAssets } from '../../data/gameData'
 
 const productIconMap = {
@@ -50,13 +50,13 @@ export function ProductCard({ copy, isBuying = false, isFavorite, item, onBuy, o
         </button>
       </div>
       <div className="mt-3 min-w-0 flex-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#75dca0]">{category}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#75dca0]">{category}</p>
         <h3 className="mt-1 truncate text-sm font-black text-slate-50">{item.name}</h3>
         {item.description ? <p className="mt-1.5 line-clamp-2 min-h-9 text-xs leading-[1.15rem] text-slate-400">{item.description}</p> : null}
       </div>
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
         <span className="min-w-0">
-          <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">{copy.price}</span>
+          <span className="block text-xs font-semibold uppercase tracking-wider text-slate-500">{copy.price}</span>
           <strong className="mt-0.5 inline-flex text-sm font-black text-[#78eda8]"><CoinPrice price={item.price} /></strong>
         </span>
         <button

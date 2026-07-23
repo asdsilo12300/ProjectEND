@@ -7,15 +7,18 @@ use App\Http\Resources\SimulatorResource;
 use App\Models\Friendship;
 use App\Models\Item;
 use App\Models\ItemUsage;
+use App\Models\Pest;
 use App\Models\Plant;
 use App\Models\Post;
 use App\Models\SimulationLog;
 use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Models\SimulatorComment;
+use App\Models\SocialNotification;
 use App\Models\UserItem;
 use App\Services\MediaStorage;
 use App\Services\PlantSimulationEngine;
+use App\Services\SimulationActivityTracker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -26,7 +29,10 @@ use Illuminate\Validation\ValidationException;
 
 class SimulatorController extends Controller
 {
-    public function __construct(private readonly MediaStorage $media) {}
+    public function __construct(
+        private readonly MediaStorage $media,
+        private readonly SimulationActivityTracker $activity,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -113,6 +119,8 @@ class SimulatorController extends Controller
                 'visual_state' => 'healthy',
                 'visual_overrides' => ['leafColor' => '#9bcf82', 'stemColor' => '#7a5a2f', 'scale' => 1],
                 'status' => 'active',
+                'active_seconds' => 0,
+                'last_active_at' => now(),
                 'started_at' => now(),
                 ...$initialEnvironment,
             ]);
@@ -188,7 +196,7 @@ class SimulatorController extends Controller
 
             abort_unless($lockedSimulator->status === 'active', 409, 'Only active simulations can be synchronized.');
 
-            $lockedSimulator->update($state + [
+            $lockedSimulator->update($state + $this->activity->attributes($lockedSimulator) + [
                 'state_version' => ((int) $lockedSimulator->state_version) + 1,
             ]);
 
@@ -343,7 +351,7 @@ class SimulatorController extends Controller
 
     public function spectate(Request $request, Simulator $simulator): SimulatorResource
     {
-        if ($simulator->status !== 'active' || $simulator->ended_at || ($simulator->share_visibility ?? 'private') === 'private') {
+        if ($simulator->status !== 'active' || $simulator->ended_at) {
             abort(410, 'This live garden is no longer available.');
         }
 
@@ -360,7 +368,9 @@ class SimulatorController extends Controller
             })
             ->exists();
 
-        abort_unless($isOwner || $simulator->share_visibility === 'public' || ($simulator->share_visibility === 'friends' && $isFriend), 403);
+        // A private simulation is hidden from the community feed, but accepted
+        // friends still need access through the dedicated friend-garden flow.
+        abort_unless($isOwner || $isFriend || $simulator->share_visibility === 'public', 403);
 
         return new SimulatorResource($simulator->load(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
     }
@@ -441,7 +451,8 @@ class SimulatorController extends Controller
 
     public function useItem(Request $request, Simulator $simulator): JsonResponse
     {
-        abort_unless($simulator->user_id === $request->user()->id, 403);
+        $userId = (int) $request->user()->id;
+        abort_unless((int) $simulator->user_id === $userId, 403);
 
         $data = $request->validate([
             'item_id' => ['nullable', 'integer', 'exists:items,id'],
@@ -469,24 +480,24 @@ class SimulatorController extends Controller
             ->firstOrFail();
 
         $effectType = strtolower((string) $item->effect_type);
-        $isHandPick = ($data['item_key'] ?? null) === 'hand-pick'
-            || strtolower($item->name) === 'hand pick'
+        $isHandPick = strtolower($item->name) === 'hand pick'
             || str_starts_with($effectType, 'manual_pest_control');
 
-        $userItem = null;
-
-        if (! $isHandPick) {
-            $userItem = UserItem::query()->firstOrCreate(
-                ['user_id' => $request->user()->id, 'item_id' => $item->id],
-                ['quantity' => 0],
-            );
-
-            abort_if($userItem->quantity < $quantity, 422, 'Not enough item quantity.');
-        }
-
-        $result = DB::transaction(function () use ($isHandPick, $item, $quantity, $request, $simulator, $userItem) {
+        $result = DB::transaction(function () use ($isHandPick, $item, $quantity, $simulator, $userId) {
             $effectType = strtolower((string) $item->effect_type);
             $targetText = str_contains($effectType, ':') ? explode(':', $effectType, 2)[1] : '';
+            $userItem = null;
+
+            if (! $isHandPick) {
+                $userItem = UserItem::query()
+                    ->where('user_id', $userId)
+                    ->where('item_id', $item->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                abort_if(! $userItem || $userItem->quantity < $quantity, 422, 'Not enough item quantity.');
+                $userItem->setRelation('item', $item);
+            }
 
             if ($isHandPick && $targetText === '') {
                 $targetText = 'aphid,snail';
@@ -503,14 +514,17 @@ class SimulatorController extends Controller
 
             if ($targets->isNotEmpty()) {
                 $matchedPests = SimulationPest::query()
-                    ->with('pest')
+                    ->select('simulation_pests.*')
+                    ->addSelect('pests.name_en as pest_name_en')
+                    ->join('pests', 'pests.id', '=', 'simulation_pests.pest_id')
                     ->where('simulator_id', $simulator->id)
-                    ->where('status', 'active')
-                    ->whereHas('pest', fn ($query) => $query->whereIn(DB::raw('LOWER(name_en)'), $targets->all()))
+                    ->where('simulation_pests.status', 'active')
+                    ->whereIn(DB::raw('LOWER(pests.name_en)'), $targets->all())
+                    ->lockForUpdate()
                     ->get();
 
                 foreach ($matchedPests as $pest) {
-                    $pestName = strtolower((string) $pest->pest?->name_en);
+                    $pestName = strtolower((string) $pest->getAttribute('pest_name_en'));
                     $successRate = $this->itemSuccessRate($item, $pestName, $isHandPick);
 
                     if (random_int(1, 100) <= $successRate) {
@@ -527,13 +541,13 @@ class SimulatorController extends Controller
             }
 
             if (! $isHandPick && $matchedPests->isNotEmpty()) {
-                $userItem->decrement('quantity', $quantity);
-                $userItem->refresh()->load('item');
+                $nextQuantity = max(0, (int) $userItem->quantity - $quantity);
+                $userItem->forceFill(['quantity' => $nextQuantity])->save();
             }
 
             $targetNames = $targets->implode(', ');
-            $removedNames = $removedPests->map(fn (SimulationPest $pest) => $pest->pest?->name_en)->filter()->values();
-            $failedNames = $failedPests->map(fn (SimulationPest $pest) => $pest->pest?->name_en)->filter()->values();
+            $removedNames = $removedPests->map(fn (SimulationPest $pest) => $pest->getAttribute('pest_name_en'))->filter()->values();
+            $failedNames = $failedPests->map(fn (SimulationPest $pest) => $pest->getAttribute('pest_name_en'))->filter()->values();
 
             $message = match (true) {
                 $removedNames->isNotEmpty() && $failedNames->isNotEmpty() => $item->name.' removed '.$removedNames->implode(', ').', but missed '.$failedNames->implode(', ').'.',
@@ -544,7 +558,7 @@ class SimulatorController extends Controller
             };
 
             $usage = ItemUsage::query()->create([
-                'user_id' => $request->user()->id,
+                'user_id' => $userId,
                 'item_id' => $item->id,
                 'simulator_id' => $simulator->id,
                 'quantity' => $isHandPick ? 0 : ($matchedPests->isNotEmpty() ? $quantity : 0),
@@ -556,20 +570,57 @@ class SimulatorController extends Controller
                 'message' => $message,
                 'targets' => $targets,
                 'removed_pests' => $removedNames,
+                'removed_pest_ids' => $removedPests->pluck('id')->map(fn ($id) => (int) $id)->values(),
                 'failed_pests' => $failedNames,
                 'success' => $removedNames->isNotEmpty(),
-                'inventory' => $userItem?->loadMissing('item'),
+                'inventory' => $userItem,
             ];
         });
-
-        $freshSimulator = $simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']);
 
         return response()->json([
             'data' => [
                 ...$result,
-                'simulator' => new SimulatorResource($freshSimulator),
+                'simulator' => $this->simulatorDeltaPayload($simulator),
             ],
         ], 201);
+    }
+
+    private function simulatorDeltaPayload(Simulator $simulator): array
+    {
+        return [
+            'id' => $simulator->id,
+            'plant_id' => $simulator->plant_id,
+            'status' => $simulator->status,
+            'state_version' => (int) ($simulator->state_version ?? 1),
+            'updated_at' => $simulator->updated_at?->toISOString(),
+        ];
+    }
+
+    private function simulationPestDeltaPayload(SimulationPest $simulationPest, Pest $pest): array
+    {
+        return [
+            'id' => $simulationPest->id,
+            'status' => $simulationPest->status,
+            'appeared_at' => $simulationPest->appeared_at?->toISOString(),
+            'risk_chance' => min(100, max(0, (int) round((float) $pest->base_chance))),
+            'pest' => [
+                'id' => $pest->id,
+                'name_th' => $pest->name_th,
+                'name_en' => $pest->name_en,
+                'model_url' => $this->publicAssetUrl($pest->model_url),
+                'image_url' => $this->publicAssetUrl($pest->image_url),
+                'damage_per_turn' => (int) $pest->damage_per_turn,
+            ],
+        ];
+    }
+
+    private function publicAssetUrl(?string $path): ?string
+    {
+        if (! $path || Str::startsWith($path, ['http://', 'https://', '/'])) {
+            return $path;
+        }
+
+        return $this->media->reference($path);
     }
 
     private function itemSuccessRate(Item $item, string $target, bool $isHandPick): int
@@ -583,6 +634,106 @@ class SimulatorController extends Controller
         }
 
         return str_starts_with(strtolower((string) $item->effect_type), 'pest_control') ? 100 : 0;
+    }
+
+    public function prank(Request $request, Simulator $simulator): JsonResponse
+    {
+        $userId = (int) $request->user()->id;
+        abort_if((int) $simulator->user_id === $userId, 422, 'Prank items can only be used in a friend garden.');
+        abort_unless($simulator->status === 'active', 422, 'This friend plant is not available.');
+
+        $this->authorizeSimulatorConversation($request, $simulator);
+
+        $data = $request->validate([
+            'item_key' => ['required', Rule::in(['aphid-prank', 'snail-prank'])],
+        ]);
+        $itemName = $data['item_key'] === 'aphid-prank' ? 'Aphid Prank' : 'Snail Prank';
+        $targetPestName = $data['item_key'] === 'aphid-prank' ? 'aphid' : 'snail';
+        $item = Item::query()
+            ->where('name', $itemName)
+            ->where('is_active', true)
+            ->where('effect_type', "friend_pest:{$targetPestName}")
+            ->firstOrFail();
+        $pest = Pest::query()
+            ->whereRaw('LOWER(name_en) = ?', [$targetPestName])
+            ->firstOrFail();
+
+        $result = DB::transaction(function () use ($item, $pest, $simulator, $targetPestName, $userId) {
+            $lockedSimulator = Simulator::query()->lockForUpdate()->findOrFail($simulator->id);
+            abort_unless($lockedSimulator->status === 'active', 422, 'This friend plant is no longer active.');
+
+            $activePest = SimulationPest::query()
+                ->where('simulator_id', $lockedSimulator->id)
+                ->where('pest_id', $pest->id)
+                ->where('status', 'active')
+                ->lockForUpdate()
+                ->first();
+            abort_if($activePest, 422, ucfirst($targetPestName).' is already active on this plant.');
+
+            $inventory = UserItem::query()
+                ->where('user_id', $userId)
+                ->where('item_id', $item->id)
+                ->lockForUpdate()
+                ->first();
+            abort_if(! $inventory || $inventory->quantity < 1, 422, 'This prank item is out of stock.');
+
+            $simulationPest = SimulationPest::query()->create([
+                'simulator_id' => $lockedSimulator->id,
+                'pest_id' => $pest->id,
+                'status' => 'active',
+                'appeared_at' => now(),
+                'treated_at' => null,
+            ]);
+
+            $inventory->forceFill([
+                'quantity' => max(0, (int) $inventory->quantity - 1),
+            ])->save();
+            $inventory->setRelation('item', $item);
+            $lockedSimulator->forceFill([
+                'state_version' => ((int) $lockedSimulator->state_version) + 1,
+                'updated_at' => now(),
+            ])->save();
+
+            $message = $targetPestName === 'aphid'
+                ? "Aphids were sent to your friend's plant."
+                : "A snail was sent to your friend's plant.";
+            $notificationExcerpt = $targetPestName === 'aphid'
+                ? 'Aphids appeared on your active plant.'
+                : 'A snail appeared on your active plant.';
+
+            ItemUsage::query()->create([
+                'user_id' => $userId,
+                'item_id' => $item->id,
+                'simulator_id' => $lockedSimulator->id,
+                'quantity' => 1,
+                'effect_result' => $message,
+            ]);
+
+            SocialNotification::query()->create([
+                'recipient_id' => $lockedSimulator->user_id,
+                'actor_id' => $userId,
+                'post_id' => null,
+                'comment_id' => null,
+                'type' => 'garden_prank',
+                'excerpt' => $notificationExcerpt,
+            ]);
+
+            return [
+                'message' => $message,
+                'inventory' => $inventory,
+                'simulation_pest' => $this->simulationPestDeltaPayload($simulationPest, $pest),
+                'simulator' => $this->simulatorDeltaPayload($lockedSimulator),
+            ];
+        });
+
+        return response()->json([
+            'data' => [
+                'message' => $result['message'],
+                'inventory' => $result['inventory'],
+                'simulation_pest' => $result['simulation_pest'],
+                'simulator' => $result['simulator'],
+            ],
+        ], 201);
     }
 
     public function comments(Request $request, Simulator $simulator): JsonResponse

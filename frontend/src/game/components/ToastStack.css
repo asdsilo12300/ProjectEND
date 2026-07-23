@@ -1,0 +1,165 @@
+.game-toast-stack {
+  position: fixed;
+  z-index: 40;
+  top: 5rem;
+  right: 1rem;
+  display: grid;
+  width: min(380px, calc(100vw - 2rem));
+  gap: 0.65rem;
+  pointer-events: none;
+}
+
+.game-toast {
+  --toast-accent: #9bcf82;
+  --toast-accent-rgb: 155, 207, 130;
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.35rem minmax(0, 1fr) 1.8rem;
+  align-items: start;
+  gap: 0.75rem;
+  overflow: hidden;
+  padding: 0.85rem 0.8rem 0.9rem;
+  border: 1px solid rgba(var(--toast-accent-rgb), 0.28);
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, rgba(var(--toast-accent-rgb), 0.1), transparent 42%), rgba(14, 20, 16, 0.96);
+  color: #eef8e9;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38), inset 3px 0 0 var(--toast-accent);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+  animation: game-toast-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.game-toast--error {
+  --toast-accent: #fb7185;
+  --toast-accent-rgb: 251, 113, 133;
+}
+
+.game-toast--progress {
+  --toast-accent: #7dd3fc;
+  --toast-accent-rgb: 125, 211, 252;
+}
+
+.game-toast--success {
+  --toast-accent: #86efac;
+  --toast-accent-rgb: 134, 239, 172;
+}
+
+.game-toast--warning {
+  --toast-accent: #fcd34d;
+  --toast-accent-rgb: 252, 211, 77;
+}
+
+.game-toast__icon {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border: 1px solid rgba(var(--toast-accent-rgb), 0.28);
+  border-radius: 0.7rem;
+  background: rgba(var(--toast-accent-rgb), 0.13);
+  color: var(--toast-accent);
+}
+
+.game-toast__icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.game-toast__content {
+  min-width: 0;
+  padding-top: 0.05rem;
+}
+
+.game-toast__content strong {
+  display: block;
+  color: var(--toast-accent);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.game-toast__content p {
+  margin: 0.3rem 0 0;
+  color: #e2ebe3;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.game-toast__close {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #839087;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.game-toast__close:hover,
+.game-toast__close:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  color: #f5faf2;
+  outline: none;
+}
+
+.game-toast__timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--toast-accent);
+  transform-origin: left;
+  animation: game-toast-timer 4.2s linear forwards;
+}
+
+.game-toast__spinner {
+  animation: game-toast-spin 950ms linear infinite;
+}
+
+@keyframes game-toast-enter {
+  from { opacity: 0; transform: translate3d(32px, -4px, 0) scale(0.97); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes game-toast-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes game-toast-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .game-toast-stack {
+    top: 4.75rem;
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-toast,
+  .game-toast__spinner,
+  .game-toast__timer {
+    animation: none;
+  }
+}
+
+html.settings-reduced-motion .game-toast,
+html.settings-reduced-motion .game-toast__spinner,
+html.settings-reduced-motion .game-toast__timer {
+  animation: none;
+}

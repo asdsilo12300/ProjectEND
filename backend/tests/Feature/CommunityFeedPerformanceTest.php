@@ -138,6 +138,43 @@ class CommunityFeedPerformanceTest extends TestCase
             ->assertJsonCount(3, 'data');
     }
 
+    public function test_leaderboard_includes_profile_preview_details(): void
+    {
+        $viewer = $this->createUser('viewer');
+        $rankedUser = $this->createUser('ranked');
+        $rankedUser->forceFill([
+            'avatar_url' => '/storage/avatars/ranked.jpg',
+            'cover_url' => '/storage/covers/ranked.jpg',
+            'bio' => 'Tulip grower and classroom observer.',
+            'level' => 8,
+            'experience' => 75,
+        ])->save();
+
+        Friendship::query()->create([
+            'requester_id' => $viewer->id,
+            'addressee_id' => $rankedUser->id,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+        ]);
+        DB::table('plant_histories')->insert([
+            'user_id' => $rankedUser->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->withToken(app(JwtService::class)->issue($viewer))
+            ->getJson('/api/community/leaderboard')
+            ->assertOk();
+
+        $profile = collect($response->json('data.levels'))->firstWhere('id', $rankedUser->id);
+
+        $this->assertSame('/storage/avatars/ranked.jpg', $profile['avatar_url']);
+        $this->assertSame('/storage/covers/ranked.jpg', $profile['cover_url']);
+        $this->assertSame('Tulip grower and classroom observer.', $profile['bio']);
+        $this->assertSame(1, $profile['friends_count']);
+        $this->assertSame(1, $profile['plants_count']);
+    }
+
     private function createUser(string $username): User
     {
         return User::query()->create([

@@ -1,4 +1,4 @@
-﻿import { AppIcon } from '../game/icons/IconifyIcon'
+import { AppIcon } from '../game/icons/FontAwesomeIcon'
 import heroImage from '../assets/hero.png'
 import { useState } from 'react'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'

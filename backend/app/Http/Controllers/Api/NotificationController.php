@@ -9,12 +9,21 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    private const COMMUNITY_TYPES = ['like', 'comment', 'reply', 'comment_like'];
+
     public function index(Request $request): JsonResponse
     {
-        $unreadCount = SocialNotification::query()
+        $unreadCounts = SocialNotification::query()
             ->where('recipient_id', $request->user()->id)
             ->whereNull('read_at')
-            ->count();
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw(
+                'SUM(CASE WHEN type IN (?, ?, ?, ?) THEN 1 ELSE 0 END) as community',
+                self::COMMUNITY_TYPES,
+            )
+            ->first();
+        $totalUnread = (int) ($unreadCounts?->total ?? 0);
+        $communityUnread = (int) ($unreadCounts?->community ?? 0);
 
         $notifications = SocialNotification::query()
             ->with(['actor', 'post.plantHistory.plant', 'post.simulator.plant', 'comment'])
@@ -26,7 +35,11 @@ class NotificationController extends Controller
 
         return response()->json([
             'data' => $notifications,
-            'unread_count' => $unreadCount,
+            'unread_count' => $totalUnread,
+            'unread_counts' => [
+                'community' => $communityUnread,
+                'game' => max(0, $totalUnread - $communityUnread),
+            ],
             'server_time' => now()->toISOString(),
         ]);
     }
@@ -52,6 +65,7 @@ class NotificationController extends Controller
         return [
             'id' => $notification->id,
             'type' => $notification->type,
+            'category' => in_array($notification->type, self::COMMUNITY_TYPES, true) ? 'community' : 'game',
             'excerpt' => $notification->excerpt,
             'read_at' => $notification->read_at?->toISOString(),
             'is_read' => (bool) $notification->read_at,

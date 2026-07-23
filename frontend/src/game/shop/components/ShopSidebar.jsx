@@ -1,4 +1,4 @@
-import { AppIcon } from '../../icons/IconifyIcon'
+import { AppIcon } from '../../icons/FontAwesomeIcon'
 import { imageAssets } from '../../data/gameData'
 
 export function ShopSidebar({ categories = [], copy, hasActiveFilters = false, latestItems = [], maxPrice, onPriceChange, onResetFilters, priceRange, searchQuery = '', selectedCategory, onSearchChange, onSelectCategory }) {
@@ -9,7 +9,7 @@ export function ShopSidebar({ categories = [], copy, hasActiveFilters = false, l
     <aside className="space-y-5 rounded-2xl border border-[#30453a]/70 bg-[#101914]/80 p-4 text-slate-300 lg:sticky lg:top-4" aria-label={copy.filters}>
       <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] pb-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#75dca0]">{copy.filters}</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#75dca0]">{copy.filters}</p>
           {hasActiveFilters ? <span className="mt-1 block text-xs text-slate-400">{copy.activeFilters([searchQuery.trim(), selectedCategory, maxPrice < priceRange.max].filter(Boolean).length)}</span> : null}
         </div>
         <button className="min-h-10 rounded-lg px-2.5 text-xs font-bold text-[#8eeab4] transition hover:bg-[#55dc91]/10 disabled:cursor-default disabled:opacity-35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#9cf3bd]" type="button" disabled={!hasActiveFilters} onClick={onResetFilters}>
@@ -121,7 +121,7 @@ export function ShopSidebar({ categories = [], copy, hasActiveFilters = false, l
           {latestItems.length === 0 && (
             <div className="rounded-lg border border-dashed border-[#34483c] px-3 py-4 text-center">
               <strong className="block text-xs text-slate-300">{copy.noPurchases}</strong>
-              <span className="mt-1 block text-[11px] leading-4 text-slate-500">{copy.noPurchasesHint}</span>
+              <span className="mt-1 block text-xs leading-4 text-slate-500">{copy.noPurchasesHint}</span>
             </div>
           )}
           {latestItems.map((item) => (
@@ -135,7 +135,7 @@ export function ShopSidebar({ categories = [], copy, hasActiveFilters = false, l
               </span>
               <span className="min-w-0 flex-1">
                 <strong className="block truncate text-xs text-slate-100">{item.name}</strong>
-                <small className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                <small className="inline-flex items-center gap-1 text-xs text-slate-500">
                   <img className="h-3 w-3" src={imageAssets.coin} alt="" />
                   {item.price}
                 </small>

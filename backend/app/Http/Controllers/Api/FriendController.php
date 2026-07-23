@@ -35,22 +35,26 @@ class FriendController extends Controller
             ->unique()
             ->values();
 
-        $latestSimulators = $friendUserIds->isEmpty()
+        $sharedSimulators = $friendUserIds->isEmpty()
             ? collect()
             : Simulator::query()
                 ->with(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
                 ->whereIn('user_id', $friendUserIds)
                 ->whereNull('deleted_at')
                 ->where('status', 'active')
-                ->whereIn('share_visibility', ['friends', 'public'])
                 ->latest('updated_at')
                 ->latest('id')
-                ->get()
-                ->unique('user_id')
-                ->keyBy('user_id');
+                ->get();
+        $simulatorsByUser = $sharedSimulators->groupBy('user_id');
+        $latestSimulators = $simulatorsByUser->map(fn (Collection $simulators) => $simulators->first());
 
         $friendships = $friendships
-            ->map(fn (Friendship $friendship) => $this->friendPayload($friendship, (int) $user->id, $latestSimulators))
+            ->map(fn (Friendship $friendship) => $this->friendPayload(
+                $friendship,
+                (int) $user->id,
+                $latestSimulators,
+                $simulatorsByUser,
+            ))
             ->values();
 
         return response()->json([
@@ -180,7 +184,12 @@ class FriendController extends Controller
 
         return new SimulatorResource($simulator);
     }
-    private function friendPayload(Friendship $friendship, int $currentUserId, ?Collection $latestSimulators = null): array
+    private function friendPayload(
+        Friendship $friendship,
+        int $currentUserId,
+        ?Collection $latestSimulators = null,
+        ?Collection $simulatorsByUser = null,
+    ): array
     {
         $isRequester = (int) $friendship->requester_id === $currentUserId;
         $other = $isRequester ? $friendship->addressee : $friendship->requester;
@@ -197,6 +206,12 @@ class FriendController extends Controller
                     ? $this->latestSimulatorPayload($other->id)
                     : $this->simulatorPayload($latestSimulators->get($other->id)))
                 : null,
+            'planted_simulators' => $friendship->status === 'accepted'
+                ? ($simulatorsByUser?->get($other->id, collect()) ?? collect())
+                    ->map(fn (Simulator $simulator) => $this->simulatorSummaryPayload($simulator))
+                    ->values()
+                    ->all()
+                : [],
         ];
     }
 
@@ -207,7 +222,6 @@ class FriendController extends Controller
             ->where('user_id', $userId)
             ->whereNull('deleted_at')
             ->where('status', 'active')
-            ->whereIn('share_visibility', ['friends', 'public'])
             ->latest('updated_at')
             ->latest('id')
             ->first();
@@ -268,6 +282,24 @@ class FriendController extends Controller
     private function simulatorPayload(?Simulator $simulator): ?array
     {
         return $simulator ? (new SimulatorResource($simulator))->resolve() : null;
+    }
+
+    private function simulatorSummaryPayload(Simulator $simulator): array
+    {
+        return [
+            'id' => $simulator->id,
+            'plant_id' => $simulator->plant_id,
+            'mode' => $simulator->mode,
+            'status' => $simulator->status,
+            'share_visibility' => $simulator->share_visibility,
+            'updated_at' => $simulator->updated_at?->toISOString(),
+            'plant' => $simulator->plant ? [
+                'id' => $simulator->plant->id,
+                'name_th' => $simulator->plant->name_th,
+                'name_en' => $simulator->plant->name_en,
+                'base_image_url' => $simulator->plant->base_image_url,
+            ] : null,
+        ];
     }
 
     private function presence(User $user): string

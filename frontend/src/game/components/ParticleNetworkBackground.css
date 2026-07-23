@@ -1,0 +1,39 @@
+.particle-network-surface {
+  isolation: isolate;
+}
+
+.particle-network-background {
+  position: sticky;
+  z-index: 0;
+  top: 0;
+  width: 100%;
+  height: var(--particle-network-height, 100dvh);
+  margin-bottom: calc(-1 * var(--particle-network-height, 100dvh));
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.particle-network-background::after {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(7, 16, 10, 0.36), transparent 25%, transparent 75%, rgba(7, 16, 10, 0.36)),
+    linear-gradient(180deg, rgba(7, 16, 10, 0.24), transparent 22%, transparent 78%, rgba(7, 16, 10, 0.34));
+  content: '';
+}
+
+.particle-network-background canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.particle-network-surface--game {
+  --particle-network-height: calc(100dvh - 4rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .particle-network-background {
+    opacity: 0.72;
+  }
+}

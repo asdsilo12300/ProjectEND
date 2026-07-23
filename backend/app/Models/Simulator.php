@@ -37,6 +37,8 @@ class Simulator extends Model
         'state_version',
         'shared_at',
         'live_snapshot_url',
+        'active_seconds',
+        'last_active_at',
         'started_at',
         'ended_at',
         'maturity_reward_claimed_at',
@@ -57,6 +59,8 @@ class Simulator extends Model
             'maturity_reward_amount' => 'integer',
             'state_version' => 'integer',
             'shared_at' => 'datetime',
+            'active_seconds' => 'integer',
+            'last_active_at' => 'datetime',
         ];
     }
 

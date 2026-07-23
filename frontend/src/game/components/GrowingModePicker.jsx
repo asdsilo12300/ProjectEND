@@ -1,4 +1,4 @@
-﻿import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 
 const modeOptions = [
   {
@@ -28,7 +28,7 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9bcf82]">{choosingForPlant ? 'New planted species · Growing mode' : 'Step 1 of 3 · Growing mode'}</p>
           <h2 className="mt-1 text-xl font-bold text-lime-50">{choosingForPlant ? `Choose a mode for ${plantName}` : 'Choose growing mode'}</h2>
           <p className="mt-2 text-sm text-slate-300">{choosingForPlant ? `Your current plant stays saved. Choose how you want to grow ${plantName}.` : 'Choose the kind of environment you want to manage. You will select a plant next.'}</p>
-          <div className="mx-auto mt-4 grid max-w-[360px] grid-cols-3 items-center gap-2 text-[10px] font-semibold text-slate-400" aria-label="Plant setup progress">
+          <div className="mx-auto mt-4 grid max-w-[360px] grid-cols-3 items-center gap-2 text-xs font-semibold text-slate-400" aria-label="Plant setup progress">
             <span className={`rounded-full px-2 py-1 ${choosingForPlant ? 'border border-lime-100/10 bg-white/[0.04] text-lime-100' : 'bg-[#9bcf82] text-[#101511]'}`}>{choosingForPlant ? `1 ${plantName}` : '1 Mode'}</span>
             <span className={`rounded-full px-2 py-1 ${choosingForPlant ? 'bg-[#9bcf82] text-[#101511]' : 'border border-lime-100/10 bg-white/[0.04]'}`}>{choosingForPlant ? '2 Mode' : '2 Plant'}</span>
             <span className="rounded-full border border-lime-100/10 bg-white/[0.04] px-2 py-1">3 Start</span>
@@ -53,7 +53,7 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2">
                     <strong className="block text-base font-bold text-lime-50 sm:text-lg">{option.title}</strong>
-                    {option.recommended && <span className="rounded-full bg-[#9bcf82]/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-lime-100">Recommended for beginners</span>}
+                    {option.recommended && <span className="rounded-full bg-[#9bcf82]/15 px-2 py-0.5 text-xs font-black uppercase tracking-wide text-lime-100">Recommended for beginners</span>}
                   </span>
                   <span className="mt-0.5 block text-sm text-slate-300">{option.subtitle}</span>
                   <span className="mt-2 block max-w-[48ch] text-xs leading-5 text-slate-400">{option.detail}</span>

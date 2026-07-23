@@ -108,6 +108,13 @@
   display: none;
 }
 
+.lab-panel { --lab-panel-accent: var(--pg-primary); }
+.lab-panel[data-panel-id='monitor'] { --lab-panel-accent: var(--pg-primary); }
+.lab-panel[data-panel-id='climate'] { --lab-panel-accent: var(--pg-warning); }
+.lab-panel[data-panel-id='friends'] { --lab-panel-accent: var(--pg-community); }
+.lab-panel[data-panel-id='comments'] { --lab-panel-accent: #8fc7d9; }
+.lab-panel__accent { background: var(--lab-panel-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--lab-panel-accent) 34%, transparent); }
+
 .plantsim-lab-alert {
   width: min(410px, calc(100vw - 32px));
   border: 1px solid rgba(248, 113, 113, 0.22);
@@ -302,6 +309,10 @@
     background: rgba(155, 207, 130, 0.16);
     color: #e8fbdc;
   }
+
+  .lab-mobile-panel-dock button[data-panel-target='climate'][aria-pressed='true'] { background: color-mix(in srgb, var(--pg-warning) 16%, transparent); color: #ffe2a8; }
+  .lab-mobile-panel-dock button[data-panel-target='comments'][aria-pressed='true'] { background: rgba(143, 199, 217, 0.16); color: #dff8ff; }
+  .lab-mobile-panel-dock button[data-panel-target='friends'][aria-pressed='true'] { background: color-mix(in srgb, var(--pg-community) 16%, transparent); color: #e8d9ff; }
 
   .lab-simulation-actions {
     bottom: 66px !important;

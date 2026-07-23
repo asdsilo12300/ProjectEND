@@ -13,7 +13,11 @@ class CommunityController extends Controller
     public function leaderboard(Request $request): JsonResponse
     {
         $levelLeaders = User::query()
-            ->withCount('plantHistories')
+            ->withCount([
+                'plantHistories',
+                'requestedFriendships as accepted_requested_friendships_count' => fn ($friendships) => $friendships->where('status', 'accepted'),
+                'receivedFriendships as accepted_received_friendships_count' => fn ($friendships) => $friendships->where('status', 'accepted'),
+            ])
             ->orderByDesc('level')
             ->orderByDesc('experience')
             ->orderByDesc('plant_histories_count')
@@ -23,7 +27,11 @@ class CommunityController extends Controller
             ->values();
 
         $growLeaders = User::query()
-            ->withCount('plantHistories')
+            ->withCount([
+                'plantHistories',
+                'requestedFriendships as accepted_requested_friendships_count' => fn ($friendships) => $friendships->where('status', 'accepted'),
+                'receivedFriendships as accepted_received_friendships_count' => fn ($friendships) => $friendships->where('status', 'accepted'),
+            ])
             ->whereHas('plantHistories')
             ->orderByDesc('plant_histories_count')
             ->orderByDesc('level')
@@ -48,8 +56,11 @@ class CommunityController extends Controller
             'email' => $user->email,
             'avatar_url' => $user->avatar_url,
             'cover_url' => $user->cover_url,
+            'bio' => $user->bio,
             'level' => (int) ($user->level ?? 1),
             'experience' => (int) ($user->experience ?? 0),
+            'friends_count' => (int) ($user->accepted_requested_friendships_count ?? 0)
+                + (int) ($user->accepted_received_friendships_count ?? 0),
             'plants_count' => (int) ($user->plant_histories_count ?? PlantHistory::query()->where('user_id', $user->id)->count()),
             'score_label' => $type === 'level'
                 ? 'Lv.'.(int) ($user->level ?? 1)

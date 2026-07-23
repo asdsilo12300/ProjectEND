@@ -21,6 +21,9 @@ class PlantHistoryResource extends JsonResource
             'health' => (int) $this->final_health,
             'total_score' => (int) $this->total_score,
             'duration_days' => (int) $this->duration_days,
+            'duration_seconds' => $this->duration_seconds === null
+                ? max(0, (int) $this->duration_days * 86400)
+                : max(0, (int) $this->duration_seconds),
             'visibility' => $this->visibility,
             'snapshot_image_url' => $this->snapshot_image_url,
             'game_state' => $this->game_state,

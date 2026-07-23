@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { completePasswordReset, requestPasswordResetOtp, verifyPasswordResetOtp } from '../../lib/api'
-import { AppIcon } from '../icons/IconifyIcon'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 
 const steps = [
   { id: 'request', label: 'Email code' },
@@ -21,7 +21,7 @@ function StepProgress({ step }) {
       {steps.map((item, index) => (
         <li key={item.id} className="min-w-0">
           <div className={`mb-2 h-1 rounded-full ${index <= activeIndex ? 'bg-[#9bcf82]' : 'bg-white/10'}`} />
-          <span className={`block truncate text-[10px] font-bold sm:text-xs ${index <= activeIndex ? 'text-lime-100' : 'text-slate-500'}`}>
+          <span className={`block truncate text-xs font-bold sm:text-xs ${index <= activeIndex ? 'text-lime-100' : 'text-slate-500'}`}>
             {index + 1}. {item.label}
           </span>
         </li>
@@ -228,7 +228,7 @@ export function PasswordResetPage({ onBack, onDone, user }) {
                   <Field autoComplete="new-password" label="New password" name="password" onChange={setPassword} placeholder="At least 8 characters" revealable type="password" value={password} />
                   <Field autoComplete="new-password" label="Confirm new password" name="password_confirmation" onChange={setPasswordConfirmation} placeholder="Enter it again" revealable type="password" value={passwordConfirmation} />
                 </div>
-                <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/15 p-3 text-[11px]">
+                <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/15 p-3 text-xs">
                   {[[passwordChecks.length, '8+ characters'], [passwordChecks.letter, 'Contains a letter'], [passwordChecks.number, 'Contains a number'], [passwordChecks.match, 'Passwords match']].map(([valid, label]) => (
                     <span className={`flex items-center gap-1.5 ${valid ? 'text-lime-200' : 'text-slate-500'}`} key={label}><AppIcon className="h-3.5 w-3.5" name="check" />{label}</span>
                   ))}

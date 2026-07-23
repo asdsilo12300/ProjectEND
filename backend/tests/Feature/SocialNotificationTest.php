@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Comment;
 use App\Models\Post;
+use App\Models\SocialNotification;
 use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Database\Schema\Blueprint;
@@ -117,9 +118,12 @@ class SocialNotificationTest extends TestCase
         $ownerNotifications = $this->withToken($this->token($owner))
             ->getJson('/api/notifications')
             ->assertOk()
-            ->assertJsonPath('unread_count', 2);
+            ->assertJsonPath('unread_count', 2)
+            ->assertJsonPath('unread_counts.community', 2)
+            ->assertJsonPath('unread_counts.game', 0);
 
         $this->assertEqualsCanonicalizing(['comment', 'like'], collect($ownerNotifications->json('data'))->pluck('type')->all());
+        $this->assertSame(['community'], collect($ownerNotifications->json('data'))->pluck('category')->unique()->values()->all());
 
         $notificationId = $ownerNotifications->json('data.0.id');
         $this->withToken($this->token($owner))
@@ -135,9 +139,27 @@ class SocialNotificationTest extends TestCase
         $commenterNotifications = $this->withToken($this->token($commenter))
             ->getJson('/api/notifications')
             ->assertOk()
-            ->assertJsonPath('unread_count', 2);
+            ->assertJsonPath('unread_count', 2)
+            ->assertJsonPath('unread_counts.community', 2)
+            ->assertJsonPath('unread_counts.game', 0);
 
         $this->assertEqualsCanonicalizing(['comment_like', 'reply'], collect($commenterNotifications->json('data'))->pluck('type')->all());
+
+        SocialNotification::query()->create([
+            'recipient_id' => $owner->id,
+            'actor_id' => $commenter->id,
+            'type' => 'garden_prank',
+            'excerpt' => 'Aphids appeared on your active plant.',
+        ]);
+
+        $mixedNotifications = $this->withToken($this->token($owner))
+            ->getJson('/api/notifications')
+            ->assertOk()
+            ->assertJsonPath('unread_count', 2)
+            ->assertJsonPath('unread_counts.community', 1)
+            ->assertJsonPath('unread_counts.game', 1);
+
+        $this->assertSame('game', collect($mixedNotifications->json('data'))->firstWhere('type', 'garden_prank')['category']);
     }
 
     private function createUser(string $username): User
