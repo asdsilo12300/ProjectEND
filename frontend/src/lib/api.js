@@ -30,8 +30,15 @@ export function clearToken() {
 
 export function resolveAssetUrl(path) {
   if (!path) return null
+  const backendStoragePrefix = `${API_ROOT_URL}/storage/`
+
+  if (path.startsWith('/storage/')) {
+    return import.meta.env.DEV ? path : `${API_BASE_URL}/media/${path.slice('/storage/'.length)}`
+  }
+  if (path.startsWith(backendStoragePrefix)) {
+    return `${API_BASE_URL}/media/${path.slice(backendStoragePrefix.length)}`
+  }
   if (path.startsWith('http://') || path.startsWith('https://')) return path
-  if (path.startsWith('/storage/')) return import.meta.env.DEV ? path : `${API_ROOT_URL}${path}`
   return path
 }
 

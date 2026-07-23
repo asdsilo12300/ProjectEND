@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\PlantController;
 use App\Http\Controllers\Api\PlantHistoryController;
 use App\Http\Controllers\Api\PlantModelController;
 use App\Http\Controllers\Api\PostController;
+use App\Http\Controllers\Api\PublicMediaController;
 use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\SimulatorController;
 use Illuminate\Support\Facades\Route;
@@ -41,6 +42,7 @@ Route::get('/shop/items', [ShopController::class, 'index']);
 Route::get('/posts', [PostController::class, 'index']);
 Route::get('/model-assets', [ModelAssetController::class, 'index']);
 Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
+Route::get('/media/{path}', PublicMediaController::class)->where('path', '.*');
 
 Route::middleware('jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
