@@ -54,6 +54,33 @@ class PublicMediaControllerTest extends TestCase
             ->assertHeader('Content-Type', 'image/png');
     }
 
+    public function test_it_prefers_an_existing_local_asset_when_supabase_is_enabled(): void
+    {
+        config([
+            'services.media.driver' => 'supabase',
+            'services.media.supabase_url' => 'https://project.supabase.co',
+            'services.media.supabase_bucket' => 'plant-media',
+        ]);
+
+        Storage::disk('public')->put('models/plant.gltf', '{"asset":{"version":"2.0"}}');
+
+        $this->get('/api/media/models/plant.gltf')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'model/gltf+json');
+    }
+
+    public function test_it_redirects_to_supabase_when_the_asset_is_not_available_locally(): void
+    {
+        config([
+            'services.media.driver' => 'supabase',
+            'services.media.supabase_url' => 'https://project.supabase.co',
+            'services.media.supabase_bucket' => 'plant-media',
+        ]);
+
+        $this->get('/api/media/profile-avatars/new-avatar.jpg')
+            ->assertRedirect('https://project.supabase.co/storage/v1/object/public/plant-media/profile-avatars/new-avatar.jpg');
+    }
+
     public function test_it_rejects_parent_directory_traversal(): void
     {
         $this->get('/api/media/model-bundles/%2E%2E/private.txt')->assertNotFound();

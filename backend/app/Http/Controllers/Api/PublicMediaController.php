@@ -13,19 +13,21 @@ class PublicMediaController extends Controller
     public function __invoke(string $path, MediaStorage $media): StreamedResponse|RedirectResponse
     {
         $path = $this->safePath($path);
+        $disk = Storage::disk((string) config('services.media.disk', 'public'));
+
+        if ($disk->exists($path)) {
+            return $disk->response($path, basename($path), [
+                'Cache-Control' => 'public, max-age=31536000, immutable',
+                'Content-Type' => $this->contentType($path),
+                'X-Content-Type-Options' => 'nosniff',
+            ], 'inline');
+        }
 
         if ($media->usesSupabase()) {
             return redirect()->away($media->publicUrl($path));
         }
 
-        $disk = Storage::disk((string) config('services.media.disk', 'public'));
-        abort_unless($disk->exists($path), 404);
-
-        return $disk->response($path, basename($path), [
-            'Cache-Control' => 'public, max-age=31536000, immutable',
-            'Content-Type' => $this->contentType($path),
-            'X-Content-Type-Options' => 'nosniff',
-        ], 'inline');
+        abort(404);
     }
 
     private function safePath(string $path): string
