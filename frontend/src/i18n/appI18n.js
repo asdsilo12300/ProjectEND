@@ -137,7 +137,6 @@ const thaiMessages = {
   'Recommended next action': 'สิ่งที่แนะนำให้ทำต่อ',
   Starting: 'กำลังเริ่ม',
   'waiting for the first update': 'กำลังรอการอัปเดตครั้งแรก',
-  Ready: 'พร้อมปลูก',
   'waiting for the next update': 'กำลังรอการอัปเดตครั้งถัดไป',
   'Applying simulation update…': 'กำลังประมวลผลการอัปเดตการจำลอง…',
   'Plant is mature — Harvest is now available.': 'พืชโตเต็มวัยแล้ว — สามารถเก็บเกี่ยวได้',

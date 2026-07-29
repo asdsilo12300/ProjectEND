@@ -1,9 +1,12 @@
 ﻿import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useGraph } from '@react-three/fiber'
 import { useAnimations, useGLTF } from '@react-three/drei'
-import { Color, DoubleSide, LoopOnce } from 'three'
+import { Color, DoubleSide } from 'three'
 import { SkeletonUtils } from 'three-stdlib'
+import { useGrowthAnimationPose } from './growthAnimationPose'
+import { collectElephantEarPestAttachments, useRegisterPlantAttachments } from './plantAttachments'
 import { updateFungusMaterial } from './fungusMaterial'
+import { attachElephantEarStressPivots, usePlantStressMotion } from './plantStressMotion'
 
 const LEAF_MATERIALS = ['1st_Leaf_Mat', '2nd_Leaf_Mat', '3rd_Leaf_Mat', '4th_Leaf_Mat', '5th_Leaf_Mat']
 const LEAF_NODES = ['Object_13', 'Object_353', 'Object_693', 'Object_1033', 'Object_1373']
@@ -29,21 +32,31 @@ function getStressPalette(leafState) {
   return ['#6f4a2a', '#d1b06a', '#4f3d24']
 }
 
-export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fungusRisk = 0, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
-  const clone = useMemo(() => SkeletonUtils.clone(scene), [scene])
+  const clone = useMemo(() => {
+    const nextClone = SkeletonUtils.clone(scene)
+    attachElephantEarStressPivots(nextClone)
+    nextClone.userData.pestAttachments = collectElephantEarPestAttachments(nextClone)
+    return nextClone
+  }, [scene])
   const { nodes, materials } = useGraph(clone)
   const plantMaterials = useMemo(() => clonePlantMaterials(materials), [materials])
-  const { actions } = useAnimations(animations, group)
+  const { actions, mixer } = useAnimations(animations, group)
   const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
   const leafState = String(visualOverrides?.leafState ?? 'upright').toLowerCase()
+  const stemState = String(visualOverrides?.stemState ?? 'upright').toLowerCase()
   const isDead = leafState === 'dead'
   const isStressed = !['upright', 'normal', 'healthy'].includes(leafState)
+    || !['upright', 'normal', 'healthy'].includes(stemState)
   const stressMarkOpacity = isDead ? 0.52 : isStressed ? 0.78 : 0
   const targetLeafColor = useMemo(() => new Color(visualOverrides?.leafColor ?? '#9bcf82'), [visualOverrides?.leafColor])
   const targetStemColor = useMemo(() => new Color(visualOverrides?.stemColor ?? '#7a5a2f'), [visualOverrides?.stemColor])
   const stressPalette = getStressPalette(leafState)
+  useGrowthAnimationPose(actions, mixer, isMature ? 1 : progress)
+  usePlantStressMotion(clone.userData?.elephantEarStressPivots, visualOverrides, health, fungusRisk)
+  useRegisterPlantAttachments(clone.userData?.pestAttachments)
 
   useEffect(() => {
     LEAF_MATERIALS.forEach((name, index) => {
@@ -85,27 +98,6 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fung
     Object.values(plantMaterials.leaves).forEach((material) => material.dispose())
     Object.values(plantMaterials.stems).forEach((material) => material.dispose())
   }, [plantMaterials])
-
-  useEffect(() => {
-
-    Object.values(actions).forEach((action) => {
-      if (!action) return
-
-      const duration = action.getClip().duration
-      action.reset()
-      action.setLoop(LoopOnce, 1)
-      action.clampWhenFinished = true
-      action.timeScale = isPaused ? 0 : 0.018
-      action.time = isMature ? duration : duration * progress
-      action.play()
-
-      if (isMature || isPaused) {
-        action.paused = true
-      }
-    })
-
-    return () => Object.values(actions).forEach((action) => action?.stop?.())
-  }, [actions, isMature, isPaused, progress])
 
   return (
     <group ref={group} {...props} dispose={null}>
@@ -159,22 +151,22 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fung
                     <skinnedMesh castShadow receiveShadow name="Object_1373" geometry={nodes.Object_1373.geometry} material={plantMaterials.leaves['5th_Leaf_Mat']} skeleton={nodes.Object_1373.skeleton} />
                   </group>
                 </group>
-              {isStressed && (
-                <group name="Stress_marks" position={[-0.03, 0.018, 0.02]}>
-                  <mesh position={[0.035, 2.19, 0.035]} rotation={[-Math.PI / 2, 0.12, 0.25]}>
-                    <circleGeometry args={[0.038, 14]} />
-                    <meshStandardMaterial color={stressPalette[0]} roughness={1} transparent opacity={stressMarkOpacity} side={DoubleSide} polygonOffset polygonOffsetFactor={-1} />
-                  </mesh>
-                  <mesh position={[-0.08, 2.60, -0.04]} rotation={[-Math.PI / 2, -0.18, -0.18]} scale={[1.3, 0.72, 1]}>
-                    <circleGeometry args={[0.03, 12]} />
-                    <meshStandardMaterial color={stressPalette[1]} roughness={1} transparent opacity={stressMarkOpacity * 0.92} side={DoubleSide} polygonOffset polygonOffsetFactor={-1} />
-                  </mesh>
-                  <mesh position={[-0.16, 2.97, -0.1]} rotation={[-Math.PI / 2, 0.1, 0.1]} scale={[0.78, 1.15, 1]}>
-                    <circleGeometry args={[0.026, 12]} />
-                    <meshStandardMaterial color={stressPalette[2]} roughness={1} transparent opacity={stressMarkOpacity * 0.86} side={DoubleSide} polygonOffset polygonOffsetFactor={-1} />
-                  </mesh>
-                </group>
-              )}
+                {isStressed && (
+                  <group name="Stress_marks" position={[-0.03, 0.018, 0.02]}>
+                    <mesh position={[0.035, 2.19, 0.035]} rotation={[-Math.PI / 2, 0.12, 0.25]}>
+                      <circleGeometry args={[0.038, 14]} />
+                      <meshStandardMaterial color={stressPalette[0]} roughness={1} transparent opacity={stressMarkOpacity} side={DoubleSide} polygonOffset polygonOffsetFactor={-1} />
+                    </mesh>
+                    <mesh position={[-0.08, 2.60, -0.04]} rotation={[-Math.PI / 2, -0.18, -0.18]} scale={[1.3, 0.72, 1]}>
+                      <circleGeometry args={[0.03, 12]} />
+                      <meshStandardMaterial color={stressPalette[1]} roughness={1} transparent opacity={stressMarkOpacity * 0.92} side={DoubleSide} polygonOffset polygonOffsetFactor={-1} />
+                    </mesh>
+                    <mesh position={[-0.16, 2.97, -0.1]} rotation={[-Math.PI / 2, 0.1, 0.1]} scale={[0.78, 1.15, 1]}>
+                      <circleGeometry args={[0.026, 12]} />
+                      <meshStandardMaterial color={stressPalette[2]} roughness={1} transparent opacity={stressMarkOpacity * 0.86} side={DoubleSide} polygonOffset polygonOffsetFactor={-1} />
+                    </mesh>
+                  </group>
+                )}
               </group>
             </group>
           </group>

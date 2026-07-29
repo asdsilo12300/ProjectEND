@@ -1,11 +1,15 @@
 ﻿import { useEffect, useMemo, useRef } from 'react'
 import { Html, useAnimations, useGLTF } from '@react-three/drei'
+import { createPortal } from '@react-three/fiber'
 import { AnimationMixer, Box3, Color, DoubleSide, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { resolveAssetUrl } from '../../lib/api'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { GltfPlant } from './GltfPlant'
+import { useGrowthAnimationPose } from './growthAnimationPose'
+import { collectGenericPestAttachments, usePlantAttachments, useRegisterPlantAttachments } from './plantAttachments'
 import { updateFungusMaterial } from './fungusMaterial'
+import { attachPlantStressPivots, usePlantStressMotion } from './plantStressMotion'
 
 const BASE_PLANT_SCALE = 1.1
 const PLANT_BASE_LOCAL_Y = 1.45
@@ -156,7 +160,13 @@ function applyPlantOverrides(object, overrides = {}) {
       const nextMaterials = materials.map((material) => {
         const nextMaterial = cloneFromOriginal(material)
         const stressColor = leafColor ?? stemColor
-        if (isStressState && nextMaterial.color && stressColor) nextMaterial.color.lerp(stressColor, isDead ? 0.72 : 0.24)
+        if (isStressState && nextMaterial.color && stressColor) {
+          if (isDead) {
+            nextMaterial.color.copy(stressColor)
+          } else {
+            nextMaterial.color.lerp(stressColor, 0.24)
+          }
+        }
         if (isDead) {
           nextMaterial.roughness = 1
           nextMaterial.metalness = 0
@@ -208,7 +218,7 @@ function applyFungusToPlant(object, fungusRisk = 0) {
   })
 }
 
-function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
   const clonedScene = useMemo(() => {
@@ -272,10 +282,13 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
 
     // Uploaded assets are not always authored Y-up. Tulip/Sketchfab exports,
     // for example, can arrive Z-up and otherwise appear flat or far too large.
+    let sourceUpAxis = 'y'
     if (sourceSize.z > sourceSize.y * 1.25 && sourceSize.z >= sourceSize.x) {
       clone.rotation.x = Math.PI / 2
+      sourceUpAxis = 'z'
     } else if (sourceSize.x > sourceSize.y * 1.25 && sourceSize.x > sourceSize.z) {
       clone.rotation.z = Math.PI / 2
+      sourceUpAxis = 'x'
     }
     clone.updateMatrixWorld(true)
 
@@ -301,9 +314,16 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
       clone.updateMatrixWorld(true)
     }
 
+    attachPlantStressPivots(clone, { upAxis: sourceUpAxis })
+    clone.userData.pestAttachments = collectGenericPestAttachments(clone)
+
     return clone
   }, [animations, plantName, scene])
-  const { actions } = useAnimations(animations, group)
+  const { actions, mixer } = useAnimations(animations, group)
+  const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
+  useGrowthAnimationPose(actions, mixer, isMature ? 1 : progress, GENERIC_MATURE_ANIMATION_FRACTION)
+  usePlantStressMotion(clonedScene.userData?.plantStressPivots, visualOverrides, health, fungusRisk)
+  useRegisterPlantAttachments(clonedScene.userData?.pestAttachments)
 
   useEffect(() => {
     applyPlantOverrides(clonedScene, visualOverrides)
@@ -312,25 +332,6 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
   useEffect(() => {
     applyFungusToPlant(clonedScene, fungusRisk)
   }, [clonedScene, fungusRisk, visualOverrides])
-
-  useEffect(() => {
-    Object.values(actions).forEach((action) => {
-      if (!action) return
-
-      const duration = action.getClip().duration
-      const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
-      const animationProgress = Math.min(GENERIC_MATURE_ANIMATION_FRACTION, progress * GENERIC_MATURE_ANIMATION_FRACTION)
-      action.timeScale = isPaused ? 0 : 0.018
-      action.time = duration * (isMature ? GENERIC_MATURE_ANIMATION_FRACTION : animationProgress)
-      action.paused = false
-      action.play()
-      if (isMature || isPaused) {
-        action.paused = true
-      }
-    })
-
-    return () => Object.values(actions).forEach((action) => action?.stop())
-  }, [actions, growthProgress, isMature, isPaused])
 
   return (
     <group {...props}>
@@ -343,7 +344,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
   )
 }
 
-export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
   const effectiveVisualOverrides = useMemo(
     () => getEffectiveVisualOverrides(visualOverrides, health),
     [health, visualOverrides],
@@ -353,7 +354,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
     return (
       <group {...props}>
         <PlantPresentationGroup visualOverrides={effectiveVisualOverrides}>
-          <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
+          <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} />
         </PlantPresentationGroup>
       </group>
     )
@@ -361,7 +362,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
 
   const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
 
-  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} {...props} />
+  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} {...props} />
 }
 
 const pestAnchors = {
@@ -467,16 +468,28 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
   const useProceduralSnail = name === 'snail' && modelUrl === '/snails.gltf'
   const risk = Number(pest?.risk_chance) || 0
   const stableSeed = `${name}-${pest?.id ?? index}`
+  const plantAttachments = usePlantAttachments()
   if (useSurfaceFungus) return null
 
   const anchors = getVisiblePestAnchors(name, risk, stableSeed)
     .map((anchor) => getGrowthAdjustedAnchor(anchor, growthProgress, name))
+  const attachmentStart = plantAttachments.length > 0
+    ? stableIndex(`surface-${stableSeed}`, plantAttachments.length)
+    : 0
   const pestVisuals = useProceduralSnail
     ? anchors.map((anchor, anchorIndex) => (
         <SnailSurfaceModel key={`${stableSeed}-${anchorIndex}`} anchor={anchor} />
       ))
     : anchors.map((anchor, anchorIndex) => (
-        <LoadedPest key={`${stableSeed}-${anchorIndex}`} modelUrl={modelUrl} anchor={anchor} pestName={name} />
+        <LoadedPest
+          key={`${stableSeed}-${anchorIndex}`}
+          modelUrl={modelUrl}
+          anchor={anchor}
+          attachment={name === 'aphid' && plantAttachments.length > 0
+            ? plantAttachments[(attachmentStart + anchorIndex) % plantAttachments.length]
+            : null}
+          pestName={name}
+        />
       ))
 
   return (
@@ -533,7 +546,7 @@ function SnailSurfaceModel({ anchor }) {
   )
 }
 
-function LoadedPest({ modelUrl, anchor, pestName }) {
+function LoadedPest({ modelUrl, anchor, attachment = null, pestName }) {
   const { scene } = useGLTF(modelUrl)
   const normalizedAsset = useMemo(() => {
     const clone = cloneSkeleton(scene)
@@ -577,8 +590,8 @@ function LoadedPest({ modelUrl, anchor, pestName }) {
     normalizedAsset.materials.forEach((material) => material.dispose())
   }, [normalizedAsset])
 
-  return (
-    <group position={anchor.position} rotation={anchor.rotation}>
+  const visual = (
+    <>
       {pestName === 'aphid' && (
         <mesh position={[0, 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.35, 0.72, 1]} renderOrder={1}>
           <circleGeometry args={[0.018, 16]} />
@@ -588,6 +601,23 @@ function LoadedPest({ modelUrl, anchor, pestName }) {
       <group position={anchor.modelOffset ?? [0, 0, 0]} rotation={anchor.modelRotation ?? [0, 0, 0]}>
         <primitive object={normalizedAsset.scene} />
       </group>
+    </>
+  )
+
+  if (attachment?.object) {
+    return createPortal(
+      <group position={attachment.position} rotation={attachment.rotation}>
+        <group rotation={anchor.rotation}>
+          {visual}
+        </group>
+      </group>,
+      attachment.object,
+    )
+  }
+
+  return (
+    <group position={anchor.position} rotation={anchor.rotation}>
+      {visual}
     </group>
   )
 }

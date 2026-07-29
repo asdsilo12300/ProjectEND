@@ -5,6 +5,7 @@ import { imageAssets } from '../data/gameData'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { Loading, PestModel, PlantModel } from './PlantModel'
+import { PlantAttachmentProvider } from './plantAttachments'
 import { SceneEnvironment } from './SceneEnvironment'
 import { TimeOfDayEnvironment } from './TimeOfDayEnvironment'
 import { useTimeOfDayLighting } from './useTimeOfDayLighting'
@@ -125,7 +126,7 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
   )
 }
 
-export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
+export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, outdoorReadings = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -152,7 +153,6 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
   const plantingAreaLabel = getAppLanguage() === 'th' ? 'พื้นที่ปลูก' : 'Planting area'
   const isMature = currentStageNo >= 3 || growthPoint >= 100
-  const isPaused = growthRate <= 0 && !isMature
   // The source animation is empty at its exact first frame. Keep a small
   // visible seedling pose while the first authoritative server cycle starts.
   const growthProgress = Math.min(1, Math.max(plantSelected ? 0.05 : 0, growthPoint / 100))
@@ -210,7 +210,13 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
           )}
           <Suspense fallback={<Loading />}>
             {mode === 'outdoor'
-              ? <TimeOfDayEnvironment plantSelected={plantSelected} solar={solarLighting} />
+              ? (
+                <TimeOfDayEnvironment
+                  plantSelected={plantSelected}
+                  rainfall={outdoorReadings?.rain}
+                  solar={solarLighting}
+                />
+              )
               : <Environment preset="city" />}
             <SceneEnvironment
               daylight={mode === 'outdoor' ? solarLighting.daylight : 1}
@@ -218,9 +224,12 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
               mode={mode}
               plantingAreaLabel={plantingAreaLabel}
               plantSelected={plantSelected}
+              rainfall={outdoorReadings?.rain}
+              windDirection={outdoorReadings?.windDirection}
+              windSpeed={outdoorReadings?.windSpeed}
             />
             {plantSelected && (
-              <>
+              <PlantAttachmentProvider>
                 <PlantModel
                   modelUrl={simulationVisual?.current_model_url}
                   plantName={simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th}
@@ -228,7 +237,6 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
                   fungusRisk={fungusRisk}
                   health={health}
                   isMature={isMature}
-                  isPaused={isPaused}
                   growthProgress={growthProgress}
                 />
                 <PlantStatusHud awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} growthPoint={growthPoint} growthRate={growthRate} health={health} />
@@ -241,7 +249,7 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
                     </PestErrorBoundary>
                   )
                 })}
-              </>
+              </PlantAttachmentProvider>
             )}
           </Suspense>
           <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, 0.38, 0]} minDistance={3.2} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />

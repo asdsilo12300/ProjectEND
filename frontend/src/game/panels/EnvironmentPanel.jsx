@@ -115,6 +115,15 @@ function buildWeatherCards(readings) {
       imageUrl: climateIcons.water.imageUrl,
     },
     {
+      label: 'Wind',
+      value: readings?.windSpeed == null
+        ? '--'
+        : `${Math.round(readings.windSpeed)} km/h`,
+      icon: climateIcons.air.icon,
+      color: climateIcons.air.color,
+      imageUrl: climateIcons.air.imageUrl,
+    },
+    {
       label: 'Time',
       value: readings ? (readings.isDay ? 'Day' : 'Night') : '--',
       icon: climateIcons.light.icon,

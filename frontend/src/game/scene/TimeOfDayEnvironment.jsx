@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { Environment } from '@react-three/drei'
+import { getRainVisualIntensity } from './rainUtils'
 
 const DAY_HDRI = '/hdri/symmetrical_garden_02_4k.hdr'
 const NIGHT_HDRI = '/hdri/satara_night_no_lamps_4k.hdr'
@@ -40,7 +41,13 @@ function NightPlantLight() {
   )
 }
 
-export function TimeOfDayEnvironment({ plantSelected = false, solar }) {
+export function TimeOfDayEnvironment({ plantSelected = false, rainfall = 0, solar }) {
+  const rainIntensity = getRainVisualIntensity(rainfall)
+  const backgroundIntensity = solar.backgroundIntensity * (1 - rainIntensity * 0.2)
+  const environmentIntensity = solar.environmentIntensity * (1 - rainIntensity * 0.12)
+  const hemisphereIntensity = solar.hemisphereIntensity * (1 - rainIntensity * 0.24)
+  const sunIntensity = solar.sunIntensity * (1 - rainIntensity * 0.62)
+
   return (
     <>
       <Environment
@@ -48,19 +55,19 @@ export function TimeOfDayEnvironment({ plantSelected = false, solar }) {
         files={solar.isDay ? DAY_HDRI : NIGHT_HDRI}
         background
         backgroundBlurriness={0.02}
-        backgroundIntensity={solar.backgroundIntensity}
-        environmentIntensity={solar.environmentIntensity}
+        backgroundIntensity={backgroundIntensity}
+        environmentIntensity={environmentIntensity}
       />
       <hemisphereLight
         color={solar.isDay ? '#dceeff' : '#7180a4'}
         groundColor={solar.isDay ? '#544a39' : '#101722'}
-        intensity={solar.hemisphereIntensity}
+        intensity={hemisphereIntensity}
       />
-      {solar.sunIntensity > 0 && (
+      {sunIntensity > 0 && (
         <directionalLight
           castShadow
           color={solar.sunColor}
-          intensity={solar.sunIntensity}
+          intensity={sunIntensity}
           position={solar.sunPosition}
           shadow-bias={-0.00035}
           shadow-normalBias={0.025}

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Html, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Box3, Color, DoubleSide, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
+import { getRainVisualIntensity } from './rainUtils'
 
 const GRASS_MODEL_URLS = {
   meadow: '/scenes/grass/scene.gltf',
@@ -254,7 +255,7 @@ function normalizeGrassAssets(scene, includeAllMeshes = false) {
   })
 }
 
-function GrassInstances({ asset, daylight = 1, placements }) {
+function GrassInstances({ asset, daylight = 1, placements, rainfall = 0 }) {
   const instanceRef = useRef(null)
 
   useLayoutEffect(() => {
@@ -263,6 +264,7 @@ function GrassInstances({ asset, daylight = 1, placements }) {
 
     const transform = new Object3D()
     const color = new Color()
+    const wetness = getRainVisualIntensity(rainfall)
 
     placements.forEach((placement, index) => {
       transform.position.set(placement.x, placement.y, placement.z)
@@ -283,16 +285,16 @@ function GrassInstances({ asset, daylight = 1, placements }) {
       const dayBlue = tintBase - 0.04 + placement.tint * tintRange
       const nightVariation = placement.tint * 0.025
       color.setRGB(
-        0.09 + nightVariation + ((dayRed - 0.09 - nightVariation) * daylightMix),
-        0.12 + nightVariation + ((dayGreen - 0.12 - nightVariation) * daylightMix),
-        0.085 + nightVariation + ((dayBlue - 0.085 - nightVariation) * daylightMix),
+        (0.09 + nightVariation + ((dayRed - 0.09 - nightVariation) * daylightMix)) * (1 - wetness * 0.18),
+        (0.12 + nightVariation + ((dayGreen - 0.12 - nightVariation) * daylightMix)) * (1 - wetness * 0.1),
+        (0.085 + nightVariation + ((dayBlue - 0.085 - nightVariation) * daylightMix)) * (1 - wetness * 0.14),
       )
       grass.setColorAt(index, color)
     })
 
     grass.instanceMatrix.needsUpdate = true
     if (grass.instanceColor) grass.instanceColor.needsUpdate = true
-  }, [daylight, placements])
+  }, [daylight, placements, rainfall])
 
   return (
     <instancedMesh
@@ -304,7 +306,7 @@ function GrassInstances({ asset, daylight = 1, placements }) {
   )
 }
 
-export function GrassGround({ daylight = 1, groundObject, mode = 'outdoor' }) {
+export function GrassGround({ daylight = 1, groundObject, mode = 'outdoor', rainfall = 0 }) {
   const meadowGltf = useGLTF(GRASS_MODEL_URLS.meadow)
   const packGltf = useGLTF(GRASS_MODEL_URLS.pack)
   const cemeteryGltf = useGLTF(GRASS_MODEL_URLS.cemetery)
@@ -353,6 +355,7 @@ export function GrassGround({ daylight = 1, groundObject, mode = 'outdoor' }) {
           asset={group.asset}
           daylight={daylight}
           placements={group.placements}
+          rainfall={rainfall}
         />
       ))}
     </group>

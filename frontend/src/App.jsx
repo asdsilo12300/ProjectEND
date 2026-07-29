@@ -17,7 +17,7 @@ import { LoginPage } from './auth/LoginPage'
 import { LandingPage } from './landing/LandingPage'
 import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
-import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
+import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation, getOutdoorReadings } from './game/utils/outdoorWeather'
 import { getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from './game/utils/realGrowth'
 import { defaultWindows, panelExpandedPosition, reflowWindowsForViewport } from './game/utils/windows'
 
@@ -42,7 +42,9 @@ const initialGrowthTrack = {
   history: [0],
 }
 
-const growthAnimationDurationMs = 1600
+const baseGrowthAnimationDurationMs = 1600
+const normalGrowthPointsPerCycle = 14
+const maximumGrowthAnimationDurationMs = 6400
 const autosaveIntervalMs = 30000
 const simulationTickIntervalMs = SIMULATION_CYCLE_SECONDS * 1000
 const initialSimulationTickDelayMs = simulationTickIntervalMs
@@ -57,6 +59,16 @@ const itemNameToKey = {
   'Fungus Spray': 'antifungal-spray',
   'Aphid Prank': 'aphid-prank',
   'Snail Prank': 'snail-prank',
+}
+
+function growthAnimationDurationForRate(growthRate) {
+  const rate = Math.max(0, Number(growthRate) || 0)
+  if (rate <= 0) return 0
+
+  return Math.min(
+    maximumGrowthAnimationDurationMs,
+    Math.max(900, baseGrowthAnimationDurationMs * (normalGrowthPointsPerCycle / rate)),
+  )
 }
 
 const itemImageByKey = {
@@ -594,8 +606,10 @@ function App() {
 
     let isCancelled = false
 
-    async function syncOutdoorWeather() {
-      setOutdoorWeather({ ...initialOutdoorWeather, status: 'loading', message: 'Finding fixed location' })
+    async function syncOutdoorWeather({ silent = false } = {}) {
+      if (!silent) {
+        setOutdoorWeather({ ...initialOutdoorWeather, status: 'loading', message: 'Finding fixed location' })
+      }
 
       try {
         const location = await getFixedOutdoorLocation()
@@ -613,7 +627,7 @@ function App() {
           forecast,
         })
       } catch {
-        if (!isCancelled) {
+        if (!isCancelled && !silent) {
           setOutdoorWeather({
             ...initialOutdoorWeather,
             status: 'error',
@@ -624,9 +638,14 @@ function App() {
     }
 
     syncOutdoorWeather()
+    const weatherRefreshTimer = window.setInterval(
+      () => syncOutdoorWeather({ silent: true }),
+      10 * 60 * 1000,
+    )
 
     return () => {
       isCancelled = true
+      window.clearInterval(weatherRefreshTimer)
     }
   }, [growingMode])
 
@@ -658,13 +677,16 @@ function App() {
     if (activePage === 'admin' || !growingMode || !selectedPlant || modeLoading) return undefined
 
     const targetProgress = clampSimulationProgress(simulationVisual.growth_point)
+    const animationDurationMs = growthAnimationDurationForRate(simulationVisual.growth_rate)
     const animationStartedAt = performance.now()
     let startingProgress = null
     let interval = null
 
     function animateCanonicalGrowth() {
       const now = performance.now()
-      const ratio = Math.min(1, Math.max(0, (now - animationStartedAt) / growthAnimationDurationMs))
+      const ratio = animationDurationMs <= 0
+        ? 1
+        : Math.min(1, Math.max(0, (now - animationStartedAt) / animationDurationMs))
       const easedRatio = 1 - ((1 - ratio) ** 3)
 
       setGrowthTrack((current) => {
@@ -691,7 +713,7 @@ function App() {
     return () => {
       if (interval !== null) window.clearInterval(interval)
     }
-  }, [activePage, growingMode, modeLoading, selectedPlant, simulationVisual.growth_point, simulationVisual.state_version])
+  }, [activePage, growingMode, modeLoading, selectedPlant, simulationVisual.growth_point, simulationVisual.growth_rate])
 
   const previewSimulationVisual = useMemo(() => {
     if (!growingMode || !selectedPlant) {
@@ -2575,6 +2597,7 @@ function App() {
                 expBurst={expBurst}
                 location={outdoorWeather.location}
                 mode={growingMode}
+                outdoorReadings={getOutdoorReadings(outdoorWeather.forecast)}
                 plantSelected={Boolean(selectedPlant)}
                 awaitingFirstCycle={awaitingFirstCycle}
                 cycleStatus={cycleStatus}
@@ -2669,9 +2692,6 @@ function App() {
 }
 
 export default App
-
-
-
 
 
 

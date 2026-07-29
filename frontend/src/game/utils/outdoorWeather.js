@@ -152,7 +152,7 @@ export async function fetchOutdoorForecast(location) {
     latitude: String(location.latitude),
     longitude: String(location.longitude),
     hourly: 'temperature_2m,relative_humidity_2m,soil_temperature_6cm,soil_moisture_1_to_3cm',
-    current: 'rain,is_day',
+    current: 'precipitation,rain,showers,snowfall,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m',
   })
 
   const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`)
@@ -177,18 +177,35 @@ export function climateFromForecast(currentClimate, forecast) {
 export function getOutdoorReadings(forecast) {
   if (!forecast) return null
 
-  const rain = forecast.current?.rain
+  const current = forecast.current ?? {}
+  const rain = Number(current.rain)
+  const showers = Number(current.showers)
+  const precipitation = Number(current.precipitation)
+  const snowfall = Number(current.snowfall)
+  const liquidRain = (Number.isFinite(rain) ? rain : 0)
+    + (Number.isFinite(showers) ? showers : 0)
+  const resolvedRain = liquidRain > 0
+    ? liquidRain
+    : Number.isFinite(precipitation) && !(Number.isFinite(snowfall) && snowfall > 0)
+      ? precipitation
+      : 0
   const temperature = firstHourlyValue(forecast, 'temperature_2m')
   const humidity = firstHourlyValue(forecast, 'relative_humidity_2m')
   const soilTemp = firstHourlyValue(forecast, 'soil_temperature_6cm')
   const soilMoisture = soilMoisturePercent(firstHourlyValue(forecast, 'soil_moisture_1_to_3cm'))
+  const windSpeed = Number(current.wind_speed_10m)
+  const windDirection = Number(current.wind_direction_10m)
+  const windGust = Number(current.wind_gusts_10m)
 
   return {
-    rain: Number.isFinite(rain) ? rain : null,
+    rain: Math.max(0, resolvedRain),
     temperature: Number.isFinite(temperature) ? Math.round(temperature) : null,
     humidity: Number.isFinite(humidity) ? Math.round(humidity) : null,
     soilTemp: Number.isFinite(soilTemp) ? Math.round(soilTemp) : null,
     soilMoisture,
-    isDay: Boolean(forecast.current?.is_day),
+    windSpeed: Number.isFinite(windSpeed) ? windSpeed : 0,
+    windDirection: Number.isFinite(windDirection) ? windDirection : 0,
+    windGust: Number.isFinite(windGust) ? windGust : 0,
+    isDay: Boolean(current.is_day),
   }
 }
