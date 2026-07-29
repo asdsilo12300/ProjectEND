@@ -3,8 +3,11 @@ import { Canvas } from '@react-three/fiber'
 import { Environment, Html, OrbitControls } from '@react-three/drei'
 import { imageAssets } from '../data/gameData'
 import { AppIcon } from '../icons/FontAwesomeIcon'
+import { getAppLanguage } from '../../i18n/appI18n'
 import { Loading, PestModel, PlantModel } from './PlantModel'
 import { SceneEnvironment } from './SceneEnvironment'
+import { TimeOfDayEnvironment } from './TimeOfDayEnvironment'
+import { useTimeOfDayLighting } from './useTimeOfDayLighting'
 
 class SceneErrorBoundary extends Component {
   constructor(props) {
@@ -122,16 +125,32 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
   )
 }
 
-export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, mode = 'greenhouse', nextCycleAt = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
+export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
+  const solarLighting = useTimeOfDayLighting(location)
   const pests = simulationVisual?.active_pests ?? []
+  const fungusRisk = pests.reduce((highestRisk, pest) => {
+    const pestName = String(
+      pest?.pest?.name_en
+        ?? pest?.name_en
+        ?? pest?.pest?.type
+        ?? pest?.type
+        ?? pest?.pest_type
+        ?? '',
+    ).toLowerCase()
+
+    return pestName.includes('fungus')
+      ? Math.max(highestRisk, Number(pest?.risk_chance) || 0)
+      : highestRisk
+  }, 0)
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
   const growthPoint = Number(simulationVisual?.growth_point ?? 0)
   const growthRate = Number(simulationVisual?.growth_rate ?? 0)
   const health = Number(simulationVisual?.health ?? 100)
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
+  const plantingAreaLabel = getAppLanguage() === 'th' ? 'พื้นที่ปลูก' : 'Planting area'
   const isMature = currentStageNo >= 3 || growthPoint >= 100
   const isPaused = growthRate <= 0 && !isMature
   // The source animation is empty at its exact first frame. Keep a small
@@ -171,6 +190,7 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
       <section
         ref={stageRef}
         className="three-stage absolute inset-0 z-10"
+        data-tour="lab-stage"
         style={itemCursorStyle}
         aria-label="Plant simulation stage"
         onClick={useItemFromStage}
@@ -178,20 +198,35 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
         onPointerLeave={() => setItemCursorPoint(null)}
       >
         <SceneErrorBoundary key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}>
-        <Canvas camera={{ position: [0.75, 1.2, 4.8], fov: 34 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
+        <Canvas shadows camera={{ position: [0.75, 1.2, 4.8], fov: 34 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
           <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#080b09']} />
-          <ambientLight intensity={0.85} />
-          <directionalLight position={[3, 5, 4]} intensity={2.9} color="#d7fff0" />
-          <pointLight position={[-3, 2, 3]} intensity={1.15} color="#9bcf82" />
-          <pointLight position={[4, 1, -3]} intensity={0.75} color="#7fb069" />
+          {mode !== 'outdoor' && (
+            <>
+              <ambientLight intensity={0.85} />
+              <directionalLight position={[3, 5, 4]} intensity={2.9} color="#d7fff0" />
+              <pointLight position={[-3, 2, 3]} intensity={1.15} color="#9bcf82" />
+              <pointLight position={[4, 1, -3]} intensity={0.75} color="#7fb069" />
+            </>
+          )}
           <Suspense fallback={<Loading />}>
-            <SceneEnvironment dirtModelUrl={sceneAssets['ground.dirt']?.url} mode={mode} plantSelected={plantSelected} />
+            {mode === 'outdoor'
+              ? <TimeOfDayEnvironment plantSelected={plantSelected} solar={solarLighting} />
+              : <Environment preset="city" />}
+            <SceneEnvironment
+              daylight={mode === 'outdoor' ? solarLighting.daylight : 1}
+              dirtModelUrl={sceneAssets['ground.dirt']?.url}
+              mode={mode}
+              plantingAreaLabel={plantingAreaLabel}
+              plantSelected={plantSelected}
+            />
             {plantSelected && (
               <>
                 <PlantModel
                   modelUrl={simulationVisual?.current_model_url}
                   plantName={simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th}
                   visualOverrides={simulationVisual?.visual_overrides}
+                  fungusRisk={fungusRisk}
+                  health={health}
                   isMature={isMature}
                   isPaused={isPaused}
                   growthProgress={growthProgress}
@@ -208,7 +243,6 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
                 })}
               </>
             )}
-            <Environment preset="city" />
           </Suspense>
           <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, 0.38, 0]} minDistance={3.2} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />
         </Canvas>
@@ -273,7 +307,7 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
             <span>{shareBusy ? 'Updating...' : 'Live'}</span>
           </button>
         )}
-        {!readOnly && plantSelected && <div className="lab-simulation-actions absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" aria-label="Simulation actions">
+        {!readOnly && plantSelected && <div className="lab-simulation-actions absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" data-tour="lab-actions" aria-label="Simulation actions">
           <button
             className="box-border inline-flex min-h-12 items-center gap-2 rounded-full border border-lime-100/15 bg-white/[0.035] px-4 py-2 text-sm font-medium leading-5 text-slate-200 shadow-xs transition hover:bg-white/[0.075] hover:text-lime-50 focus:outline-none focus:ring-4 focus:ring-lime-100/10"
             type="button"

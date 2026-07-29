@@ -31,6 +31,7 @@ class User extends Authenticatable
         'gem',
         'status',
         'last_login_at',
+        'onboarding_progress',
     ];
 
     /**
@@ -48,6 +49,7 @@ class User extends Authenticatable
             'experience' => 'integer',
             'coin' => 'integer',
             'gem' => 'integer',
+            'onboarding_progress' => 'array',
         ];
     }
 

@@ -31,6 +31,8 @@ class Plant extends Model
         'soil_temp_max',
         'air_temp_min',
         'air_temp_max',
+        'real_maturity_days',
+        'growth_reference_url',
     ];
 
     protected function casts(): array
@@ -40,6 +42,7 @@ class Plant extends Model
             'soil_temp_max' => 'decimal:2',
             'air_temp_min' => 'decimal:2',
             'air_temp_max' => 'decimal:2',
+            'real_maturity_days' => 'integer',
         ];
     }
 

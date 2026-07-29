@@ -405,6 +405,13 @@ export async function getMe() {
   return apiFetch('/me')
 }
 
+export async function updateOnboardingProgress(page, version, state) {
+  return apiFetch('/me/onboarding', {
+    method: 'PATCH',
+    body: JSON.stringify({ page, version, state }),
+  })
+}
+
 export async function requestPasswordResetOtp() {
   return apiFetch('/auth/password-reset/request', { method: 'POST' })
 }
@@ -514,6 +521,10 @@ export async function getFriendPosts() {
 
 export async function getCommunityLeaderboard() {
   return apiFetch('/community/leaderboard')
+}
+
+export async function getCommunityInsights(days = 30) {
+  return apiFetch(`/community/insights?days=${encodeURIComponent(days)}`)
 }
 
 export async function getPostComments(postId) {

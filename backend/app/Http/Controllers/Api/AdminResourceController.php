@@ -186,6 +186,8 @@ class AdminResourceController extends Controller
                 'name_th' => ['required', 'string', 'max:191', Rule::unique('plants', 'name_th')->ignore($id)],
                 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'],
                 'base_image_url' => $nullableUrl, 'base_model_url' => ['required', 'string', 'max:2048'],
+                'real_maturity_days' => ['sometimes', 'required', 'integer', 'between:1,3650'],
+                'growth_reference_url' => ['nullable', 'url', 'max:2048'],
                 'water_min' => $requiredPercent, 'water_max' => $requiredPercent, 'light_min' => $requiredPercent, 'light_max' => $requiredPercent,
                 'fertilizer_min' => $requiredPercent, 'fertilizer_max' => $requiredPercent, 'soil_humidity_min' => $requiredPercent, 'soil_humidity_max' => $requiredPercent,
                 'air_humidity_min' => $requiredPercent, 'air_humidity_max' => $requiredPercent,

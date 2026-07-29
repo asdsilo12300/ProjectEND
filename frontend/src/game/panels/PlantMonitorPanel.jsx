@@ -4,12 +4,7 @@ import { Panel } from '../components/Panel'
 import { PestChance } from '../components/PestChance'
 import { resolveAssetUrl } from '../../lib/api'
 import { AppIcon } from '../icons/FontAwesomeIcon'
-
-const stageStops = [
-  { label: 'Seedling', value: 0 },
-  { label: 'Sprout', value: 40 },
-  { label: 'Young', value: 100 },
-]
+import { formatRealDays, getGrowthStageStops, getRealGrowthEstimate } from '../utils/realGrowth'
 
 const visualStateLabels = {
   healthy: 'Healthy',
@@ -138,56 +133,140 @@ function getGrowthPace(simulationVisual, health, growthProgress, growthRate, awa
   return { label: 'Good', value: 78, color: '#9bcf82', detail: 'steady growth' }
 }
 
-function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, progress, history, pace, rate }) {
-  const currentX = 18 + progress * 2.64
-  const timelineValues = history?.length ? history : [0, 0, 0, 0, 0, 0, progress]
-  const points = timelineValues
+function formatGameTime(seconds) {
+  const value = Math.max(0, Math.round(Number(seconds) || 0))
+  if (value < 60) return `${value}s`
+  const minutes = Math.floor(value / 60)
+  const remainingSeconds = value % 60
+  return remainingSeconds ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`
+}
+
+function normalizeTimelineValues(history, progress) {
+  const values = (Array.isArray(history) ? history : [])
+    .map(clampPercent)
+    .slice(-7)
+
+  while (values.length > 2 && values[0] === 0 && values[1] === 0) values.shift()
+  if (values.length === 0) values.push(0)
+  if (Math.abs(values[values.length - 1] - progress) > 0.1) values.push(progress)
+  return values.slice(-7)
+}
+
+function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimate, progress, history, pace, rate, referenceUrl, stages }) {
+  const plot = { left: 34, right: 254, top: 12, bottom: 92 }
+  const timelineValues = normalizeTimelineValues(history, progress)
+  const pointData = timelineValues
     .map((value, index) => {
-      const x = 18 + index * (264 / Math.max(1, timelineValues.length - 1))
-      const y = 98 - clampPercent(value) * 0.68
-      return `${x},${Math.max(24, y)}`
+      const x = timelineValues.length === 1
+        ? plot.right
+        : plot.left + index * ((plot.right - plot.left) / (timelineValues.length - 1))
+      const y = plot.bottom - (clampPercent(value) / 100) * (plot.bottom - plot.top)
+      const biologicalDays = estimate.maturityDays * (clampPercent(value) / 100)
+      const secondsAgo = (timelineValues.length - 1 - index) * estimate.cycleSeconds
+      return { biologicalDays, secondsAgo, value, x, y }
     })
-    .join(' ')
+  const points = pointData.map(({ x, y }) => `${x},${y}`).join(' ')
+  const areaPath = pointData.length > 1
+    ? `M${pointData[0].x} ${plot.bottom} L${points} L${pointData[pointData.length - 1].x} ${plot.bottom} Z`
+    : ''
+  const elapsedWindow = (timelineValues.length - 1) * estimate.cycleSeconds
+  const middleElapsed = Math.round(elapsedWindow / 2)
 
   return (
     <div className="rounded-md border border-lime-100/10 bg-black/20 px-3 py-2">
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <strong className="text-xs text-lime-50">Growth timeline</strong>
+          <strong className="text-xs text-lime-50">Growth calculation</strong>
           <p className="text-xs text-slate-400">
-            {cycleStatus === 'updating'
-              ? 'Applying simulation update…'
-              : cycleSeconds != null
-                ? `${awaitingFirstCycle ? 'First' : 'Next'} update in ${cycleSeconds}s`
-                : `${pace.detail}${rate > 0 ? ` · +${Math.round(rate)} pts/cycle` : ''}`}
+            {progress >= 100
+              ? 'Biological maturity reached'
+              : cycleStatus === 'updating'
+                ? 'Applying simulation update...'
+                : cycleSeconds != null
+                  ? `${awaitingFirstCycle ? 'First' : 'Next'} update in ${cycleSeconds}s`
+                  : `${pace.detail}${rate > 0 ? ` · +${Math.round(rate)} pts/cycle` : ''}`}
           </p>
         </div>
         <span className="shrink-0 whitespace-nowrap rounded bg-[#9bcf82]/12 px-2 py-1 text-xs font-bold leading-none text-lime-100">{pace.label}</span>
       </div>
-      <svg className="h-24 w-full" viewBox="0 0 300 116" role="img" aria-label="Plant growth timeline">
+      <svg className="h-28 w-full" viewBox="0 0 300 120" role="img" aria-label="Calculated game time compared with real-life plant growth">
         <defs>
           <linearGradient id="growthTimelineFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#9bcf82" stopOpacity="0.24" />
+            <stop offset="0%" stopColor="#9bcf82" stopOpacity="0.3" />
             <stop offset="100%" stopColor="#9bcf82" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <path d={`M18 98 L${points} L282 98 Z`} fill="url(#growthTimelineFill)" />
-        <polyline fill="none" points={points} stroke="#9bcf82" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
-        <line x1="18" x2="282" y1="98" y2="98" stroke="rgba(216,243,201,.16)" />
-        {stageStops.map((stage) => {
-          const x = 18 + stage.value * 2.64
-          const active = progress >= stage.value
+        {[0, 50, 100].map((percent) => {
+          const y = plot.bottom - (percent / 100) * (plot.bottom - plot.top)
+          const dayLabel = formatRealDays(estimate.maturityDays * (percent / 100))
           return (
-            <g key={stage.label}>
-              <circle cx={x} cy="98" r={active ? 4 : 3} fill={active ? '#d8f3c9' : 'rgba(216,243,201,.28)'} />
-              <text x={x} y="113" textAnchor="middle" className="fill-slate-400 text-xs">
-                {stage.label}
-              </text>
+            <g key={percent}>
+              <line x1={plot.left} x2={plot.right} y1={y} y2={y} stroke="rgba(216,243,201,.11)" strokeDasharray="3 4" />
+              <text x={plot.left - 5} y={y + 3} textAnchor="end" className="fill-slate-500 text-[8px]">{dayLabel}d</text>
             </g>
           )
         })}
-        <circle cx={currentX} cy="98" r="6" fill="#9bcf82" stroke="#101511" strokeWidth="3" />
+        {stages.map((stage) => {
+          const y = plot.bottom - (stage.value / 100) * (plot.bottom - plot.top)
+          return (
+            <g key={stage.label}>
+              <line x1={plot.right + 2} x2={plot.right + 6} y1={y} y2={y} stroke={progress >= stage.value ? '#9bcf82' : 'rgba(216,243,201,.25)'} />
+              <text x={plot.right + 9} y={y + 3} className={progress >= stage.value ? 'fill-lime-100 text-[7px]' : 'fill-slate-500 text-[7px]'}>{stage.label}</text>
+            </g>
+          )
+        })}
+        {areaPath && <path d={areaPath} fill="url(#growthTimelineFill)" />}
+        <polyline fill="none" points={points} stroke="#9bcf82" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+        {pointData.map((point, index) => (
+          <circle key={`${point.secondsAgo}-${index}`} cx={point.x} cy={point.y} r={index === pointData.length - 1 ? 4 : 2.5} fill={index === pointData.length - 1 ? '#d8f3c9' : '#9bcf82'} stroke="#101511" strokeWidth="1.5">
+            <title>{`${point.secondsAgo === 0 ? 'Now' : `${formatGameTime(point.secondsAgo)} ago`} · ${point.value.toFixed(1)}% growth · ${formatRealDays(point.biologicalDays)} real days`}</title>
+          </circle>
+        ))}
+        {elapsedWindow > 0 && <text x={plot.left} y="108" textAnchor="start" className="fill-slate-500 text-[8px]">-{formatGameTime(elapsedWindow)}</text>}
+        {middleElapsed > 0 && <text x={(plot.left + plot.right) / 2} y="108" textAnchor="middle" className="fill-slate-600 text-[8px]">-{formatGameTime(middleElapsed)}</text>}
+        <text x={plot.right} y="108" textAnchor="end" className="fill-slate-400 text-[8px]">Now</text>
+        <text x={plot.left} y="118" className="fill-slate-600 text-[7px]">game time →</text>
       </svg>
+      <RealGrowthScale estimate={estimate} pace={pace} referenceUrl={referenceUrl} />
+    </div>
+  )
+}
+
+function formatScaleSeconds(value) {
+  if (!Number.isFinite(value)) return '—'
+  return value < 10 ? value.toFixed(1) : Math.round(value).toLocaleString()
+}
+
+function RealGrowthScale({ estimate, pace, referenceUrl }) {
+  const currentDays = formatRealDays(estimate.equivalentDays)
+  const maturityDays = formatRealDays(estimate.maturityDays)
+  const isWaiting = !estimate.isMature && estimate.growthPointsPerCycle <= 0 && ['Starting', 'Ready'].includes(pace.label)
+  const isPaused = !estimate.isMature && !isWaiting && estimate.growthPointsPerCycle <= 0
+  const scaleSeconds = estimate.currentSecondsPerRealDay ?? estimate.normalSecondsPerRealDay
+  const scaleLabel = estimate.currentSecondsPerRealDay
+    ? `1 day ≈ ${formatScaleSeconds(scaleSeconds)}s now`
+    : `1 day ≈ ${formatScaleSeconds(scaleSeconds)}s normal`
+  const tooltip = estimate.currentSecondsPerRealDay
+    ? `${estimate.cycleSeconds}s per update ÷ ${formatRealDays(estimate.equivalentDaysPerCycle)} biological days = ${formatScaleSeconds(scaleSeconds)} game seconds per real-life growth day.`
+    : isPaused
+      ? `Growth is paused under the current conditions. At normal pace, one real-life growth day equals about ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} game seconds.`
+      : `At normal pace, one real-life growth day equals about ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} game seconds.`
+
+  return (
+    <div className="mt-1 flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 border-t border-lime-100/10 pt-2 text-[10px]" aria-label="Real-life growth scale" title={tooltip}>
+      <span className="inline-flex items-center gap-1.5 font-bold text-sky-100">
+        <AppIcon className="h-3 w-3 text-sky-300" name="history" />
+        {currentDays} / ~{maturityDays} days
+      </span>
+      <span aria-hidden="true" className="text-white/20">•</span>
+      <span className={isPaused ? 'font-semibold text-orange-200' : 'font-semibold text-slate-300'}>
+        {isPaused ? `Paused · normal 1 day ≈ ${formatScaleSeconds(estimate.normalSecondsPerRealDay)}s` : scaleLabel}
+      </span>
+      {referenceUrl && (
+        <a className="ml-auto shrink-0 text-sky-300/75 transition hover:text-white" href={referenceUrl} target="_blank" rel="noreferrer" aria-label="Open growth-time source" title="Growth-time source">
+          Source ↗
+        </a>
+      )}
     </div>
   )
 }
@@ -202,6 +281,8 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const paceValue = useSoftNumber(targetPace.value, 0.012)
   const pace = { ...targetPace, value: paceValue }
   const growthHistory = simulationVisual?.growth_history ?? [growthProgress]
+  const growthStages = getGrowthStageStops(simulationVisual?.plant)
+  const realGrowth = getRealGrowthEstimate(simulationVisual)
   const stageName = simulationVisual?.current_stage?.stage_name ?? 'Seedling'
   const plantName = readablePlantName(simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th)
   const plantImageUrl = resolveAssetUrl(simulationVisual?.plant?.base_image_url ?? simulationVisual?.plant?.image_url ?? simulationVisual?.plant?.icon_url)
@@ -258,7 +339,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
           <span className="mt-1 block text-xs leading-5 text-slate-200">{nextAction}</span>
         </div>
 
-        <GrowthTimeline awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} progress={growthProgress} history={growthHistory} pace={pace} rate={growthRate} />
+        <GrowthTimeline awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} estimate={realGrowth} progress={growthProgress} history={growthHistory} pace={pace} rate={growthRate} referenceUrl={simulationVisual?.plant?.growth_reference_url} stages={growthStages} />
 
         <div className="mt-3 border-t border-lime-100/10 pt-3">
           <div className="lab-pest-monitor-heading mb-2 flex items-center justify-between">

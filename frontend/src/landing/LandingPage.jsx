@@ -164,7 +164,7 @@ function ProductTour() {
   }
 
   return (
-    <section className="landing-section landing-product-tour" aria-labelledby="product-tour-title">
+    <section className="landing-section landing-product-tour" data-tour="home-game-preview" aria-labelledby="product-tour-title">
       <div className="landing-container">
         <div className="landing-section-heading landing-product-tour__heading" data-reveal="up">
           <div>
@@ -216,7 +216,7 @@ function ProductTour() {
 function HomePage({ user, onStart, onLearn, onOpenPage }) {
   return (
     <>
-      <section className="landing-hero">
+      <section className="landing-hero" data-tour="home-hero">
         <img className="landing-hero__image" src={heroImage} alt="A young plant growing in healthy soil" />
         <div className="landing-hero__shade" />
         <HeroParticles />
@@ -231,7 +231,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage }) {
               observe its response, and build real understanding through every growing cycle.
             </p>
             <div className="landing-actions">
-              <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
+              <button className="landing-button landing-button--primary" data-tour="home-start" type="button" onClick={onStart}>
                 <AppIcon name="controller" />
                 {user ? 'Continue your experiment' : 'Play the simulation'}
                 <AppIcon name="arrowForward" />
@@ -647,7 +647,7 @@ function LearningLibrary({ onOpenArticle }) {
   }, [reloadKey])
 
   return (
-    <section className="landing-section learning-library" aria-labelledby="learning-library-title">
+    <section className="landing-section learning-library" data-tour="learn-library" aria-labelledby="learning-library-title">
       <div className="landing-container">
         <div className="learning-library__heading" data-reveal="up">
           <div>
@@ -799,7 +799,7 @@ function LearningArticlePage({ slug, user, onBack, onStart }) {
 function LearnPage({ user, onHome, onStart, onOpenArticle }) {
   return (
     <>
-      <section className="landing-learn-hero">
+      <section className="landing-learn-hero" data-tour="learn-hero">
         <img className="landing-learn-hero__image" src={learnAboutPlantsBanner} alt="" aria-hidden="true" />
         <div className="landing-learn-hero__shade" aria-hidden="true" />
         <div className="landing-container">
@@ -838,7 +838,7 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
           </div>
         </section>
 
-        <section className="landing-section landing-section--factors">
+        <section className="landing-section landing-section--factors" data-tour="learn-factors">
           <div className="landing-container">
             <div className="landing-section-heading landing-section-heading--center" data-reveal="up">
               <SectionEyebrow icon="eco">Plant growth essentials</SectionEyebrow>

@@ -48,6 +48,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
     Route::patch('/me', [AuthController::class, 'updateProfile']);
     Route::post('/me/profile', [AuthController::class, 'updateProfile']);
+    Route::patch('/me/onboarding', [AuthController::class, 'updateOnboarding']);
     Route::post('/auth/password-reset/request', [PasswordResetController::class, 'requestOtp'])->middleware('throttle:3,10');
     Route::post('/auth/password-reset/verify', [PasswordResetController::class, 'verifyOtp'])->middleware('throttle:10,10');
     Route::post('/auth/password-reset/complete', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:5,10');
@@ -59,6 +60,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/friends/{friendship}/simulator/latest', [FriendController::class, 'latestSimulator']);
     Route::get('/posts/friends', [PostController::class, 'friends']);
     Route::get('/community/leaderboard', [CommunityController::class, 'leaderboard']);
+    Route::get('/community/insights', [CommunityController::class, 'insights']);
 
     Route::get('/simulators', [SimulatorController::class, 'index']);
     Route::get('/simulators/latest', [SimulatorController::class, 'latest']);

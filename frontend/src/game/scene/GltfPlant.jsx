@@ -3,8 +3,11 @@ import { useFrame, useGraph } from '@react-three/fiber'
 import { useAnimations, useGLTF } from '@react-three/drei'
 import { Color, DoubleSide, LoopOnce } from 'three'
 import { SkeletonUtils } from 'three-stdlib'
+import { updateFungusMaterial } from './fungusMaterial'
 
 const LEAF_MATERIALS = ['1st_Leaf_Mat', '2nd_Leaf_Mat', '3rd_Leaf_Mat', '4th_Leaf_Mat', '5th_Leaf_Mat']
+const LEAF_NODES = ['Object_13', 'Object_353', 'Object_693', 'Object_1033', 'Object_1373']
+const DEAD_EMISSIVE_COLOR = new Color('#000000')
 
 function clonePlantMaterials(materials) {
   const cloned = { leaves: {}, stems: {} }
@@ -19,13 +22,14 @@ function clonePlantMaterials(materials) {
 }
 
 function getStressPalette(leafState) {
+  if (leafState === 'dead') return ['#3e2c20', '#765335', '#251c17']
   if (leafState === 'yellowing') return ['#e3ce63', '#f1dc78', '#9f8434']
   if (leafState === 'darkened') return ['#425c52', '#60766b', '#31493f']
   if (leafState === 'wilted' || leafState === 'drooping') return ['#87623d', '#aa8051', '#5f472f']
   return ['#6f4a2a', '#d1b06a', '#4f3d24']
 }
 
-export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fungusRisk = 0, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene])
@@ -34,11 +38,23 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
   const { actions } = useAnimations(animations, group)
   const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
   const leafState = String(visualOverrides?.leafState ?? 'upright').toLowerCase()
+  const isDead = leafState === 'dead'
   const isStressed = !['upright', 'normal', 'healthy'].includes(leafState)
-  const stressMarkOpacity = isStressed ? 0.78 : 0
+  const stressMarkOpacity = isDead ? 0.52 : isStressed ? 0.78 : 0
   const targetLeafColor = useMemo(() => new Color(visualOverrides?.leafColor ?? '#9bcf82'), [visualOverrides?.leafColor])
   const targetStemColor = useMemo(() => new Color(visualOverrides?.stemColor ?? '#7a5a2f'), [visualOverrides?.stemColor])
   const stressPalette = getStressPalette(leafState)
+
+  useEffect(() => {
+    LEAF_MATERIALS.forEach((name, index) => {
+      updateFungusMaterial(
+        plantMaterials.leaves[name],
+        fungusRisk,
+        index * 2.37 + 1.4,
+        nodes[LEAF_NODES[index]]?.geometry,
+      )
+    })
+  }, [fungusRisk, nodes, plantMaterials])
 
   useFrame((_, delta) => {
     const blend = 1 - Math.exp(-Math.min(delta, 0.1) * 4.2)
@@ -49,14 +65,18 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
 
       if (leafMaterial) {
         leafMaterial.color.lerp(targetLeafColor, blend)
-        leafMaterial.emissive?.lerp?.(targetLeafColor, blend * 0.75)
-        leafMaterial.emissiveIntensity += ((isStressed ? 0.025 : 0) - leafMaterial.emissiveIntensity) * blend
+        leafMaterial.emissive?.lerp?.(isDead ? DEAD_EMISSIVE_COLOR : targetLeafColor, blend * 0.75)
+        leafMaterial.emissiveIntensity += ((isDead ? 0 : isStressed ? 0.025 : 0) - leafMaterial.emissiveIntensity) * blend
+        leafMaterial.roughness += ((isDead ? 1 : 0.76) - leafMaterial.roughness) * blend
+        leafMaterial.metalness += ((isDead ? 0 : 0.02) - leafMaterial.metalness) * blend
       }
 
       if (stemMaterial) {
         stemMaterial.color.lerp(targetStemColor, blend)
-        stemMaterial.emissive?.lerp?.(targetStemColor, blend * 0.5)
-        stemMaterial.emissiveIntensity += ((isStressed ? 0.012 : 0) - stemMaterial.emissiveIntensity) * blend
+        stemMaterial.emissive?.lerp?.(isDead ? DEAD_EMISSIVE_COLOR : targetStemColor, blend * 0.5)
+        stemMaterial.emissiveIntensity += ((isDead ? 0 : isStressed ? 0.012 : 0) - stemMaterial.emissiveIntensity) * blend
+        stemMaterial.roughness += ((isDead ? 1 : 0.8) - stemMaterial.roughness) * blend
+        stemMaterial.metalness += ((isDead ? 0 : 0.02) - stemMaterial.metalness) * blend
       }
     })
   })
@@ -99,8 +119,8 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
                     <primitive object={nodes.GLTF_created_0_rootJoint} />
                     <group name="1st_Leaf001_336" />
                     <group name="1st_Stem_335" />
-                    <skinnedMesh name="Object_11" geometry={nodes.Object_11.geometry} material={plantMaterials.stems['1st_Leaf_Mat']} skeleton={nodes.Object_11.skeleton} />
-                    <skinnedMesh name="Object_13" geometry={nodes.Object_13.geometry} material={plantMaterials.leaves['1st_Leaf_Mat']} skeleton={nodes.Object_13.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_11" geometry={nodes.Object_11.geometry} material={plantMaterials.stems['1st_Leaf_Mat']} skeleton={nodes.Object_11.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_13" geometry={nodes.Object_13.geometry} material={plantMaterials.leaves['1st_Leaf_Mat']} skeleton={nodes.Object_13.skeleton} />
                   </group>
                 </group>
                 <group name="2nd_Leaf_673">
@@ -108,8 +128,8 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
                     <primitive object={nodes.GLTF_created_1_rootJoint} />
                     <group name="2nd_Leaf001_672" />
                     <group name="2nd_Stem_671" />
-                    <skinnedMesh name="Object_351" geometry={nodes.Object_351.geometry} material={plantMaterials.stems['2nd_Leaf_Mat']} skeleton={nodes.Object_351.skeleton} />
-                    <skinnedMesh name="Object_353" geometry={nodes.Object_353.geometry} material={plantMaterials.leaves['2nd_Leaf_Mat']} skeleton={nodes.Object_353.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_351" geometry={nodes.Object_351.geometry} material={plantMaterials.stems['2nd_Leaf_Mat']} skeleton={nodes.Object_351.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_353" geometry={nodes.Object_353.geometry} material={plantMaterials.leaves['2nd_Leaf_Mat']} skeleton={nodes.Object_353.skeleton} />
                   </group>
                 </group>
                 <group name="3rd_Leaf_1009">
@@ -117,8 +137,8 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
                     <primitive object={nodes.GLTF_created_2_rootJoint} />
                     <group name="3rd_Leaf001_1008" />
                     <group name="3rd_Stem_1007" />
-                    <skinnedMesh name="Object_691" geometry={nodes.Object_691.geometry} material={plantMaterials.stems['3rd_Leaf_Mat']} skeleton={nodes.Object_691.skeleton} />
-                    <skinnedMesh name="Object_693" geometry={nodes.Object_693.geometry} material={plantMaterials.leaves['3rd_Leaf_Mat']} skeleton={nodes.Object_693.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_691" geometry={nodes.Object_691.geometry} material={plantMaterials.stems['3rd_Leaf_Mat']} skeleton={nodes.Object_691.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_693" geometry={nodes.Object_693.geometry} material={plantMaterials.leaves['3rd_Leaf_Mat']} skeleton={nodes.Object_693.skeleton} />
                   </group>
                 </group>
                 <group name="4th_Leaf_1345">
@@ -126,8 +146,8 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
                     <primitive object={nodes.GLTF_created_3_rootJoint} />
                     <group name="4th_Leaf001_1344" />
                     <group name="4th_Stem_1343" />
-                    <skinnedMesh name="Object_1031" geometry={nodes.Object_1031.geometry} material={plantMaterials.stems['4th_Leaf_Mat']} skeleton={nodes.Object_1031.skeleton} />
-                    <skinnedMesh name="Object_1033" geometry={nodes.Object_1033.geometry} material={plantMaterials.leaves['4th_Leaf_Mat']} skeleton={nodes.Object_1033.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_1031" geometry={nodes.Object_1031.geometry} material={plantMaterials.stems['4th_Leaf_Mat']} skeleton={nodes.Object_1031.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_1033" geometry={nodes.Object_1033.geometry} material={plantMaterials.leaves['4th_Leaf_Mat']} skeleton={nodes.Object_1033.skeleton} />
                   </group>
                 </group>
                 <group name="5th_Leaf_1681">
@@ -135,8 +155,8 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, isMa
                     <primitive object={nodes.GLTF_created_4_rootJoint} />
                     <group name="5th_Leaf001_1680" />
                     <group name="5th_Stem_1679" />
-                    <skinnedMesh name="Object_1371" geometry={nodes.Object_1371.geometry} material={plantMaterials.stems['5th_Leaf_Mat']} skeleton={nodes.Object_1371.skeleton} />
-                    <skinnedMesh name="Object_1373" geometry={nodes.Object_1373.geometry} material={plantMaterials.leaves['5th_Leaf_Mat']} skeleton={nodes.Object_1373.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_1371" geometry={nodes.Object_1371.geometry} material={plantMaterials.stems['5th_Leaf_Mat']} skeleton={nodes.Object_1371.skeleton} />
+                    <skinnedMesh castShadow receiveShadow name="Object_1373" geometry={nodes.Object_1373.geometry} material={plantMaterials.leaves['5th_Leaf_Mat']} skeleton={nodes.Object_1373.skeleton} />
                   </group>
                 </group>
               {isStressed && (

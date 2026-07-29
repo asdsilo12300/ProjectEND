@@ -20,9 +20,9 @@ function Toggle({ checked, label, onChange }) {
   )
 }
 
-function Section({ children, description, icon, title }) {
+function Section({ children, dataTour, description, icon, title }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-lime-100/10 bg-[#121914]/90 shadow-[0_14px_34px_rgba(0,0,0,.18)]">
+    <section className="overflow-hidden rounded-xl border border-lime-100/10 bg-[#121914]/90 shadow-[0_14px_34px_rgba(0,0,0,.18)]" data-tour={dataTour}>
       <header className="flex items-start gap-3 border-b border-lime-100/10 px-5 py-4">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#9bcf82]/10 text-[#bdeba7] ring-1 ring-[#9bcf82]/15">
           <AppIcon className="h-5 w-5" name={icon} />
@@ -149,7 +149,7 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
           </div>
         </div>
 
-        <section className="mb-5 overflow-hidden rounded-xl border border-lime-100/10 bg-[#121914]/90 shadow-[0_14px_34px_rgba(0,0,0,.18)]">
+        <section className="mb-5 overflow-hidden rounded-xl border border-lime-100/10 bg-[#121914]/90 shadow-[0_14px_34px_rgba(0,0,0,.18)]" data-tour="settings-account">
           <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#263022] text-base font-black text-lime-100 ring-1 ring-lime-100/10">
@@ -177,7 +177,7 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
         </section>
 
         <div className="grid gap-5">
-          <Section icon="eye" title="Display & accessibility" description="Adjust readability and motion without changing simulation results.">
+          <Section dataTour="settings-accessibility" icon="eye" title="Display & accessibility" description="Adjust readability and motion without changing simulation results.">
             <SettingRow title="Text size" description="Increase interface text across the academy.">
               <ChoiceGroup
                 label="Text size"
@@ -199,7 +199,7 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
             </SettingRow>
           </Section>
 
-          <Section icon="translate" title="Language" description="Choose the preferred language for learning content.">
+          <Section dataTour="settings-language" icon="translate" title="Language" description="Choose the preferred language for learning content.">
             <SettingRow title="Preferred language" description="The academy will use this preference as translated content becomes available.">
               <ChoiceGroup
                 label="Preferred language"

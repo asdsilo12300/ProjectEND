@@ -50,7 +50,14 @@ class HarvestSimulationTest extends TestCase
             'last_active_at' => now()->subSeconds(45),
             'started_at' => now()->subSeconds(45),
         ]);
-        $request = Request::create('/api/simulators/1/histories', 'POST', ['visibility' => 'private']);
+        $request = Request::create('/api/simulators/1/histories', 'POST', [
+            'visibility' => 'private',
+            'growth_calculation' => [
+                'cycle_seconds' => 30,
+                'observed_growth_points_per_cycle' => 14,
+                'recent_growth_percentages' => [0, 14, 28],
+            ],
+        ]);
         $request->setUserResolver(fn () => $user);
         $controller = app(PlantHistoryController::class);
 
@@ -65,6 +72,12 @@ class HarvestSimulationTest extends TestCase
         $this->assertGreaterThanOrEqual(45, (int) $first->resource->duration_seconds);
         $this->assertLessThan(50, (int) $first->resource->duration_seconds);
         $this->assertSame(0, (int) $first->resource->duration_days);
+        $growthCalculation = data_get($first->resource->game_state, 'growth_calculation');
+        $this->assertSame(90, $growthCalculation['maturity_days']);
+        $this->assertSame(30, $growthCalculation['cycle_seconds']);
+        $this->assertEquals(14.0, $growthCalculation['observed_growth_points_per_cycle']);
+        $this->assertEquals([0, 14, 28, 100], $growthCalculation['recent_growth_percentages']);
+        $this->assertSame('complete', $growthCalculation['status']);
     }
 
     private function buildSchema(): void

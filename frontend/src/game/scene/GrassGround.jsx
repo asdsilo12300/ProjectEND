@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { useGLTF } from '@react-three/drei'
+import { Html, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { Box3, Color, DoubleSide, Object3D, Raycaster, Vector3 } from 'three'
+import { Box3, Color, DoubleSide, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
 
 const GRASS_MODEL_URLS = {
   meadow: '/scenes/grass/scene.gltf',
@@ -63,7 +63,7 @@ function findPlantingHeight(groundObject) {
   return raycaster.intersectObject(groundSurface, false)[0]?.point.y ?? bounds.max.y
 }
 
-function PlantingSpot({ groundObject, plantSelected }) {
+export function PlantingSpot({ groundObject, label = 'Planting area', plantSelected }) {
   const ringRef = useRef(null)
   const plantingHeight = useMemo(() => findPlantingHeight(groundObject), [groundObject])
 
@@ -114,6 +114,12 @@ function PlantingSpot({ groundObject, plantSelected }) {
           </mesh>
         </group>
       )}
+      <Html position={[0, 0.08, 1.08]} center zIndexRange={[8, 0]}>
+        <div className={`pointer-events-none inline-flex select-none items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.09em] shadow-[0_7px_18px_rgba(0,0,0,.36)] backdrop-blur-sm ${plantSelected ? 'border-lime-100/18 bg-[#101511]/78 text-lime-100/75' : 'border-lime-100/30 bg-[#101511]/92 text-lime-50'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${plantSelected ? 'bg-[#9bcf82]/65' : 'bg-[#c6ff9f] shadow-[0_0_7px_rgba(198,255,159,.65)]'}`} aria-hidden="true" />
+          {label}
+        </div>
+      </Html>
     </group>
   )
 }
@@ -222,20 +228,33 @@ function normalizeGrassAssets(scene, includeAllMeshes = false) {
     const sourceMaterial = Array.isArray(sourceMesh.material)
       ? sourceMesh.material[0]
       : sourceMesh.material
-    const material = sourceMaterial.clone()
-    material.side = DoubleSide
-    material.transparent = true
-    material.alphaTest = Math.max(0.28, material.alphaTest ?? 0)
+    // Some grass packs use an unlit material, which stays neon green even when
+    // the night HDRI is dark. A standard material makes every variant respond
+    // to the sun, environment and the focused night lamp.
+    const material = new MeshStandardMaterial({
+      alphaMap: sourceMaterial.alphaMap ?? null,
+      alphaTest: Math.max(0.28, sourceMaterial.alphaTest ?? 0),
+      aoMap: sourceMaterial.aoMap ?? null,
+      color: sourceMaterial.color?.clone?.() ?? new Color('#ffffff'),
+      map: sourceMaterial.map ?? null,
+      metalness: 0,
+      normalMap: sourceMaterial.normalMap ?? null,
+      opacity: sourceMaterial.opacity ?? 1,
+      roughness: 0.96,
+      side: DoubleSide,
+      transparent: true,
+    })
     material.depthWrite = true
-    material.metalness = 0
-    material.roughness = 0.92
+    material.emissive.set('#000000')
+    material.emissiveIntensity = 0
+    material.toneMapped = true
     material.needsUpdate = true
 
     return [{ geometry, material }]
   })
 }
 
-function GrassInstances({ asset, placements }) {
+function GrassInstances({ asset, daylight = 1, placements }) {
   const instanceRef = useRef(null)
 
   useLayoutEffect(() => {
@@ -258,17 +277,22 @@ function GrassInstances({ asset, placements }) {
 
       const tintBase = placement.kind === 'pack' ? 0.87 : 0.76
       const tintRange = placement.kind === 'pack' ? 0.11 : 0.13
+      const daylightMix = Math.min(1, Math.max(0, daylight))
+      const dayRed = tintBase + placement.tint * tintRange
+      const dayGreen = tintBase + 0.08 + placement.tint * tintRange
+      const dayBlue = tintBase - 0.04 + placement.tint * tintRange
+      const nightVariation = placement.tint * 0.025
       color.setRGB(
-        tintBase + placement.tint * tintRange,
-        tintBase + 0.08 + placement.tint * tintRange,
-        tintBase - 0.04 + placement.tint * tintRange,
+        0.09 + nightVariation + ((dayRed - 0.09 - nightVariation) * daylightMix),
+        0.12 + nightVariation + ((dayGreen - 0.12 - nightVariation) * daylightMix),
+        0.085 + nightVariation + ((dayBlue - 0.085 - nightVariation) * daylightMix),
       )
       grass.setColorAt(index, color)
     })
 
     grass.instanceMatrix.needsUpdate = true
     if (grass.instanceColor) grass.instanceColor.needsUpdate = true
-  }, [placements])
+  }, [daylight, placements])
 
   return (
     <instancedMesh
@@ -280,7 +304,7 @@ function GrassInstances({ asset, placements }) {
   )
 }
 
-export function GrassGround({ groundObject, mode = 'greenhouse', plantSelected = false }) {
+export function GrassGround({ daylight = 1, groundObject, mode = 'outdoor' }) {
   const meadowGltf = useGLTF(GRASS_MODEL_URLS.meadow)
   const packGltf = useGLTF(GRASS_MODEL_URLS.pack)
   const cemeteryGltf = useGLTF(GRASS_MODEL_URLS.cemetery)
@@ -323,16 +347,14 @@ export function GrassGround({ groundObject, mode = 'greenhouse', plantSelected =
 
   return (
     <group>
-      <PlantingSpot groundObject={groundObject} plantSelected={plantSelected} />
       {instanceGroups.map((group) => (
         <GrassInstances
           key={`${group.key}-${group.placements.length}`}
           asset={group.asset}
+          daylight={daylight}
           placements={group.placements}
         />
       ))}
     </group>
   )
 }
-
-Object.values(GRASS_MODEL_URLS).forEach((url) => useGLTF.preload(url))

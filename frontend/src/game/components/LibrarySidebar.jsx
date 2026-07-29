@@ -29,7 +29,7 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
         <AppIcon className="h-4 w-4" name="plant" />
         Lab assets
       </button>
-      <aside id="lab-asset-library" className="lab-library-drawer absolute bottom-0 left-0 top-16 z-40 w-[244px] overflow-visible border-r border-lime-100/15 bg-[#101511]/95 text-slate-100" data-open={drawerOpen ? 'true' : 'false'} aria-label="Plant and item library">
+      <aside id="lab-asset-library" className="lab-library-drawer absolute bottom-0 left-0 top-16 z-40 w-[244px] overflow-visible border-r border-lime-100/15 bg-[#101511]/95 text-slate-100" data-open={drawerOpen ? 'true' : 'false'} data-tour="lab-assets" aria-label="Plant and item library">
         <div className="flex items-center gap-3 border-b border-lime-100/10 px-3 py-3">
           <span className="min-w-0 flex-1">
             <strong className="block text-sm text-lime-50">Lab assets</strong>
@@ -52,7 +52,7 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
           const visibleItems = items
 
           return (
-            <section className="mb-2" key={section}>
+            <section className="mb-2" data-tour={section === 'Plants' ? 'lab-plants' : 'lab-items'} key={section}>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                 type="button"
@@ -131,9 +131,9 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                             </span>
                             <span className="min-w-0 flex-1">
                               <strong className="block truncate text-[12px] text-lime-50">{itemName}</strong>
-                              <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-400" aria-label={item.current ? 'Growing now' : item.planted ? 'Planted' : readOnly ? 'Not planted' : 'Available'}>
+                              <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-400" aria-label={item.current ? 'Growing now' : item.planted ? 'Planted' : readOnly ? 'Not planted' : 'Ready to plant'}>
                                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : readOnly ? 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
-                                <span className="shrink-0">{item.current ? 'Growing' : item.planted ? 'Planted' : readOnly ? 'Not planted' : 'Available'}</span>
+                                <span className="shrink-0">{item.current ? 'Growing' : item.planted ? 'Planted' : readOnly ? 'Not planted' : 'Ready'}</span>
                               </span>
                             </span>
                           </>

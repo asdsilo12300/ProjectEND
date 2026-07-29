@@ -5,6 +5,7 @@ import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { resolveAssetUrl } from '../../lib/api'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { GltfPlant } from './GltfPlant'
+import { updateFungusMaterial } from './fungusMaterial'
 
 const BASE_PLANT_SCALE = 1.1
 const PLANT_BASE_LOCAL_Y = 1.45
@@ -15,8 +16,16 @@ const PLANT_ASSET_ALIGNMENT_SCALE = 0.9
 const GENERIC_PLANT_TARGET_HEIGHT = 2.15
 const GENERIC_MATURE_ANIMATION_FRACTION = 0.95
 const TULIP_SOIL_EMBED_DEPTH = 0.2
+const DEAD_PLANT_OVERRIDES = {
+  leafColor: '#6f5232',
+  stemColor: '#493628',
+  leafState: 'dead',
+  stemState: 'dead',
+  scale: 0.9,
+}
 
 const STEM_LEAN_BY_STATE = {
+  dead: 0.15,
   leaning: 0.095,
   soft: -0.055,
   thin: 0.035,
@@ -26,6 +35,7 @@ const STEM_LEAN_BY_STATE = {
 }
 
 const LEAF_LEAN_BY_STATE = {
+  dead: 0.05,
   wilted: 0.035,
   drooping: -0.025,
   burnt_edges: 0.018,
@@ -36,14 +46,25 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, Number(value) || 0))
 }
 
+function getEffectiveVisualOverrides(visualOverrides = {}, health = 100) {
+  if (Number(health) > 0) return visualOverrides
+
+  return {
+    ...visualOverrides,
+    ...DEAD_PLANT_OVERRIDES,
+  }
+}
+
 function getPlantPresentation(visualOverrides = {}) {
   const visualScale = clamp(visualOverrides.scale ?? 1, 0.5, 1.5)
   const stemLean = STEM_LEAN_BY_STATE[visualOverrides.stemState] ?? 0
   const leafLean = LEAF_LEAN_BY_STATE[visualOverrides.leafState] ?? 0
+  const isDead = visualOverrides.leafState === 'dead' || visualOverrides.stemState === 'dead'
 
   return {
     scale: BASE_PLANT_SCALE * visualScale,
-    lean: clamp(stemLean + leafLean, -0.14, 0.14),
+    heightScale: isDead ? 0.92 : 1,
+    lean: clamp(stemLean + leafLean, -0.22, 0.22),
   }
 }
 
@@ -51,7 +72,11 @@ function PlantPresentationGroup({ children, visualOverrides = {} }) {
   const presentation = getPlantPresentation(visualOverrides)
 
   return (
-    <group position={PLANT_PIVOT} rotation={[0, 0, presentation.lean]} scale={presentation.scale}>
+    <group
+      position={PLANT_PIVOT}
+      rotation={[0, 0, presentation.lean]}
+      scale={[presentation.scale, presentation.scale * presentation.heightScale, presentation.scale]}
+    >
       <group position={PLANT_LOCAL_OFFSET}>{children}</group>
     </group>
   )
@@ -62,6 +87,7 @@ function applyPlantOverrides(object, overrides = {}) {
   const stemColor = overrides.stemColor ? new Color(overrides.stemColor) : null
   const isStressState = (overrides.leafState && overrides.leafState !== 'upright')
     || (overrides.stemState && overrides.stemState !== 'upright')
+  const isDead = overrides.leafState === 'dead' || overrides.stemState === 'dead'
   let targetedMaterialCount = 0
 
   function cloneFromOriginal(material) {
@@ -70,8 +96,19 @@ function applyPlantOverrides(object, overrides = {}) {
     const nextMaterial = material.clone()
     if (nextMaterial.color) {
       const originalColor = material.userData?.plantOriginalColor ?? `#${material.color.getHexString()}`
-      nextMaterial.userData = { ...nextMaterial.userData, plantOriginalColor: originalColor }
+      nextMaterial.userData = {
+        ...nextMaterial.userData,
+        plantOriginalColor: originalColor,
+        plantOriginalMetalness: material.userData?.plantOriginalMetalness ?? material.metalness,
+        plantOriginalRoughness: material.userData?.plantOriginalRoughness ?? material.roughness,
+      }
       nextMaterial.color.set(originalColor)
+    }
+    if (Number.isFinite(nextMaterial.userData?.plantOriginalMetalness)) {
+      nextMaterial.metalness = nextMaterial.userData.plantOriginalMetalness
+    }
+    if (Number.isFinite(nextMaterial.userData?.plantOriginalRoughness)) {
+      nextMaterial.roughness = nextMaterial.userData.plantOriginalRoughness
     }
 
     return nextMaterial
@@ -80,6 +117,8 @@ function applyPlantOverrides(object, overrides = {}) {
   object.traverse((child) => {
     if (!child.isMesh || !child.material) return
 
+    child.castShadow = true
+    child.receiveShadow = true
     const meshName = child.name?.toLowerCase?.() ?? ''
     const materials = Array.isArray(child.material) ? child.material : [child.material]
     const nextMaterials = materials.map((material) => {
@@ -90,8 +129,15 @@ function applyPlantOverrides(object, overrides = {}) {
       if ((!isLeaf && !isStem) || !material?.clone) return material
 
       const nextMaterial = cloneFromOriginal(material)
-      if (nextMaterial.color && leafColor && isLeaf) nextMaterial.color.lerp(leafColor, 0.35)
-      if (nextMaterial.color && stemColor && isStem) nextMaterial.color.lerp(stemColor, 0.35)
+      const tintStrength = isDead ? 0.82 : 0.35
+      if (nextMaterial.color && leafColor && isLeaf) nextMaterial.color.lerp(leafColor, tintStrength)
+      if (nextMaterial.color && stemColor && isStem) nextMaterial.color.lerp(stemColor, tintStrength)
+      if (isDead) {
+        nextMaterial.roughness = 1
+        nextMaterial.metalness = 0
+        if (nextMaterial.emissive) nextMaterial.emissive.set('#000000')
+        nextMaterial.emissiveIntensity = 0
+      }
       targetedMaterialCount += 1
       return nextMaterial
     })
@@ -110,7 +156,13 @@ function applyPlantOverrides(object, overrides = {}) {
       const nextMaterials = materials.map((material) => {
         const nextMaterial = cloneFromOriginal(material)
         const stressColor = leafColor ?? stemColor
-        if (isStressState && nextMaterial.color && stressColor) nextMaterial.color.lerp(stressColor, 0.24)
+        if (isStressState && nextMaterial.color && stressColor) nextMaterial.color.lerp(stressColor, isDead ? 0.72 : 0.24)
+        if (isDead) {
+          nextMaterial.roughness = 1
+          nextMaterial.metalness = 0
+          if (nextMaterial.emissive) nextMaterial.emissive.set('#000000')
+          nextMaterial.emissiveIntensity = 0
+        }
         return nextMaterial
       })
 
@@ -131,7 +183,32 @@ function plantSoilEmbedDepth(plantName = '') {
   return normalizedName.includes('tulip') || normalizedName.includes('ทิวลิป') ? TULIP_SOIL_EMBED_DEPTH : 0
 }
 
-function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+function applyFungusToPlant(object, fungusRisk = 0) {
+  const leafMaterials = new Map()
+  const fallbackMaterials = new Map()
+
+  object.traverse((child) => {
+    if (!child.isMesh || !child.material || !child.geometry?.attributes?.uv) return
+
+    const meshName = String(child.name ?? '').toLowerCase()
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    materials.forEach((material) => {
+      const materialName = String(material?.name ?? '').toLowerCase()
+      if (!fallbackMaterials.has(material)) fallbackMaterials.set(material, child.geometry)
+      if ((meshName.includes('leaf') || materialName.includes('leaf')) && !leafMaterials.has(material)) {
+        leafMaterials.set(material, child.geometry)
+      }
+    })
+  })
+
+  const targets = leafMaterials.size > 0 ? leafMaterials : fallbackMaterials
+  const targetEntries = [...targets.entries()]
+  targetEntries.forEach(([material, geometry], index) => {
+    updateFungusMaterial(material, fungusRisk, index * 2.37 + 1.4, geometry)
+  })
+}
+
+function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
   const clonedScene = useMemo(() => {
@@ -233,6 +310,10 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, isMature
   }, [clonedScene, visualOverrides])
 
   useEffect(() => {
+    applyFungusToPlant(clonedScene, fungusRisk)
+  }, [clonedScene, fungusRisk, visualOverrides])
+
+  useEffect(() => {
     Object.values(actions).forEach((action) => {
       if (!action) return
 
@@ -262,12 +343,17 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, isMature
   )
 }
 
-export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, isPaused = false, growthProgress = 0, ...props }) {
+  const effectiveVisualOverrides = useMemo(
+    () => getEffectiveVisualOverrides(visualOverrides, health),
+    [health, visualOverrides],
+  )
+
   if (isBasePlantModel(modelUrl)) {
     return (
       <group {...props}>
-        <PlantPresentationGroup visualOverrides={visualOverrides}>
-          <GltfPlant modelUrl="/plant.gltf" visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
+        <PlantPresentationGroup visualOverrides={effectiveVisualOverrides}>
+          <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} />
         </PlantPresentationGroup>
       </group>
     )
@@ -275,7 +361,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
 
   const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
 
-  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={visualOverrides} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} {...props} />
+  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} isMature={isMature} isPaused={isPaused} growthProgress={growthProgress} {...props} />
 }
 
 const pestAnchors = {
@@ -381,19 +467,17 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
   const useProceduralSnail = name === 'snail' && modelUrl === '/snails.gltf'
   const risk = Number(pest?.risk_chance) || 0
   const stableSeed = `${name}-${pest?.id ?? index}`
+  if (useSurfaceFungus) return null
+
   const anchors = getVisiblePestAnchors(name, risk, stableSeed)
     .map((anchor) => getGrowthAdjustedAnchor(anchor, growthProgress, name))
   const pestVisuals = useProceduralSnail
     ? anchors.map((anchor, anchorIndex) => (
         <SnailSurfaceModel key={`${stableSeed}-${anchorIndex}`} anchor={anchor} />
       ))
-    : !useSurfaceFungus
-      ? anchors.map((anchor, anchorIndex) => (
-          <LoadedPest key={`${stableSeed}-${anchorIndex}`} modelUrl={modelUrl} anchor={anchor} pestName={name} />
-        ))
-      : anchors.map((anchor, anchorIndex) => (
-          <FungusSurfacePatch key={`${stableSeed}-${anchorIndex}`} anchor={anchor} variant={anchorIndex} />
-        ))
+    : anchors.map((anchor, anchorIndex) => (
+        <LoadedPest key={`${stableSeed}-${anchorIndex}`} modelUrl={modelUrl} anchor={anchor} pestName={name} />
+      ))
 
   return (
     <PlantPresentationGroup visualOverrides={visualOverrides}>
@@ -504,57 +588,6 @@ function LoadedPest({ modelUrl, anchor, pestName }) {
       <group position={anchor.modelOffset ?? [0, 0, 0]} rotation={anchor.modelRotation ?? [0, 0, 0]}>
         <primitive object={normalizedAsset.scene} />
       </group>
-    </group>
-  )
-}
-
-const FUNGUS_SPOTS = [
-  { offset: [0, 0], size: [0.071, 0.047], color: '#5f8e4f', rotation: 0.2 },
-  { offset: [0.056, -0.014], size: [0.044, 0.033], color: '#8ab877', rotation: -0.5 },
-  { offset: [-0.052, 0.018], size: [0.039, 0.029], color: '#739f61', rotation: 0.65 },
-  { offset: [0.019, 0.044], size: [0.027, 0.022], color: '#eef2e7', rotation: -0.2 },
-  { offset: [-0.018, -0.039], size: [0.022, 0.017], color: '#faf9ed', rotation: 0.35 },
-  { offset: [0.068, 0.032], size: [0.016, 0.014], color: '#e1ead8', rotation: 0 },
-]
-
-function FungusSurfacePatch({ anchor, variant = 0 }) {
-  const isStem = anchor.surface === 'stem'
-  const patchScale = anchor.scale ?? 1
-
-  return (
-    <group position={anchor.position} rotation={anchor.rotation} scale={patchScale}>
-      {FUNGUS_SPOTS.map((spot, spotIndex) => {
-        const [offsetA, offsetB] = spot.offset
-        const position = isStem
-          ? [offsetA, offsetB, 0.003 + spotIndex * 0.0003]
-          : [offsetA, 0.003 + spotIndex * 0.0003, offsetB]
-        const rotation = isStem
-          ? [0, 0, spot.rotation + variant * 0.12]
-          : [-Math.PI / 2, 0, spot.rotation + variant * 0.12]
-
-        return (
-          <mesh
-            key={`${spot.color}-${spotIndex}`}
-            position={position}
-            rotation={rotation}
-            scale={[spot.size[0], spot.size[1], 1]}
-            renderOrder={3}
-          >
-            <circleGeometry args={[1, 10]} />
-            <meshStandardMaterial
-              color={spot.color}
-              emissive={spot.color}
-              emissiveIntensity={spotIndex >= 3 ? 0.035 : 0.012}
-              roughness={0.94}
-              metalness={0}
-              side={DoubleSide}
-              polygonOffset
-              polygonOffsetFactor={-2}
-              polygonOffsetUnits={-2}
-            />
-          </mesh>
-        )
-      })}
     </group>
   )
 }

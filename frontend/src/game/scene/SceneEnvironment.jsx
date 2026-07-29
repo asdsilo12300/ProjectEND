@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { Group } from 'three'
 import { resolveAssetUrl } from '../../lib/api'
-import { GrassGround } from './GrassGround'
+import { GrassGround, PlantingSpot } from './GrassGround'
 
 function getDirtModelUrl(dirtModelUrl) {
   const resolvedModelUrl = resolveAssetUrl(dirtModelUrl)
@@ -11,7 +11,16 @@ function getDirtModelUrl(dirtModelUrl) {
   return resolvedModelUrl
 }
 
-export function SceneEnvironment({ dirtModelUrl = null, mode = 'greenhouse', plantSelected = false }) {
+function isScatteredRock(object) {
+  const name = String(object?.name ?? '').toLowerCase()
+
+  return name.startsWith('soil_clod_')
+    || name.includes('scattered_rock')
+    || name.includes('scattered_stone')
+    || name.includes('pebble')
+}
+
+export function SceneEnvironment({ daylight = 1, dirtModelUrl = null, mode = 'greenhouse', plantingAreaLabel = 'Planting area', plantSelected = false }) {
   const modelUrl = getDirtModelUrl(dirtModelUrl)
   const { scene } = useGLTF(modelUrl)
   const groundObject = useMemo(() => {
@@ -24,7 +33,18 @@ export function SceneEnvironment({ dirtModelUrl = null, mode = 'greenhouse', pla
     root.position.set(0.75, -0.42, 0)
     root.scale.setScalar(isOutdoor ? 1.68 : 1.6)
     root.rotation.set(0, isOutdoor ? -0.1 : -0.18, 0)
-    root.add(scene.clone(true))
+    const groundScene = scene.clone(true)
+    groundScene.traverse((child) => {
+      if (!isOutdoor && isScatteredRock(child)) {
+        child.visible = false
+        return
+      }
+
+      if (!child.isMesh) return
+      child.castShadow = false
+      child.receiveShadow = true
+    })
+    root.add(groundScene)
     root.updateMatrixWorld(true)
 
     return root
@@ -33,7 +53,10 @@ export function SceneEnvironment({ dirtModelUrl = null, mode = 'greenhouse', pla
   return (
     <group>
       <primitive object={groundObject} />
-      <GrassGround groundObject={groundObject} mode={mode} plantSelected={plantSelected} />
+      <PlantingSpot groundObject={groundObject} label={plantingAreaLabel} plantSelected={plantSelected} />
+      {mode === 'outdoor' && (
+        <GrassGround daylight={daylight} groundObject={groundObject} mode={mode} />
+      )}
     </group>
   )
 }

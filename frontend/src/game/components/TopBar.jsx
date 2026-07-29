@@ -76,7 +76,7 @@ function notificationExactTime(value) {
   }).format(date)
 }
 
-export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, communityUnreadNotificationCount = 0, notificationError = '', notifications = [], notificationStatus = 'idle', onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
+export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, communityUnreadNotificationCount = 0, notificationError = '', notifications = [], notificationStatus = 'idle', onHelpOpen, onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const accountMenuRef = useRef(null)
@@ -180,7 +180,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
   }
 
   return (
-    <header className="absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-lime-100/15 bg-[#101511]/95 px-3 sm:px-5">
+    <header className="absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-lime-100/15 bg-[#101511]/95 px-3 sm:px-5" data-tour="global-topbar">
       <div className="flex min-w-0 items-center gap-2 xl:gap-3">
         <button
           className="flex h-16 shrink-0 items-center border-r border-lime-100/10 pr-3 transition hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 sm:pr-5"
@@ -194,14 +194,32 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             alt="Plant Growth Academy"
           />
         </button>
-        <nav className="hidden h-16 min-w-0 items-end overflow-x-auto xl:flex" aria-label="Primary">
+        <nav className="hidden h-16 min-w-0 items-end overflow-x-auto xl:flex" data-tour="global-navigation" aria-label="Primary">
           <ul className="flex min-w-max text-center text-sm font-medium text-slate-300">{renderNavItems()}</ul>
         </nav>
       </div>
 
       <div ref={accountMenuRef} className="relative flex items-center gap-2 text-sm">
         {user && (
-          <div className="relative" ref={notificationMenuRef}>
+          <button
+            className="hidden h-11 w-11 place-items-center rounded-md border border-lime-100/10 bg-white/[0.04] text-slate-200 transition hover:border-[#9bcf82]/35 hover:bg-[#9bcf82]/10 hover:text-lime-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 sm:grid sm:h-12 sm:w-12"
+            data-tour="help-button"
+            type="button"
+            aria-label="Open help and tutorials"
+            title="Help and tutorials"
+            onClick={() => {
+              setProfileOpen(false)
+              setMobileNavOpen(false)
+              setNotificationsOpen(false)
+              onHelpOpen?.()
+            }}
+          >
+            <AppIcon className="h-5 w-5" name="help" />
+          </button>
+        )}
+
+        {user && (
+          <div className="relative" data-tour="global-notifications" ref={notificationMenuRef}>
             <button
               className={`relative grid h-11 w-11 place-items-center rounded-md border text-slate-200 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 sm:h-12 sm:w-12 ${notificationsOpen ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100' : 'border-lime-100/10 bg-white/[0.04] hover:bg-white/[0.075]'}`}
               type="button"
@@ -307,7 +325,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         )}
 
         {user && (
-          <div className="relative flex h-11 items-center gap-1.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-2 shadow-[0_8px_18px_rgba(0,0,0,.18)] sm:h-12 sm:gap-2 sm:px-3" aria-label="Coin balance">
+          <div className="relative flex h-11 items-center gap-1.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-2 shadow-[0_8px_18px_rgba(0,0,0,.18)] sm:h-12 sm:gap-2 sm:px-3" data-tour="global-coins" aria-label="Coin balance">
             <img className="h-6 w-6 shrink-0 object-contain sm:h-7 sm:w-7" src={imageAssets.coin} alt="Coin" />
             <span className="min-w-6 text-right text-xs font-black tabular-nums text-lime-50 sm:min-w-10 sm:text-sm">{shownCoins}</span>
             {coinDelta ? (
@@ -333,6 +351,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
 
         <button
           className="flex items-center gap-3 rounded-md bg-white/[0.045] px-3 py-2 text-left transition hover:bg-white/[0.075] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+          data-tour="global-profile"
           type="button"
           aria-haspopup={user ? 'menu' : undefined}
           aria-expanded={user ? profileOpen : undefined}
@@ -395,6 +414,19 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 Admin console
               </button>
             )}
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"
+              data-tour="help-button"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setProfileOpen(false)
+                onHelpOpen?.()
+              }}
+            >
+              <AppIcon className="h-4 w-4 text-slate-400" name="help" />
+              Help & tutorials
+            </button>
             <button
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200"
               type="button"

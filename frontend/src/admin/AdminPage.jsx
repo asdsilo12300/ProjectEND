@@ -231,10 +231,11 @@ const resourceGroups = {
   plants: [
     {
       id: 'plants', label: 'Plant catalog', createLabel: 'New plant', icon: 'plant',
-      defaults: { name_th: '', name_en: '', description: '', base_image_url: '', base_model_url: '', water_min: 40, water_max: 80, light_min: 40, light_max: 90, fertilizer_min: 20, fertilizer_max: 70, soil_humidity_min: 40, soil_humidity_max: 80, air_humidity_min: 40, air_humidity_max: 80, soil_temp_min: 18, soil_temp_max: 32, air_temp_min: 18, air_temp_max: 35 },
+      defaults: { name_th: '', name_en: '', description: '', base_image_url: '', base_model_url: '', real_maturity_days: 90, growth_reference_url: '', water_min: 40, water_max: 80, light_min: 40, light_max: 90, fertilizer_min: 20, fertilizer_max: 70, soil_humidity_min: 40, soil_humidity_max: 80, air_humidity_min: 40, air_humidity_max: 80, soil_temp_min: 18, soil_temp_max: 32, air_temp_min: 18, air_temp_max: 35 },
       fields: [
         { key: 'name_en', label: 'English name', required: true }, { key: 'name_th', label: 'Thai name', required: true },
         { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'base_image_url', label: 'Plant image', type: 'image-upload', scope: 'plants', wide: true }, { key: 'base_model_url', label: 'Base 3D model package', type: 'model-bundle', required: true, wide: true },
+        { key: 'real_maturity_days', label: 'Real-life maturity (days)', type: 'number', required: true }, { key: 'growth_reference_url', label: 'Growth reference URL', type: 'url', wide: true },
         ...['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'].flatMap((factor) => [
           { key: `${factor}_min`, label: `${factor.replaceAll('_', ' ')} min`, type: 'number', required: true },
           { key: `${factor}_max`, label: `${factor.replaceAll('_', ' ')} max`, type: 'number', required: true },
@@ -244,6 +245,7 @@ const resourceGroups = {
         { label: 'Plant', render: (row) => row.name_en || row.name_th },
         { label: 'Thai name', render: (row) => row.name_th },
         { label: 'Water / light', render: (row) => `${row.water_min}–${row.water_max} / ${row.light_min}–${row.light_max}` },
+        { label: 'Real maturity', render: (row) => `~${row.real_maturity_days ?? 90} days` },
         { label: 'Subtables', render: (row) => `${row.stages_count} stages · ${row.condition_rules_count} rules · ${row.visual_variants_count} visuals` },
       ],
     },

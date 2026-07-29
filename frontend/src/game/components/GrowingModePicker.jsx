@@ -23,7 +23,7 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
 
   return (
     <div className="absolute inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-[2px]">
-      <section className="w-full max-w-[680px] rounded-lg border border-lime-100/15 bg-[#101511] p-5 text-slate-100 shadow-[0_20px_48px_rgba(0,0,0,.46)]">
+      <section className="w-full max-w-[680px] rounded-lg border border-lime-100/15 bg-[#101511] p-5 text-slate-100 shadow-[0_20px_48px_rgba(0,0,0,.46)]" data-tour="lab-mode-picker">
         <div className="mb-4 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9bcf82]">{choosingForPlant ? 'New planted species · Growing mode' : 'Step 1 of 3 · Growing mode'}</p>
           <h2 className="mt-1 text-xl font-bold text-lime-50">{choosingForPlant ? `Choose a mode for ${plantName}` : 'Choose growing mode'}</h2>

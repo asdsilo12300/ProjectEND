@@ -122,6 +122,31 @@ class AuthController extends Controller
         return response()->json(['data' => $this->userPayload($user->fresh())]);
     }
 
+    public function updateOnboarding(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'page' => ['required', 'string', Rule::in(['lab', 'lab-items', 'lab-friends', 'navigation', 'shop', 'history', 'community', 'settings'])],
+            'version' => ['required', 'integer', 'min:1', 'max:1000'],
+            'state' => ['required', 'string', Rule::in(['completed', 'dismissed'])],
+        ]);
+
+        $user = $request->user();
+        $progress = is_array($user->onboarding_progress) ? $user->onboarding_progress : [];
+        $progress[$data['page']] = [
+            'version' => (int) $data['version'],
+            'state' => $data['state'],
+            'updated_at' => now()->toIso8601String(),
+        ];
+
+        $user->forceFill(['onboarding_progress' => $progress])->save();
+
+        return response()->json([
+            'data' => [
+                'onboarding_progress' => $progress,
+            ],
+        ]);
+    }
+
     private function normalizeEmailInput(Request $request): void
     {
         $email = $request->input('email');
@@ -166,6 +191,7 @@ class AuthController extends Controller
             'coin' => $user->coin,
             'gem' => $user->gem,
             'status' => $user->status,
+            'onboarding_progress' => $user->onboarding_progress ?? [],
         ];
     }
 

@@ -62,6 +62,11 @@ class PlantHistoryController extends Controller
             'visibility' => ['nullable', Rule::in(['private', 'friends', 'public'])],
             'snapshot_image_url' => ['nullable', 'string', 'max:2048'],
             'snapshot_image_data' => ['nullable', 'string', 'max:7500000'],
+            'growth_calculation' => ['nullable', 'array'],
+            'growth_calculation.cycle_seconds' => ['nullable', 'integer', 'between:1,3600'],
+            'growth_calculation.observed_growth_points_per_cycle' => ['nullable', 'numeric', 'between:0,10000'],
+            'growth_calculation.recent_growth_percentages' => ['nullable', 'array', 'max:20'],
+            'growth_calculation.recent_growth_percentages.*' => ['numeric', 'between:0,100'],
         ]);
 
         $history = DB::transaction(function () use ($data, $request, $simulator): PlantHistory {
@@ -90,15 +95,28 @@ class PlantHistoryController extends Controller
                 ])->save();
             }
 
+            $lockedSimulator->load(['plant.stages', 'plant.conditionRules', 'currentStage', 'activePests.pest']);
+
             if ($existingHistory) {
                 if ($existingHistory->trashed()) {
                     $existingHistory->restore();
                 }
 
                 $durationSeconds = $this->durationSeconds($lockedSimulator);
+                $gameState = is_array($existingHistory->game_state)
+                    ? $existingHistory->game_state
+                    : $this->gameState($lockedSimulator, $data['growth_calculation'] ?? []);
+                $gameState['schema_version'] = 2;
+                if (! is_array($gameState['growth_calculation'] ?? null)) {
+                    $gameState['growth_calculation'] = $this->growthCalculation(
+                        $lockedSimulator,
+                        $data['growth_calculation'] ?? [],
+                    );
+                }
                 $existingHistory->forceFill([
                     'duration_seconds' => $durationSeconds,
                     'duration_days' => intdiv($durationSeconds, 86400),
+                    'game_state' => $gameState,
                 ])->save();
 
                 Post::query()->where('simulator_id', $lockedSimulator->id)->delete();
@@ -106,7 +124,6 @@ class PlantHistoryController extends Controller
                 return $existingHistory;
             }
 
-            $lockedSimulator->load(['plant.stages', 'plant.conditionRules', 'currentStage', 'activePests.pest']);
             $matchedRules = $this->matchedRules($lockedSimulator);
             $activePestCount = $lockedSimulator->activePests->count();
             $score = $this->totalScore($lockedSimulator, $matchedRules, $activePestCount);
@@ -127,7 +144,7 @@ class PlantHistoryController extends Controller
                 'duration_seconds' => $durationSeconds,
                 'visibility' => $data['visibility'] ?? 'private',
                 'snapshot_image_url' => $snapshotImageUrl,
-                'game_state' => $this->gameState($lockedSimulator),
+                'game_state' => $this->gameState($lockedSimulator, $data['growth_calculation'] ?? []),
                 'analysis_result' => $analysis,
                 'direction' => $direction,
             ]);
@@ -161,16 +178,64 @@ class PlantHistoryController extends Controller
         return new PlantHistoryResource($history->load(['plant.stages', 'finalStage']));
     }
 
-    private function gameState(Simulator $simulator): array
+    private function gameState(Simulator $simulator, array $growthInput = []): array
     {
         $resource = (new SimulatorResource(
             $simulator->fresh(['user', 'plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
         ))->resolve(request());
 
         return [
-            'schema_version' => 1,
+            'schema_version' => 2,
             'captured_at' => now()->toISOString(),
             'simulator' => $resource,
+            'growth_calculation' => $this->growthCalculation($simulator, $growthInput),
+        ];
+    }
+
+    private function growthCalculation(Simulator $simulator, array $input = []): array
+    {
+        $maximumGrowthPoint = max(100, (int) $simulator->plant->stages->max('required_growth_point'));
+        $growthPoint = min($maximumGrowthPoint, max(0, (float) $simulator->growth_point));
+        $maturityDays = max(1, (int) ($simulator->plant->real_maturity_days ?? 90));
+        $cycleSeconds = min(3600, max(1, (int) ($input['cycle_seconds'] ?? 30)));
+        $observedGrowthRate = max(0, (float) ($input['observed_growth_points_per_cycle'] ?? 0));
+        $progressPercent = ($growthPoint / $maximumGrowthPoint) * 100;
+        $equivalentDays = ($growthPoint / $maximumGrowthPoint) * $maturityDays;
+        $realDaysPerPoint = $maturityDays / $maximumGrowthPoint;
+        $normalGrowthRate = 14.0;
+        $isMature = $growthPoint >= $maximumGrowthPoint;
+        $secondsPerRealDay = ! $isMature && $observedGrowthRate > 0
+            ? $cycleSeconds / ($observedGrowthRate * $realDaysPerPoint)
+            : null;
+        $history = collect($input['recent_growth_percentages'] ?? [])
+            ->map(fn ($value): float => round(min(100, max(0, (float) $value)), 2))
+            ->values()
+            ->take(-20)
+            ->all();
+        $roundedProgress = round($progressPercent, 2);
+
+        if ($history === [] || abs((float) end($history) - $roundedProgress) > 0.01) {
+            $history[] = $roundedProgress;
+        }
+
+        return [
+            'version' => 1,
+            'captured_at' => now()->toISOString(),
+            'status' => $isMature ? 'complete' : ($observedGrowthRate > 0 ? 'growing' : 'paused'),
+            'cycle_seconds' => $cycleSeconds,
+            'growth_point' => round($growthPoint, 2),
+            'maximum_growth_point' => $maximumGrowthPoint,
+            'progress_percent' => $roundedProgress,
+            'maturity_days' => $maturityDays,
+            'equivalent_days' => round($equivalentDays, 2),
+            'real_days_remaining' => round(max(0, $maturityDays - $equivalentDays), 2),
+            'real_days_per_point' => round($realDaysPerPoint, 4),
+            'observed_growth_points_per_cycle' => round($observedGrowthRate, 2),
+            'pace_percent' => $isMature ? 0 : round(min(100, ($observedGrowthRate / $normalGrowthRate) * 100), 2),
+            'seconds_per_real_day' => $secondsPerRealDay === null ? null : round($secondsPerRealDay, 2),
+            'normal_seconds_per_real_day' => round($cycleSeconds / ($normalGrowthRate * $realDaysPerPoint), 2),
+            'recent_growth_percentages' => array_slice($history, -20),
+            'reference_url' => $simulator->plant->growth_reference_url,
         ];
     }
 

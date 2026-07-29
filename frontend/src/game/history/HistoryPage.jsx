@@ -41,6 +41,17 @@ const historyMessages = {
     score: 'Score',
     health: 'Health',
     duration: 'Duration',
+    biologicalGrowth: 'Real-life growth equivalent',
+    growthSnapshot: 'Growth calculation at save time',
+    timeScale: 'Simulation time scale',
+    complete: 'Complete',
+    paused: 'Paused',
+    growing: 'Growing',
+    realDays: (current, total) => `${current} / ~${total} days`,
+    secondsPerDay: (seconds) => `1 real-life day ≈ ${seconds}s`,
+    stoppedAtMaturity: 'Counter stopped at biological maturity',
+    growthReference: 'Growth-time source',
+    recentGrowth: 'Recent calculated growth',
     loadingLabel: 'Loading save history',
     loadingTitle: 'Loading your growth records…',
     errorTitle: 'Your history could not be loaded',
@@ -95,6 +106,17 @@ const historyMessages = {
     score: 'คะแนน',
     health: 'สุขภาพ',
     duration: 'ระยะเวลา',
+    biologicalGrowth: '\u0e27\u0e31\u0e19\u0e40\u0e15\u0e34\u0e1a\u0e42\u0e15\u0e40\u0e17\u0e35\u0e22\u0e1a\u0e0a\u0e35\u0e27\u0e34\u0e15\u0e08\u0e23\u0e34\u0e07',
+    growthSnapshot: '\u0e01\u0e32\u0e23\u0e04\u0e33\u0e19\u0e27\u0e13\u0e13 \u0e02\u0e13\u0e30\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01',
+    timeScale: '\u0e2d\u0e31\u0e15\u0e23\u0e32\u0e40\u0e27\u0e25\u0e32\u0e08\u0e33\u0e25\u0e2d\u0e07',
+    complete: '\u0e40\u0e15\u0e34\u0e1a\u0e42\u0e15\u0e40\u0e15\u0e47\u0e21\u0e17\u0e35\u0e48',
+    paused: '\u0e2b\u0e22\u0e38\u0e14\u0e40\u0e15\u0e34\u0e1a\u0e42\u0e15',
+    growing: '\u0e01\u0e33\u0e25\u0e31\u0e07\u0e40\u0e15\u0e34\u0e1a\u0e42\u0e15',
+    realDays: (current, total) => `${current} / ~${total} \u0e27\u0e31\u0e19`,
+    secondsPerDay: (seconds) => `1 \u0e27\u0e31\u0e19\u0e08\u0e23\u0e34\u0e07 \u2248 ${seconds} \u0e27\u0e34\u0e19\u0e32\u0e17\u0e35`,
+    stoppedAtMaturity: '\u0e2b\u0e22\u0e38\u0e14\u0e19\u0e31\u0e1a\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e16\u0e36\u0e07\u0e27\u0e31\u0e22\u0e40\u0e15\u0e47\u0e21\u0e17\u0e35\u0e48\u0e15\u0e32\u0e21\u0e0a\u0e35\u0e27\u0e27\u0e34\u0e17\u0e22\u0e32',
+    growthReference: '\u0e41\u0e2b\u0e25\u0e48\u0e07\u0e2d\u0e49\u0e32\u0e07\u0e2d\u0e34\u0e07\u0e23\u0e30\u0e22\u0e30\u0e40\u0e27\u0e25\u0e32',
+    recentGrowth: '\u0e01\u0e23\u0e32\u0e1f\u0e01\u0e32\u0e23\u0e40\u0e15\u0e34\u0e1a\u0e42\u0e15\u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14',
     loadingLabel: 'กำลังโหลดประวัติการบันทึก',
     loadingTitle: 'กำลังโหลดบันทึกการเติบโต…',
     errorTitle: 'ไม่สามารถโหลดประวัติได้',
@@ -150,6 +172,76 @@ function saveSubtitle(save, language, copy) {
 
 function localizedField(save, field, language) {
   return (language === 'th' ? save[`${field}_th`] : save[field]) || save[field] || save[`${field}_th`] || ''
+}
+
+function savedGrowthCalculation(save) {
+  return save?.growth_calculation ?? save?.game_state?.growth_calculation ?? null
+}
+
+function compactNumber(value, maximumFractionDigits = 1) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '0'
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(number)
+}
+
+function SavedGrowthCalculation({ calculation, copy }) {
+  if (!calculation) return null
+
+  const maturityDays = Math.max(1, Number(calculation.maturity_days) || 1)
+  const equivalentDays = Math.min(maturityDays, Math.max(0, Number(calculation.equivalent_days) || 0))
+  const progress = Math.min(100, Math.max(0, Number(calculation.progress_percent) || 0))
+  const statusCopy = calculation.status === 'complete'
+    ? copy.complete
+    : calculation.status === 'growing' ? copy.growing : copy.paused
+  const secondsPerDay = calculation.status === 'complete'
+    ? Number(calculation.normal_seconds_per_real_day)
+    : Number(calculation.seconds_per_real_day ?? calculation.normal_seconds_per_real_day)
+  const samples = Array.isArray(calculation.recent_growth_percentages)
+    ? calculation.recent_growth_percentages.map((value) => Math.min(100, Math.max(0, Number(value) || 0)))
+    : []
+  const chartSamples = samples.length > 0 ? samples : [progress]
+  const points = chartSamples.map((value, index) => {
+    const x = chartSamples.length === 1 ? 260 : 12 + (index / (chartSamples.length - 1)) * 496
+    const y = 112 - (value / 100) * 92
+    return `${x},${y}`
+  }).join(' ')
+
+  return (
+    <section className="mt-3 overflow-hidden rounded-2xl border border-[#55dc91]/20 bg-[#0a130e] p-3.5" aria-label={copy.growthSnapshot}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#75dca0]">{copy.growthSnapshot}</p>
+          <strong className="mt-1 block text-lg text-white">{copy.realDays(compactNumber(equivalentDays), compactNumber(maturityDays, 0))}</strong>
+        </div>
+        <span className="rounded-full border border-[#78eda8]/25 bg-[#55dc91]/10 px-2.5 py-1 text-xs font-bold text-[#b8f5ce]">{statusCopy}</span>
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.07]">
+        <span className="block h-full rounded-full bg-gradient-to-r from-cyan-400 via-[#55dc91] to-[#a4e789]" style={{ width: `${progress}%` }} />
+      </div>
+
+      {chartSamples.length > 1 ? (
+        <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/15 px-2 pb-1.5 pt-1">
+          <p className="px-1 pt-1 text-[11px] font-semibold text-slate-400">{copy.recentGrowth}</p>
+          <svg className="mt-1 h-20 w-full" viewBox="0 0 520 130" role="img" aria-label={`${copy.recentGrowth}: ${compactNumber(progress)}%`}>
+            <line x1="12" x2="508" y1="20" y2="20" stroke="rgba(148,163,184,.14)" strokeDasharray="4 5" />
+            <line x1="12" x2="508" y1="66" y2="66" stroke="rgba(148,163,184,.12)" strokeDasharray="4 5" />
+            <line x1="12" x2="508" y1="112" y2="112" stroke="rgba(148,163,184,.16)" />
+            <polyline points={points} fill="none" stroke="#67e8a3" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+            {chartSamples.map((value, index) => {
+              const [x, y] = points.split(' ')[index].split(',')
+              return <circle key={`${index}-${value}`} cx={x} cy={y} r="4" fill="#b8f5ce"><title>{`${compactNumber(value)}% · ${compactNumber((value / 100) * maturityDays)} days`}</title></circle>
+            })}
+          </svg>
+        </div>
+      ) : null}
+
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <span>{calculation.status === 'complete' ? `${copy.stoppedAtMaturity} · ${copy.secondsPerDay(compactNumber(secondsPerDay, 2))}` : copy.secondsPerDay(compactNumber(secondsPerDay, 2))}</span>
+        {calculation.reference_url ? <a className="font-semibold text-cyan-300 hover:text-cyan-200" href={calculation.reference_url} target="_blank" rel="noreferrer">{copy.growthReference} ↗</a> : null}
+      </div>
+    </section>
+  )
 }
 
 function PreviewScene({ copy, imageUrl, score = 0 }) {
@@ -210,9 +302,10 @@ function SaveCard({ copy, language, onDelete, onOpen, onToggleVisibility, save, 
   const isShared = save.visibility === 'public'
   const analysis = localizedField(save, 'analysis_result', language)
   const direction = localizedField(save, 'direction', language)
+  const growthCalculation = savedGrowthCalculation(save)
 
   return (
-    <article className="group relative flex min-h-full flex-col overflow-hidden rounded-2xl bg-[#121c17] text-left shadow-[0_18px_36px_rgba(0,0,0,.22)] ring-1 ring-[#32493b] transition hover:-translate-y-0.5 hover:ring-[#78eda8]/55 focus-within:ring-[#78eda8]/65 motion-reduce:transform-none">
+    <article className="group relative flex min-h-full flex-col overflow-hidden rounded-2xl bg-[#121c17] text-left shadow-[0_18px_36px_rgba(0,0,0,.22)] ring-1 ring-[#32493b] transition hover:-translate-y-0.5 hover:ring-[#78eda8]/55 focus-within:ring-[#78eda8]/65 motion-reduce:transform-none" data-tour="history-card">
       <button className="block flex-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#9cf3bd]" type="button" onClick={() => onOpen(save)}>
         <PreviewScene copy={copy} score={score} imageUrl={save.snapshot_image_url} />
         <div className="px-4 pb-20 pt-4">
@@ -223,9 +316,10 @@ function SaveCard({ copy, language, onDelete, onOpen, onToggleVisibility, save, 
               <p className="mt-1.5 text-xs text-slate-500">{formatDate(save.created_at || save.updated_at || save.started_at, language, copy)}</p>
             </div>
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <span className="rounded-lg bg-[#08100c]/70 px-2.5 py-1.5 text-xs text-slate-400"><strong className="text-[#9cf3bd]">{score.toFixed(0)}</strong> {copy.scoreShort}</span>
             <span className="rounded-lg bg-[#08100c]/70 px-2.5 py-1.5 text-xs text-slate-400"><strong className="text-[#9cf3bd]">{health.toFixed(0)}%</strong> {copy.healthShort}</span>
+            {growthCalculation ? <span className="rounded-lg bg-[#08100c]/70 px-2.5 py-1.5 text-xs text-slate-400"><strong className="text-cyan-300">{compactNumber(growthCalculation.equivalent_days)}</strong> / {compactNumber(growthCalculation.maturity_days, 0)}</span> : null}
           </div>
           <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-300">{analysis || copy.noAnalysis}</p>
           <p className="mt-2 line-clamp-1 text-xs font-semibold text-[#8eeab4]">{direction || copy.noDirection}</p>
@@ -239,7 +333,7 @@ function SaveCard({ copy, language, onDelete, onOpen, onToggleVisibility, save, 
       >
         <AppIcon className="h-5 w-5" name="trash" />
       </button>
-      <div className="absolute bottom-3 right-3 z-20">
+      <div className="absolute bottom-3 right-3 z-20" data-tour="history-share">
         <ShareToggle checked={isShared} copy={copy} disabled={visibilityBusy} onChange={(nextChecked) => onToggleVisibility(save, nextChecked ? 'public' : 'private')} />
       </div>
     </article>
@@ -272,24 +366,30 @@ function HistoryDetailModal({ copy, language, onClose, onDelete, onOpenGameState
   const health = Number(save.final_health ?? save.health ?? 0)
   const analysis = localizedField(save, 'analysis_result', language)
   const direction = localizedField(save, 'direction', language)
+  const growthCalculation = savedGrowthCalculation(save)
+  const historySecondsPerDay = Number(
+    growthCalculation?.seconds_per_real_day
+      ?? growthCalculation?.normal_seconds_per_real_day,
+  )
 
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/65 px-3 py-5 backdrop-blur-sm sm:px-5" onMouseDown={onClose} role="presentation">
-      <div className="max-h-[calc(100dvh-2.5rem)] w-full max-w-[760px] overflow-y-auto rounded-2xl border border-[#78eda8]/20 bg-[#101813] text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.6)]" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="history-detail-title">
-        <div className="relative h-48 bg-[#080b09] sm:h-64 md:h-[300px]">
+    <div className="fixed inset-x-0 bottom-0 top-16 z-[60] grid place-items-center overflow-y-auto bg-black/65 px-3 py-3 backdrop-blur-sm sm:px-5" onMouseDown={onClose} role="presentation">
+      <div className="max-h-[calc(100dvh-5.5rem)] w-full max-w-[760px] overflow-y-auto rounded-2xl border border-[#78eda8]/20 bg-[#101813] text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.6)]" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="history-detail-title">
+        <div className="relative h-36 bg-[#080b09] sm:h-44 md:h-48">
           {save.snapshot_image_url ? <img className="h-full w-full object-cover" src={resolveAssetUrl(save.snapshot_image_url)} alt={copy.savedPlant} /> : <PreviewScene copy={copy} score={score} />}
           <div className="absolute right-3 top-3 flex gap-2 sm:right-4 sm:top-4">
             <button className="grid h-11 w-11 place-items-center rounded-xl border border-red-200/25 bg-black/60 text-red-100 hover:bg-red-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-100" type="button" onClick={() => onDelete(save)} aria-label={copy.deleteLabel}><AppIcon className="h-5 w-5" name="trash" /></button>
             <button className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-black/60 text-2xl leading-none text-slate-100 hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" type="button" onClick={onClose} aria-label={copy.closeLabel}><span aria-hidden="true">×</span></button>
           </div>
         </div>
-        <div className="grid gap-5 p-4 sm:p-6 md:grid-cols-[1fr_220px]">
+        <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-[1fr_220px]">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[#75dca0]">{copy.savedPlant}</p>
             <h2 className="mt-1 break-words text-2xl font-black text-white" id="history-detail-title">{saveTitle(save, language, copy)}</h2>
             <p className="mt-1 text-sm leading-6 text-slate-400">{saveSubtitle(save, language, copy)} · {formatDate(save.created_at, language, copy)}</p>
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><strong className="text-sm text-lime-50">{copy.analysis}</strong><p className="mt-2 text-sm leading-6 text-slate-300">{analysis || copy.noAnalysis}</p></div>
-            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4"><strong className="text-sm text-lime-50">{copy.direction}</strong><p className="mt-2 text-sm leading-6 text-slate-300">{direction || copy.noDirection}</p></div>
+            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3.5"><strong className="text-sm text-lime-50">{copy.analysis}</strong><p className="mt-1.5 text-sm leading-6 text-slate-300">{analysis || copy.noAnalysis}</p></div>
+            <div className="mt-2.5 rounded-2xl border border-white/10 bg-white/[0.035] p-3.5"><strong className="text-sm text-lime-50">{copy.direction}</strong><p className="mt-1.5 text-sm leading-6 text-slate-300">{direction || copy.noDirection}</p></div>
+            <SavedGrowthCalculation calculation={growthCalculation} copy={copy} />
           </div>
           <div className="grid content-start gap-3">
             {save.game_state?.simulator && onOpenGameState ? (
@@ -298,6 +398,13 @@ function HistoryDetailModal({ copy, language, onClose, onDelete, onOpenGameState
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.score}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{score}</strong></div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.health}</span><strong className="mt-1 block text-2xl text-[#b8f5ce]">{health}%</strong></div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"><span className="text-xs text-slate-400">{copy.duration}</span><strong className="mt-1 block text-xl leading-snug text-[#b8f5ce]">{formatPlantDuration(save, language)}</strong></div>
+            {growthCalculation ? (
+              <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.045] p-4">
+                <span className="text-xs text-slate-400">{copy.biologicalGrowth}</span>
+                <strong className="mt-1 block text-xl leading-snug text-cyan-200">{copy.realDays(compactNumber(growthCalculation.equivalent_days), compactNumber(growthCalculation.maturity_days, 0))}</strong>
+                <span className="mt-1.5 block text-xs leading-5 text-slate-400">{copy.secondsPerDay(compactNumber(historySecondsPerDay, 2))}</span>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -463,7 +570,7 @@ export function HistoryPage({ onOpenGameState, onStartGrowing }) {
     <section className="particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7" aria-label={copy.pageLabel}>
       <ParticleNetworkBackground variant="history" />
       <div className="relative z-[1] mx-auto max-w-[1220px]">
-        <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between" data-tour="history-header">
           <div className="flex items-start gap-3.5">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#6ca7ef]/12 text-[#91b9f4] ring-1 ring-[#6ca7ef]/25"><AppIcon className="h-6 w-6" name="history" /></span>
             <div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#91b9f4]">{copy.eyebrow}</p><h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">{copy.title}</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">{copy.subtitle}</p></div>
@@ -471,7 +578,7 @@ export function HistoryPage({ onOpenGameState, onStartGrowing }) {
           <span className="text-xs font-semibold text-slate-500">{copy.recordCount(saves.length)}</span>
         </header>
 
-        <div className="mb-5 flex justify-end">
+        <div className="mb-5 flex justify-end" data-tour="history-search">
           <label className="relative w-full sm:w-[340px]">
             <span className="sr-only">{copy.searchLabel}</span>
             <AppIcon className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" name="search" />
@@ -479,20 +586,22 @@ export function HistoryPage({ onOpenGameState, onStartGrowing }) {
           </label>
         </div>
 
-        {feedback ? <div className="mb-4 rounded-xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{feedback}</div> : null}
+        <div data-tour="history-records">
+          {feedback ? <div className="mb-4 rounded-xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100" role="alert">{feedback}</div> : null}
 
-        {status === 'loading' ? <HistorySkeleton copy={copy} /> : null}
-        {status === 'error' ? <HistoryState actionLabel={copy.retry} description={copy.errorDescription} icon="restartAlt" onAction={loadSaves} title={copy.errorTitle} /> : null}
-        {status === 'unauthenticated' ? <HistoryState description={copy.loginDescription} icon="lock" title={copy.loginTitle} /> : null}
-        {status === 'ready' && saves.length === 0 ? <HistoryState actionLabel={copy.refresh} description={copy.emptyDescription} icon="sprout" onAction={onStartGrowing ?? loadSaves} title={copy.emptyTitle} /> : null}
-        {status === 'ready' && saves.length > 0 && filtered.length === 0 ? <HistoryState actionLabel={copy.clearSearch} description={copy.noMatchDescription} icon="search" onAction={() => setQuery('')} title={copy.noMatchTitle} /> : null}
-        {status === 'ready' && visibleSaves.length > 0 ? (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleSaves.map((save) => <SaveCard copy={copy} key={save.id} language={language} save={save} visibilityBusy={visibilityBusyId === save.id} onDelete={requestDelete} onOpen={setSelectedSave} onToggleVisibility={toggleVisibility} />)}
-          </div>
-        ) : null}
+          {status === 'loading' ? <HistorySkeleton copy={copy} /> : null}
+          {status === 'error' ? <HistoryState actionLabel={copy.retry} description={copy.errorDescription} icon="restartAlt" onAction={loadSaves} title={copy.errorTitle} /> : null}
+          {status === 'unauthenticated' ? <HistoryState description={copy.loginDescription} icon="lock" title={copy.loginTitle} /> : null}
+          {status === 'ready' && saves.length === 0 ? <HistoryState actionLabel={copy.refresh} description={copy.emptyDescription} icon="sprout" onAction={onStartGrowing ?? loadSaves} title={copy.emptyTitle} /> : null}
+          {status === 'ready' && saves.length > 0 && filtered.length === 0 ? <HistoryState actionLabel={copy.clearSearch} description={copy.noMatchDescription} icon="search" onAction={() => setQuery('')} title={copy.noMatchTitle} /> : null}
+          {status === 'ready' && visibleSaves.length > 0 ? (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleSaves.map((save) => <SaveCard copy={copy} key={save.id} language={language} save={save} visibilityBusy={visibilityBusyId === save.id} onDelete={requestDelete} onOpen={setSelectedSave} onToggleVisibility={toggleVisibility} />)}
+            </div>
+          ) : null}
 
-        {status === 'ready' && filtered.length > 0 ? <HistoryPagination copy={copy} currentPage={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
+          {status === 'ready' && filtered.length > 0 ? <HistoryPagination copy={copy} currentPage={currentPage} pageCount={pageCount} onPageChange={setPage} /> : null}
+        </div>
       </div>
       <HistoryDetailModal copy={copy} language={language} save={selectedSave} onClose={() => setSelectedSave(null)} onDelete={requestDelete} onOpenGameState={onOpenGameState} />
       <DeleteConfirmModal copy={copy} error={deleteError} language={language} save={deleteTarget} status={deleteStatus} onCancel={() => { if (deleteStatus === 'idle') { setDeleteTarget(null); setDeleteError('') } }} onConfirm={confirmDelete} />

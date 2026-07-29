@@ -7,6 +7,7 @@ use App\Models\PlantConditionRule;
 use App\Models\PlantGrowthStage;
 use App\Models\PlantVisualVariant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class KnownPlantProfileService
@@ -18,7 +19,11 @@ class KnownPlantProfileService
         }
 
         DB::transaction(function () use ($plant): void {
-            $plant->update($this->tulipEnvironment());
+            $environment = $this->tulipEnvironment();
+            if (! Schema::hasColumn('plants', 'real_maturity_days')) {
+                unset($environment['real_maturity_days'], $environment['growth_reference_url']);
+            }
+            $plant->update($environment);
             $this->ensureGrowthTrack($plant);
             $this->syncTulipRules($plant);
             $this->syncTulipVisuals($plant);
@@ -35,10 +40,12 @@ class KnownPlantProfileService
         return Str::contains($englishName, 'tulip') || $thaiName === 'ทิวลิป';
     }
 
-    /** @return array<string, int> */
+    /** @return array<string, int|string> */
     private function tulipEnvironment(): array
     {
         return [
+            'real_maturity_days' => 112,
+            'growth_reference_url' => 'https://extension.umn.edu/gardening-minnesota/growing-bulbs-indoors',
             'water_min' => 35,
             'water_max' => 60,
             'light_min' => 60,

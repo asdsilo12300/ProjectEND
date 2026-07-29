@@ -274,7 +274,7 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
     <section className="particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] text-slate-100" aria-label={copy.pageLabel}>
       <ParticleNetworkBackground variant="shop" />
       <div className="relative z-[1] mx-auto min-h-full w-full max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-        <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between" data-tour="shop-header">
           <div className="flex items-start gap-3.5">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#e9b95f]/12 text-[#f3ce7a] ring-1 ring-[#e9b95f]/25">
               <AppIcon className="h-6 w-6" name="shop" />
@@ -302,7 +302,7 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
         </header>
 
         <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <div className={`${filtersOpen ? 'block' : 'hidden'} lg:block`} id="shop-filters">
+          <div className={`${filtersOpen ? 'block' : 'hidden'} lg:block`} data-tour="shop-filters" id="shop-filters">
             <ShopSidebar
               categories={categories}
               copy={copy}
@@ -318,7 +318,7 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
               onSelectCategory={selectCategory}
             />
           </div>
-          <main className="min-w-0">
+          <main className="min-w-0" data-tour="shop-catalog">
             {shopNotice ? (
               <div className={`mb-4 rounded-xl border px-4 py-3 text-sm font-semibold ${shopNotice.type === 'error' ? 'border-rose-300/20 bg-rose-500/10 text-rose-100' : 'border-[#55dc91]/25 bg-[#55dc91]/10 text-[#9cf3bd]'}`} role={shopNotice.type === 'error' ? 'alert' : 'status'}>
                 {shopNotice.text}

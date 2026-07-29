@@ -331,7 +331,7 @@ class PostController extends Controller
                 'requestedFriendships as accepted_requested_friendships_count' => fn (Builder $friendships) => $friendships->where('status', 'accepted'),
                 'receivedFriendships as accepted_received_friendships_count' => fn (Builder $friendships) => $friendships->where('status', 'accepted'),
             ]),
-            'plantHistory',
+            'plantHistory' => fn ($query) => $query->with(['plant.stages', 'finalStage']),
             'simulator.plant',
         ];
     }

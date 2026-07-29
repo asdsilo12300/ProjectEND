@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
-import { createPostComment, createPostCommentReply, getCommunityLeaderboard, getFriendPosts, getFriends, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
+import { createPostComment, createPostCommentReply, getCommunityInsights, getCommunityLeaderboard, getFriendPosts, getFriends, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { ParticleNetworkBackground } from '../components/ParticleNetworkBackground'
@@ -113,6 +113,13 @@ function formatJoinedDate(value, language = getAppLanguage()) {
   if (Number.isNaN(date.getTime())) return copy(language, 'Joined recently', 'เพิ่งเข้าร่วม')
   const monthYear = date.toLocaleDateString(language === 'th' ? 'th-TH' : 'en-GB', { month: 'long', year: 'numeric' })
   return copy(language, `Joined ${monthYear}`, `เข้าร่วมเมื่อ ${monthYear}`)
+}
+
+function formatGrowthNumber(value, maximumFractionDigits = 1) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '0'
+
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(number)
 }
 
 function looksLikeBrokenThai(value) {
@@ -363,6 +370,11 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
   const isLive = Boolean(liveSimulator && liveSimulator.status === 'active' && liveSimulator.share_visibility !== 'private')
   const score = Number(history?.total_score ?? liveSimulator?.growth_point ?? 0)
   const health = Number(history?.final_health ?? history?.health ?? liveSimulator?.health ?? 0)
+  const growthCalculation = history?.growth_calculation ?? history?.game_state?.growth_calculation ?? null
+  const secondsPerRealDay = Number(
+    growthCalculation?.seconds_per_real_day
+      ?? growthCalculation?.normal_seconds_per_real_day,
+  )
   const snapshotUrl = history?.snapshot_image_url || liveSimulator?.snapshot_image_url
   const imageUrl = snapshotUrl || liveSimulator?.plant?.image_url
   return (
@@ -391,10 +403,21 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
           </span>
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-2 p-3 text-xs">
+      <div className={`grid grid-cols-2 gap-2 p-3 text-xs ${growthCalculation && !isLive ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{copy(language, 'Score', 'คะแนน')} <strong className="text-lime-100">{score}</strong></span>
         <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{copy(language, 'Health', 'สุขภาพ')} <strong className="text-lime-100">{health}%</strong></span>
         <span className="rounded-md bg-white/[0.04] px-2 py-2 text-slate-300">{isLive ? copy(language, 'Growth', 'การเติบโต') : copy(language, 'Grow time', 'เวลาปลูก')} <strong className="text-lime-100">{isLive ? `${Math.round(score)}%` : formatPlantDuration(history, language, { compact: true })}</strong></span>
+        {growthCalculation && !isLive ? (
+          <span
+            className="rounded-md border border-cyan-300/10 bg-cyan-300/[0.045] px-2 py-2 text-slate-300"
+            title={copy(language, `1 real-life growth day ≈ ${formatGrowthNumber(secondsPerRealDay, 2)} game seconds`, `1 วันเติบโตจริง ≈ ${formatGrowthNumber(secondsPerRealDay, 2)} วินาทีในเกม`)}
+          >
+            {copy(language, 'Real-life growth', 'วันเติบโตจริง')}{' '}
+            <strong className="block truncate text-cyan-200">
+              {formatGrowthNumber(growthCalculation.equivalent_days)} / ~{formatGrowthNumber(growthCalculation.maturity_days, 0)} {copy(language, 'days', 'วัน')}
+            </strong>
+          </span>
+        ) : null}
       </div>
       <span className="flex w-full items-center justify-center gap-2 border-t border-lime-100/10 bg-[#9bcf82]/10 px-3 py-3 text-xs font-black text-lime-100 transition group-hover:bg-[#9bcf82]/18">
         <AppIcon className="h-4 w-4" name="eye" />
@@ -476,7 +499,7 @@ function FeedPost({ hidden = false, onHide, onOpenGame, onOpenPost, onRestore, o
       tabIndex={0}
     >
       <div className="flex gap-4">
-        <div className="group/profile relative h-fit shrink-0" onClick={(event) => event.stopPropagation()}>
+        <div className="group/profile relative h-fit shrink-0" data-tour="community-profile-preview" onClick={(event) => event.stopPropagation()}>
           <button
             className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-[#263022] text-sm font-black text-lime-100 ring-1 ring-lime-100/10 transition hover:ring-[#8fbf78]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
             onClick={() => onSelectUser?.(postUser)}
@@ -523,7 +546,7 @@ function FeedPost({ hidden = false, onHide, onOpenGame, onOpenPost, onRestore, o
             <p className="whitespace-pre-line text-sm leading-6 text-slate-100">{post.body}</p>
             {post.history || post.liveSimulator ? <HistoryPreview history={post.history} liveSimulator={post.liveSimulator} onOpenGame={onOpenGame} post={post} /> : null}
           </div>
-          <div className="mt-5 grid max-w-[180px] grid-cols-2 text-slate-400">
+          <div className="mt-5 grid max-w-[180px] grid-cols-2 text-slate-400" data-tour="community-post-actions">
             <ActionButton active={post.likedByMe} burstKey={reactionBurstKey} icon="heart" label="Like post" onClick={() => onToggleLike(post)} value={post.likes} />
             <ActionButton icon="chat" label="Comment on post" onClick={() => onOpenPost(post)} value={post.replies} />
           </div>
@@ -766,6 +789,253 @@ function PostModal({ actionError = '', commentBurstKeys, commentDraft, comments,
     </div>
   )
 }
+
+const insightMetrics = [
+  { key: 'posts', icon: 'chat', color: '#6ee7a2' },
+  { key: 'likes', icon: 'heart', color: '#fb7185' },
+  { key: 'comments', icon: 'chat', color: '#67e8f9' },
+  { key: 'replies', icon: 'reply', color: '#c4a7ff' },
+]
+
+function insightMetricLabel(metric, mode, language) {
+  const labels = {
+    posts: { en: 'Posts', th: 'โพสต์' },
+    likes: mode === 'content' ? { en: 'Likes received', th: 'ไลก์ที่ได้รับ' } : { en: 'Likes given', th: 'ไลก์ที่กด' },
+    comments: mode === 'content' ? { en: 'Comments received', th: 'คอมเมนต์ที่ได้รับ' } : { en: 'Comments written', th: 'คอมเมนต์ที่เขียน' },
+    replies: mode === 'content' ? { en: 'Replies received', th: 'ตอบกลับที่ได้รับ' } : { en: 'Replies written', th: 'ตอบกลับที่เขียน' },
+  }
+
+  return labels[metric]?.[language] ?? labels[metric]?.en ?? metric
+}
+
+function InsightLineChart({ language, mode, series }) {
+  const [hoverIndex, setHoverIndex] = useState(null)
+  const width = 760
+  const height = 190
+  const padding = { left: 36, right: 12, top: 12, bottom: 28 }
+  const plotWidth = width - padding.left - padding.right
+  const plotHeight = height - padding.top - padding.bottom
+  const values = series.flatMap((row) => insightMetrics.map((metric) => Number(row?.[metric.key] ?? 0)))
+  const maxValue = Math.max(1, ...values)
+  const selectedIndex = hoverIndex == null ? Math.max(0, series.length - 1) : hoverIndex
+  const selectedRow = series[selectedIndex] ?? null
+  const xAt = (index) => padding.left + (series.length <= 1 ? plotWidth / 2 : (index / (series.length - 1)) * plotWidth)
+  const yAt = (value) => padding.top + plotHeight - (Number(value ?? 0) / maxValue) * plotHeight
+  const dateFormatter = new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-US', { day: 'numeric', month: 'short' })
+
+  function linePath(key) {
+    return series.map((row, index) => `${index === 0 ? 'M' : 'L'} ${xAt(index).toFixed(2)} ${yAt(row[key]).toFixed(2)}`).join(' ')
+  }
+
+  function updateHover(event) {
+    if (!series.length) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const pointerX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * width
+    const ratio = Math.min(1, Math.max(0, (pointerX - padding.left) / plotWidth))
+    setHoverIndex(Math.round(ratio * Math.max(0, series.length - 1)))
+  }
+
+  return (
+    <div className="min-w-0">
+      <div className="mb-2 flex min-h-8 flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="font-bold text-slate-300">
+          {selectedRow ? dateFormatter.format(new Date(`${selectedRow.date}T00:00:00`)) : copy(language, 'No activity yet', 'ยังไม่มีกิจกรรม')}
+        </span>
+        <span className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+          {insightMetrics.map((metric) => (
+            <span className="inline-flex items-center gap-1.5 text-slate-400" key={metric.key}>
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: metric.color }} />
+              {selectedRow?.[metric.key] ?? 0} {insightMetricLabel(metric.key, mode, language)}
+            </span>
+          ))}
+        </span>
+      </div>
+
+      <svg
+        className="block h-[170px] w-full cursor-crosshair overflow-visible rounded-lg bg-black/10"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={copy(language, 'Community activity trend', 'แนวโน้มกิจกรรมในชุมชน')}
+        onMouseMove={updateHover}
+        onMouseLeave={() => setHoverIndex(null)}
+      >
+        {[0, 0.5, 1].map((ratio) => {
+          const y = padding.top + plotHeight - ratio * plotHeight
+          return (
+            <g key={ratio}>
+              <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="rgba(185,229,164,.11)" strokeDasharray="4 7" />
+              <text x={padding.left - 8} y={y + 4} fill="#64748b" fontSize="10" textAnchor="end">{Math.round(maxValue * ratio)}</text>
+            </g>
+          )
+        })}
+        {insightMetrics.map((metric) => (
+          <path
+            d={linePath(metric.key)}
+            fill="none"
+            key={metric.key}
+            stroke={metric.color}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2.8"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        {selectedRow ? (
+          <g>
+            <line x1={xAt(selectedIndex)} x2={xAt(selectedIndex)} y1={padding.top} y2={padding.top + plotHeight} stroke="rgba(230,255,221,.28)" strokeDasharray="3 5" />
+            {insightMetrics.map((metric) => (
+              <circle
+                cx={xAt(selectedIndex)}
+                cy={yAt(selectedRow[metric.key])}
+                fill="#101511"
+                key={metric.key}
+                r="4"
+                stroke={metric.color}
+                strokeWidth="2.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </g>
+        ) : null}
+        {series.length ? (
+          <>
+            <text x={padding.left} y={height - 8} fill="#64748b" fontSize="10">{dateFormatter.format(new Date(`${series[0].date}T00:00:00`))}</text>
+            <text x={width - padding.right} y={height - 8} fill="#64748b" fontSize="10" textAnchor="end">{dateFormatter.format(new Date(`${series[series.length - 1].date}T00:00:00`))}</text>
+          </>
+        ) : null}
+      </svg>
+    </div>
+  )
+}
+
+function CommunityInsights({ refreshKey = '' }) {
+  const language = useCommunityLanguage()
+  const [expanded, setExpanded] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+  const [days, setDays] = useState(30)
+  const [mode, setMode] = useState('content')
+  const [status, setStatus] = useState('loading')
+  const [insights, setInsights] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+
+    getCommunityInsights(days)
+      .then((payload) => {
+        if (cancelled) return
+        setInsights(payload.data ?? null)
+        setStatus('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [days, reloadKey, refreshKey])
+
+  const current = insights?.[mode] ?? { totals: {}, series: [] }
+  const changeDays = (value) => {
+    setStatus('loading')
+    setDays(value)
+  }
+  const retry = () => {
+    setStatus('loading')
+    setReloadKey((value) => value + 1)
+  }
+
+  return (
+    <section className="border-b border-lime-100/10 bg-[#111613] px-5 py-4 sm:px-8" data-tour="community-insights">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[#78eda8]/15 bg-[#78eda8]/10 text-[#78eda8]">
+            <AppIcon className="h-4 w-4" name="speed" />
+          </span>
+          <span className="min-w-0">
+            <strong className="block text-sm text-lime-50">{copy(language, 'Community insights', 'สถิติชุมชนของฉัน')}</strong>
+            <small className="block truncate text-xs text-slate-500">
+              {copy(language, `Your activity during the last ${days} days`, `กิจกรรมของคุณในช่วง ${days} วันที่ผ่านมา`)}
+            </small>
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="hidden rounded-lg border border-lime-100/10 bg-black/15 p-0.5 sm:flex" role="group" aria-label={copy(language, 'Statistics range', 'ช่วงเวลาสถิติ')}>
+            {[7, 30, 90].map((value) => (
+              <button
+                className={`min-h-8 rounded-md px-2.5 text-xs font-black transition ${days === value ? 'bg-[#78eda8]/16 text-[#9cf3bd]' : 'text-slate-500 hover:text-slate-300'}`}
+                key={value}
+                onClick={() => changeDays(value)}
+                type="button"
+              >
+                {value}D
+              </button>
+            ))}
+          </div>
+          <button
+            className="grid h-9 w-9 place-items-center rounded-lg border border-lime-100/10 bg-white/[0.035] text-slate-300 transition hover:bg-white/[0.07] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+            type="button"
+            aria-expanded={expanded}
+            aria-label={expanded ? copy(language, 'Collapse insights', 'พับสถิติ') : copy(language, 'Expand insights', 'เปิดสถิติ')}
+            onClick={() => setExpanded((currentValue) => !currentValue)}
+          >
+            <AppIcon className={`h-4 w-4 transition ${expanded ? '' : 'rotate-180'}`} name="arrowUp" />
+          </button>
+        </div>
+      </header>
+
+      {status === 'error' ? (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-red-300/15 bg-red-400/[0.06] px-3 py-2 text-xs text-red-100">
+          <span>{copy(language, 'Statistics could not be loaded.', 'ไม่สามารถโหลดข้อมูลสถิติได้')}</span>
+          <button className="font-black text-red-200 underline underline-offset-4" type="button" onClick={retry}>{copy(language, 'Retry', 'ลองใหม่')}</button>
+        </div>
+      ) : null}
+
+      {status !== 'error' ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {insightMetrics.map((metric) => (
+            <div className="rounded-lg border border-lime-100/[0.08] bg-white/[0.025] px-3 py-2.5" key={metric.key}>
+              <span className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: metric.color }} />
+                <span className="truncate">{insightMetricLabel(metric.key, mode, language)}</span>
+              </span>
+              <strong className="mt-1 block text-lg font-black tabular-nums text-lime-50">{status === 'loading' ? '—' : Number(current.totals?.[metric.key] ?? 0).toLocaleString()}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {expanded && status !== 'error' ? (
+        <div className="mt-3 rounded-xl border border-lime-100/[0.09] bg-[#0d120f] p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex rounded-lg border border-lime-100/10 bg-black/20 p-0.5" role="group" aria-label={copy(language, 'Insight type', 'ประเภทสถิติ')}>
+              {[
+                ['content', copy(language, 'My content', 'ผลงานของฉัน')],
+                ['activity', copy(language, 'My activity', 'กิจกรรมของฉัน')],
+              ].map(([value, label]) => (
+                <button
+                  className={`min-h-8 rounded-md px-3 text-xs font-black transition ${mode === value ? 'bg-[#78eda8]/16 text-[#9cf3bd]' : 'text-slate-500 hover:text-slate-300'}`}
+                  key={value}
+                  onClick={() => setMode(value)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex rounded-lg border border-lime-100/10 bg-black/15 p-0.5 sm:hidden" role="group" aria-label={copy(language, 'Statistics range', 'ช่วงเวลาสถิติ')}>
+              {[7, 30, 90].map((value) => (
+                <button className={`min-h-8 rounded-md px-2.5 text-xs font-black ${days === value ? 'bg-[#78eda8]/16 text-[#9cf3bd]' : 'text-slate-500'}`} key={value} onClick={() => changeDays(value)} type="button">{value}D</button>
+              ))}
+            </div>
+          </div>
+          {status === 'loading' ? <LoadingSkeleton count={2} label="Loading community insights" variant="list" /> : <InsightLineChart language={language} mode={mode} series={current.series ?? []} />}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 function ProfileCenter({ actionBusy = false, actionError = '', friendsCount, hiddenPostIds = [], isOwnProfile = true, loading = false, onAddFriend, onBack, onEditProfile, onHidePost, onOpenGame, onOpenPost, onRestorePost, onSelectUser, onToggleLike, posts, reactionBursts, user }) {
   const language = useCommunityLanguage()
   const name = displayName(user)
@@ -848,6 +1118,12 @@ function ProfileCenter({ actionBusy = false, actionError = '', friendsCount, hid
           </div>
         </div>
       </section>
+
+      {isOwnProfile ? (
+        <CommunityInsights
+          refreshKey={posts.map((post) => `${post.id}:${post.likes}:${post.replies}:${post.likedByMe ? 1 : 0}`).join('|')}
+        />
+      ) : null}
 
       {loading ? <LoadingSkeleton count={2} label="Loading profile posts" variant="feed" /> : null}
       {!loading && profilePosts.map((post) => (
@@ -1046,7 +1322,7 @@ function RightDashboard({ leaderboard, loading = false, onOpenSearch, onSelectUs
   const language = useCommunityLanguage()
 
   return (
-    <aside className="sticky top-0 min-h-[calc(100dvh-4rem)] self-start border-l border-lime-100/10 bg-[#101713] px-5 py-6 max-lg:hidden">
+    <aside className="sticky top-0 min-h-[calc(100dvh-4rem)] self-start border-l border-lime-100/10 bg-[#101713] px-5 py-6 max-lg:hidden" data-tour="community-dashboard">
       <button
         className="relative block h-11 w-full min-w-0 rounded-xl border border-lime-100/15 bg-[#18201b] pl-11 pr-4 text-left text-sm text-slate-400 shadow-[0_8px_20px_rgba(0,0,0,.12)] outline-none transition hover:border-[#8fbf78]/60 hover:bg-[#1c2720] hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
         onClick={onOpenSearch}
@@ -1181,7 +1457,7 @@ function FeedCenter({ activeFeed, error, friendPosts, hiddenPostIds = [], onFeed
   const visiblePosts = activeFeed === 'friends' ? friendPosts : posts
 
   return (
-    <main className="min-h-full min-w-0 bg-[#141817]">
+    <main className="min-h-full min-w-0 bg-[#141817]" data-tour="community-feed">
       <div className="sticky top-0 z-10 grid grid-cols-2 border-b border-lime-100/10 bg-[#141817]/95 backdrop-blur">
         <button
           type="button"
@@ -1771,7 +2047,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
           className="community-shared-scroll relative z-[1] mx-auto grid h-full max-w-[1180px] items-start overflow-y-auto overscroll-contain border-x border-lime-100/10 grid-cols-[220px_minmax(420px,1fr)_260px] max-lg:grid-cols-[180px_minmax(0,1fr)] max-md:grid-cols-1 max-md:pb-20"
           ref={sharedScrollRef}
         >
-          <aside className="sticky top-0 min-h-[calc(100dvh-4rem)] self-start border-r border-lime-100/10 bg-[#151817] px-5 py-8 max-md:hidden">
+          <aside className="sticky top-0 min-h-[calc(100dvh-4rem)] self-start border-r border-lime-100/10 bg-[#151817] px-5 py-8 max-md:hidden" data-tour="community-navigation">
             <nav className="space-y-2" aria-label={copy(language, 'Community sections', 'ส่วนต่าง ๆ ของชุมชน')}>
               <LeftNavItem active={activeView === 'home'} icon="home" label={copy(language, 'Home', 'หน้าหลัก')} onClick={() => navigateCommunityView('home')} />
               <LeftNavItem active={activeView === 'profile' && !selectedProfile} icon="profile" label={copy(language, 'Profile', 'โปรไฟล์')} onClick={handleOpenOwnProfile} />
@@ -1790,7 +2066,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
           />
         </div>
 
-        <nav className="absolute inset-x-0 bottom-0 z-40 hidden grid-cols-4 border-t border-lime-100/10 bg-[#101412]/95 shadow-[0_-10px_30px_rgba(0,0,0,.28)] backdrop-blur max-md:grid" aria-label={copy(language, 'Community sections', 'ส่วนต่าง ๆ ของชุมชน')}>
+        <nav className="absolute inset-x-0 bottom-0 z-40 hidden grid-cols-4 border-t border-lime-100/10 bg-[#101412]/95 shadow-[0_-10px_30px_rgba(0,0,0,.28)] backdrop-blur max-md:grid" data-tour="community-mobile-navigation" aria-label={copy(language, 'Community sections', 'ส่วนต่าง ๆ ของชุมชน')}>
           <MobileNavItem active={activeView === 'home'} icon="home" label={copy(language, 'Home', 'หน้าหลัก')} onClick={() => navigateCommunityView('home')} />
           <MobileNavItem active={activeView === 'profile'} icon="profile" label={copy(language, 'Profile', 'โปรไฟล์')} onClick={handleOpenOwnProfile} />
           <MobileNavItem active={activeView === 'search'} icon="search" label={copy(language, 'Search', 'ค้นหา')} onClick={handleOpenSearch} />

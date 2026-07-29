@@ -108,12 +108,37 @@
   display: none;
 }
 
-.lab-panel { --lab-panel-accent: var(--pg-primary); }
+.lab-panel {
+  --lab-panel-accent: var(--pg-primary);
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 220ms ease,
+    box-shadow 180ms ease;
+}
 .lab-panel[data-panel-id='monitor'] { --lab-panel-accent: var(--pg-primary); }
 .lab-panel[data-panel-id='climate'] { --lab-panel-accent: var(--pg-warning); }
 .lab-panel[data-panel-id='friends'] { --lab-panel-accent: var(--pg-community); }
 .lab-panel[data-panel-id='comments'] { --lab-panel-accent: #8fc7d9; }
 .lab-panel__accent { background: var(--lab-panel-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--lab-panel-accent) 34%, transparent); }
+
+@media (min-width: 768px) {
+  .lab-panel[data-panel-collapsed='true'] {
+    width: 174px !important;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.42);
+  }
+
+  .lab-panel[data-panel-collapsed='true'] .lab-panel__subtitle,
+  .lab-panel[data-panel-collapsed='true'] .lab-panel__header-actions,
+  .lab-panel[data-panel-collapsed='true'] .lab-panel__drag-handle {
+    display: none;
+  }
+
+  .lab-panel__body {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
 
 .plantsim-lab-alert {
   width: min(410px, calc(100vw - 32px));

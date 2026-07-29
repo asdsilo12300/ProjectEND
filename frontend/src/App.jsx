@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import './App.css'
@@ -12,12 +12,14 @@ import { CommentsPanel } from './game/panels/CommentsPanel'
 import { EnvironmentPanel } from './game/panels/EnvironmentPanel'
 import { FriendsPanel } from './game/panels/FriendsPanel'
 import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
+import { OnboardingExperience } from './game/onboarding/OnboardingExperience'
 import { LoginPage } from './auth/LoginPage'
 import { LandingPage } from './landing/LandingPage'
 import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation } from './game/utils/outdoorWeather'
-import { defaultWindows } from './game/utils/windows'
+import { getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from './game/utils/realGrowth'
+import { defaultWindows, panelExpandedPosition, reflowWindowsForViewport } from './game/utils/windows'
 
 const AdminPage = lazy(() => import('./admin/AdminPage').then((module) => ({ default: module.AdminPage })))
 const CommunityPage = lazy(() => import('./game/community/CommunityPage').then((module) => ({ default: module.CommunityPage })))
@@ -37,12 +39,12 @@ const initialOutdoorWeather = {
 
 const initialGrowthTrack = {
   progress: 0,
-  history: [0, 0, 0, 0, 0, 0, 0],
+  history: [0],
 }
 
 const growthAnimationDurationMs = 1600
 const autosaveIntervalMs = 30000
-const simulationTickIntervalMs = 30000
+const simulationTickIntervalMs = SIMULATION_CYCLE_SECONDS * 1000
 const initialSimulationTickDelayMs = simulationTickIntervalMs
 const simulationTickMarkerPrefix = 'plant_game_last_tick:'
 const resetMarkerKey = 'plant_game_reset_marker'
@@ -246,18 +248,22 @@ function wait(ms) {
 
 function outdoorClimateWindow(currentWindows = {}) {
   const isCompactOutdoor = window.innerWidth < 640
-  const monitorY = Number(currentWindows.monitor?.y ?? defaultWindows.monitor.y)
+  const monitorY = Number(currentWindows.monitor?.expandedY ?? currentWindows.monitor?.y ?? 88)
   const monitorHeight = isCompactOutdoor ? 430 : 470
+  const x = isCompactOutdoor ? 16 : 258
+  const y = Math.max(76, monitorY + monitorHeight + 6)
 
   return {
-    x: isCompactOutdoor ? 16 : 258,
-    y: Math.max(76, monitorY + monitorHeight + 6),
+    x,
+    y,
+    expandedX: x,
+    expandedY: y,
     visible: true,
     collapsed: false,
   }
 }
 function ModeLoadingOverlay({ mode }) {
-  const label = !mode ? 'saved simulation' : mode === 'outdoor' ? 'outdoor field' : 'greenhouse lab'
+  const label = !mode ? 'saved simulation' : mode === 'outdoor' ? 'outdoor field' : 'lab'
 
   return (
     <div className="absolute inset-0 z-[90] grid place-items-center bg-black/55 px-4 backdrop-blur-md">
@@ -302,6 +308,7 @@ function App() {
   const [actionToasts, setActionToasts] = useState([])
   const actionToastTimersRef = useRef(new Map())
   const [activePage, setActivePage] = useState('home')
+  const [helpCenterOpen, setHelpCenterOpen] = useState(false)
   const [settingsReturnPage, setSettingsReturnPage] = useState('lab')
   const [pendingPageAfterAuth, setPendingPageAfterAuth] = useState(null)
   const [visitingFriend, setVisitingFriend] = useState(null)
@@ -336,6 +343,9 @@ function App() {
   const [saveCompleteHistory, setSaveCompleteHistory] = useState(null)
   const [saveReadyForNewPlant, setSaveReadyForNewPlant] = useState(false)
   const [user, setUser] = useState(null)
+  const updateUserOnboardingProgress = useCallback((progress) => {
+    setUser((current) => current ? { ...current, onboarding_progress: progress } : current)
+  }, [])
   const [sessionStatus, setSessionStatus] = useState(() => getToken() ? 'checking' : 'guest')
   const [coinDelta, setCoinDelta] = useState(null)
   const [coinBurst, setCoinBurst] = useState(null)
@@ -368,6 +378,23 @@ function App() {
     () => notifications.filter((notification) => !notification.is_read).length,
     [notifications],
   )
+
+  useEffect(() => {
+    let frame = 0
+
+    function reflowLabWindows() {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        setWindows((current) => reflowWindowsForViewport(current))
+      })
+    }
+
+    window.addEventListener('resize', reflowLabWindows)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', reflowLabWindows)
+    }
+  }, [])
 
   const dismissActionToast = useCallback((toastId) => {
     const timer = actionToastTimersRef.current.get(toastId)
@@ -497,7 +524,7 @@ function App() {
       simulationVisual: next,
       growthTrack: {
         progress,
-        history: [...(snapshot.growthTrack?.history ?? initialGrowthTrack.history).slice(1), progress],
+        history: [...(snapshot.growthTrack?.history ?? initialGrowthTrack.history), progress].slice(-7),
       },
     }
     return next
@@ -633,7 +660,6 @@ function App() {
     const targetProgress = clampSimulationProgress(simulationVisual.growth_point)
     const animationStartedAt = performance.now()
     let startingProgress = null
-    let lastHistoryAt = animationStartedAt
     let interval = null
 
     function animateCanonicalGrowth() {
@@ -646,9 +672,8 @@ function App() {
 
         const nextProgress = clampSimulationProgress(startingProgress + ((targetProgress - startingProgress) * easedRatio))
         const roundedProgress = ratio >= 1 ? targetProgress : Number(nextProgress.toFixed(2))
-        const shouldRecordHistory = ratio >= 1 || now - lastHistoryAt >= 240
-        const nextHistory = shouldRecordHistory ? [...current.history.slice(1), roundedProgress] : current.history
-        if (shouldRecordHistory) lastHistoryAt = now
+        const shouldRecordHistory = ratio >= 1
+        const nextHistory = shouldRecordHistory ? [...current.history, roundedProgress].slice(-7) : current.history
 
         if (roundedProgress === current.progress && nextHistory === current.history) return current
         return { progress: roundedProgress, history: nextHistory }
@@ -666,7 +691,7 @@ function App() {
     return () => {
       if (interval !== null) window.clearInterval(interval)
     }
-  }, [activePage, growingMode, modeLoading, selectedPlant, simulationVisual.growth_point])
+  }, [activePage, growingMode, modeLoading, selectedPlant, simulationVisual.growth_point, simulationVisual.state_version])
 
   const previewSimulationVisual = useMemo(() => {
     if (!growingMode || !selectedPlant) {
@@ -900,7 +925,7 @@ function App() {
     })
     setGrowthTrack({
       progress: restoredProgress,
-      history: [0, 0, 0, 0, 0, 0, restoredProgress],
+      history: [restoredProgress],
     })
     const nextSimulation = {
       ...defaultSimulationVisual,
@@ -1313,33 +1338,23 @@ function App() {
         ]))
       }
 
-      if (id === 'friends') {
-        return {
-          ...value,
-          [id]: {
-            ...value[id],
-            x: Math.max(24, window.innerWidth - 350),
-            y: Math.max(76, window.innerHeight - 380),
-            visible: true,
-            collapsed: false,
-          },
-        }
-      }
+      const fallback = panelExpandedPosition(id)
+      const expandedX = Number(value[id].expandedX ?? fallback.x)
+      const expandedY = Number(value[id].expandedY ?? fallback.y)
 
-      if (id === 'comments') {
-        return {
-          ...value,
-          [id]: {
-            ...value[id],
-            x: Math.max(24, window.innerWidth - 400),
-            y: window.innerHeight >= 820 ? 88 : 144,
-            visible: true,
-            collapsed: false,
-          },
-        }
+      return {
+        ...value,
+        [id]: {
+          ...value[id],
+          x: expandedX,
+          y: expandedY,
+          expandedX,
+          expandedY,
+          visible: true,
+          collapsed: false,
+          responsiveCollapsed: false,
+        },
       }
-
-      return { ...value, [id]: { ...value[id], visible: true, collapsed: false } }
     })
   }
 
@@ -1508,13 +1523,27 @@ function App() {
 
   function openPlantWindows() {
     setActiveMobileLabPanel('monitor')
-    setWindows((value) => ({
-      ...value,
-      monitor: { ...value.monitor, visible: true, collapsed: false },
-      climate: { ...value.climate, visible: true, collapsed: true },
-      friends: { ...value.friends, visible: true, collapsed: true },
-      comments: { ...value.comments, visible: true, collapsed: true },
-    }))
+    setWindows((value) => {
+      const layout = defaultWindows()
+
+      return Object.fromEntries(Object.entries(value).map(([id, panel]) => {
+        const fallback = layout[id] ?? panel
+        const shouldCollapse = Boolean(fallback.collapsed)
+        const expandedX = Number(panel.expandedX ?? fallback.expandedX ?? fallback.x)
+        const expandedY = Number(panel.expandedY ?? fallback.expandedY ?? fallback.y)
+
+        return [id, {
+          ...panel,
+          x: shouldCollapse ? fallback.x : expandedX,
+          y: shouldCollapse ? fallback.y : expandedY,
+          expandedX,
+          expandedY,
+          visible: true,
+          collapsed: shouldCollapse,
+          responsiveCollapsed: Boolean(fallback.responsiveCollapsed),
+        }]
+      }))
+    })
   }
 
   async function switchToPlantedSpecies(asset, simulator) {
@@ -1728,15 +1757,12 @@ function App() {
     setActiveMobileLabPanel('monitor')
 
     const guidedWindows = defaultWindows()
-    guidedWindows.climate = { ...guidedWindows.climate, collapsed: true }
-    guidedWindows.comments = { ...guidedWindows.comments, collapsed: true }
-    guidedWindows.friends = { ...guidedWindows.friends, collapsed: true }
 
     if (mode === 'outdoor') {
       guidedWindows.climate = {
         ...guidedWindows.climate,
         ...outdoorClimateWindow(guidedWindows),
-        collapsed: true,
+        collapsed: false,
       }
     } else {
       setOutdoorWeather(initialOutdoorWeather)
@@ -1816,7 +1842,16 @@ function App() {
         const historyVisibility = nextVisual?.share_visibility && nextVisual.share_visibility !== 'private'
           ? nextVisual.share_visibility
           : 'private'
-        const payload = await savePlantHistory(historySimulatorId, { visibility: historyVisibility, snapshot_image_data: snapshotImageData })
+        const growthEstimate = getRealGrowthEstimate(nextVisual)
+        const payload = await savePlantHistory(historySimulatorId, {
+          visibility: historyVisibility,
+          snapshot_image_data: snapshotImageData,
+          growth_calculation: {
+            cycle_seconds: growthEstimate.cycleSeconds,
+            observed_growth_points_per_cycle: Number(nextVisual?.growth_rate ?? previewSimulationVisual?.growth_rate ?? 0),
+            recent_growth_percentages: [...growthTrack.history, growthEstimate.progressPercent].slice(-20),
+          },
+        })
         const history = payload.data ?? payload
         forgetActiveSimulator(historySimulatorId)
         window.localStorage.removeItem('plant_game_simulator_id')
@@ -2404,6 +2439,7 @@ function App() {
     setNotificationError('')
     setSessionStatus('guest')
     setProfileOpen(false)
+    setHelpCenterOpen(false)
     setAuthMode('login')
     setAuthStatus('idle')
     setAuthError('')
@@ -2470,12 +2506,20 @@ function App() {
   }
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100" data-mobile-lab-panel={activeMobileLabPanel}>
+    <main className="game-themed-scrollbar relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100" data-mobile-lab-panel={activeMobileLabPanel}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
-      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onHelpOpen={() => setHelpCenterOpen(true)} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
       <ToastStack onDismiss={dismissActionToast} toasts={actionToasts} />
+      <OnboardingExperience
+        activePage={activePage}
+        helpOpen={helpCenterOpen}
+        onHelpClose={() => setHelpCenterOpen(false)}
+        onNavigate={navigateToPage}
+        onProgressChange={updateUserOnboardingProgress}
+        user={user}
+      />
       {saveCompleteHistory && (
         <div className="absolute inset-0 z-50 grid place-items-center bg-black/45 px-4 backdrop-blur-sm">
           <div className="animate-[saveModalIn_.24s_ease-out] w-full max-w-[420px] overflow-hidden rounded-xl border border-lime-100/20 bg-[#101511]/96 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.5)]">
@@ -2529,6 +2573,7 @@ function App() {
                 coinBurst={coinBurst}
                 emptyGardenOwnerName={visitingFriend ? visitorName : ''}
                 expBurst={expBurst}
+                location={outdoorWeather.location}
                 mode={growingMode}
                 plantSelected={Boolean(selectedPlant)}
                 awaitingFirstCycle={awaitingFirstCycle}
@@ -2548,7 +2593,7 @@ function App() {
               />
 
               {visitingFriend && (
-                <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]">
+                <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]" data-tour="friend-mode-banner">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
                   <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved game state' : `${visitorName}'s garden`}</strong> - view only</span>
                   <button
@@ -2583,7 +2628,7 @@ function App() {
               )}
               {!visitingFriend && <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} />}
               <CommentsPanel currentUser={user} onAuthRequired={openAuth} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
-              <nav className="lab-mobile-panel-dock" aria-label="Lab panels">
+              <nav className="lab-mobile-panel-dock" data-tour="mobile-panel-dock" aria-label="Lab panels">
                 {[
                   ['monitor', 'Plant'],
                   ['climate', 'Environment'],
