@@ -22,6 +22,7 @@ use App\Models\Simulator;
 use App\Models\SimulatorComment;
 use App\Services\AdminDataCache;
 use App\Services\KnownPlantProfileService;
+use App\Services\PublicCatalogCache;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +32,10 @@ use Illuminate\Validation\Rule;
 
 class AdminResourceController extends Controller
 {
-    public function __construct(private readonly AdminDataCache $cache) {}
+    public function __construct(
+        private readonly AdminDataCache $cache,
+        private readonly PublicCatalogCache $catalogCache,
+    ) {}
 
     public function lookups(): JsonResponse
     {
@@ -92,6 +96,7 @@ class AdminResourceController extends Controller
 
         $freshRecord = $record->fresh($resource === 'plants' ? ['stages'] : []);
         AdminActivityLog::record($request->user(), 'created', $resource, $record->id, ['after' => $freshRecord->toArray()]);
+        $this->catalogCache->clear();
 
         return response()->json(['data' => $freshRecord], 201);
     }
@@ -104,6 +109,7 @@ class AdminResourceController extends Controller
             $before = $model->toArray();
             $model->fill($request->validate($this->rules($resource, $record, $request)))->save();
             AdminActivityLog::record($request->user(), 'updated', $resource, $model->id, ['before' => $before, 'after' => $model->fresh()->toArray()]);
+            $this->catalogCache->clear();
 
             return response()->json(['data' => $model->fresh()]);
         }
@@ -131,6 +137,7 @@ class AdminResourceController extends Controller
         }
 
         AdminActivityLog::record($request->user(), 'soft_deleted', $resource, $record, ['before' => $before]);
+        $this->catalogCache->clear();
 
         return response()->json(['message' => 'Record moved to trash.']);
     }
@@ -149,6 +156,7 @@ class AdminResourceController extends Controller
         AdminActivityLog::record($request->user(), 'restored', $resource, $record, [
             'after' => $model->fresh()->toArray(),
         ]);
+        $this->catalogCache->clear();
 
         return response()->json(['message' => 'Record restored.', 'data' => $model->fresh()]);
     }

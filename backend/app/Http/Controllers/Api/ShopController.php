@@ -6,21 +6,29 @@ use App\Http\Controllers\Controller;
 use App\Models\ShopItem;
 use App\Models\UserItem;
 use App\Models\WalletTransaction;
+use App\Services\PublicCatalogCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ShopController extends Controller
 {
+    public function __construct(private readonly PublicCatalogCache $cache) {}
+
     public function index(): JsonResponse
     {
-        $items = ShopItem::query()
+        $items = $this->cache->remember('shop-items', fn () => ShopItem::query()
             ->with('item')
             ->whereHas('item', fn ($query) => $query->whereNull('deleted_at')->where('is_active', true))
             ->where('is_active', true)
-            ->get();
+            ->get()
+            ->toArray());
 
-        return response()->json(['data' => $items]);
+        $seconds = max(0, (int) config('catalog.browser_cache_seconds', 30));
+
+        return response()
+            ->json(['data' => $items])
+            ->header('Cache-Control', "public, max-age={$seconds}, stale-while-revalidate=300");
     }
 
     public function inventory(Request $request): JsonResponse

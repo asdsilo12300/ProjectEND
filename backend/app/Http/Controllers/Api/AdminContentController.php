@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AdminActivityLog;
 use App\Models\Content;
 use App\Services\MediaStorage;
+use App\Services\PublicCatalogCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -13,7 +14,10 @@ use Illuminate\Validation\Rule;
 
 class AdminContentController extends Controller
 {
-    public function __construct(private readonly MediaStorage $media) {}
+    public function __construct(
+        private readonly MediaStorage $media,
+        private readonly PublicCatalogCache $catalogCache,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -53,6 +57,7 @@ class AdminContentController extends Controller
 
         $content = Content::query()->create($data);
         AdminActivityLog::record($request->user(), 'created', 'contents', $content->id, ['title' => $content->title, 'status' => $content->status]);
+        $this->catalogCache->clear();
 
         return response()->json(['data' => $content], 201);
     }
@@ -84,6 +89,7 @@ class AdminContentController extends Controller
         $data['published_at'] = $this->publishedAt($data, $content);
         $content->fill($data)->save();
         AdminActivityLog::record($request->user(), 'updated', 'contents', $content->id, ['before' => $before, 'after' => $content->fresh()->only(['title', 'title_th', 'slug', 'status', 'version'])]);
+        $this->catalogCache->clear();
 
         return response()->json(['data' => $content->fresh()]);
     }
@@ -94,6 +100,7 @@ class AdminContentController extends Controller
         $before = $content->only(['title', 'slug', 'status', 'version']);
         $content->delete();
         AdminActivityLog::record($admin, 'soft_deleted', 'contents', $content->id, ['before' => $before]);
+        $this->catalogCache->clear();
 
         return response()->json(['message' => 'Content moved to trash.']);
     }
@@ -106,6 +113,7 @@ class AdminContentController extends Controller
             'title' => $record->title,
             'slug' => $record->slug,
         ]);
+        $this->catalogCache->clear();
 
         return response()->json(['message' => 'Content restored.', 'data' => $record->fresh()]);
     }

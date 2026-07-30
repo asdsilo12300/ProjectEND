@@ -4,20 +4,30 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ModelAsset;
+use App\Services\PublicCatalogCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 
 class ModelAssetController extends Controller
 {
+    public function __construct(private readonly PublicCatalogCache $cache) {}
+
     public function index(): JsonResponse
     {
-        return response()->json([
-            'data' => ModelAsset::query()
+        $assets = $this->cache->remember(
+            'model-assets',
+            fn (): array => ModelAsset::query()
                 ->orderBy('asset_key')
                 ->get()
                 ->map(fn (ModelAsset $asset) => $this->serialize($asset))
-                ->values(),
-        ]);
+                ->values()
+                ->all(),
+        );
+        $seconds = max(0, (int) config('catalog.browser_cache_seconds', 30));
+
+        return response()
+            ->json(['data' => $assets])
+            ->header('Cache-Control', "public, max-age={$seconds}, stale-while-revalidate=300");
     }
 
     public function show(string $key): JsonResponse
@@ -49,6 +59,6 @@ class ModelAssetController extends Controller
             return $path;
         }
 
-        return '/storage/' . ltrim($path, '/');
+        return '/storage/'.ltrim($path, '/');
     }
 }
