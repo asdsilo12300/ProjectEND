@@ -5,7 +5,7 @@ import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation 
 import { AppIcon } from '../game/icons/FontAwesomeIcon'
 import { ParticleNetworkBackground } from '../game/components/ParticleNetworkBackground'
 import { loadSettings, saveSettings } from '../game/settings/settingsPreferences'
-import { getLearningContent, getLearningContents } from '../lib/api'
+import { getLearningContent, getLearningContents, resolveAssetUrl } from '../lib/api'
 import './LandingPage.css'
 
 const factors = [
@@ -571,7 +571,10 @@ function sanitizeArticleHtml(html) {
       element.setAttribute('target', '_blank')
       element.setAttribute('rel', 'noreferrer noopener')
     }
-    if (element.tagName === 'IMG' && element.hasAttribute('src')) element.setAttribute('loading', 'lazy')
+    if (element.tagName === 'IMG' && element.hasAttribute('src')) {
+      element.setAttribute('src', resolveAssetUrl(element.getAttribute('src')))
+      element.setAttribute('loading', 'lazy')
+    }
     if (element.tagName === 'IFRAME' && element.hasAttribute('src')) {
       element.setAttribute('loading', 'lazy')
       element.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share')
@@ -594,7 +597,7 @@ function LearningContentCard({ article, language, onOpen, index }) {
       <button type="button" onClick={() => onOpen(article.slug)} aria-label={`${language === 'th' ? 'เปิดบทความ' : 'Open article'}: ${title}`}>
         <div className="learning-content-card__image">
           {article.cover_image_url
-            ? <img src={article.cover_image_url} alt={imageAlt} />
+            ? <img src={resolveAssetUrl(article.cover_image_url)} alt={imageAlt} />
             : <div className="learning-content-card__placeholder"><AppIcon name={article.icon || 'eco'} /></div>}
           <span className="learning-content-card__number">0{index + 1}</span>
         </div>
@@ -752,7 +755,7 @@ function LearningArticlePage({ slug, user, onBack, onStart }) {
             </div>
           </div>
           <figure className="learning-article-hero__figure">
-            <img src={article.cover_image_url} alt={imageAlt} />
+            <img src={resolveAssetUrl(article.cover_image_url)} alt={imageAlt} />
             {article.image_credit && (
               <figcaption>
                 Image: <a href={article.image_credit_url} target="_blank" rel="noreferrer">{article.image_credit}</a>

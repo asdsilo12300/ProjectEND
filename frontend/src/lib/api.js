@@ -30,16 +30,38 @@ export function clearToken() {
 
 export function resolveAssetUrl(path) {
   if (!path) return null
+  const value = String(path).trim()
   const backendStoragePrefix = `${API_ROOT_URL}/storage/`
 
-  if (path.startsWith('/storage/')) {
-    return import.meta.env.DEV ? path : `${API_BASE_URL}/media/${path.slice('/storage/'.length)}`
+  if (value.startsWith('/storage/')) {
+    return `${API_BASE_URL}/media/${value.slice('/storage/'.length)}`
   }
-  if (path.startsWith(backendStoragePrefix)) {
-    return `${API_BASE_URL}/media/${path.slice(backendStoragePrefix.length)}`
+  if (value.startsWith(backendStoragePrefix)) {
+    return `${API_BASE_URL}/media/${value.slice(backendStoragePrefix.length)}`
   }
-  if (path.startsWith('http://') || path.startsWith('https://')) return path
-  return path
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    try {
+      const url = new URL(value)
+      const storagePrefix = '/storage/'
+      const mediaPrefix = '/api/media/'
+      const isBackendOwnedHost = url.origin === API_ROOT_URL
+        || ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
+
+      // Older records contain absolute localhost storage URLs. Always route
+      // backend-owned media through the current API host after deployment.
+      if (isBackendOwnedHost && url.pathname.startsWith(storagePrefix)) {
+        return `${API_BASE_URL}/media/${url.pathname.slice(storagePrefix.length)}`
+      }
+      if (isBackendOwnedHost && url.pathname.startsWith(mediaPrefix)) {
+        return `${API_BASE_URL}/media/${url.pathname.slice(mediaPrefix.length)}`
+      }
+    } catch {
+      return value
+    }
+
+    return value
+  }
+  return value
 }
 
 export function storageAsset(path) {

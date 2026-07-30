@@ -102,14 +102,14 @@ class AuthController extends Controller
             $this->media->deleteFromReference($avatarUrl);
 
             $path = $this->media->storeUploadedFile($request->file('avatar'), 'profile-avatars');
-            $avatarUrl = $this->media->publicUrl($path);
+            $avatarUrl = $this->media->reference($path);
         }
 
         if ($request->hasFile('cover')) {
             $this->media->deleteFromReference($coverUrl);
 
             $path = $this->media->storeUploadedFile($request->file('cover'), 'profile-covers');
-            $coverUrl = $this->media->publicUrl($path);
+            $coverUrl = $this->media->reference($path);
         }
 
         $user->forceFill([
@@ -194,5 +194,4 @@ class AuthController extends Controller
             'onboarding_progress' => $user->onboarding_progress ?? [],
         ];
     }
-
 }

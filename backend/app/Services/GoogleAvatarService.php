@@ -60,7 +60,7 @@ class GoogleAvatarService
                 return null;
             }
 
-            return $this->media->publicUrl($path);
+            return $this->media->reference($path);
         } catch (Throwable $error) {
             Log::notice('Could not cache a Google profile image.', [
                 'exception' => $error::class,

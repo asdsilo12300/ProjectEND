@@ -25,6 +25,30 @@ class MediaStorageTest extends TestCase
         Storage::disk('public')->assertMissing('profile-avatars/avatar.png');
     }
 
+    public function test_legacy_localhost_media_urls_are_normalized_to_portable_references(): void
+    {
+        config()->set('services.media.driver', 'laravel');
+
+        $media = app(MediaStorage::class);
+
+        $this->assertSame(
+            '/storage/profile-avatars/avatar.png',
+            $media->normalizeReference('http://localhost:8000/storage/profile-avatars/avatar.png'),
+        );
+        $this->assertSame(
+            '/storage/content-images/cover image.jpg',
+            $media->normalizeReference('http://localhost:8000/api/media/content-images/cover%20image.jpg'),
+        );
+        $this->assertSame(
+            'https://images.example.com/cover.jpg',
+            $media->normalizeReference('https://images.example.com/cover.jpg'),
+        );
+        $this->assertSame(
+            'https://images.example.com/storage/cover.jpg',
+            $media->normalizeReference('https://images.example.com/storage/cover.jpg'),
+        );
+    }
+
     public function test_supabase_media_upload_uses_server_credentials_and_public_url(): void
     {
         config()->set('services.media.driver', 'supabase');
@@ -45,6 +69,10 @@ class MediaStorageTest extends TestCase
         $this->assertSame(
             'https://project-ref.supabase.co/storage/v1/object/public/plant-media/content-images/cover%20image.png',
             $media->reference($path),
+        );
+        $this->assertSame(
+            '/storage/content-images/cover image.png',
+            $media->normalizeReference($media->reference($path)),
         );
 
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://project-ref.supabase.co/storage/v1/object/plant-media/content-images/cover%20image.png'

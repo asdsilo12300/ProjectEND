@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\MediaStorage;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -44,5 +46,12 @@ class Content extends Model
             'sort_order' => 'integer',
             'version' => 'integer',
         ];
+    }
+
+    protected function coverImageUrl(): Attribute
+    {
+        return Attribute::get(
+            fn (?string $value): ?string => app(MediaStorage::class)->normalizeReference($value),
+        );
     }
 }

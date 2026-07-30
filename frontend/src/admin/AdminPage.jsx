@@ -956,7 +956,7 @@ function ContentEditor({ content, onClose, onSaved }) {
     setCoverUploadStatus('uploading')
     try {
       const payload = await uploadAdminContentImage(file)
-      update('cover_image_url', payload.url)
+      update('cover_image_url', payload.reference ?? payload.url)
       setCoverUploadStatus('idle')
       restoreScrollPosition()
     } catch (uploadError) {
@@ -1055,7 +1055,7 @@ function ContentEditor({ content, onClose, onSaved }) {
 
               <div className="admin-cover-editor">
                 <div className={`admin-cover-editor__preview ${form.cover_image_url ? 'has-image' : ''}`}>
-                  {form.cover_image_url ? <img src={form.cover_image_url} alt="" /> : <AppIcon name="camera" />}
+                  {form.cover_image_url ? <img src={resolveAssetUrl(form.cover_image_url)} alt="" /> : <AppIcon name="camera" />}
                 </div>
                 <div className="admin-cover-editor__fields">
                   <div className="admin-cover-editor__heading"><strong>{language === 'th' ? 'รูปปกบทความ' : 'Article cover'}</strong><small>{language === 'th' ? 'แนะนำภาพแนวนอน JPG, PNG หรือ WebP ไม่เกิน 8 MB' : 'Landscape JPG, PNG, or WebP up to 8 MB is recommended.'}</small></div>
@@ -1108,7 +1108,7 @@ function ContentEditor({ content, onClose, onSaved }) {
 
           {editorMode === 'html' && <aside className="admin-editor__preview">
             <div><span>LIVE PREVIEW</span><strong>{language === 'th' ? form.title_th : form.title || 'Untitled article'}</strong></div>
-            {form.cover_image_url && <img src={form.cover_image_url} alt="" />}
+            {form.cover_image_url && <img src={resolveAssetUrl(form.cover_image_url)} alt="" />}
             <iframe title="Article HTML preview" sandbox="" srcDoc={`<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;padding:28px;font-family:"Inter Variable","Noto Sans Thai Variable",Inter,"Noto Sans Thai",ui-sans-serif,system-ui,"Segoe UI",sans-serif;color:#1c2b21;line-height:1.7}h1,h2,h3,h4{margin:1.4em 0 .55em;color:#163b23;line-height:1.25}p{margin:.6em 0 1em}img{display:block;max-width:100%;height:auto;border-radius:10px}figure{max-width:100%;margin:1.5em auto}figcaption{margin-top:.5em;color:#647168;font-size:12px;text-align:center}table{width:100%;margin:1.5em 0;border-collapse:collapse}th,td{padding:10px;border:1px solid #ccd8cf;text-align:left;vertical-align:top}th{background:#edf4ef}blockquote,.article-callout,.article-science-note{margin:1.5em 0;padding:16px 18px;border-left:4px solid #75b45c;background:#edf6e9}.article-science-note{border-left-color:#4e8eae;background:#edf5f8}pre{overflow:auto;padding:16px;border-radius:9px;background:#132119;color:#e9f5eb}code{font-family:Consolas,monospace}.media{position:relative;overflow:hidden;padding-top:56.25%}.media iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style>${previewHtml}`} />
           </aside>}
         </div>
@@ -1205,7 +1205,7 @@ function ContentsView({ contents, onRefresh }) {
             {contents.map((content, index) => (
               <tr className={content.deleted_at ? 'is-trashed' : ''} key={content.id}>
                 <td className="admin-index-cell">{index + 1}</td>
-                <td><div className="admin-content-cell">{content.cover_image_url ? <img src={content.cover_image_url} alt="" /> : <span><AppIcon name="bookmark" /></span>}<div><strong>{content.title}</strong><small>/{content.slug}</small></div></div></td>
+                <td><div className="admin-content-cell">{content.cover_image_url ? <img src={resolveAssetUrl(content.cover_image_url)} alt="" /> : <span><AppIcon name="bookmark" /></span>}<div><strong>{content.title}</strong><small>/{content.slug}</small></div></div></td>
                 <td>{content.category}</td><td><StatusBadge status={content.deleted_at ? 'archived' : content.status} /></td><td>v{content.version}</td><td>{formatDate(content.updated_at, true)}</td>
                 <td><div className="admin-row-actions">{!content.deleted_at && <button disabled={editingContentId !== null} type="button" onClick={() => editContent(content)}><AppIcon name="settings" />{editingContentId === content.id ? 'Loading…' : 'Edit'}</button>}{!content.deleted_at && <button className="is-danger" type="button" aria-label={`Move ${content.title} to trash`} onClick={() => remove(content)}><AppIcon name="trash" /></button>}{content.deleted_at && <button type="button" onClick={() => restore(content)}><AppIcon name="history" />Restore</button>}</div></td>
               </tr>

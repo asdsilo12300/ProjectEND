@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\MediaStorage;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -51,6 +53,20 @@ class User extends Authenticatable
             'gem' => 'integer',
             'onboarding_progress' => 'array',
         ];
+    }
+
+    protected function avatarUrl(): Attribute
+    {
+        return Attribute::get(
+            fn (?string $value): ?string => app(MediaStorage::class)->normalizeReference($value),
+        );
+    }
+
+    protected function coverUrl(): Attribute
+    {
+        return Attribute::get(
+            fn (?string $value): ?string => app(MediaStorage::class)->normalizeReference($value),
+        );
     }
 
     public function simulators(): HasMany

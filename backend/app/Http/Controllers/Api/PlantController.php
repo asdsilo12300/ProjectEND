@@ -20,7 +20,7 @@ class PlantController extends Controller
             'plants',
             fn (): array => PlantResource::collection(
                 Plant::query()->playable()->with('stages')->orderBy('name_th')->get(),
-            )->resolve(),
+            )->response()->getData(true)['data'] ?? [],
         );
 
         return response()

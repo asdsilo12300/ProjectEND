@@ -43,7 +43,7 @@ class PublicCatalogCache
 
     private function key(string $catalog): string
     {
-        return "public-catalog:v2:{$catalog}";
+        return "public-catalog:v3:{$catalog}";
     }
 
     private function store(): Repository

@@ -78,6 +78,7 @@ class AdminContentController extends Controller
 
         return response()->json([
             'url' => $this->media->publicUrl($path),
+            'reference' => $this->media->reference($path),
         ], 201);
     }
 

@@ -100,6 +100,17 @@ class MediaStorage
             : '/storage/'.$path;
     }
 
+    public function normalizeReference(?string $reference): ?string
+    {
+        if ($reference === null || trim($reference) === '') {
+            return null;
+        }
+
+        $path = $this->pathFromReference($reference);
+
+        return $path === null ? trim($reference) : '/storage/'.$path;
+    }
+
     public function usesSupabase(): bool
     {
         return config('services.media.driver', 'laravel') === 'supabase';
@@ -164,6 +175,10 @@ class MediaStorage
             return $this->normalizePath(substr($reference, strlen('/storage/')));
         }
 
+        if (str_starts_with($reference, '/api/media/')) {
+            return $this->normalizePath(substr($reference, strlen('/api/media/')));
+        }
+
         if (! $this->usesSupabase()) {
             $diskBaseUrl = rtrim((string) config("filesystems.disks.{$this->disk()}.url"), '/');
 
@@ -180,11 +195,43 @@ class MediaStorage
             }
         }
 
+        if (
+            (str_starts_with($reference, 'http://') || str_starts_with($reference, 'https://'))
+            && $this->isBackendOwnedUrl($reference)
+        ) {
+            $urlPath = rawurldecode((string) parse_url($reference, PHP_URL_PATH));
+
+            if (str_starts_with($urlPath, '/storage/')) {
+                return $this->normalizePath(substr($urlPath, strlen('/storage/')));
+            }
+
+            if (str_starts_with($urlPath, '/api/media/')) {
+                return $this->normalizePath(substr($urlPath, strlen('/api/media/')));
+            }
+        }
+
         if (! str_starts_with($reference, 'http://') && ! str_starts_with($reference, 'https://')) {
             return $this->normalizePath($reference);
         }
 
         return null;
+    }
+
+    private function isBackendOwnedUrl(string $reference): bool
+    {
+        $host = mb_strtolower((string) parse_url($reference, PHP_URL_HOST));
+        $backendHosts = array_filter([
+            'localhost',
+            '127.0.0.1',
+            '::1',
+            mb_strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST)),
+            mb_strtolower((string) parse_url(
+                (string) config("filesystems.disks.{$this->disk()}.url"),
+                PHP_URL_HOST,
+            )),
+        ]);
+
+        return $host !== '' && in_array($host, $backendHosts, true);
     }
 
     private function normalizePath(string $path): string
