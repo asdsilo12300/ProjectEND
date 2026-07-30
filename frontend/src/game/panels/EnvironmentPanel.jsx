@@ -137,11 +137,12 @@ function buildWeatherCards(readings) {
 function locationSourceLabel(source) {
   if (source === 'browser') return 'current'
   if (source === 'saved') return 'saved'
+  if (source === 'simulation') return 'locked'
   if (source === 'fallback') return 'fallback'
   return ''
 }
 
-export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mode = 'greenhouse', onRefreshLocation, outdoorWeather, plantSelected = true }) {
+export function EnvironmentPanel({ climate, setClimate, windows, setWindows, locationLocked = false, mode = 'greenhouse', onRefreshLocation, outdoorWeather, plantSelected = true }) {
   const isOutdoor = mode === 'outdoor'
   const controlKeys = isOutdoor ? outdoorControlKeys : Object.keys(climate)
   const outdoorReadings = getOutdoorReadings(outdoorWeather?.forecast)
@@ -189,14 +190,20 @@ export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mod
                   className="grid h-7 w-7 place-items-center rounded-md border border-lime-100/15 bg-white/[0.035] text-slate-300 transition hover:border-lime-100/30 hover:bg-lime-100/10 hover:text-lime-100 disabled:cursor-wait disabled:opacity-50"
                   type="button"
                   onClick={onRefreshLocation}
-                  disabled={outdoorWeather?.status === 'loading'}
-                  aria-label="Use current location"
-                  title="Use current location"
+                  disabled={outdoorWeather?.status === 'loading' || locationLocked}
+                  aria-label={locationLocked ? 'Location locked while this plant is growing' : 'Use current location'}
+                  title={locationLocked ? 'Location locked until this growing cycle ends' : 'Use current location'}
                 >
                   <AppIcon className={`h-3.5 w-3.5 ${outdoorWeather?.status === 'loading' ? 'animate-spin' : ''}`} name="restartAlt" />
                 </button>
               </div>
             </div>
+
+            {locationLocked && (
+              <p className="mb-2 rounded-md border border-sky-200/15 bg-sky-300/[0.06] px-2.5 py-2 text-[10px] leading-4 text-sky-100/85">
+                This plant location is locked until it is harvested or uprooted. Weather updates continue from this saved location.
+              </p>
+            )}
 
             {outdoorWeather?.location?.source === 'fallback' && (
               <p className="mb-2 rounded-md border border-amber-200/15 bg-amber-300/[0.06] px-2.5 py-2 text-[10px] leading-4 text-amber-100/85">

@@ -49,7 +49,7 @@ const initialFriendGardenLoading = {
   simulatorId: undefined,
 }
 
-function spectatorLocationFromSimulator(simulator) {
+function locationFromSimulator(simulator, source = 'simulation') {
   const latitude = Number(simulator?.latitude)
   const longitude = Number(simulator?.longitude)
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
@@ -57,14 +57,14 @@ function spectatorLocationFromSimulator(simulator) {
   return {
     latitude,
     longitude,
-    source: 'spectator',
+    source,
   }
 }
 
 async function outdoorWeatherForSimulator(simulator) {
   if (simulator?.mode !== 'outdoor') return initialOutdoorWeather
 
-  const location = spectatorLocationFromSimulator(simulator)
+  const location = locationFromSimulator(simulator, 'spectator')
   if (!location) {
     return {
       ...initialOutdoorWeather,
@@ -500,6 +500,35 @@ function App() {
     () => notifications.filter((notification) => !notification.is_read).length,
     [notifications],
   )
+  const activeSimulatorLatitude = simulationVisual?.latitude
+  const activeSimulatorLongitude = simulationVisual?.longitude
+  const activeSimulatorStatus = simulationVisual?.status
+  const lockedOutdoorLocation = useMemo(() => {
+    if (
+      growingMode !== 'outdoor'
+      || visitingFriend
+      || !selectedPlant
+      || activeSimulatorStatus !== 'active'
+    ) {
+      return null
+    }
+
+    const latitude = Number(activeSimulatorLatitude)
+    const longitude = Number(activeSimulatorLongitude)
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+
+    return { latitude, longitude, source: 'simulation' }
+  }, [
+    activeSimulatorLatitude,
+    activeSimulatorLongitude,
+    activeSimulatorStatus,
+    growingMode,
+    selectedPlant,
+    visitingFriend,
+  ])
+  const lockedOutdoorLocationName = lockedOutdoorLocation
+    ? simulationVisual?.location_name ?? ''
+    : ''
 
   useEffect(() => {
     let frame = 0
@@ -718,20 +747,33 @@ function App() {
 
     async function syncOutdoorWeather({ silent = false } = {}) {
       if (!silent) {
-        setOutdoorWeather({ ...initialOutdoorWeather, status: 'loading', message: 'Finding current location' })
+        setOutdoorWeather({
+          ...initialOutdoorWeather,
+          status: 'loading',
+          message: lockedOutdoorLocation ? 'Loading weather for the planted location' : 'Finding current location',
+          location: lockedOutdoorLocation,
+          addressLabel: lockedOutdoorLocationName,
+        })
       }
 
       try {
-        const location = await getFixedOutdoorLocation()
+        const location = lockedOutdoorLocation ?? await getFixedOutdoorLocation()
         if (isCancelled) return
 
-        const [addressLabel, forecast] = await Promise.all([fetchLocationAddress(location), fetchOutdoorForecast(location)])
+        const addressRequest = lockedOutdoorLocation && lockedOutdoorLocationName
+          ? Promise.resolve(lockedOutdoorLocationName)
+          : fetchLocationAddress(location)
+        const [addressLabel, forecast] = await Promise.all([addressRequest, fetchOutdoorForecast(location)])
         if (isCancelled) return
 
         setClimate((current) => climateFromForecast(current, forecast))
         setOutdoorWeather({
           status: 'ready',
-          message: location.source === 'fallback' ? 'using fallback location' : 'synced from saved location',
+          message: lockedOutdoorLocation
+            ? 'Weather synced to the planted location'
+            : location.source === 'fallback'
+              ? 'using fallback location'
+              : 'synced from current location',
           location,
           addressLabel,
           forecast,
@@ -757,7 +799,7 @@ function App() {
       isCancelled = true
       window.clearInterval(weatherRefreshTimer)
     }
-  }, [growingMode, outdoorLocationRefreshKey, visitingFriend])
+  }, [growingMode, lockedOutdoorLocation, lockedOutdoorLocationName, outdoorLocationRefreshKey, visitingFriend])
 
   useEffect(() => {
     if (!growingMode) return undefined
@@ -1033,6 +1075,19 @@ function App() {
     setGrowingMode(restoredMode)
     if (Object.prototype.hasOwnProperty.call(options, 'outdoorWeather')) {
       setOutdoorWeather(options.outdoorWeather ?? initialOutdoorWeather)
+    } else if (restoredMode === 'outdoor') {
+      const plantedLocation = locationFromSimulator(simulator)
+      setOutdoorWeather(plantedLocation
+        ? {
+            ...initialOutdoorWeather,
+            status: 'loading',
+            message: 'Loading weather for the planted location',
+            location: plantedLocation,
+            addressLabel: simulator.location_name ?? 'Planted outdoor location',
+          }
+        : initialOutdoorWeather)
+    } else {
+      setOutdoorWeather(initialOutdoorWeather)
     }
     if (restoredMode === 'outdoor') {
       setWindows((value) => ({
@@ -1797,18 +1852,21 @@ function App() {
     try {
       if (selectedPlant) await persistCurrentSimulation({ silent: true })
 
-      let location = mode === 'outdoor' ? outdoorWeather.location : null
-      if (mode === 'outdoor' && !location) {
+      let location = null
+      let locationName = ''
+      if (mode === 'outdoor') {
         try {
           location = await getFixedOutdoorLocation()
+          locationName = await fetchLocationAddress(location)
         } catch {
-          location = null
+          location = outdoorWeather.location
+          locationName = outdoorWeather.addressLabel
         }
       }
 
       const accountSession = accountSessionRef.current
       const simulatorPayload = await startSimulator(apiPlant.id, mode, {
-        location_name: mode === 'outdoor' ? outdoorWeather.addressLabel || undefined : undefined,
+        location_name: mode === 'outdoor' ? locationName || undefined : undefined,
         latitude: location?.latitude,
         longitude: location?.longitude,
       })
@@ -2948,6 +3006,7 @@ function App() {
                   windows={windows}
                   setWindows={setWindows}
                   mode={growingMode}
+                  locationLocked={Boolean(lockedOutdoorLocation)}
                   onRefreshLocation={() => setOutdoorLocationRefreshKey((current) => current + 1)}
                   outdoorWeather={outdoorWeather}
                   plantSelected={Boolean(selectedPlant)}
