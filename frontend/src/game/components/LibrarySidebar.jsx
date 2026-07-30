@@ -186,7 +186,7 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                         }}
                       >
                         <>
-                            <LibraryThumb item={item} />
+                            <LibraryThumb item={item} display="contain" />
                             {quantityBadge && (
                               <span className={`absolute left-2 top-2 rounded-full px-1.5 py-0.5 text-xs font-black shadow-[0_3px_8px_rgba(0,0,0,.32)] ${isZeroQuantity ? 'bg-red-400 text-[#101511]' : 'bg-[#9bcf82] text-[#101511]'}`}>
                                 {quantityBadge}

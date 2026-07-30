@@ -24,11 +24,21 @@ function TargetBadges({ targets }) {
   )
 }
 
-export function LibraryThumb({ item }) {
+export function LibraryThumb({ item, display = 'cover' }) {
+  const showFullImage = display === 'contain'
+
   return (
-    <span className="relative grid h-12 w-full place-items-center overflow-hidden rounded-md border border-black/20 text-[#101511]" style={{ backgroundColor: item.color }}>
+    <span
+      className={`relative grid w-full place-items-center overflow-hidden rounded-md border border-black/20 text-[#101511] ${showFullImage ? 'h-16' : 'h-12'}`}
+      style={{ backgroundColor: item.color }}
+    >
       {item.imageUrl ? (
-        <img className="h-full w-full object-cover object-center" src={item.imageUrl} alt="" draggable="false" />
+        <img
+          className={`h-full w-full object-center ${showFullImage ? 'object-contain p-1' : 'object-cover'}`}
+          src={item.imageUrl}
+          alt=""
+          draggable="false"
+        />
       ) : (
         <AppIcon className="h-8 w-8" name={libraryIconMap[item.icon] ?? 'leaf'} />
       )}

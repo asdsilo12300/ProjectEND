@@ -444,6 +444,7 @@ function App() {
   const [plantCatalog, setPlantCatalog] = useState([])
   const [modelAssets, setModelAssets] = useState({})
   const [outdoorWeather, setOutdoorWeather] = useState(initialOutdoorWeather)
+  const [outdoorLocationRefreshKey, setOutdoorLocationRefreshKey] = useState(0)
   const [simulationVisual, setSimulationVisual] = useState(defaultSimulationVisual)
   const [growthTrack, setGrowthTrack] = useState(initialGrowthTrack)
   const [nextSimulationTickAt, setNextSimulationTickAt] = useState(null)
@@ -717,7 +718,7 @@ function App() {
 
     async function syncOutdoorWeather({ silent = false } = {}) {
       if (!silent) {
-        setOutdoorWeather({ ...initialOutdoorWeather, status: 'loading', message: 'Finding fixed location' })
+        setOutdoorWeather({ ...initialOutdoorWeather, status: 'loading', message: 'Finding current location' })
       }
 
       try {
@@ -756,7 +757,7 @@ function App() {
       isCancelled = true
       window.clearInterval(weatherRefreshTimer)
     }
-  }, [growingMode, visitingFriend])
+  }, [growingMode, outdoorLocationRefreshKey, visitingFriend])
 
   useEffect(() => {
     if (!growingMode) return undefined
@@ -2947,6 +2948,7 @@ function App() {
                   windows={windows}
                   setWindows={setWindows}
                   mode={growingMode}
+                  onRefreshLocation={() => setOutdoorLocationRefreshKey((current) => current + 1)}
                   outdoorWeather={outdoorWeather}
                   plantSelected={Boolean(selectedPlant)}
                 />

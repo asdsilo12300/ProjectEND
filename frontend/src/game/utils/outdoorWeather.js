@@ -84,16 +84,16 @@ function requestBrowserLocation() {
   })
 }
 
-export async function getFixedOutdoorLocation() {
+export async function getFixedOutdoorLocation({ preferCurrent = true } = {}) {
   const saved = readSavedLocation()
-  if (saved) return saved
+  if (!preferCurrent && saved) return saved
 
   try {
     const location = await requestBrowserLocation()
     saveLocation(location)
     return location
   } catch {
-    return FALLBACK_LOCATION
+    return saved ?? FALLBACK_LOCATION
   }
 }
 

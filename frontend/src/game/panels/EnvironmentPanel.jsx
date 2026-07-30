@@ -1,4 +1,5 @@
 import { climateIcons } from '../data/gameData'
+import { AppIcon } from '../icons/FontAwesomeIcon'
 import { MetricIcon } from '../icons/MetricIcon'
 import { Panel } from '../components/Panel'
 import { getOutdoorReadings } from '../utils/outdoorWeather'
@@ -133,7 +134,14 @@ function buildWeatherCards(readings) {
   ]
 }
 
-export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mode = 'greenhouse', outdoorWeather, plantSelected = true }) {
+function locationSourceLabel(source) {
+  if (source === 'browser') return 'current'
+  if (source === 'saved') return 'saved'
+  if (source === 'fallback') return 'fallback'
+  return ''
+}
+
+export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mode = 'greenhouse', onRefreshLocation, outdoorWeather, plantSelected = true }) {
   const isOutdoor = mode === 'outdoor'
   const controlKeys = isOutdoor ? outdoorControlKeys : Object.keys(climate)
   const outdoorReadings = getOutdoorReadings(outdoorWeather?.forecast)
@@ -171,12 +179,30 @@ export function EnvironmentPanel({ climate, setClimate, windows, setWindows, mod
                 <strong className="block text-xs leading-4 text-lime-50">Address</strong>
                 <span className="mt-0.5 block truncate text-xs leading-4 text-slate-400">{formatLocation(outdoorWeather?.addressLabel, outdoorWeather?.status)}</span>
               </div>
-              {outdoorWeather?.location && (
-                <span className="shrink-0 rounded-md bg-lime-100/10 px-2 py-1 text-xs font-semibold text-lime-100">
-                  {outdoorWeather.location.source === 'fallback' ? 'fallback' : 'fixed'}
-                </span>
-              )}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {outdoorWeather?.location && (
+                  <span className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${outdoorWeather.location.source === 'fallback' ? 'bg-amber-300/10 text-amber-100' : 'bg-lime-100/10 text-lime-100'}`}>
+                    {locationSourceLabel(outdoorWeather.location.source)}
+                  </span>
+                )}
+                <button
+                  className="grid h-7 w-7 place-items-center rounded-md border border-lime-100/15 bg-white/[0.035] text-slate-300 transition hover:border-lime-100/30 hover:bg-lime-100/10 hover:text-lime-100 disabled:cursor-wait disabled:opacity-50"
+                  type="button"
+                  onClick={onRefreshLocation}
+                  disabled={outdoorWeather?.status === 'loading'}
+                  aria-label="Use current location"
+                  title="Use current location"
+                >
+                  <AppIcon className={`h-3.5 w-3.5 ${outdoorWeather?.status === 'loading' ? 'animate-spin' : ''}`} name="restartAlt" />
+                </button>
+              </div>
             </div>
+
+            {outdoorWeather?.location?.source === 'fallback' && (
+              <p className="mb-2 rounded-md border border-amber-200/15 bg-amber-300/[0.06] px-2.5 py-2 text-[10px] leading-4 text-amber-100/85">
+                Location permission is unavailable. Allow location access in your browser, then press the refresh button.
+              </p>
+            )}
 
             <div className="grid grid-cols-1 gap-2">
               {weatherCards.map((item) => (
