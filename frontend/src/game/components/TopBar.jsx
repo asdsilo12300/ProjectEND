@@ -42,6 +42,8 @@ const navPages = {
   Community: 'community',
 }
 
+const MAX_COIN_BALANCE = 2_000_000_000
+
 function notificationAction(type) {
   if (type === 'like') return 'liked your post'
   if (type === 'comment_like') return 'liked your comment'
@@ -79,15 +81,19 @@ function notificationExactTime(value) {
 export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, communityUnreadNotificationCount = 0, notificationError = '', notifications = [], notificationStatus = 'idle', onHelpOpen, onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [coinDetailsOpen, setCoinDetailsOpen] = useState(false)
   const accountMenuRef = useRef(null)
   const notificationMenuRef = useRef(null)
+  const coinMenuRef = useRef(null)
   const displayName = user?.username ?? 'Learner'
   const learnerLevel = user?.level ?? 1
   const learnerExperience = Number(user?.experience ?? user?.level_progress?.experience ?? 0)
   const learnerNextExperience = Number(user?.level_progress?.next_level_experience ?? nextLevelExperience(learnerLevel))
   const learnerExpPercent = Math.max(0, Math.min(100, Number(user?.level_progress?.percent ?? ((learnerExperience / learnerNextExperience) * 100)) || 0))
   const initial = displayName.slice(0, 1).toUpperCase()
-  const shownCoins = Number(user?.coin ?? coinBalance ?? 0).toLocaleString()
+  const coinAmount = Number(user?.coin ?? coinBalance ?? 0)
+  const shownCoins = (Number.isFinite(coinAmount) ? Math.max(0, Math.trunc(coinAmount)) : 0).toLocaleString()
+  const shownMaxCoins = MAX_COIN_BALANCE.toLocaleString()
   const notificationBadge = unreadNotificationCount > 99 ? '99+' : String(unreadNotificationCount)
   const communityNotificationBadge = communityUnreadNotificationCount > 99 ? '99+' : String(communityUnreadNotificationCount)
 
@@ -95,6 +101,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
     function handlePointerDown(event) {
       if (profileOpen && !accountMenuRef.current?.contains(event.target)) setProfileOpen(false)
       if (notificationsOpen && !notificationMenuRef.current?.contains(event.target)) setNotificationsOpen(false)
+      if (coinDetailsOpen && !coinMenuRef.current?.contains(event.target)) setCoinDetailsOpen(false)
     }
 
     function handleKeyDown(event) {
@@ -102,6 +109,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       setProfileOpen(false)
       setMobileNavOpen(false)
       setNotificationsOpen(false)
+      setCoinDetailsOpen(false)
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
@@ -110,7 +118,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [notificationsOpen, profileOpen, setProfileOpen])
+  }, [coinDetailsOpen, notificationsOpen, profileOpen, setProfileOpen])
 
   function handleProfileClick() {
     if (!user) {
@@ -118,6 +126,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       return
     }
 
+    setCoinDetailsOpen(false)
     setProfileOpen((value) => !value)
   }
 
@@ -126,6 +135,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
     setMobileNavOpen(false)
     setProfileOpen(false)
     setNotificationsOpen(false)
+    setCoinDetailsOpen(false)
     onNavigate?.(page)
     if (page === 'lab' && navTargets[item]) openWindow?.(navTargets[item])
   }
@@ -211,6 +221,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
               setProfileOpen(false)
               setMobileNavOpen(false)
               setNotificationsOpen(false)
+              setCoinDetailsOpen(false)
               onHelpOpen?.()
             }}
           >
@@ -229,6 +240,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
               onClick={() => {
                 setProfileOpen(false)
                 setMobileNavOpen(false)
+                setCoinDetailsOpen(false)
                 setNotificationsOpen((value) => !value)
                 if (!notificationsOpen && notificationStatus !== 'loading') onNotificationsRefresh?.({ silent: true })
               }}
@@ -325,14 +337,73 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         )}
 
         {user && (
-          <div className="relative flex h-11 items-center gap-1.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-2 shadow-[0_8px_18px_rgba(0,0,0,.18)] sm:h-12 sm:gap-2 sm:px-3" data-tour="global-coins" aria-label="Coin balance">
-            <img className="h-6 w-6 shrink-0 object-contain sm:h-7 sm:w-7" src={imageAssets.coin} alt="Coin" />
-            <span className="min-w-6 text-right text-xs font-black tabular-nums text-lime-50 sm:min-w-10 sm:text-sm">{shownCoins}</span>
+          <div className="group relative" data-tour="global-coins" ref={coinMenuRef}>
+            <button
+              className="relative flex h-11 items-center gap-1.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-2 shadow-[0_8px_18px_rgba(0,0,0,.18)] transition hover:border-amber-200/30 hover:bg-amber-200/[0.07] focus-visible:border-amber-200/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 sm:h-12 sm:gap-2 sm:px-3"
+              type="button"
+              aria-label={`Coin balance: ${shownCoins}. ${coinDetailsOpen ? 'Close' : 'Open'} balance details.`}
+              aria-describedby="coin-balance-tooltip"
+              aria-expanded={coinDetailsOpen}
+              onClick={() => {
+                setProfileOpen(false)
+                setMobileNavOpen(false)
+                setNotificationsOpen(false)
+                setCoinDetailsOpen((value) => !value)
+              }}
+            >
+              <img className="h-6 w-6 shrink-0 object-contain drop-shadow-[0_2px_6px_rgba(251,191,36,.25)] sm:h-7 sm:w-7" src={imageAssets.coin} alt="" />
+              <span className="min-w-6 text-right text-xs font-black tabular-nums text-lime-50 sm:min-w-10 sm:text-sm">{shownCoins}</span>
+            </button>
             {coinDelta ? (
               <span className="coin-pop pointer-events-none absolute -top-3 right-2 rounded-full border border-amber-100/25 bg-[#1b1a10] px-2 py-0.5 text-xs font-black text-amber-200 shadow-[0_8px_18px_rgba(0,0,0,.28)]" aria-live="polite" title="Simulation reward">
                 +{coinDelta}
               </span>
             ) : null}
+
+            <section
+              className={`pointer-events-none absolute right-0 top-[calc(100%+10px)] z-[90] w-[min(304px,calc(100vw-24px))] overflow-hidden rounded-xl border border-amber-100/20 bg-[#111712]/[0.98] shadow-[0_24px_60px_rgba(0,0,0,.58),0_0_28px_rgba(245,158,11,.08)] backdrop-blur-xl transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 ${
+                coinDetailsOpen ? 'visible translate-y-0 opacity-100' : 'invisible translate-y-1 opacity-0'
+              }`}
+              id="coin-balance-tooltip"
+              role="tooltip"
+            >
+              <span className="absolute right-5 top-0 h-2.5 w-2.5 -translate-y-1/2 rotate-45 border-l border-t border-amber-100/20 bg-[#111712]" aria-hidden="true" />
+
+              <header className="flex items-center gap-3 border-b border-amber-100/10 px-4 py-3.5">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-amber-200/20 bg-amber-300/10 shadow-[inset_0_0_14px_rgba(251,191,36,.08)]">
+                  <img className="h-7 w-7 object-contain" src={imageAssets.coin} alt="" />
+                </span>
+                <span className="min-w-0">
+                  <strong className="block text-sm font-black text-amber-100">Coins</strong>
+                  <small className="mt-0.5 block text-xs text-slate-400">Academy currency</small>
+                </span>
+                <strong className="ml-auto text-right text-base font-black tabular-nums text-amber-200">{shownCoins}</strong>
+              </header>
+
+              <div className="px-4 py-3.5">
+                <strong className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-lime-200">
+                  <AppIcon className="h-3.5 w-3.5" name="plant" />
+                  How to earn coins
+                </strong>
+                <p className="mt-2 text-xs leading-5 text-slate-300">
+                  Grow a plant to full maturity and claim its reward before harvesting.
+                </p>
+                <p className="mt-1.5 text-xs leading-5 text-slate-400">
+                  Use coins for care tools and friend pranks in the Shop.
+                </p>
+
+                <dl className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-lime-100/10 bg-white/[0.035] px-3 py-2.5">
+                    <dt className="text-[11px] font-bold text-slate-400">Current balance</dt>
+                    <dd className="mt-1 truncate text-sm font-black tabular-nums text-lime-100">{shownCoins}</dd>
+                  </div>
+                  <div className="rounded-lg border border-lime-100/10 bg-white/[0.035] px-3 py-2.5">
+                    <dt className="text-[11px] font-bold text-slate-400">Maximum balance</dt>
+                    <dd className="mt-1 truncate text-sm font-black tabular-nums text-slate-200" title={shownMaxCoins}>{shownMaxCoins}</dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
           </div>
         )}
 
@@ -343,6 +414,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           aria-expanded={mobileNavOpen}
           onClick={() => {
             setProfileOpen(false)
+            setCoinDetailsOpen(false)
             setMobileNavOpen((value) => !value)
           }}
         >

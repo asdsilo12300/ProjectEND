@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef } from 'react'
 import { Html, useAnimations, useGLTF } from '@react-three/drei'
-import { createPortal } from '@react-three/fiber'
+import { useLayoutEffect, useState } from 'react'
+import { createPortal, useFrame } from '@react-three/fiber'
 import { AnimationMixer, Box3, Color, DoubleSide, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { resolveAssetUrl } from '../../lib/api'
@@ -20,6 +21,18 @@ const PLANT_ASSET_ALIGNMENT_SCALE = 0.9
 const GENERIC_PLANT_TARGET_HEIGHT = 2.15
 const GENERIC_MATURE_ANIMATION_FRACTION = 0.95
 const TULIP_SOIL_EMBED_DEPTH = 0.2
+const TULIP_GROWTH_TRANSITION_RESPONSE = 3.2
+// Frames 0-82 in the uploaded Tulip clip contain extreme compensated bone
+// transforms. Frames 83-257 are stable when sampled on their authored 24 fps
+// boundaries, so biological growth is remapped to that safe window.
+const TULIP_GROWTH_ANIMATION = Object.freeze({
+  startFrame: 83,
+  endFrame: 257,
+  framesPerSecond: 24,
+  excludedFrames: Object.freeze([161]),
+  progressExponent: 1.2,
+  transitionResponse: TULIP_GROWTH_TRANSITION_RESPONSE,
+})
 const DEAD_PLANT_OVERRIDES = {
   leafColor: '#6f5232',
   stemColor: '#493628',
@@ -48,6 +61,55 @@ const LEAF_LEAN_BY_STATE = {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, Number(value) || 0))
+}
+
+function smoothstep(value) {
+  const progress = clamp(value, 0, 1)
+  return progress * progress * (3 - 2 * progress)
+}
+
+function isTulipPlant(plantName = '') {
+  const normalizedName = String(plantName).trim().toLowerCase()
+  return normalizedName.includes('tulip') || normalizedName.includes('ทิวลิป')
+}
+
+function tulipGrowthScale(progress) {
+  // Bulb establishment stays compact and then gains height as leaves emerge,
+  // instead of showing a miniature mature flower at the start.
+  return 0.34 + smoothstep(progress) * 0.66
+}
+
+function PlantGrowthGroup({ children, isTulip = false, pivotY = 0, progress = 1 }) {
+  const group = useRef(null)
+  const targetScale = isTulip ? tulipGrowthScale(progress) : 1
+  const targetScaleRef = useRef(targetScale)
+  const displayedScaleRef = useRef(targetScale)
+  const [initialScale] = useState(targetScale)
+
+  useLayoutEffect(() => {
+    targetScaleRef.current = targetScale
+  }, [targetScale])
+
+  useFrame((_, delta) => {
+    if (!group.current) return
+
+    const blend = isTulip
+      ? 1 - Math.exp(-Math.min(Math.max(delta, 0), 0.1) * TULIP_GROWTH_TRANSITION_RESPONSE)
+      : 1
+    displayedScaleRef.current += (targetScaleRef.current - displayedScaleRef.current) * blend
+    group.current.scale.setScalar(displayedScaleRef.current)
+  })
+
+  return (
+    <group
+      name={isTulip ? 'Tulip_growth_pivot' : 'Plant_growth_pivot'}
+      position={[0, pivotY, 0]}
+      ref={group}
+      scale={initialScale}
+    >
+      <group position={[0, -pivotY, 0]}>{children}</group>
+    </group>
+  )
 }
 
 function getEffectiveVisualOverrides(visualOverrides = {}, health = 100) {
@@ -86,36 +148,48 @@ function PlantPresentationGroup({ children, visualOverrides = {} }) {
   )
 }
 
-function applyPlantOverrides(object, overrides = {}) {
-  const leafColor = overrides.leafColor ? new Color(overrides.leafColor) : null
-  const stemColor = overrides.stemColor ? new Color(overrides.stemColor) : null
+function applyPlantOverrides(object, overrides = {}, health = 100) {
+  const isHeatScorched = overrides.leafState === 'burnt_edges'
+  const leafColor = isHeatScorched
+    ? new Color('#6b3b25')
+    : overrides.leafColor ? new Color(overrides.leafColor) : null
+  const stemColor = isHeatScorched
+    ? new Color('#4c2d22')
+    : overrides.stemColor ? new Color(overrides.stemColor) : null
   const isStressState = (overrides.leafState && overrides.leafState !== 'upright')
     || (overrides.stemState && overrides.stemState !== 'upright')
   const isDead = overrides.leafState === 'dead' || overrides.stemState === 'dead'
+  const healthStress = clamp((100 - Number(health ?? 100)) / 100, 0, 1)
+  const stressTintStrength = isDead
+    ? 0.94
+    : isStressState
+      ? isHeatScorched
+        ? clamp(0.66 + healthStress * 0.3, 0.66, 0.94)
+        : clamp(0.48 + healthStress * 0.4, 0.48, 0.84)
+      : 0
   let targetedMaterialCount = 0
 
-  function cloneFromOriginal(material) {
-    if (!material?.clone) return material
+  function restoreOriginalMaterial(material) {
+    if (!material) return material
 
-    const nextMaterial = material.clone()
-    if (nextMaterial.color) {
+    if (material.color) {
       const originalColor = material.userData?.plantOriginalColor ?? `#${material.color.getHexString()}`
-      nextMaterial.userData = {
-        ...nextMaterial.userData,
+      material.userData = {
+        ...material.userData,
         plantOriginalColor: originalColor,
         plantOriginalMetalness: material.userData?.plantOriginalMetalness ?? material.metalness,
         plantOriginalRoughness: material.userData?.plantOriginalRoughness ?? material.roughness,
       }
-      nextMaterial.color.set(originalColor)
+      material.color.set(originalColor)
     }
-    if (Number.isFinite(nextMaterial.userData?.plantOriginalMetalness)) {
-      nextMaterial.metalness = nextMaterial.userData.plantOriginalMetalness
+    if (Number.isFinite(material.userData?.plantOriginalMetalness)) {
+      material.metalness = material.userData.plantOriginalMetalness
     }
-    if (Number.isFinite(nextMaterial.userData?.plantOriginalRoughness)) {
-      nextMaterial.roughness = nextMaterial.userData.plantOriginalRoughness
+    if (Number.isFinite(material.userData?.plantOriginalRoughness)) {
+      material.roughness = material.userData.plantOriginalRoughness
     }
 
-    return nextMaterial
+    return material
   }
 
   object.traverse((child) => {
@@ -130,18 +204,25 @@ function applyPlantOverrides(object, overrides = {}) {
       const isLeaf = materialName.includes('leaf') || meshName.includes('leaf')
       const isStem = materialName.includes('stem') || materialName.includes('trunk') || meshName.includes('stem') || meshName.includes('trunk')
 
-      if ((!isLeaf && !isStem) || !material?.clone) return material
+      if (!isLeaf && !isStem) return material
 
-      const nextMaterial = cloneFromOriginal(material)
-      const tintStrength = isDead ? 0.82 : 0.35
-      if (nextMaterial.color && leafColor && isLeaf) nextMaterial.color.lerp(leafColor, tintStrength)
-      if (nextMaterial.color && stemColor && isStem) nextMaterial.color.lerp(stemColor, tintStrength)
+      const nextMaterial = restoreOriginalMaterial(material)
+      if (isStressState && nextMaterial.color && leafColor && isLeaf) {
+        nextMaterial.color.lerp(leafColor, stressTintStrength)
+      }
+      if (isStressState && nextMaterial.color && stemColor && isStem) {
+        nextMaterial.color.lerp(stemColor, stressTintStrength)
+      }
       if (isDead) {
         nextMaterial.roughness = 1
         nextMaterial.metalness = 0
         if (nextMaterial.emissive) nextMaterial.emissive.set('#000000')
         nextMaterial.emissiveIntensity = 0
+      } else if (isHeatScorched) {
+        nextMaterial.roughness = Math.max(Number(nextMaterial.roughness ?? 0), 0.96)
+        nextMaterial.metalness = 0
       }
+      nextMaterial.needsUpdate = true
       targetedMaterialCount += 1
       return nextMaterial
     })
@@ -158,21 +239,24 @@ function applyPlantOverrides(object, overrides = {}) {
 
       const materials = Array.isArray(child.material) ? child.material : [child.material]
       const nextMaterials = materials.map((material) => {
-        const nextMaterial = cloneFromOriginal(material)
+        const nextMaterial = restoreOriginalMaterial(material)
         const stressColor = leafColor ?? stemColor
         if (isStressState && nextMaterial.color && stressColor) {
-          if (isDead) {
-            nextMaterial.color.copy(stressColor)
-          } else {
-            nextMaterial.color.lerp(stressColor, 0.24)
-          }
+          // The tulip asset uses one textured material for petals, leaves, and
+          // stems. A stronger whole-model tint is needed for heat/cold/water
+          // symptoms to remain visible through that texture.
+          nextMaterial.color.lerp(stressColor, stressTintStrength)
         }
         if (isDead) {
           nextMaterial.roughness = 1
           nextMaterial.metalness = 0
           if (nextMaterial.emissive) nextMaterial.emissive.set('#000000')
           nextMaterial.emissiveIntensity = 0
+        } else if (isHeatScorched) {
+          nextMaterial.roughness = Math.max(Number(nextMaterial.roughness ?? 0), 0.96)
+          nextMaterial.metalness = 0
         }
+        nextMaterial.needsUpdate = true
         return nextMaterial
       })
 
@@ -189,8 +273,7 @@ function isBasePlantModel(modelUrl) {
 }
 
 function plantSoilEmbedDepth(plantName = '') {
-  const normalizedName = String(plantName).trim().toLowerCase()
-  return normalizedName.includes('tulip') || normalizedName.includes('ทิวลิป') ? TULIP_SOIL_EMBED_DEPTH : 0
+  return isTulipPlant(plantName) ? TULIP_SOIL_EMBED_DEPTH : 0
 }
 
 function applyFungusToPlant(object, fungusRisk = 0) {
@@ -220,6 +303,7 @@ function applyFungusToPlant(object, fungusRisk = 0) {
 
 function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
+  const isTulip = isTulipPlant(plantName)
   const { scene, animations } = useGLTF(modelUrl)
   const clonedScene = useMemo(() => {
     const clone = cloneSkeleton(scene)
@@ -272,7 +356,9 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
       const clip = animations[0]
       measurementMixer = new AnimationMixer(clone)
       measurementMixer.clipAction(clip).play()
-      measurementMixer.setTime(clip.duration * GENERIC_MATURE_ANIMATION_FRACTION)
+      measurementMixer.setTime(isTulip
+        ? Math.min(clip.duration, TULIP_GROWTH_ANIMATION.endFrame / TULIP_GROWTH_ANIMATION.framesPerSecond)
+        : clip.duration * GENERIC_MATURE_ANIMATION_FRACTION)
       clone.updateMatrixWorld(true)
     }
 
@@ -318,16 +404,22 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     clone.userData.pestAttachments = collectGenericPestAttachments(clone)
 
     return clone
-  }, [animations, plantName, scene])
+  }, [animations, isTulip, plantName, scene])
   const { actions, mixer } = useAnimations(animations, group)
   const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
-  useGrowthAnimationPose(actions, mixer, isMature ? 1 : progress, GENERIC_MATURE_ANIMATION_FRACTION)
+  const displayedGrowthProgress = isMature ? 1 : progress
+  useGrowthAnimationPose(
+    actions,
+    mixer,
+    displayedGrowthProgress,
+    isTulip ? TULIP_GROWTH_ANIMATION : GENERIC_MATURE_ANIMATION_FRACTION,
+  )
   usePlantStressMotion(clonedScene.userData?.plantStressPivots, visualOverrides, health, fungusRisk)
   useRegisterPlantAttachments(clonedScene.userData?.pestAttachments)
 
   useEffect(() => {
-    applyPlantOverrides(clonedScene, visualOverrides)
-  }, [clonedScene, visualOverrides])
+    applyPlantOverrides(clonedScene, visualOverrides, health)
+  }, [clonedScene, health, visualOverrides])
 
   useEffect(() => {
     applyFungusToPlant(clonedScene, fungusRisk)
@@ -336,9 +428,15 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
   return (
     <group {...props}>
       <PlantPresentationGroup visualOverrides={visualOverrides}>
-        <group ref={group}>
-          <primitive object={clonedScene} />
-        </group>
+        <PlantGrowthGroup
+          isTulip={isTulip}
+          pivotY={PLANT_BASE_LOCAL_Y - plantSoilEmbedDepth(plantName)}
+          progress={displayedGrowthProgress}
+        >
+          <group ref={group}>
+            <primitive object={clonedScene} />
+          </group>
+        </PlantGrowthGroup>
       </PlantPresentationGroup>
     </group>
   )

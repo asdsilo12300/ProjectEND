@@ -81,7 +81,10 @@ export function evaluateLocalSimulation(factors) {
   if (factors.air_temp <= 8) addHardStop('cold_stress')
   else if (factors.air_temp < 16) addStress('cold_stress')
 
-  const visualState = stressStates.length >= 3 ? 'stunted' : hardStops[0] ?? stressStates[0] ?? 'healthy'
+  // Preserve the first concrete environmental symptom for the 3D renderer.
+  // Multiple stresses may pause growth without hiding heat, water, nutrient,
+  // or cold damage behind the generic "stunted" appearance.
+  const visualState = hardStops[0] ?? stressStates[0] ?? 'healthy'
   const growthPoint = visualState === 'healthy'
     ? 14
     : hardStops.length > 0 || visualState === 'stunted'

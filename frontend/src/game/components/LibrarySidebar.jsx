@@ -14,7 +14,51 @@ function readableItemName(item) {
   return name || 'Plant'
 }
 
-export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true, loading = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply }) {
+function PlantLibraryCard({ item, itemLocked, itemName, lockLabel, onApply, onShowPlantInfo, selected, setDrawerOpen }) {
+  return (
+    <div
+      className={`group relative flex min-w-0 items-center rounded-md border transition ${selected && !itemLocked ? 'border-lime-200/45 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.16)]' : 'border-lime-100/10 bg-white/[0.045]'} ${itemLocked ? 'opacity-70' : 'hover:border-lime-200/35 hover:bg-white/[0.075]'}`}
+    >
+      <button
+        aria-disabled={itemLocked}
+        aria-pressed={selected}
+        className={`flex min-w-0 flex-1 items-center gap-2 rounded-l-md p-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${itemLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        data-lab-asset={item.id}
+        disabled={itemLocked}
+        onClick={() => {
+          if (!itemLocked) {
+            onApply(item)
+            setDrawerOpen(false)
+          }
+        }}
+        title={lockLabel ?? item.help}
+        type="button"
+      >
+        <span className="w-12 shrink-0">
+          <LibraryThumb item={item} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <strong className="block truncate text-[12px] text-lime-50">{itemName}</strong>
+          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-400" aria-label={item.current ? 'Growing now' : item.planted ? 'Planted' : item.readOnly ? 'Not planted' : 'Ready to plant'}>
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : item.readOnly ? 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
+            <span className="shrink-0">{item.current ? 'Growing' : item.planted ? 'Planted' : item.readOnly ? 'Not planted' : 'Ready'}</span>
+          </span>
+        </span>
+      </button>
+      <button
+        aria-label={`Open ${itemName} plant guide`}
+        className="mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-lime-100/12 bg-black/20 text-slate-400 transition hover:border-emerald-200/30 hover:bg-emerald-300/10 hover:text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+        onClick={() => onShowPlantInfo?.(item)}
+        title={`Plant guide: ${itemName}`}
+        type="button"
+      >
+        <AppIcon className="h-3.5 w-3.5" name="help" />
+      </button>
+    </div>
+  )
+}
+
+export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true, loading = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
@@ -93,6 +137,7 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                     const itemLocked = (section === 'Plants' && (busy || friendPlantUnavailable))
                       || (section === 'Items' && (mockItems || isZeroQuantity || friendItemUnsupported || friendGardenEmpty))
                     const selected = section === 'Plants' ? Boolean(item.current) : selectedAsset?.id === item.id
+                    const plantItem = section === 'Plants' ? { ...item, readOnly } : item
                     const lockLabel = friendPlantUnavailable
                       ? 'This friend has not planted this species'
                       : friendItemUnsupported
@@ -107,9 +152,25 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                             ? 'Out of stock — visit Shop to get more'
                             : undefined
 
+                    if (section === 'Plants') {
+                      return (
+                        <PlantLibraryCard
+                          item={plantItem}
+                          itemLocked={itemLocked}
+                          itemName={itemName}
+                          key={item.id}
+                          lockLabel={lockLabel}
+                          onApply={onApply}
+                          onShowPlantInfo={onShowPlantInfo}
+                          selected={selected}
+                          setDrawerOpen={setDrawerOpen}
+                        />
+                      )
+                    }
+
                     return (
                       <button
-                        className={`group relative min-w-0 rounded-md border text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${selected && !itemLocked ? 'border-lime-200/45 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.16)]' : 'border-lime-100/10 bg-white/[0.045]'} ${itemLocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:border-lime-200/35 hover:bg-white/[0.075]'} ${section === 'Plants' ? 'flex items-center gap-2 p-2' : 'p-1.5'}`}
+                        className={`group relative min-w-0 rounded-md border p-1.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${selected && !itemLocked ? 'border-lime-200/45 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.16)]' : 'border-lime-100/10 bg-white/[0.045]'} ${itemLocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:border-lime-200/35 hover:bg-white/[0.075]'}`}
                         type="button"
                         disabled={itemLocked}
                         data-lab-asset={item.id}
@@ -124,21 +185,7 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                           }
                         }}
                       >
-                        {section === 'Plants' ? (
-                          <>
-                            <span className="w-12 shrink-0">
-                              <LibraryThumb item={item} />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <strong className="block truncate text-[12px] text-lime-50">{itemName}</strong>
-                              <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-400" aria-label={item.current ? 'Growing now' : item.planted ? 'Planted' : readOnly ? 'Not planted' : 'Ready to plant'}>
-                                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : readOnly ? 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
-                                <span className="shrink-0">{item.current ? 'Growing' : item.planted ? 'Planted' : readOnly ? 'Not planted' : 'Ready'}</span>
-                              </span>
-                            </span>
-                          </>
-                        ) : (
-                          <>
+                        <>
                             <LibraryThumb item={item} />
                             {quantityBadge && (
                               <span className={`absolute left-2 top-2 rounded-full px-1.5 py-0.5 text-xs font-black shadow-[0_3px_8px_rgba(0,0,0,.32)] ${isZeroQuantity ? 'bg-red-400 text-[#101511]' : 'bg-[#9bcf82] text-[#101511]'}`}>
@@ -159,7 +206,6 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                               </span>
                             )}
                           </>
-                        )}
                       </button>
                     )
                   })}

@@ -152,6 +152,12 @@ class SimulatorSnapshotTest extends TestCase
     public function test_accepted_friend_can_discover_and_spectate_a_private_active_simulation(): void
     {
         [$simulator] = $this->seedSimulator();
+        $simulator->update([
+            'mode' => 'outdoor',
+            'location_name' => 'Owner garden',
+            'latitude' => 18.7816,
+            'longitude' => 99.0064,
+        ]);
         $owner = User::query()->forceCreate([
             'id' => 99,
             'username' => 'garden-owner',
@@ -164,6 +170,13 @@ class SimulatorSnapshotTest extends TestCase
             'email' => 'friend@example.test',
             'password' => 'password',
         ]);
+        $viewerSimulator = $simulator->replicate();
+        $viewerSimulator->forceFill([
+            'user_id' => $viewer->id,
+            'location_name' => 'Viewer garden',
+            'latitude' => 13.7563,
+            'longitude' => 100.5018,
+        ])->save();
         $friendship = Friendship::query()->create([
             'requester_id' => $owner->id,
             'addressee_id' => $viewer->id,
@@ -179,6 +192,11 @@ class SimulatorSnapshotTest extends TestCase
 
         $this->assertSame($simulator->id, $latest->resource->id);
         $this->assertSame($simulator->id, $spectator->resource->id);
+        $this->assertNotSame($viewerSimulator->id, $latest->resource->id);
+        $this->assertSame('outdoor', $spectator->resource->mode);
+        $this->assertSame('Owner garden', $spectator->resource->location_name);
+        $this->assertEquals(18.7816, (float) $spectator->resource->latitude);
+        $this->assertEquals(99.0064, (float) $spectator->resource->longitude);
         $this->assertSame('private', $spectator->resource->share_visibility);
     }
 

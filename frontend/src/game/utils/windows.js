@@ -17,7 +17,7 @@ export function panelExpandedPosition(id, width = viewportWidth(), height = view
     monitor: { x: 268, y: 88 },
     climate: { x: 258, y: Math.max(88, height - 280) },
     comments: { x: Math.max(24, width - 400), y: 88 },
-    friends: { x: Math.max(24, width - 350), y: Math.max(92, height - 400) },
+    friends: { x: Math.max(24, width - 380), y: Math.max(92, height - 420) },
   }
 
   return positions[id] ?? { x: 24, y: 88 }
@@ -55,7 +55,7 @@ export function panelDockPosition(id, width = viewportWidth(), height = viewport
 export function reflowWindowsForViewport(windows, width = viewportWidth(), height = viewportHeight()) {
   if (width < 768) return windows
 
-  const panelWidths = { monitor: 360, climate: 520, friends: 330, comments: 370 }
+  const panelWidths = { monitor: 360, climate: 520, friends: 360, comments: 370 }
   const shouldResponsiveCollapse = (id) => (
     (id === 'friends' && (width < 1120 || height < 720))
     || (id === 'comments' && width < 1040)

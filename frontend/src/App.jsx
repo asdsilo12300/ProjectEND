@@ -6,6 +6,7 @@ import { defaultClimate, imageAssets } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
 import { LibrarySidebar } from './game/components/LibrarySidebar'
 import { CircularLoader } from './game/components/LoadingSkeleton'
+import { PlantKnowledgeModal } from './game/components/PlantKnowledgeModal'
 import { ToastStack } from './game/components/ToastStack'
 import { TopBar } from './game/components/TopBar'
 import { CommentsPanel } from './game/panels/CommentsPanel'
@@ -35,6 +36,67 @@ const initialOutdoorWeather = {
   location: null,
   forecast: null,
   addressLabel: '',
+}
+
+const initialFriendGardenLoading = {
+  active: false,
+  commentsReady: false,
+  dataReady: false,
+  error: '',
+  loadKey: 0,
+  ownerName: 'Friend',
+  sceneReady: false,
+  simulatorId: undefined,
+}
+
+function spectatorLocationFromSimulator(simulator) {
+  const latitude = Number(simulator?.latitude)
+  const longitude = Number(simulator?.longitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+
+  return {
+    latitude,
+    longitude,
+    source: 'spectator',
+  }
+}
+
+async function outdoorWeatherForSimulator(simulator) {
+  if (simulator?.mode !== 'outdoor') return initialOutdoorWeather
+
+  const location = spectatorLocationFromSimulator(simulator)
+  if (!location) {
+    return {
+      ...initialOutdoorWeather,
+      status: 'error',
+      message: 'This outdoor garden has no saved map location.',
+      addressLabel: simulator?.location_name ?? 'Outdoor location unavailable',
+    }
+  }
+
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 10000)
+
+  try {
+    const forecast = await fetchOutdoorForecast(location, { signal: controller.signal })
+    return {
+      status: 'ready',
+      message: 'Weather loaded from the garden owner location',
+      location,
+      forecast,
+      addressLabel: simulator?.location_name ?? 'Friend outdoor location',
+    }
+  } catch {
+    return {
+      status: 'error',
+      message: 'Weather is temporarily unavailable for this garden.',
+      location,
+      forecast: null,
+      addressLabel: simulator?.location_name ?? 'Friend outdoor location',
+    }
+  } finally {
+    window.clearTimeout(timeout)
+  }
 }
 
 const initialGrowthTrack = {
@@ -166,6 +228,7 @@ function plantAssetFromApi(plant, planted = false) {
     icon: 'sprout',
     imageUrl: resolveAssetUrl(plant.base_image_url),
     modelUrl: plant.base_model_url,
+    plantData: plant,
     planted,
   }
 }
@@ -288,6 +351,50 @@ function ModeLoadingOverlay({ mode }) {
   )
 }
 
+function FriendGardenLoadingScreen({ loading, onCancel }) {
+  const steps = [
+    { label: 'Garden data', ready: loading.dataReady },
+    { label: '3D scene and models', ready: loading.sceneReady },
+    { label: 'Comments', ready: loading.commentsReady },
+  ]
+
+  return (
+    <div
+      className="fixed inset-0 z-[160] grid place-items-center overflow-hidden bg-[#08100b] px-5 text-slate-100"
+      role="status"
+      aria-live="polite"
+      aria-label={`Loading ${loading.ownerName}'s garden`}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.18),transparent_27%),linear-gradient(135deg,#071009_0%,#101a12_52%,#071009_100%)]" />
+      <div className="soft-grid absolute inset-0 opacity-45" />
+      <div className="relative w-full max-w-md rounded-2xl border border-lime-100/15 bg-[#101511]/96 px-6 py-7 shadow-[0_28px_90px_rgba(0,0,0,.55)]">
+        <CircularLoader
+          className="min-h-32"
+          description={loading.error || 'Loading the owner location, current weather, models, and discussion before showing the garden.'}
+          label={`Preparing ${loading.ownerName}'s garden`}
+        />
+        <div className="mt-5 grid gap-2 border-t border-lime-100/10 pt-4">
+          {steps.map((step) => (
+            <div className="flex items-center justify-between gap-4 text-xs" key={step.label}>
+              <span className={step.ready ? 'text-lime-100' : 'text-slate-400'}>{step.label}</span>
+              <span className={`rounded-full px-2 py-0.5 font-bold ${step.ready ? 'bg-[#9bcf82]/15 text-lime-100' : 'bg-white/[0.055] text-slate-400'}`}>
+                {step.ready ? 'Ready' : 'Loading'}
+              </span>
+            </div>
+          ))}
+        </div>
+        <button
+          className="mt-5 h-9 w-full rounded-lg border border-lime-100/15 bg-white/[0.045] text-xs font-bold text-slate-300 transition hover:bg-white/[0.08] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+          type="button"
+          onClick={onCancel}
+        >
+          Cancel and go back
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function SessionLoadingScreen() {
   return (
     <main className="relative grid h-screen w-screen place-items-center overflow-hidden bg-[#0b0f0c] px-5 text-slate-100">
@@ -324,6 +431,8 @@ function App() {
   const [settingsReturnPage, setSettingsReturnPage] = useState('lab')
   const [pendingPageAfterAuth, setPendingPageAfterAuth] = useState(null)
   const [visitingFriend, setVisitingFriend] = useState(null)
+  const [plantKnowledgeAsset, setPlantKnowledgeAsset] = useState(null)
+  const [friendGardenLoading, setFriendGardenLoading] = useState(initialFriendGardenLoading)
   const [growingMode, setGrowingMode] = useState(null)
   const [modeLoading, setModeLoading] = useState(false)
   const [saveHydrated, setSaveHydrated] = useState(() => !getToken())
@@ -602,7 +711,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (growingMode !== 'outdoor') return undefined
+    if (growingMode !== 'outdoor' || visitingFriend) return undefined
 
     let isCancelled = false
 
@@ -647,7 +756,7 @@ function App() {
       isCancelled = true
       window.clearInterval(weatherRefreshTimer)
     }
-  }, [growingMode])
+  }, [growingMode, visitingFriend])
 
   useEffect(() => {
     if (!growingMode) return undefined
@@ -921,6 +1030,9 @@ function App() {
     setCycleStatus('idle')
     setNextSimulationTickAt(null)
     setGrowingMode(restoredMode)
+    if (Object.prototype.hasOwnProperty.call(options, 'outdoorWeather')) {
+      setOutdoorWeather(options.outdoorWeather ?? initialOutdoorWeather)
+    }
     if (restoredMode === 'outdoor') {
       setWindows((value) => ({
         ...value,
@@ -960,6 +1072,68 @@ function App() {
     canonicalSimulationRef.current = nextSimulation
     setSimulationVisual(nextSimulation)
   }, [])
+
+  const handleFriendSceneReady = useCallback(({ error = false, loadKey, simulatorId }) => {
+    setFriendGardenLoading((current) => {
+      if (!current.active || current.loadKey !== loadKey || !current.dataReady) return current
+
+      const expectedSimulatorId = current.simulatorId == null ? null : String(current.simulatorId)
+      const readySimulatorId = simulatorId == null ? null : String(simulatorId)
+      if (expectedSimulatorId !== readySimulatorId) return current
+
+      return {
+        ...current,
+        error: current.error || (error ? 'The garden loaded, but one 3D asset could not be displayed.' : ''),
+        sceneReady: true,
+      }
+    })
+  }, [])
+
+  const handleFriendCommentsLoadState = useCallback(({ ready, simulatorId }) => {
+    setFriendGardenLoading((current) => {
+      if (!current.active || !current.dataReady) return current
+
+      const expectedSimulatorId = current.simulatorId == null ? null : String(current.simulatorId)
+      const commentSimulatorId = simulatorId == null ? null : String(simulatorId)
+      if (expectedSimulatorId !== commentSimulatorId) return current
+
+      return {
+        ...current,
+        commentsReady: Boolean(ready),
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (
+      !friendGardenLoading.active
+      || !friendGardenLoading.dataReady
+      || !friendGardenLoading.sceneReady
+      || !friendGardenLoading.commentsReady
+      || inventoryStatus === 'loading'
+      || plantCatalogStatus === 'loading'
+    ) {
+      return undefined
+    }
+
+    const revealTimer = window.setTimeout(() => {
+      setFriendGardenLoading((current) => (
+        current.loadKey === friendGardenLoading.loadKey
+          ? { ...current, active: false }
+          : current
+      ))
+    }, 220)
+
+    return () => window.clearTimeout(revealTimer)
+  }, [
+    friendGardenLoading.active,
+    friendGardenLoading.commentsReady,
+    friendGardenLoading.dataReady,
+    friendGardenLoading.loadKey,
+    friendGardenLoading.sceneReady,
+    inventoryStatus,
+    plantCatalogStatus,
+  ])
 
   const buildSaveSnapshot = useCallback(() => {
     const state = autosaveStateRef.current
@@ -1676,21 +1850,44 @@ function App() {
 
     const requestId = spectatorRequestRef.current + 1
     spectatorRequestRef.current = requestId
+    const ownerName = visitingFriend.user?.username ?? 'Friend'
+    setFriendGardenLoading({
+      ...initialFriendGardenLoading,
+      active: true,
+      loadKey: requestId,
+      ownerName,
+    })
     setPlantingBusy(true)
     setModeLoading(true)
     setAppliedAsset(null)
-    setActionMessage(`Opening ${visitingFriend.user?.username ?? 'friend'}'s ${asset.name}...`)
+    setActionMessage(`Opening ${ownerName}'s ${asset.name}...`)
 
     try {
       const payload = await getSpectatorSimulator(simulatorSummary.id)
+      const simulator = payload.data ?? payload
+      const spectatorWeather = await outdoorWeatherForSimulator(simulator)
       if (spectatorRequestRef.current !== requestId) return
 
-      const simulator = payload.data ?? payload
-      applySimulatorSnapshot(simulator, { persistLocalId: false })
+      setFriendGardenLoading((current) => current.loadKey === requestId
+        ? {
+            ...current,
+            commentsReady: false,
+            dataReady: true,
+            sceneReady: false,
+            simulatorId: simulator.id,
+          }
+        : current)
+      applySimulatorSnapshot(simulator, {
+        outdoorWeather: spectatorWeather,
+        persistLocalId: false,
+      })
       setVisitingFriend((current) => current ? { ...current, simulatorId: simulator.id } : current)
-      setActionMessage(`Viewing ${visitingFriend.user?.username ?? 'friend'}'s ${asset.name}`)
+      setActionMessage(`Viewing ${ownerName}'s ${asset.name}`)
     } catch (error) {
       if (spectatorRequestRef.current === requestId) {
+        setFriendGardenLoading((current) => current.loadKey === requestId
+          ? { ...current, active: false, error: error.message || `Unable to open ${asset.name}` }
+          : current)
         setActionMessage(error.message || `Unable to open ${asset.name}`)
       }
     } finally {
@@ -2185,6 +2382,13 @@ function App() {
   async function viewFriendGarden(friend) {
     const requestId = spectatorRequestRef.current + 1
     spectatorRequestRef.current = requestId
+    const ownerName = friend?.user?.username ?? 'Friend'
+    setFriendGardenLoading({
+      ...initialFriendGardenLoading,
+      active: true,
+      loadKey: requestId,
+      ownerName,
+    })
     ownGardenSnapshotRef.current = {
       appliedAsset,
       awaitingFirstCycle,
@@ -2209,7 +2413,7 @@ function App() {
       climate: { ...value.climate, visible: false },
       friends: { ...value.friends, visible: false },
     }))
-    setActionMessage(`Loading ${friend?.user?.username ?? 'friend'}'s plant...`)
+    setActionMessage(`Loading ${ownerName}'s plant...`)
 
     try {
       const cachedSimulator = friend.latest_simulator ?? null
@@ -2217,10 +2421,22 @@ function App() {
       const candidate = payload.data ?? null
       const livePayload = candidate?.id ? await getSpectatorSimulator(candidate.id) : null
       const simulator = livePayload?.data ?? livePayload ?? null
+      const spectatorWeather = simulator
+        ? await outdoorWeatherForSimulator(simulator)
+        : initialOutdoorWeather
 
       if (spectatorRequestRef.current !== requestId) return
 
       if (simulator) {
+        setFriendGardenLoading((current) => current.loadKey === requestId
+          ? {
+              ...current,
+              commentsReady: false,
+              dataReady: true,
+              sceneReady: false,
+              simulatorId: simulator.id,
+            }
+          : current)
         setVisitingFriend((current) => {
           if (!current) return current
           const plantedSimulators = [
@@ -2235,17 +2451,51 @@ function App() {
             simulatorId: simulator.id,
           }
         })
-        applySimulatorSnapshot(simulator, { persistLocalId: false })
-        setActionMessage(`Viewing ${friend?.user?.username ?? 'friend'}'s plant`)
+        applySimulatorSnapshot(simulator, {
+          outdoorWeather: spectatorWeather,
+          persistLocalId: false,
+        })
+        setActionMessage(`Viewing ${ownerName}'s plant`)
       } else {
+        setFriendGardenLoading((current) => current.loadKey === requestId
+          ? {
+              ...current,
+              commentsReady: false,
+              dataReady: true,
+              sceneReady: false,
+              simulatorId: null,
+            }
+          : current)
+        setVisitingFriend((current) => current ? { ...current, simulatorId: null } : current)
+        setAppliedAsset(null)
+        setGrowingMode('greenhouse')
+        setModeLoading(false)
+        setOutdoorWeather(initialOutdoorWeather)
+        setClimate({ ...defaultClimate })
         setSelectedPlant(null)
         canonicalSimulationRef.current = defaultSimulationVisual
         setSimulationVisual(defaultSimulationVisual)
         setGrowthTrack(initialGrowthTrack)
-        setActionMessage(`${friend?.user?.username ?? 'Friend'} has no active plant yet`)
+        setActionMessage(`${ownerName} has no active plant yet`)
       }
     } catch (error) {
       if (spectatorRequestRef.current !== requestId) return
+      setFriendGardenLoading((current) => current.loadKey === requestId
+        ? {
+            ...current,
+            commentsReady: false,
+            dataReady: true,
+            error: error.message || 'Unable to load this friend plant.',
+            sceneReady: false,
+            simulatorId: null,
+          }
+        : current)
+      setVisitingFriend((current) => current ? { ...current, simulatorId: null } : current)
+      setAppliedAsset(null)
+      setGrowingMode('greenhouse')
+      setModeLoading(false)
+      setOutdoorWeather(initialOutdoorWeather)
+      setClimate({ ...defaultClimate })
       setSelectedPlant(null)
       canonicalSimulationRef.current = defaultSimulationVisual
       setSimulationVisual(defaultSimulationVisual)
@@ -2266,6 +2516,13 @@ function App() {
 
     const requestId = spectatorRequestRef.current + 1
     spectatorRequestRef.current = requestId
+    const ownerName = owner?.username ?? 'Learner'
+    setFriendGardenLoading({
+      ...initialFriendGardenLoading,
+      active: true,
+      loadKey: requestId,
+      ownerName,
+    })
 
     ownGardenSnapshotRef.current = {
       appliedAsset,
@@ -2295,9 +2552,23 @@ function App() {
       setActionMessage('Connecting to the live garden...')
       try {
         const payload = await getSpectatorSimulator(liveSimulator.id)
+        const simulator = payload.data ?? payload
+        const spectatorWeather = await outdoorWeatherForSimulator(simulator)
         if (spectatorRequestRef.current !== requestId) return
-        applySimulatorSnapshot(payload.data ?? payload, { persistLocalId: false })
-        setActionMessage(`Watching ${owner?.username ?? 'this learner'} live`)
+        setFriendGardenLoading((current) => current.loadKey === requestId
+          ? {
+              ...current,
+              commentsReady: false,
+              dataReady: true,
+              sceneReady: false,
+              simulatorId: simulator.id ?? null,
+            }
+          : current)
+        applySimulatorSnapshot(simulator, {
+          outdoorWeather: spectatorWeather,
+          persistLocalId: false,
+        })
+        setActionMessage(`Watching ${ownerName} live`)
       } catch (error) {
         if (spectatorRequestRef.current !== requestId) return
         leaveFriendGarden(source)
@@ -2307,9 +2578,24 @@ function App() {
     }
 
     if (savedSimulator) {
+      const spectatorWeather = await outdoorWeatherForSimulator(savedSimulator)
+      if (spectatorRequestRef.current !== requestId) return
+
       autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: { user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id, source } }
       setVisitingFriend({ user: owner ?? user, historyReplay: true, historyId: post?.plant_history?.id, source })
-      applySimulatorSnapshot(savedSimulator, { persistLocalId: false })
+      setFriendGardenLoading((current) => current.loadKey === requestId
+        ? {
+            ...current,
+            commentsReady: false,
+            dataReady: true,
+            sceneReady: false,
+            simulatorId: savedSimulator.id ?? null,
+          }
+        : current)
+      applySimulatorSnapshot(savedSimulator, {
+        outdoorWeather: spectatorWeather,
+        persistLocalId: false,
+      })
       setActionMessage('Viewing a saved game state')
       return
     }
@@ -2335,6 +2621,7 @@ function App() {
         ? 'history'
         : null
     spectatorRequestRef.current += 1
+    setFriendGardenLoading(initialFriendGardenLoading)
     autosaveStateRef.current = { ...autosaveStateRef.current, visitingFriend: null }
     setVisitingFriend(null)
 
@@ -2377,7 +2664,7 @@ function App() {
 
   useEffect(() => {
     const simulatorId = visitingFriend?.simulatorId
-    if (activePage === 'admin' || !simulatorId || visitingFriend?.historyReplay) return undefined
+    if (activePage === 'admin' || friendGardenLoading.active || !simulatorId || visitingFriend?.historyReplay) return undefined
 
     let cancelled = false
     let requestRunning = false
@@ -2404,7 +2691,7 @@ function App() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [activePage, applySimulatorSnapshot, leaveFriendGarden, setActionMessage, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
+  }, [activePage, applySimulatorSnapshot, friendGardenLoading.active, leaveFriendGarden, setActionMessage, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
 
   function navigateToPage(page) {
     if (sessionStatus !== 'authenticated' || !user) {
@@ -2534,6 +2821,18 @@ function App() {
 
       <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onHelpOpen={() => setHelpCenterOpen(true)} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
       <ToastStack onDismiss={dismissActionToast} toasts={actionToasts} />
+      {friendGardenLoading.active && (
+        <FriendGardenLoadingScreen
+          loading={friendGardenLoading}
+          onCancel={() => leaveFriendGarden()}
+        />
+      )}
+      {plantKnowledgeAsset && (
+        <PlantKnowledgeModal
+          onClose={() => setPlantKnowledgeAsset(null)}
+          plantAsset={plantKnowledgeAsset}
+        />
+      )}
       <OnboardingExperience
         activePage={activePage}
         helpOpen={helpCenterOpen}
@@ -2590,7 +2889,7 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} />
+              <LibrarySidebar busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
               <SimulationStage
                 coinBurst={coinBurst}
                 emptyGardenOwnerName={visitingFriend ? visitorName : ''}
@@ -2602,6 +2901,7 @@ function App() {
                 awaitingFirstCycle={awaitingFirstCycle}
                 cycleStatus={cycleStatus}
                 nextCycleAt={nextSimulationTickAt}
+                onSceneReady={handleFriendSceneReady}
                 selectedItemCursorUrl={selectedItemCursorUrl}
                 onUseSelectedItem={applySelectedItem}
                 readOnly={Boolean(visitingFriend)}
@@ -2611,6 +2911,7 @@ function App() {
                 resetSimulation={resetSimulation}
                 saveSimulation={saveSimulation}
                 sceneAssets={modelAssets}
+                sceneLoadKey={friendGardenLoading.active ? friendGardenLoading.loadKey : null}
                 simulationVisual={previewSimulationVisual}
                 snapshotRef={stageSnapshotRef}
               />
@@ -2650,7 +2951,7 @@ function App() {
                 />
               )}
               {!visitingFriend && <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} />}
-              <CommentsPanel currentUser={user} onAuthRequired={openAuth} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
+              <CommentsPanel currentUser={user} onAuthRequired={openAuth} onLoadStateChange={handleFriendCommentsLoadState} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
               <nav className="lab-mobile-panel-dock" data-tour="mobile-panel-dock" aria-label="Lab panels">
                 {[
                   ['monitor', 'Plant'],
@@ -2692,6 +2993,3 @@ function App() {
 }
 
 export default App
-
-
-

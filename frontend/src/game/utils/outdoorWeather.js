@@ -147,7 +147,7 @@ function soilMoisturePercent(value) {
   return Math.round(value > 1 ? value : value * 100)
 }
 
-export async function fetchOutdoorForecast(location) {
+export async function fetchOutdoorForecast(location, { signal } = {}) {
   const params = new URLSearchParams({
     latitude: String(location.latitude),
     longitude: String(location.longitude),
@@ -155,7 +155,7 @@ export async function fetchOutdoorForecast(location) {
     current: 'precipitation,rain,showers,snowfall,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m',
   })
 
-  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`)
+  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { signal })
   if (!response.ok) throw new Error('Weather request failed')
 
   return response.json()

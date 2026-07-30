@@ -50,9 +50,13 @@ class PlantSimulationEngine
             $wasDepleted = (int) $simulator->health === 0;
             $naturalRecovery = $stressCount === 0 ? 3 : 0;
 
-            $visualState = $stressCount >= 3
-                ? 'stunted'
-                : ($matchedRules->first()?->visual_state ?? 'healthy');
+            // Keep the dominant environmental symptom as the visual state.
+            // Growth can still be stunted or paused by several simultaneous
+            // stresses, but replacing a specific cause such as heat stress
+            // with the generic "stunted" state hides the corresponding colour
+            // and deformation from the 3D plant.
+            $dominantVisualState = $matchedRules->first()?->visual_state;
+            $visualState = $dominantVisualState ?? 'healthy';
 
             $pestRisks = $this->pestRiskMap($simulator, $factors);
             $pestState = $this->updatePests($simulator, $factors, $pestRisks);
@@ -68,7 +72,10 @@ class PlantSimulationEngine
             $healthAfterEnvironment = $this->clamp($startingHealth + $healthDelta + $naturalRecovery, 0, 100);
             $nextHealth = $this->clamp($healthAfterEnvironment - $pestDamage, 0, 100);
 
-            if ($nextHealth <= 50) {
+            // Low health caused only by an active pest has no environmental
+            // symptom to display, so the generic stunted appearance remains
+            // useful in that case.
+            if ($nextHealth <= 50 && $dominantVisualState === null) {
                 $visualState = 'stunted';
             }
 

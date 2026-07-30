@@ -7,7 +7,7 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
   if (!current.visible) return null
 
   const canDrag = id === 'climate' && !current.collapsed
-  const panelWidths = { monitor: 360, climate: 520, friends: 330, comments: 370 }
+  const panelWidths = { monitor: 360, climate: 520, friends: 360, comments: 370 }
   const currentWidth = panelWidths[id] ?? 320
   const lowerPanelTop = Object.entries(windows)
     .filter(([panelId, panel]) => {

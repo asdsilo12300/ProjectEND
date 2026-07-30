@@ -8,6 +8,13 @@ const thaiMessages = {
   profile: 'โปรไฟล์',
   Primary: 'เมนูหลัก',
   'Coin balance': 'ยอดเหรียญ',
+  Coins: 'เหรียญ',
+  'Academy currency': 'สกุลเงินของสถาบัน',
+  'How to earn coins': 'วิธีรับเหรียญ',
+  'Grow a plant to full maturity and claim its reward before harvesting.': 'ปลูกพืชให้โตเต็มที่และรับรางวัลก่อนเก็บเกี่ยว',
+  'Use coins for care tools and friend pranks in the Shop.': 'ใช้เหรียญซื้ออุปกรณ์ดูแลพืชและไอเทมแกล้งเพื่อนในร้านค้า',
+  'Current balance': 'จำนวนที่มีอยู่',
+  'Maximum balance': 'จำนวนสูงสุด',
   'Checking your session': 'กำลังตรวจสอบเซสชัน',
   'Preparing your Plant Growth Academy account...': 'กำลังเตรียมบัญชี Plant Growth Academy ของคุณ...',
   'Loading saved simulation': 'กำลังโหลดการจำลองที่บันทึกไว้',
@@ -225,9 +232,41 @@ const thaiMessages = {
   Friends: 'เพื่อน',
   Requests: 'คำขอ',
   Online: 'ออนไลน์',
+  'Online now': 'ออนไลน์อยู่',
   Pending: 'รอดำเนินการ',
+  Sent: 'ส่งแล้ว',
   'friend list': 'รายชื่อเพื่อน',
   'invite friends': 'เชิญเพื่อน',
+  'Invite friend': 'เชิญเพื่อน',
+  Back: 'กลับ',
+  Garden: 'ดูสวน',
+  'Invitation pending': 'คำเชิญที่รอดำเนินการ',
+  'Invitation sent': 'ส่งคำเชิญแล้ว',
+  'Wants to connect': 'ต้องการเป็นเพื่อนกับคุณ',
+  'Friend options': 'ตัวเลือกเพื่อน',
+  'Find a friend': 'ค้นหาเพื่อน',
+  'Search by name': 'ค้นหาด้วยชื่อ',
+  'Search friends': 'ค้นหาเพื่อน',
+  'Clear search': 'ล้างการค้นหา',
+  'Search with a username or email address.': 'ค้นหาด้วยชื่อผู้ใช้หรืออีเมล',
+  'Try another username or email.': 'ลองค้นหาด้วยชื่อผู้ใช้หรืออีเมลอื่น',
+  'Searching users': 'กำลังค้นหาผู้ใช้',
+  'No learners found': 'ไม่พบผู้ใช้',
+  'No matching friends.': 'ไม่พบเพื่อนที่ตรงกับการค้นหา',
+  'No friend requests right now.': 'ยังไม่มีคำขอเป็นเพื่อน',
+  'No friends online right now.': 'ขณะนี้ยังไม่มีเพื่อนออนไลน์',
+  'No friends yet.': 'ยังไม่มีเพื่อน',
+  'Invite a friend to get started': 'เชิญเพื่อนเพื่อเริ่มต้น',
+  'Remove friend': 'ลบเพื่อน',
+  'Cancel invitation': 'ยกเลิกคำเชิญ',
+  'Cancel invitation?': 'ยกเลิกคำเชิญหรือไม่?',
+  'Decline friend request?': 'ปฏิเสธคำขอเป็นเพื่อนหรือไม่?',
+  Decline: 'ปฏิเสธ',
+  Keep: 'ยกเลิก',
+  Added: 'เพิ่มแล้ว',
+  Sending: 'กำลังส่ง',
+  Accepting: 'กำลังยอมรับ',
+  'Login or sign up': 'เข้าสู่ระบบหรือสมัครสมาชิก',
   'Search users': 'ค้นหาผู้ใช้',
   'Search results': 'ผลการค้นหา',
   Search: 'ค้นหา',
@@ -1163,6 +1202,12 @@ const thaiPatterns = [
   [/^(\d+) plants$/, (_, count) => `${count} พืช`],
   [/^Reply to (.+)\.\.\.$/, (_, name) => `ตอบกลับ ${name}...`],
   [/^Open (.+) profile$/, (_, name) => `เปิดโปรไฟล์ของ ${name}`],
+  [/^View (.+)'s garden$/, (_, name) => `ดูสวนของ ${name}`],
+  [/^Manage (.+)$/, (_, name) => `จัดการ ${name}`],
+  [/^Decline request from (.+)$/, (_, name) => `ปฏิเสธคำขอจาก ${name}`],
+  [/^The request from (.+) will be declined\.$/, (_, name) => `คำขอจาก ${name} จะถูกปฏิเสธ`],
+  [/^Your invitation to (.+) will be cancelled\.$/, (_, name) => `คำเชิญที่ส่งให้ ${name} จะถูกยกเลิก`],
+  [/^(.+) will be removed from your friends list\.$/, (_, name) => `${name} จะถูกลบออกจากรายชื่อเพื่อนของคุณ`],
   [/^Remove (.+)$/, (_, name) => `ลบ ${name}`],
   [/^Loading (.+)\.\.\.$/, (_, subject) => `กำลังโหลด ${subject}...`],
   [/^Loading (.+)$/, (_, subject) => `กำลังโหลด ${subject}`],
@@ -1178,6 +1223,7 @@ const thaiPatterns = [
   [/^Buy (.+)\?$/, (_, item) => `ซื้อ ${item} หรือไม่?`],
   [/^Showing (\d+) - (\d+) of (\d+) results$/, (_, start, end, total) => `แสดง ${start} - ${end} จาก ${total} รายการ`],
   [/^(\d+) friend requests$/, (_, count) => `คำขอเป็นเพื่อน ${count} รายการ`],
+  [/^1 friend request$/, () => 'คำขอเป็นเพื่อน 1 รายการ'],
   [/^(.+) chance$/, (_, pest) => `โอกาสเกิด${thaiMessages[pest] ?? pest}`],
   [/^Expand (.+)$/, (_, panel) => `ขยาย ${thaiMessages[panel] ?? panel}`],
   [/^Collapse (.+)$/, (_, panel) => `ย่อ ${thaiMessages[panel] ?? panel}`],
@@ -1218,7 +1264,7 @@ function withOriginalWhitespace(source, translated) {
 }
 
 function translateTextNode(node) {
-  if (!node?.parentElement || skippedTags.has(node.parentElement.tagName)) return
+  if (!node?.parentElement || skippedTags.has(node.parentElement.tagName) || node.parentElement.closest('[data-i18n-skip="true"]')) return
 
   const current = node.nodeValue ?? ''
 
@@ -1246,6 +1292,7 @@ function mapFor(store, element) {
 }
 
 function translateAttribute(element, name) {
+  if (element.closest('[data-i18n-skip="true"]')) return
   if (!element.hasAttribute(name)) return
   const current = element.getAttribute(name) ?? ''
   const translatedMap = mapFor(translatedAttributes, element)
@@ -1269,7 +1316,7 @@ function translateAttribute(element, name) {
 }
 
 function translateElement(element) {
-  if (!element || skippedTags.has(element.tagName)) return
+  if (!element || skippedTags.has(element.tagName) || element.matches('[data-i18n-skip="true"]')) return
   translatedAttributeNames.forEach((name) => translateAttribute(element, name))
   element.childNodes.forEach((child) => {
     if (child.nodeType === Node.TEXT_NODE) translateTextNode(child)

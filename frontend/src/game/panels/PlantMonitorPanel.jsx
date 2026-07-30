@@ -3,6 +3,7 @@ import { pestChances } from '../data/gameData'
 import { Panel } from '../components/Panel'
 import { PestChance } from '../components/PestChance'
 import { resolveAssetUrl } from '../../lib/api'
+import { getAppLanguage } from '../../i18n/appI18n'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { formatRealDays, getGrowthStageStops, getRealGrowthEstimate } from '../utils/realGrowth'
 
@@ -18,6 +19,293 @@ const visualStateLabels = {
   dry_air: 'Dry-air stress',
   botrytis: 'Fungal risk',
   stunted: 'Stunted',
+}
+
+const recommendationTones = {
+  success: {
+    badge: 'Stable',
+    badgeTh: 'ปลอดภัย',
+    border: 'border-emerald-300/25',
+    background: 'bg-emerald-400/[0.08]',
+    icon: 'check',
+    iconBackground: 'bg-emerald-300/15',
+    iconColor: 'text-emerald-200',
+    label: 'text-emerald-200',
+  },
+  info: {
+    badge: 'Preparing',
+    badgeTh: 'กำลังเตรียม',
+    border: 'border-sky-300/25',
+    background: 'bg-sky-400/[0.08]',
+    icon: 'clock',
+    iconBackground: 'bg-sky-300/15',
+    iconColor: 'text-sky-200',
+    label: 'text-sky-200',
+  },
+  warning: {
+    badge: 'Warning',
+    badgeTh: 'เฝ้าระวัง',
+    border: 'border-amber-300/35',
+    background: 'bg-amber-400/[0.10]',
+    icon: 'warning',
+    iconBackground: 'bg-amber-300/15',
+    iconColor: 'text-amber-200',
+    label: 'text-amber-200',
+  },
+  danger: {
+    badge: 'Danger',
+    badgeTh: 'อันตราย',
+    border: 'border-orange-400/40',
+    background: 'bg-orange-500/[0.12]',
+    icon: 'warning',
+    iconBackground: 'bg-orange-400/20',
+    iconColor: 'text-orange-200',
+    label: 'text-orange-200',
+  },
+  critical: {
+    badge: 'Critical',
+    badgeTh: 'วิกฤต',
+    border: 'border-rose-400/50',
+    background: 'bg-rose-500/[0.14]',
+    icon: 'warning',
+    iconBackground: 'bg-rose-400/20',
+    iconColor: 'text-rose-200',
+    label: 'text-rose-200',
+  },
+}
+
+const factorDefinitions = [
+  {
+    key: 'water',
+    label: 'Water',
+    labelTh: 'น้ำ',
+    states: ['underwatered', 'overwatered'],
+    unit: 'ml',
+    display: (value) => Number(value) * 10,
+  },
+  {
+    key: 'light',
+    label: 'Light',
+    labelTh: 'แสง',
+    states: ['low_light', 'stunted'],
+    unit: 'lx',
+  },
+  {
+    key: 'fertilizer',
+    label: 'Fertilizer',
+    labelTh: 'ปุ๋ย',
+    states: ['nutrient_deficient', 'burnt'],
+    unit: 'g',
+  },
+  {
+    key: 'soil_humidity',
+    label: 'Soil moisture',
+    labelTh: 'ความชื้นในดิน',
+    states: ['underwatered', 'overwatered', 'botrytis'],
+    unit: '%',
+  },
+  {
+    key: 'air_humidity',
+    label: 'Air humidity',
+    labelTh: 'ความชื้นอากาศ',
+    states: ['dry_air', 'botrytis'],
+    unit: '%RH',
+  },
+  {
+    key: 'soil_temp',
+    label: 'Soil temperature',
+    labelTh: 'อุณหภูมิดิน',
+    states: ['heat_stress', 'cold_stress', 'burnt'],
+    unit: '°C',
+  },
+  {
+    key: 'air_temp',
+    label: 'Air temperature',
+    labelTh: 'อุณหภูมิอากาศ',
+    states: ['heat_stress', 'cold_stress'],
+    unit: '°C',
+  },
+]
+
+function useAppLanguage() {
+  const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
+
+  useEffect(() => {
+    function updateLanguage(event) {
+      setLanguage(event?.detail?.language === 'th' || getAppLanguage() === 'th' ? 'th' : 'en')
+    }
+
+    window.addEventListener('plant-settings-change', updateLanguage)
+    return () => window.removeEventListener('plant-settings-change', updateLanguage)
+  }, [])
+
+  return language
+}
+
+function formatFactorValue(definition, value) {
+  const displayed = definition.display ? definition.display(value) : Number(value)
+  const rounded = Math.abs(displayed - Math.round(displayed)) < 0.05
+    ? Math.round(displayed)
+    : Number(displayed.toFixed(1))
+  return `${rounded}${definition.unit}`
+}
+
+function getEnvironmentIssues(simulationVisual) {
+  const environment = simulationVisual?.plant?.environment ?? {}
+
+  return factorDefinitions.flatMap((definition) => {
+    const value = Number(simulationVisual?.[definition.key])
+    const minimum = Number(environment?.[definition.key]?.min)
+    const maximum = Number(environment?.[definition.key]?.max)
+    if (![value, minimum, maximum].every(Number.isFinite) || minimum > maximum) return []
+    if (value >= minimum && value <= maximum) return []
+
+    const direction = value < minimum ? 'low' : 'high'
+    const distance = direction === 'low' ? minimum - value : value - maximum
+    const span = Math.max(1, maximum - minimum)
+
+    return [{
+      ...definition,
+      direction,
+      distanceRatio: distance / span,
+      maximum,
+      minimum,
+      value,
+    }]
+  })
+}
+
+function getRecommendationLevel({ health, issue, growthRate, hasActivePests, pestRisk = 0 }) {
+  if (health <= 25 || (hasActivePests && pestRisk >= 70)) return 'critical'
+  if (health <= 50 || growthRate <= 0 || issue?.distanceRatio >= 0.45 || hasActivePests) return 'danger'
+  return 'warning'
+}
+
+function getActivePestRecommendation(simulationVisual, language) {
+  const activePests = simulationVisual?.active_pests ?? []
+  if (activePests.length === 0) return null
+
+  const entries = activePests.map((entry) => entry?.pest ?? entry)
+  const pestNames = entries
+    .map((pest) => language === 'th' ? pest?.name_th ?? pest?.name_en : pest?.name_en ?? pest?.name_th)
+    .filter(Boolean)
+  const normalizedNames = entries.map((pest) => String(pest?.name_en ?? pest?.type ?? '').toLowerCase())
+  const treatments = []
+  if (normalizedNames.some((name) => name.includes('snail'))) treatments.push(language === 'th' ? 'สเปรย์กำจัดหอยทาก' : 'Snail Spray')
+  if (normalizedNames.some((name) => name.includes('aphid'))) treatments.push(language === 'th' ? 'สเปรย์กำจัดเพลี้ย' : 'Insect Spray')
+  if (normalizedNames.some((name) => name.includes('fung'))) treatments.push(language === 'th' ? 'สเปรย์กำจัดเชื้อรา' : 'Fungus Spray')
+
+  const risk = Math.max(0, ...activePests.map((entry) => Number(entry?.risk_chance ?? 0)))
+  const names = pestNames.join(', ') || (language === 'th' ? 'ศัตรูพืช' : 'pest')
+  const treatment = treatments.join(', ') || (language === 'th' ? 'ไอเทมรักษาที่ตรงกับศัตรูพืช' : 'the matching treatment item')
+
+  return {
+    risk,
+    text: language === 'th'
+      ? `พบ${names}บนพืช - ใช้${treatment}ทันทีเพื่อลดความเสียหาย`
+      : `${names} detected - use ${treatment} now to limit plant damage.`,
+  }
+}
+
+function buildRecommendation(simulationVisual, {
+  awaitingFirstCycle,
+  cycleSeconds,
+  growthProgress,
+  growthRate,
+  health,
+  language,
+}) {
+  if (growthProgress >= 100 && health > 0) {
+    return {
+      detail: language === 'th'
+        ? 'วงจรการเจริญเติบโตสมบูรณ์แล้ว สามารถกดเก็บเกี่ยวได้ทันที'
+        : 'The growth cycle is complete. You can harvest the plant now.',
+      level: 'success',
+      text: language === 'th'
+        ? 'ต้นไม้เติบโตเต็มที่สมบูรณ์แล้ว และพร้อมเก็บเกี่ยว'
+        : 'The plant has reached full maturity and is ready to harvest.',
+    }
+  }
+
+  const pestRecommendation = getActivePestRecommendation(simulationVisual, language)
+  if (pestRecommendation) {
+    return {
+      detail: language === 'th' ? 'ควรรักษาก่อนการอัปเดตครั้งถัดไป' : 'Treat before the next simulation update.',
+      level: getRecommendationLevel({
+        health,
+        growthRate,
+        hasActivePests: true,
+        pestRisk: pestRecommendation.risk,
+      }),
+      text: pestRecommendation.text,
+    }
+  }
+
+  const visualState = simulationVisual?.visual_state ?? 'healthy'
+  const issues = getEnvironmentIssues(simulationVisual)
+    .sort((left, right) => {
+      const leftMatchesState = left.states.includes(visualState) ? 1 : 0
+      const rightMatchesState = right.states.includes(visualState) ? 1 : 0
+      return rightMatchesState - leftMatchesState || right.distanceRatio - left.distanceRatio
+    })
+  const issue = issues[0]
+
+  if (issue) {
+    const label = language === 'th' ? issue.labelTh : issue.label
+    const current = formatFactorValue(issue, issue.value)
+    const target = `${formatFactorValue(issue, issue.minimum)}-${formatFactorValue(issue, issue.maximum)}`
+    const direction = language === 'th'
+      ? issue.direction === 'low' ? 'ต่ำเกินไป' : 'สูงเกินไป'
+      : issue.direction === 'low' ? 'is too low' : 'is too high'
+    const action = language === 'th'
+      ? issue.direction === 'low' ? 'เพิ่ม' : 'ลด'
+      : issue.direction === 'low' ? 'increase' : 'reduce'
+    const additionalIssues = issues.slice(1, 3)
+      .map((entry) => language === 'th' ? entry.labelTh : entry.label)
+      .join(', ')
+    const hiddenIssueCount = Math.max(0, issues.length - 3)
+    const additionalDetail = additionalIssues
+      ? language === 'th'
+        ? ` - ค่าอื่นที่ควรแก้: ${additionalIssues}${hiddenIssueCount ? ` และอีก ${hiddenIssueCount} ค่า` : ''}`
+        : ` Other values to adjust: ${additionalIssues}${hiddenIssueCount ? ` and ${hiddenIssueCount} more` : ''}.`
+      : ''
+
+    return {
+      detail: language === 'th'
+        ? `ควรแก้ก่อนการอัปเดตครั้งถัดไป${additionalDetail}`
+        : `Adjust before the next update.${additionalDetail}`,
+      level: getRecommendationLevel({ health, issue, growthRate, hasActivePests: false }),
+      text: language === 'th'
+        ? `${label}${direction} (${current}) - ${action}ให้อยู่ในช่วง ${target}`
+        : `${label} ${direction} (${current}) - ${action} it into the ${target} target range.`,
+    }
+  }
+
+  if (visualState !== 'healthy' || health < 75) {
+    return {
+      detail: language === 'th' ? 'ค่าปัจจัยอาจเพิ่งถูกแก้ไข โปรดรอผลรอบถัดไป' : 'The factors may have just changed; wait for the next update.',
+      level: getRecommendationLevel({ health, growthRate, hasActivePests: false }),
+      text: language === 'th'
+        ? 'พืชยังอยู่ในภาวะเครียด - รักษาค่าทุกปัจจัยให้อยู่ในช่วงเป้าหมาย'
+        : 'The plant is still stressed - keep every factor inside its target range.',
+    }
+  }
+
+  if (awaitingFirstCycle) {
+    return {
+      detail: language === 'th' ? 'ระบบกำลังเตรียมการคำนวณรอบแรก' : 'The first simulation calculation is being prepared.',
+      level: 'info',
+      text: language === 'th' ? 'ตรวจสอบค่าปัจจัยระหว่างรอการอัปเดตครั้งแรก' : 'Review the Environment controls while the first update is prepared.',
+    }
+  }
+
+  return {
+    detail: language === 'th'
+      ? cycleSeconds != null ? `อัปเดตครั้งถัดไปใน ${cycleSeconds} วินาที` : 'ติดตามผลในการอัปเดตครั้งถัดไป'
+      : cycleSeconds != null ? `Next update in ${cycleSeconds} seconds.` : 'Keep monitoring the next update.',
+    level: 'success',
+    text: language === 'th' ? 'ค่าปัจจัยอยู่ในช่วงที่เหมาะสม พืชมีความเสถียร' : 'Conditions are in range and the plant is stable.',
+  }
 }
 
 function clampPercent(value) {
@@ -272,6 +560,7 @@ function RealGrowthScale({ estimate, pace, referenceUrl }) {
 }
 
 export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'idle', hasPlant = true, nextCycleAt = null, windows, setWindows, simulationVisual }) {
+  const language = useAppLanguage()
   const visiblePestChances = buildPestChances(simulationVisual)
   const targetGrowthProgress = getGrowthProgress(simulationVisual)
   const targetHealth = getHealth(simulationVisual)
@@ -289,18 +578,15 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const visualState = simulationVisual?.visual_state ?? 'healthy'
   const statusLabel = visualStateLabels[visualState] ?? 'Monitoring'
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
-  const hasActivePests = (simulationVisual?.active_pests ?? []).length > 0
-  const nextAction = targetGrowthProgress >= 100
-    ? 'Plant is mature — Harvest is now available.'
-    : hasActivePests
-      ? 'Pest detected — select a matching treatment from Lab assets.'
-      : visualState !== 'healthy' || targetHealth < 75
-        ? 'Plant is stressed — review the Environment controls before the next update.'
-        : awaitingFirstCycle
-          ? 'Review the Environment controls while the first update is prepared.'
-          : cycleSeconds != null
-            ? `Conditions look stable. Next update in ${cycleSeconds} seconds.`
-            : 'Conditions look stable. Keep monitoring the next update.'
+  const recommendation = buildRecommendation(simulationVisual, {
+    awaitingFirstCycle,
+    cycleSeconds,
+    growthProgress: targetGrowthProgress,
+    growthRate,
+    health: targetHealth,
+    language,
+  })
+  const recommendationTone = recommendationTones[recommendation.level]
 
   return (
     <Panel id="monitor" title="Plant monitor" subtitle={hasPlant ? 'growth and next action' : 'Step 2 · choose a plant'} windows={windows} setWindows={setWindows} className="w-[360px] max-w-[calc(100vw-32px)]">
@@ -334,9 +620,24 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
           <div className="flex shrink-0 items-center whitespace-nowrap rounded-md bg-[#9bcf82]/12 px-2 py-1 text-xs font-semibold leading-none text-lime-100">{pace.label}</div>
         </div>
 
-        <div className="mb-3 rounded-md border border-lime-100/10 bg-[#9bcf82]/[0.07] px-3 py-2.5">
-          <span className="block text-xs font-black uppercase tracking-[0.1em] text-[#9bcf82]">Recommended next action</span>
-          <span className="mt-1 block text-xs leading-5 text-slate-200">{nextAction}</span>
+        <div
+          className={`mb-3 rounded-md border px-3 py-2.5 ${recommendationTone.border} ${recommendationTone.background}`}
+          data-i18n-skip="true"
+          role={recommendation.level === 'critical' || recommendation.level === 'danger' ? 'alert' : undefined}
+        >
+          <div className="flex items-center gap-2">
+            <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${recommendationTone.iconBackground}`}>
+              <AppIcon className={`h-3.5 w-3.5 ${recommendationTone.iconColor}`} name={recommendationTone.icon} />
+            </span>
+            <span className={`min-w-0 flex-1 text-xs font-black uppercase tracking-[0.08em] ${recommendationTone.label}`}>
+              {language === 'th' ? 'สิ่งที่แนะนำให้ทำต่อ' : 'Recommended next action'}
+            </span>
+            <span className={`shrink-0 rounded-full border border-current/20 bg-black/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.06em] ${recommendationTone.label}`}>
+              {language === 'th' ? recommendationTone.badgeTh : recommendationTone.badge}
+            </span>
+          </div>
+          <strong className="mt-2 block text-xs leading-5 text-slate-100">{recommendation.text}</strong>
+          <span className="mt-0.5 block text-[11px] leading-4 text-slate-300">{recommendation.detail}</span>
         </div>
 
         <GrowthTimeline awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} estimate={realGrowth} progress={growthProgress} history={growthHistory} pace={pace} rate={growthRate} referenceUrl={simulationVisual?.plant?.growth_reference_url} stages={growthStages} />

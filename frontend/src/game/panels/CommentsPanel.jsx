@@ -59,7 +59,7 @@ function exactPostedLabel(value) {
   }).format(date)
 }
 
-export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, windows, setWindows, title = 'Comments' }) {
+export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, simulatorId, windows, setWindows, title = 'Comments' }) {
   const [comments, setComments] = useState([])
   const [draft, setDraft] = useState('')
   const [status, setStatus] = useState('idle')
@@ -68,7 +68,15 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
   const visibleComments = simulatorId ? comments : []
 
   useEffect(() => {
-    if (!simulatorId) return undefined
+    if (!simulatorId) {
+      const resetTimer = window.setTimeout(() => {
+        setComments([])
+        setStatus('idle')
+        setError('')
+        onLoadStateChange?.({ ready: true, simulatorId: null })
+      }, 0)
+      return () => window.clearTimeout(resetTimer)
+    }
 
 
     let cancelled = false
@@ -76,17 +84,20 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
     async function loadComments() {
       setStatus('loading')
       setError('')
+      onLoadStateChange?.({ ready: false, simulatorId })
 
       try {
         const payload = await getSimulatorComments(simulatorId)
         if (!cancelled) {
           setComments(payload.data ?? [])
           setStatus('idle')
+          onLoadStateChange?.({ ready: true, simulatorId })
         }
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError.message || 'Unable to load comments')
           setStatus('idle')
+          onLoadStateChange?.({ ready: true, simulatorId })
         }
       }
     }
@@ -96,7 +107,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, simulatorId, window
     return () => {
       cancelled = true
     }
-  }, [simulatorId])
+  }, [onLoadStateChange, simulatorId])
 
   async function submitComment(event) {
     event.preventDefault()

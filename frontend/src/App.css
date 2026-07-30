@@ -121,6 +121,7 @@
 .lab-panel[data-panel-id='friends'] { --lab-panel-accent: var(--pg-community); }
 .lab-panel[data-panel-id='comments'] { --lab-panel-accent: #8fc7d9; }
 .lab-panel__accent { background: var(--lab-panel-accent); box-shadow: 0 0 14px color-mix(in srgb, var(--lab-panel-accent) 34%, transparent); }
+.lab-panel[data-panel-id='friends'] .lab-panel__body { padding: 12px; }
 
 @media (min-width: 768px) {
   .lab-panel[data-panel-collapsed='true'] {
@@ -251,6 +252,14 @@
     font-size: 12px;
     font-weight: 800;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.42);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+
+  [data-mobile-lab-panel='friends'] .lab-library-toggle,
+  [data-mobile-lab-panel='comments'] .lab-library-toggle {
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(8px);
   }
 
   .lab-library-close {

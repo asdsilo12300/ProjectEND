@@ -54,6 +54,7 @@ export function buildPlantStressProfile(visualOverrides = {}, health = 100, fung
   const leafState = normalizeState(visualOverrides?.leafState)
   const stemState = normalizeState(visualOverrides?.stemState)
   const isDead = leafState === 'dead' || stemState === 'dead' || Number(health) <= 0
+  const isHeatScorched = leafState === 'burnt_edges'
   const hasStateStress = !HEALTHY_STATES.has(leafState) || !HEALTHY_STATES.has(stemState)
   const healthStress = clamp01((100 - Math.max(0, Number(health) || 0)) / 72)
   const fungusStress = clamp01(Number(fungusRisk) / 100)
@@ -73,6 +74,11 @@ export function buildPlantStressProfile(visualOverrides = {}, health = 100, fung
   // high. As health falls, the same symptom grows progressively stronger.
   const stateIntensity = hasStateStress ? 0.48 + healthStress * 0.52 : healthStress * 0.22
   const fungusInfluence = fungusStress * (0.34 + healthStress * 0.18)
+  // Heat damage needs a recognisable silhouette, not only a colour change.
+  // It starts as a slight bow and approaches a near-collapse as health falls.
+  const heatCollapse = isHeatScorched
+    ? clamp01(stateIntensity * (0.5 + healthStress * 0.5))
+    : 0
 
   return {
     leafDroop: clamp01(profile.leafDroop * stateIntensity + fungusInfluence * 0.34),
@@ -81,6 +87,7 @@ export function buildPlantStressProfile(visualOverrides = {}, health = 100, fung
     compression: clamp01(profile.compression * stateIntensity + healthStress * 0.035),
     stiffness: clamp01(Math.max(profile.stiffness * stateIntensity, isDead ? 1 : 0)),
     severity: isDead ? 1 : clamp01(Math.max(healthStress, hasStateStress ? stateIntensity : 0, fungusInfluence)),
+    heatCollapse,
     isDead,
   }
 }
@@ -252,44 +259,69 @@ function targetForEntry(entry, profile, elapsed) {
 
   if (entry.role === 'stem') {
     const deadCollapse = profile.isDead ? 1 : 0
+    const heatCollapse = profile.heatCollapse ?? 0
     return {
-      x: profile.stemLean * (0.18 + deadCollapse * 0.14) + crossBreeze * 0.42,
+      x: profile.stemLean * (0.18 + deadCollapse * 0.14)
+        + heatCollapse * 0.34
+        + crossBreeze * 0.42,
       y: breeze * 0.18,
-      z: direction * profile.stemLean * (0.2 + deadCollapse * 0.08) + breeze,
-      scaleY: 1 - profile.compression * (0.095 + deadCollapse * 0.035),
+      z: direction * (
+        profile.stemLean * (0.2 + deadCollapse * 0.08)
+        + heatCollapse * 0.18
+      ) + breeze,
+      scaleY: 1
+        - profile.compression * (0.095 + deadCollapse * 0.035)
+        - heatCollapse * 0.045,
     }
   }
 
   if (entry.role === 'flower') {
+    const heatCollapse = profile.heatCollapse ?? 0
     return {
-      x: profile.leafDroop * 0.19 + profile.stemLean * 0.08 + crossBreeze,
+      x: profile.leafDroop * 0.19
+        + profile.stemLean * 0.08
+        + heatCollapse * 0.3
+        + crossBreeze,
       y: breeze * 0.32,
-      z: direction * (profile.curl * 0.11 + profile.leafDroop * 0.045) + breeze,
-      scaleY: 1 - profile.compression * 0.06,
+      z: direction * (
+        profile.curl * 0.11
+        + profile.leafDroop * 0.045
+        + heatCollapse * 0.12
+      ) + breeze,
+      scaleY: 1 - profile.compression * 0.06 - heatCollapse * 0.025,
     }
   }
 
   if (entry.role === 'petal') {
+    const heatCollapse = profile.heatCollapse ?? 0
     return {
-      x: profile.leafDroop * 0.11 + profile.curl * 0.14 + crossBreeze * 0.5,
+      x: profile.leafDroop * 0.11
+        + profile.curl * 0.14
+        + heatCollapse * 0.18
+        + crossBreeze * 0.5,
       y: direction * profile.curl * 0.055,
-      z: direction * profile.curl * 0.13 + breeze * 0.45,
-      scaleY: 1 - profile.compression * 0.075,
+      z: direction * (profile.curl * 0.13 + heatCollapse * 0.075) + breeze * 0.45,
+      scaleY: 1 - profile.compression * 0.075 - heatCollapse * 0.02,
     }
   }
 
   const variation = 0.88 + (index % 4) * 0.075
   const deadCollapse = profile.isDead ? 1 : 0
+  const heatCollapse = profile.heatCollapse ?? 0
   return {
     x: profile.leafDroop * (0.55 + deadCollapse * 0.25) * variation
       + profile.curl * (0.08 + deadCollapse * 0.1)
+      + heatCollapse * 0.44
       + crossBreeze,
     y: direction * profile.curl * 0.045,
     z: direction * (
       profile.curl * (0.18 + deadCollapse * 0.07)
       + profile.leafDroop * (0.075 + deadCollapse * 0.035)
+      + heatCollapse * 0.14
     ) + breeze,
-    scaleY: 1 - profile.compression * (0.105 + deadCollapse * 0.035),
+    scaleY: 1
+      - profile.compression * (0.105 + deadCollapse * 0.035)
+      - heatCollapse * 0.035,
   }
 }
 
@@ -301,6 +333,7 @@ function neutralStressProfile() {
     compression: 0,
     stiffness: 0,
     severity: 0,
+    heatCollapse: 0,
     isDead: false,
   }
 }
@@ -313,6 +346,7 @@ function stressProfileSignature(profile) {
     profile.compression,
     profile.stiffness,
     profile.severity,
+    profile.heatCollapse,
     profile.isDead ? 1 : 0,
   ].map((value) => typeof value === 'number' ? value.toFixed(4) : value).join(':')
 }
@@ -339,6 +373,7 @@ function interpolateStressProfile(from, target, progress) {
     compression: MathUtils.lerp(from.compression, target.compression, easedProgress),
     stiffness: MathUtils.lerp(from.stiffness, target.stiffness, easedProgress),
     severity: MathUtils.lerp(from.severity, target.severity, easedProgress),
+    heatCollapse: MathUtils.lerp(from.heatCollapse ?? 0, target.heatCollapse ?? 0, easedProgress),
     // Switch after the collapse is visibly underway so the stronger dead pose
     // does not snap in on the first frame.
     isDead: target.isDead && easedProgress >= 0.24,

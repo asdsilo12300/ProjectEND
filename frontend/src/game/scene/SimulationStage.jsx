@@ -20,6 +20,10 @@ class SceneErrorBoundary extends Component {
     return { hasError: true }
   }
 
+  componentDidCatch(error) {
+    this.props.onError?.(error)
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -81,6 +85,26 @@ function useCountdownSeconds(targetTime) {
   return targetTime ? seconds : null
 }
 
+function SceneReadySignal({ loadKey, onReady, simulatorId }) {
+  useEffect(() => {
+    if (loadKey == null || !onReady) return undefined
+
+    let secondFrame = null
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        onReady({ loadKey, simulatorId: simulatorId ?? null })
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [loadKey, onReady, simulatorId])
+
+  return null
+}
+
 function getHudPace(growthRate, growthPoint, health) {
   if (growthPoint >= 100) return 0
   if (growthRate <= 0 || health < 50) return 0
@@ -92,6 +116,15 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
   const healthValue = clampPercent(health)
   const growthValue = clampPercent(growthPoint)
   const paceValue = clampPercent(getHudPace(growthRate, growthPoint, healthValue))
+  const isThai = getAppLanguage() === 'th'
+  const isHarvestReady = growthValue >= 100 && healthValue > 0
+  const statusLabel = isHarvestReady
+    ? isThai ? 'พร้อมเก็บเกี่ยว' : 'HARVEST READY'
+    : cycleStatus === 'updating'
+      ? isThai ? 'กำลังอัปเดต' : 'UPDATING'
+      : awaitingFirstCycle && cycleSeconds != null
+        ? isThai ? `รอบแรก ${cycleSeconds} วิ` : `FIRST ${cycleSeconds}s`
+        : isThai ? 'กำลังเติบโต' : 'GROWING'
   const stats = [
     { label: 'Health', value: healthValue, color: '#ef6f61', icon: 'heart' },
     { label: 'Growth', value: growthValue, color: '#9bcf82', icon: 'sprout' },
@@ -103,8 +136,11 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
       <div className="pointer-events-none w-[230px] rounded-lg border border-lime-100/25 bg-[#101511]/96 px-3 py-2 text-slate-100 shadow-[0_14px_34px_rgba(0,0,0,.45),0_0_0_1px_rgba(0,0,0,.35)]">
         <div className="mb-2 flex items-center justify-between border-b border-lime-100/10 pb-1.5">
           <strong className="text-xs text-lime-50">Plant status</strong>
-          <span className="rounded bg-[#9bcf82]/12 px-1.5 py-0.5 text-xs font-black text-lime-100">
-            {cycleStatus === 'updating' ? 'UPDATING' : awaitingFirstCycle && cycleSeconds != null ? `FIRST ${cycleSeconds}s` : 'LIVE'}
+          <span
+            className={`rounded px-1.5 py-0.5 text-xs font-black ${isHarvestReady ? 'bg-emerald-300/20 text-emerald-100' : 'bg-[#9bcf82]/12 text-lime-100'}`}
+            data-i18n-skip="true"
+          >
+            {statusLabel}
           </span>
         </div>
         <div className="grid gap-2">
@@ -126,7 +162,7 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
   )
 }
 
-export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, outdoorReadings = null, plantSelected = false, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
+export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onSceneReady, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -197,7 +233,14 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
         onPointerMove={moveItemCursor}
         onPointerLeave={() => setItemCursorPoint(null)}
       >
-        <SceneErrorBoundary key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}>
+        <SceneErrorBoundary
+          key={`${mode}-${simulationVisual?.current_model_url ?? 'empty'}-${sceneAssets['ground.dirt']?.url ?? 'ground'}`}
+          onError={() => onSceneReady?.({
+            error: true,
+            loadKey: sceneLoadKey,
+            simulatorId: simulationVisual?.id ?? null,
+          })}
+        >
         <Canvas shadows camera={{ position: [0.75, 1.2, 4.8], fov: 34 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
           <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#080b09']} />
           {mode !== 'outdoor' && (
@@ -251,6 +294,12 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
                 })}
               </PlantAttachmentProvider>
             )}
+            <SceneReadySignal
+              key={`${sceneLoadKey ?? 'normal'}-${simulationVisual?.id ?? 'empty'}-${simulationVisual?.current_model_url ?? 'model'}-${mode}`}
+              loadKey={sceneLoadKey}
+              onReady={onSceneReady}
+              simulatorId={simulationVisual?.id}
+            />
           </Suspense>
           <OrbitControls enablePan={false} enableZoom enableRotate target={[0.75, 0.38, 0]} minDistance={3.2} maxDistance={9} minPolarAngle={0.35} maxPolarAngle={1.32} />
         </Canvas>

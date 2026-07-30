@@ -156,6 +156,32 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame('#b87536', $result->visual_overrides['leafColor']);
     }
 
+    public function test_low_health_does_not_hide_dominant_heat_stress_visuals(): void
+    {
+        [$plant, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['health' => 48]);
+        PlantConditionRule::query()->create([
+            'plant_id' => $plant->id,
+            'factor' => 'air_temp',
+            'operator' => 'above',
+            'max_value' => 18,
+            'visual_state' => 'heat_stress',
+            'severity' => 80,
+            'health_delta' => -10,
+            'growth_delta' => -7,
+        ]);
+
+        $result = app(PlantSimulationEngine::class)->tick(
+            $simulator->fresh(),
+            $this->healthyFactors(['air_temp' => 45]),
+        );
+
+        $this->assertLessThanOrEqual(50, (int) $result->health);
+        $this->assertSame('heat_stress', $result->visual_state);
+        $this->assertSame('burnt_edges', $result->visual_overrides['leafState']);
+        $this->assertSame('#c6773e', $result->visual_overrides['leafColor']);
+    }
+
     public function test_growth_point_stops_at_final_stage_requirement(): void
     {
         [$plant, $simulator] = $this->seedPlantAndSimulator();
