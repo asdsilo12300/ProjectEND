@@ -288,6 +288,64 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
   )
 }
 
+function ControlledGrowthStatusPanel({ plantSelected, readOnly = false, simulationVisual }) {
+  const language = getAppLanguage()
+  const isThai = language === 'th'
+  const estimate = getRealGrowthEstimate(simulationVisual)
+  const secondsPerDay = estimate.currentSecondsPerRealDay ?? estimate.normalSecondsPerRealDay
+  const progress = plantSelected ? Math.min(100, Math.max(0, estimate.progressPercent)) : 0
+
+  return (
+    <section
+      className={`pointer-events-none absolute left-1/2 z-30 w-[320px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-xl border border-emerald-100/20 bg-[#0c1710]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.36)] backdrop-blur-md ${readOnly ? 'top-[136px]' : 'top-20'}`}
+      aria-label={isThai ? 'ข้อมูลวันเติบโตโหมดควบคุมปัจจัย' : 'Environment control growth status'}
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-100/10 bg-emerald-300/10 text-emerald-200">
+          <AppIcon className="h-4 w-4" name="sprout" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-100/60">
+              {isThai ? 'วันเติบโต' : 'Growth day'}
+            </span>
+            <span className="rounded-md bg-emerald-200/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-100">
+              {isThai ? 'ควบคุมปัจจัย' : 'Controlled'}
+            </span>
+          </div>
+          <strong className="mt-0.5 block truncate text-lg leading-tight text-lime-50">
+            {plantSelected ? `${formatRealDays(estimate.equivalentDays)} / ~${formatRealDays(estimate.maturityDays)}` : '—'}
+          </strong>
+          <span className="mt-0.5 block truncate text-[10px] text-slate-400">
+            {plantSelected
+              ? isThai ? 'วันเทียบการเติบโตในชีวิตจริง' : 'real-life growth equivalent'
+              : isThai ? 'เลือกพืชเพื่อเริ่มคำนวณ' : 'Select a plant to begin calculation'}
+          </span>
+        </div>
+      </div>
+
+      <div className="h-1 bg-black/25">
+        <span
+          className="block h-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-lime-300 transition-[width] duration-500 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      <div className="flex items-center justify-center gap-2 border-t border-emerald-100/10 bg-black/20 px-3 py-1.5 text-[10px] text-slate-300">
+        <AppIcon className="h-3 w-3 text-cyan-300" name="clock" />
+        <span>
+          {plantSelected
+            ? isThai
+              ? `${formatScaleSeconds(secondsPerDay)} วินาทีในเกม = 1 วันเติบโตจริง`
+              : `${formatScaleSeconds(secondsPerDay)} game seconds = 1 real-life growth day`
+            : isThai ? 'อัตราเวลาจะแสดงหลังเลือกพืช' : 'Time scale appears after selecting a plant'}
+        </span>
+      </div>
+    </section>
+  )
+}
+
 export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onSceneReady, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare, weatherStatus = 'idle' }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
@@ -368,7 +426,7 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
           })}
         >
         <Canvas shadows camera={{ position: [0.75, 1.2, 4.8], fov: 34 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
-          <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#080b09']} />
+          <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#173c26']} />
           {mode !== 'outdoor' && (
             <>
               <ambientLight intensity={0.85} />
@@ -481,6 +539,13 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
             simulationVisual={simulationVisual}
             solarLighting={solarLighting}
             weatherStatus={weatherStatus}
+          />
+        )}
+        {mode !== 'outdoor' && (
+          <ControlledGrowthStatusPanel
+            plantSelected={plantSelected}
+            readOnly={readOnly}
+            simulationVisual={simulationVisual}
           />
         )}
         {!readOnly && plantSelected && <div className="lab-simulation-actions absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" data-tour="lab-actions" aria-label="Simulation actions">
