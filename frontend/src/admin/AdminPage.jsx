@@ -357,14 +357,6 @@ function AdminDashboardSkeleton() {
         ))}
       </div>
 
-      <section className="admin-skeleton-attention">
-        <div><AdminSkeletonBlock className="is-eyebrow" /><AdminSkeletonBlock className="is-heading" /></div>
-        <AdminSkeletonBlock className="is-badge" />
-        <div className="admin-skeleton-attention-grid">
-          {Array.from({ length: 6 }, (_, index) => <AdminSkeletonBlock className="is-action" key={index} />)}
-        </div>
-      </section>
-
       <div className="admin-dashboard-grid">
         <section className="admin-skeleton-panel is-chart">
           <div className="admin-skeleton-panel-heading"><span><AdminSkeletonBlock className="is-eyebrow" /><AdminSkeletonBlock className="is-heading" /></span><AdminSkeletonBlock className="is-tools" /></div>
@@ -378,6 +370,14 @@ function AdminDashboardSkeleton() {
           <div className="admin-skeleton-overview-lines">{Array.from({ length: 5 }, (_, index) => <AdminSkeletonBlock key={index} />)}</div>
         </section>
       </div>
+
+      <section className="admin-skeleton-attention">
+        <div><AdminSkeletonBlock className="is-eyebrow" /><AdminSkeletonBlock className="is-heading" /></div>
+        <AdminSkeletonBlock className="is-badge" />
+        <div className="admin-skeleton-attention-grid">
+          {Array.from({ length: 6 }, (_, index) => <AdminSkeletonBlock className="is-action" key={index} />)}
+        </div>
+      </section>
       <span className="sr-only">Loading management data</span>
     </div>
   )
@@ -781,8 +781,6 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
         <MetricCard icon="shop" label="Game catalog" value={totalGameCatalog} detail={`${metrics.items ?? 0} items · ${metrics.quests ?? 0} quests`} tone="blue" />
       </div>
 
-      <AttentionCenter attention={data?.attention} onOpenSection={onOpenSection} />
-
       <div className="admin-dashboard-grid">
         <section className="admin-panel admin-panel--trend">
           <header className="admin-panel__header">
@@ -905,6 +903,8 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
           </div>
         </section>
       </div>
+
+      <AttentionCenter attention={data?.attention} onOpenSection={onOpenSection} />
     </div>
   )
 }
