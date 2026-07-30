@@ -2897,6 +2897,7 @@ function App() {
                 location={outdoorWeather.location}
                 mode={growingMode}
                 outdoorReadings={getOutdoorReadings(outdoorWeather.forecast)}
+                weatherStatus={outdoorWeather.status}
                 plantSelected={Boolean(selectedPlant)}
                 awaitingFirstCycle={awaitingFirstCycle}
                 cycleStatus={cycleStatus}
@@ -2917,7 +2918,7 @@ function App() {
               />
 
               {visitingFriend && (
-                <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]" data-tour="friend-mode-banner">
+                <div className={`absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)] ${growingMode === 'outdoor' ? 'top-[216px]' : 'top-20'}`} data-tour="friend-mode-banner">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
                   <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved game state' : `${visitorName}'s garden`}</strong> - view only</span>
                   <button

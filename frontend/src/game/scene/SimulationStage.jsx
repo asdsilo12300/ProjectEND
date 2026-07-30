@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Environment, Html, OrbitControls } from '@react-three/drei'
 import { imageAssets } from '../data/gameData'
 import { AppIcon } from '../icons/FontAwesomeIcon'
+import { formatRealDays, getRealGrowthEstimate } from '../utils/realGrowth'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { Loading, PestModel, PlantModel } from './PlantModel'
 import { PlantAttachmentProvider } from './plantAttachments'
@@ -162,7 +163,132 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
   )
 }
 
-export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onSceneReady, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare }) {
+function getOutdoorClock(currentTime, timezone, language) {
+  const locale = language === 'th' ? 'th-TH' : 'en-GB'
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const normalizedTimezone = String(timezone ?? '').trim().toUpperCase()
+  const displayTimezone = (!timezone || normalizedTimezone === 'GMT' || normalizedTimezone === 'UTC')
+    ? browserTimezone || timezone
+    : timezone
+  const options = {
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    ...(displayTimezone ? { timeZone: displayTimezone } : {}),
+  }
+
+  try {
+    const formatter = new Intl.DateTimeFormat(locale, options)
+    const parts = formatter.formatToParts(currentTime)
+    const hour = Number(parts.find((part) => part.type === 'hour')?.value)
+
+    return {
+      hour: Number.isFinite(hour) ? hour : currentTime.getHours(),
+      label: formatter.format(currentTime),
+      timezone: displayTimezone,
+    }
+  } catch {
+    return {
+      hour: currentTime.getHours(),
+      label: new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        hourCycle: 'h23',
+        minute: '2-digit',
+      }).format(currentTime),
+      timezone: browserTimezone,
+    }
+  }
+}
+
+function formatScaleSeconds(value) {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—'
+  return seconds < 10 ? seconds.toFixed(1).replace(/\.0$/, '') : Math.round(seconds).toLocaleString()
+}
+
+function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, solarLighting, weatherStatus = 'idle' }) {
+  const language = getAppLanguage()
+  const isThai = language === 'th'
+  const estimate = getRealGrowthEstimate(simulationVisual)
+  const isDay = outdoorReadings?.isDay ?? solarLighting.isDay
+  const outdoorClock = getOutdoorClock(solarLighting.currentTime, outdoorReadings?.timezone, language)
+  const dailyRain = Number(outdoorReadings?.dailyRain ?? outdoorReadings?.rain ?? 0)
+  const rainNow = Number(outdoorReadings?.rain ?? 0)
+  const rainProbability = outdoorReadings?.rainProbability
+  const secondsPerDay = estimate.currentSecondsPerRealDay ?? estimate.normalSecondsPerRealDay
+  const weatherReady = Boolean(outdoorReadings)
+  const rainLabel = !weatherReady
+    ? weatherStatus === 'error'
+      ? isThai ? 'ไม่มีข้อมูลอากาศ' : 'Weather unavailable'
+      : isThai ? 'กำลังโหลดอากาศ' : 'Loading weather'
+    : rainNow > 0
+      ? isThai ? 'ฝนกำลังตก' : 'Raining now'
+      : dailyRain > 0
+        ? isThai ? 'วันนี้มีฝน' : 'Rain today'
+        : isThai ? 'วันนี้ไม่มีฝน' : 'No rain today'
+  const dayPhase = !isDay
+    ? isThai ? 'กลางคืน' : 'Nighttime'
+    : outdoorClock.hour < 12
+      ? isThai ? 'ช่วงเช้า' : 'Morning'
+      : outdoorClock.hour < 17
+        ? isThai ? 'ช่วงกลางวัน' : 'Daytime'
+        : isThai ? 'ช่วงเย็น' : 'Evening'
+
+  return (
+    <section
+      className="outdoor-status-panel pointer-events-none absolute left-1/2 top-20 z-30 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-xl border border-lime-100/20 bg-[#0c130f]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.4)] backdrop-blur-md"
+      aria-label={isThai ? 'สถานะโหมดกลางแจ้ง' : 'Outdoor mode status'}
+      aria-live="polite"
+    >
+      <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
+        <div className="flex min-w-0 flex-col justify-center px-4 py-3">
+          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-lime-100/55">{isThai ? 'วันเติบโต' : 'Growth day'}</span>
+          <strong className="mt-0.5 truncate text-base leading-tight text-lime-50">
+            {plantSelected ? `${formatRealDays(estimate.equivalentDays)} / ~${formatRealDays(estimate.maturityDays)}` : '—'}
+          </strong>
+          <span className="mt-0.5 truncate text-[10px] text-slate-400">{plantSelected ? (isThai ? 'วันเทียบชีวิตจริง' : 'real-life equivalent') : (isThai ? 'ยังไม่ได้เลือกพืช' : 'No plant selected')}</span>
+        </div>
+
+        <div className="flex min-w-[118px] flex-col items-center justify-center border-x border-lime-100/10 bg-white/[0.025] px-3 py-2.5 text-center">
+          <span className={`grid h-7 w-7 place-items-center rounded-full ${isDay ? 'bg-amber-200/10 text-amber-200' : 'bg-sky-200/10 text-sky-200'}`}>
+            <AppIcon className="h-4 w-4" name={isDay ? 'lightMode' : 'darkMode'} />
+          </span>
+          <time
+            className="mt-1 text-xl font-black leading-none tracking-tight text-white"
+            dateTime={solarLighting.currentTime.toISOString()}
+            title={outdoorClock.timezone ?? undefined}
+          >
+            {outdoorClock.label}
+          </time>
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">{dayPhase}</span>
+        </div>
+
+        <div className="flex min-w-0 flex-col justify-center px-4 py-3 text-right">
+          <span className="text-[9px] font-black uppercase tracking-[0.14em] text-sky-100/55">{isThai ? 'ฝนวันนี้' : 'Today’s rain'}</span>
+          <strong className={`mt-0.5 truncate text-sm leading-tight ${rainNow > 0 ? 'text-sky-200' : dailyRain > 0 ? 'text-cyan-100' : 'text-lime-50'}`}>{rainLabel}</strong>
+          <span className="mt-0.5 truncate text-[10px] text-slate-400">
+            {weatherReady
+              ? `${dailyRain.toFixed(1)} mm${rainProbability == null ? '' : ` · ${Math.round(rainProbability)}%`}`
+              : '—'}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-2 border-t border-lime-100/10 bg-black/20 px-3 py-1.5 text-[10px] text-slate-300">
+        <AppIcon className="h-3 w-3 text-sky-300" name="clock" />
+        <span>
+          {plantSelected
+            ? isThai
+              ? `${formatScaleSeconds(secondsPerDay)} วินาทีในเกม = 1 วันเติบโตจริง`
+              : `${formatScaleSeconds(secondsPerDay)} game seconds = 1 real-life growth day`
+            : isThai ? 'อัตราเวลาจะแสดงหลังเลือกพืช' : 'Time scale appears after selecting a plant'}
+        </span>
+      </div>
+    </section>
+  )
+}
+
+export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onSceneReady, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare, weatherStatus = 'idle' }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -348,21 +474,14 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
             <span className="mt-1 block text-xs leading-5 text-slate-300">Open Lab assets and choose the plant card. Your simulation will be saved to this account.</span>
           </div>
         )}
-        {!readOnly && plantSelected && (
-          <button
-            className={`absolute left-1/2 top-20 z-30 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border bg-[#101511]/94 px-4 py-2.5 text-sm font-semibold shadow-[0_8px_18px_rgba(0,0,0,.32)] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 ${shareVisibility === 'private' ? 'border-lime-100/15 text-slate-200 hover:bg-[#17201a]' : 'border-red-300/35 text-lime-50 hover:bg-[#1b1e18]'}`}
-            type="button"
-            onClick={toggleLiveShare}
-            disabled={shareBusy}
-            aria-label={shareVisibility === 'private' ? 'Start live sharing' : 'Stop live sharing'}
-            aria-pressed={shareVisibility !== 'private'}
-          >
-            <span className="relative grid h-5 w-5 place-items-center">
-              <AppIcon className={`h-5 w-5 ${shareBusy ? 'animate-pulse' : ''}`} name="live" />
-              <span className={`absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-[#101511] ${shareVisibility === 'private' ? 'bg-slate-500' : 'bg-red-500'}`} aria-hidden="true" />
-            </span>
-            <span>{shareBusy ? 'Updating...' : 'Live'}</span>
-          </button>
+        {mode === 'outdoor' && (
+          <OutdoorStatusPanel
+            outdoorReadings={outdoorReadings}
+            plantSelected={plantSelected}
+            simulationVisual={simulationVisual}
+            solarLighting={solarLighting}
+            weatherStatus={weatherStatus}
+          />
         )}
         {!readOnly && plantSelected && <div className="lab-simulation-actions absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" data-tour="lab-actions" aria-label="Simulation actions">
           <button
@@ -383,6 +502,21 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
           >
             <img className="h-8 w-8 shrink-0 rounded-full border border-[#101511]/15 object-cover shadow-[0_2px_6px_rgba(0,0,0,.22)]" src={imageAssets.harvest} alt="" draggable="false" />
             Harvest
+          </button>
+          <button
+            className={`box-border inline-flex min-h-12 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold leading-5 shadow-xs transition focus:outline-none focus:ring-4 focus:ring-lime-100/10 ${shareVisibility === 'private' ? 'border-lime-100/15 bg-white/[0.035] text-slate-200 hover:bg-white/[0.075] hover:text-lime-50' : 'border-red-300/30 bg-red-300/10 text-red-100 hover:bg-red-300/15'}`}
+            type="button"
+            onClick={toggleLiveShare}
+            disabled={shareBusy}
+            aria-label={shareVisibility === 'private' ? 'Start live sharing' : 'Stop live sharing'}
+            aria-pressed={shareVisibility !== 'private'}
+            title={shareVisibility === 'private' ? 'Share this garden live in Community' : 'Stop sharing this live garden'}
+          >
+            <span className="relative grid h-6 w-6 place-items-center">
+              <AppIcon className={`h-4 w-4 ${shareBusy ? 'animate-pulse' : ''}`} name="live" />
+              <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ring-2 ring-[#101511] ${shareVisibility === 'private' ? 'bg-slate-500' : 'bg-red-500'}`} aria-hidden="true" />
+            </span>
+            <span>{shareBusy ? 'Updating…' : shareVisibility === 'private' ? 'Go live' : 'Live'}</span>
           </button>
           {!isMature && <span className="sr-only" id="harvest-requirement">Harvest is available when plant growth reaches 100 percent.</span>}
         </div>}

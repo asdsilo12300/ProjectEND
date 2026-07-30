@@ -139,7 +139,21 @@ export async function fetchLocationAddress(location) {
 function firstHourlyValue(forecast, key) {
   const values = forecast?.hourly?.[key]
   if (!Array.isArray(values) || values.length === 0) return null
-  return values[0]
+  const times = forecast?.hourly?.time
+  const currentHour = String(forecast?.current?.time ?? '').slice(0, 13)
+  const currentIndex = Array.isArray(times) && currentHour
+    ? times.findIndex((time) => String(time).slice(0, 13) === currentHour)
+    : -1
+
+  return values[currentIndex >= 0 ? currentIndex : 0]
+}
+
+function firstDailyValue(forecast, key) {
+  const values = forecast?.daily?.[key]
+  if (!Array.isArray(values) || values.length === 0) return null
+
+  const value = Number(values[0])
+  return Number.isFinite(value) ? value : null
 }
 
 function soilMoisturePercent(value) {
@@ -152,7 +166,10 @@ export async function fetchOutdoorForecast(location, { signal } = {}) {
     latitude: String(location.latitude),
     longitude: String(location.longitude),
     hourly: 'temperature_2m,relative_humidity_2m,soil_temperature_6cm,soil_moisture_1_to_3cm',
+    daily: 'precipitation_sum,rain_sum,showers_sum,precipitation_probability_max',
     current: 'precipitation,rain,showers,snowfall,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+    forecast_days: '1',
+    timezone: 'auto',
   })
 
   const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { signal })
@@ -196,9 +213,15 @@ export function getOutdoorReadings(forecast) {
   const windSpeed = Number(current.wind_speed_10m)
   const windDirection = Number(current.wind_direction_10m)
   const windGust = Number(current.wind_gusts_10m)
+  const dailyPrecipitation = firstDailyValue(forecast, 'precipitation_sum')
+  const dailyRain = firstDailyValue(forecast, 'rain_sum')
+  const dailyShowers = firstDailyValue(forecast, 'showers_sum')
+  const rainProbability = firstDailyValue(forecast, 'precipitation_probability_max')
 
   return {
     rain: Math.max(0, resolvedRain),
+    dailyRain: Math.max(0, dailyPrecipitation ?? ((dailyRain ?? 0) + (dailyShowers ?? 0))),
+    rainProbability: rainProbability == null ? null : clamp(Math.round(rainProbability)),
     temperature: Number.isFinite(temperature) ? Math.round(temperature) : null,
     humidity: Number.isFinite(humidity) ? Math.round(humidity) : null,
     soilTemp: Number.isFinite(soilTemp) ? Math.round(soilTemp) : null,
@@ -207,5 +230,8 @@ export function getOutdoorReadings(forecast) {
     windDirection: Number.isFinite(windDirection) ? windDirection : 0,
     windGust: Number.isFinite(windGust) ? windGust : 0,
     isDay: Boolean(current.is_day),
+    observedAt: current.time ?? null,
+    timezone: forecast.timezone ?? null,
+    timezoneAbbreviation: forecast.timezone_abbreviation ?? null,
   }
 }

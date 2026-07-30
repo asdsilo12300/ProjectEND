@@ -11,10 +11,9 @@ export function useTimeOfDayLighting(location = null) {
   )
 
   useEffect(() => {
-    const timer = window.setInterval(() => setCurrentTime(new Date()), 60000)
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30000)
     return () => window.clearInterval(timer)
   }, [])
 
-  return solar
+  return { ...solar, currentTime }
 }
-
