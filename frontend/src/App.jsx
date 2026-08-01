@@ -15,12 +15,15 @@ import { FriendsPanel } from './game/panels/FriendsPanel'
 import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { OnboardingExperience } from './game/onboarding/OnboardingExperience'
 import { LoginPage } from './auth/LoginPage'
+import { DemoSafetyBar } from './demo/DemoSafetyBar'
+import { isDemoApiSessionActive, seedDemoSimulator, startDemoApiSession, stopDemoApiSession } from './demo/demoApiSession'
 import { LandingPage } from './landing/LandingPage'
 import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation, getOutdoorReadings } from './game/utils/outdoorWeather'
 import { getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from './game/utils/realGrowth'
 import { defaultWindows, panelExpandedPosition, reflowWindowsForViewport } from './game/utils/windows'
+import { applySettings, loadSettings } from './game/settings/settingsPreferences'
 
 const AdminPage = lazy(() => import('./admin/AdminPage').then((module) => ({ default: module.AdminPage })))
 const CommunityPage = lazy(() => import('./game/community/CommunityPage').then((module) => ({ default: module.CommunityPage })))
@@ -36,6 +39,50 @@ const initialOutdoorWeather = {
   location: null,
   forecast: null,
   addressLabel: '',
+}
+
+function createDemoOutdoorWeather() {
+  const now = new Date()
+  const hour = now.getHours()
+  const observedAt = now.toISOString().slice(0, 13) + ':00'
+  const isDay = hour >= 6 && hour < 18
+  const location = { latitude: 13.7563, longitude: 100.5018, source: 'preview' }
+  const forecast = {
+    timezone: 'Asia/Bangkok',
+    timezone_abbreviation: 'ICT',
+    current: {
+      time: observedAt,
+      is_day: isDay ? 1 : 0,
+      precipitation: 0,
+      rain: 0,
+      showers: 0,
+      snowfall: 0,
+      wind_speed_10m: 6,
+      wind_direction_10m: 120,
+      wind_gusts_10m: 9,
+    },
+    hourly: {
+      time: [observedAt],
+      temperature_2m: [29],
+      relative_humidity_2m: [62],
+      soil_temperature_6cm: [25],
+      soil_moisture_1_to_3cm: [0.58],
+    },
+    daily: {
+      precipitation_sum: [0],
+      rain_sum: [0],
+      showers_sum: [0],
+      precipitation_probability_max: [15],
+    },
+  }
+
+  return {
+    status: 'ready',
+    message: 'Sample weather generated locally for this preview',
+    location,
+    forecast,
+    addressLabel: 'Preview Garden · Bangkok',
+  }
 }
 
 const initialFriendGardenLoading = {
@@ -427,6 +474,8 @@ function App() {
   const [actionToasts, setActionToasts] = useState([])
   const actionToastTimersRef = useRef(new Map())
   const [activePage, setActivePage] = useState('home')
+  const [demoMode, setDemoMode] = useState(false)
+  const [demoPage, setDemoPage] = useState(null)
   const [helpCenterOpen, setHelpCenterOpen] = useState(false)
   const [settingsReturnPage, setSettingsReturnPage] = useState('lab')
   const [pendingPageAfterAuth, setPendingPageAfterAuth] = useState(null)
@@ -529,6 +578,10 @@ function App() {
   const lockedOutdoorLocationName = lockedOutdoorLocation
     ? simulationVisual?.location_name ?? ''
     : ''
+
+  useEffect(() => {
+    if (demoMode && demoPage && activePage !== demoPage) setActivePage(demoPage)
+  }, [activePage, demoMode, demoPage])
 
   useEffect(() => {
     let frame = 0
@@ -743,6 +796,13 @@ function App() {
   useEffect(() => {
     if (growingMode !== 'outdoor' || visitingFriend) return undefined
 
+    if (demoMode) {
+      const previewWeather = createDemoOutdoorWeather()
+      setClimate((current) => climateFromForecast(current, previewWeather.forecast))
+      setOutdoorWeather(previewWeather)
+      return undefined
+    }
+
     let isCancelled = false
 
     async function syncOutdoorWeather({ silent = false } = {}) {
@@ -799,7 +859,7 @@ function App() {
       isCancelled = true
       window.clearInterval(weatherRefreshTimer)
     }
-  }, [growingMode, lockedOutdoorLocation, lockedOutdoorLocationName, outdoorLocationRefreshKey, visitingFriend])
+  }, [demoMode, growingMode, lockedOutdoorLocation, lockedOutdoorLocationName, outdoorLocationRefreshKey, visitingFriend])
 
   useEffect(() => {
     if (!growingMode) return undefined
@@ -1855,12 +1915,19 @@ function App() {
       let location = null
       let locationName = ''
       if (mode === 'outdoor') {
-        try {
-          location = await getFixedOutdoorLocation()
-          locationName = await fetchLocationAddress(location)
-        } catch {
-          location = outdoorWeather.location
-          locationName = outdoorWeather.addressLabel
+        if (demoMode) {
+          const previewWeather = createDemoOutdoorWeather()
+          location = previewWeather.location
+          locationName = previewWeather.addressLabel
+          setOutdoorWeather(previewWeather)
+        } else {
+          try {
+            location = await getFixedOutdoorLocation()
+            locationName = await fetchLocationAddress(location)
+          } catch {
+            location = outdoorWeather.location
+            locationName = outdoorWeather.addressLabel
+          }
         }
       }
 
@@ -2564,6 +2631,11 @@ function App() {
   }
 
   async function viewCommunityGame(post, source = 'community') {
+    if (demoMode) {
+      setActionMessage('Game-state viewing is disabled in this page preview.')
+      return
+    }
+
     const liveSimulator = post?.live_simulator
     const savedSimulator = post?.plant_history?.game_state?.simulator
     const owner = post?.user ?? null
@@ -2753,6 +2825,15 @@ function App() {
   }, [activePage, applySimulatorSnapshot, friendGardenLoading.active, leaveFriendGarden, setActionMessage, visitingFriend?.historyReplay, visitingFriend?.simulatorId, visitingFriend?.user?.username])
 
   function navigateToPage(page) {
+    // Each public preview is intentionally isolated to the page selected on
+    // the landing screen. Nested controls and tutorials cannot expose another
+    // authenticated area while the temporary session is active.
+    if (demoMode) {
+      setProfileOpen(false)
+      setActivePage(demoPage ?? 'lab')
+      return
+    }
+
     if (sessionStatus !== 'authenticated' || !user) {
       openAuth('login')
       return
@@ -2793,6 +2874,77 @@ function App() {
     setActivePage(page)
   }
 
+  async function enterDemoSession(requestedPage = 'lab') {
+    const previewPages = ['lab', 'shop', 'history', 'community', 'settings']
+    const destination = previewPages.includes(requestedPage) ? requestedPage : 'lab'
+    const previewUser = startDemoApiSession()
+
+    clearClientSimulationSession({ hydrated: false })
+    latestSaveLoadedRef.current = true
+    setDemoMode(true)
+    setDemoPage(destination)
+    setUser(previewUser)
+    setSessionStatus('authenticated')
+    setPlantCatalogStatus('loading')
+    setInventoryStatus('loading')
+    setNotificationStatus('loading')
+    setAuthError('')
+    setProfileOpen(false)
+    setActivePage(destination)
+
+    try {
+      const payload = await getPlants()
+      if (!isDemoApiSessionActive()) return
+      const plants = payload.data ?? payload
+      if (Array.isArray(plants)) {
+        setPlantCatalog(plants)
+        setPlantCatalogStatus('ready')
+      }
+      const simulator = seedDemoSimulator(Array.isArray(plants) ? plants[0] : null)
+      if (simulator) {
+        setActiveSimulators([simulator])
+        applySimulatorSnapshot(simulator)
+      }
+    } catch {
+      if (!isDemoApiSessionActive()) return
+      const simulator = seedDemoSimulator()
+      if (simulator) {
+        setPlantCatalog([simulator.plant].filter(Boolean))
+        setActiveSimulators([simulator])
+        applySimulatorSnapshot(simulator)
+      }
+      setPlantCatalogStatus('ready')
+    } finally {
+      if (isDemoApiSessionActive()) setSaveHydrated(true)
+    }
+  }
+
+  function exitDemoSession(destination = 'home') {
+    clearClientSimulationSession()
+    stopDemoApiSession()
+    applySettings(loadSettings())
+    setDemoMode(false)
+    setDemoPage(null)
+    setPlantCatalog([])
+    setActiveSimulators([])
+    setPendingPlant(null)
+    setPlantingBusy(false)
+    setUser(null)
+    notificationRequestRef.current += 1
+    setNotifications([])
+    setNotificationStatus('idle')
+    setNotificationError('')
+    setProfileOpen(false)
+    setHelpCenterOpen(false)
+    setAuthMode('login')
+    setAuthStatus('idle')
+    setAuthError('')
+    setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
+    setPendingPageAfterAuth(null)
+    setSessionStatus('guest')
+    setActivePage(destination === 'auth' ? 'auth' : 'home')
+  }
+
   function logoutUser() {
     clearToken()
     clearClientSimulationSession()
@@ -2830,15 +2982,25 @@ function App() {
 
   if (activePage === 'home' || activePage === 'learn') {
     return (
-      <LandingPage
-        page={activePage}
-        user={user}
-        onHome={() => openLanding('home')}
-        onLearn={() => openLanding('learn')}
-        onStart={enterGameFromLanding}
-        onSignIn={() => openAuth('login')}
-        onOpenPage={openGamePageFromLanding}
-      />
+      <>
+        <LandingPage
+          key={demoMode ? 'demo-landing' : 'public-landing'}
+          page={activePage}
+          user={user}
+          onHome={() => openLanding('home')}
+          onLearn={() => openLanding('learn')}
+          onStart={enterGameFromLanding}
+          onSignIn={() => openAuth('login')}
+          onOpenPage={openGamePageFromLanding}
+          onOpenDemo={enterDemoSession}
+        />
+        {demoMode && (
+          <DemoSafetyBar
+            onExit={() => exitDemoSession('home')}
+            onSignIn={() => exitDemoSession('auth')}
+          />
+        )}
+      </>
     )
   }
 
@@ -2878,7 +3040,7 @@ function App() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
-      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onHelpOpen={() => setHelpCenterOpen(true)} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={logoutUser} />
+      <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} demoMode={demoMode} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onDemoExit={() => exitDemoSession('home')} onDemoSignIn={() => exitDemoSession('auth')} onHelpOpen={() => setHelpCenterOpen(true)} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={demoMode ? () => exitDemoSession('home') : logoutUser} />
       <ToastStack onDismiss={dismissActionToast} toasts={actionToasts} />
       {friendGardenLoading.active && (
         <FriendGardenLoadingScreen
@@ -2894,6 +3056,7 @@ function App() {
       )}
       <OnboardingExperience
         activePage={activePage}
+        allowedPages={demoMode ? [demoPage ?? activePage] : undefined}
         helpOpen={helpCenterOpen}
         onHelpClose={() => setHelpCenterOpen(false)}
         onNavigate={navigateToPage}
@@ -2940,7 +3103,9 @@ function App() {
           backLabel={`Back to ${settingsReturnPage === 'lab' ? 'Plant Lab' : settingsReturnPage[0].toUpperCase() + settingsReturnPage.slice(1)}`}
           user={user}
           onBack={() => navigateToPage(settingsReturnPage)}
-          onResetPassword={() => navigateToPage('password-reset')}
+          onResetPassword={() => demoMode
+            ? setActionMessage('Password reset is disabled in preview mode.')
+            : navigateToPage('password-reset')}
         />
       ) : activePage === 'password-reset' ? (
         <PasswordResetPage user={user} onBack={() => navigateToPage('settings')} onDone={() => navigateToPage('settings')} />

@@ -131,7 +131,7 @@ function FirstVisitPrompt({ language, onDismiss, onStart, page }) {
   )
 }
 
-function HelpCenter({ activePage, language, onClose, onNavigate, onStartTour, progress }) {
+function HelpCenter({ activePage, allowedPages = tutorialPageOrder, language, onClose, onNavigate, onStartTour, progress }) {
   const initialPage = autoGuideByPage[activePage] ?? 'lab'
   const [selectedPage, setSelectedPage] = useState(initialPage)
   const guide = tutorialCatalog[selectedPage]
@@ -154,7 +154,7 @@ function HelpCenter({ activePage, language, onClose, onNavigate, onStartTour, pr
           <aside className="help-center__navigation">
             <p>{language === 'th' ? 'คู่มือตามหัวข้อ' : 'GUIDED TOPICS'}</p>
             <nav aria-label={language === 'th' ? 'หัวข้อคู่มือ' : 'Guide topics'}>
-              {tutorialPageOrder.map((page) => {
+              {allowedPages.map((page) => {
                 const item = tutorialCatalog[page]
                 const complete = hasCompletedCurrentGuide(progress, page)
                 return (
@@ -309,6 +309,7 @@ function TourOverlay({ language, onBack, onClose, onNext, page, rect, stepIndex 
 
 export function OnboardingExperience({
   activePage,
+  allowedPages,
   helpOpen = false,
   onHelpClose,
   onNavigate,
@@ -513,6 +514,7 @@ export function OnboardingExperience({
       {helpOpen ? (
         <HelpCenter
           activePage={activePage}
+          allowedPages={allowedPages}
           language={language}
           onClose={onHelpClose}
           onNavigate={onNavigate}

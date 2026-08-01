@@ -50,12 +50,12 @@ const journeySteps = [
 ]
 
 const gameSpaces = [
-  { page: 'lab', icon: 'controller', title: 'Plant Lab', eyebrow: 'Core experience', description: 'Grow a living 3D plant and control the conditions around it in real time.', preview: 'lab' },
-  { page: 'shop', icon: 'shop', title: 'Shop', eyebrow: 'Tools & supplies', description: 'Use earned coins to unlock practical tools for pests and plant care.', preview: 'shop' },
-  { page: 'history', icon: 'history', title: 'History', eyebrow: 'Experiment records', description: 'Revisit completed sessions, scores, conditions, and saved evidence.', preview: 'history' },
-  { page: 'community', icon: 'groups', title: 'Community', eyebrow: 'Learn together', description: 'Share observations, view live gardens, and learn from other growers.', preview: 'community' },
-  { page: 'learn', icon: 'bookmark', title: 'Knowledge Library', eyebrow: 'Research-backed lessons', description: 'Read focused lessons about plants, environmental factors, and photosynthesis.', preview: 'learn' },
-  { page: 'settings', icon: 'settings', title: 'Settings', eyebrow: 'Made for you', description: 'Choose your language and adjust display, accessibility, and account preferences.', preview: 'settings' },
+  { page: 'lab', icon: 'controller', title: 'Plant Lab', eyebrow: 'Core experience', description: 'Grow a living 3D plant and control the conditions around it in real time.', preview: 'lab', image: '/media/plant-lab-preview.png', imageAlt: 'Plant Lab preview interface' },
+  { page: 'shop', icon: 'shop', title: 'Shop', eyebrow: 'Tools & supplies', description: 'Use earned coins to unlock practical tools for pests and plant care.', preview: 'shop', image: '/media/shop-preview.png', imageAlt: 'Shop preview interface' },
+  { page: 'history', icon: 'history', title: 'History', eyebrow: 'Experiment records', description: 'Revisit completed sessions, scores, conditions, and saved evidence.', preview: 'history', image: '/media/history-preview.png', imageAlt: 'Saved experiment history preview interface' },
+  { page: 'community', icon: 'groups', title: 'Community', eyebrow: 'Learn together', description: 'Share observations, view live gardens, and learn from other growers.', preview: 'community', image: '/media/community-preview.png', imageAlt: 'Community preview interface' },
+  { page: 'learn', icon: 'bookmark', title: 'Knowledge Library', eyebrow: 'Research-backed lessons', description: 'Read focused lessons about plants, environmental factors, and photosynthesis.', preview: 'learn', image: '/media/knowledge-preview.png', imageAlt: 'Knowledge Library learning page' },
+  { page: 'settings', icon: 'settings', title: 'Settings', eyebrow: 'Made for you', description: 'Choose your language and adjust display, accessibility, and account preferences.', preview: 'settings', image: '/media/settings-preview.png', imageAlt: 'Settings preview interface' },
 ]
 
 function HeroParticles() {
@@ -213,7 +213,7 @@ function ProductTour() {
   )
 }
 
-function HomePage({ user, onStart, onLearn, onOpenPage }) {
+function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
   return (
     <>
       <section className="landing-hero" data-tour="home-hero">
@@ -312,9 +312,10 @@ function HomePage({ user, onStart, onLearn, onOpenPage }) {
             {journeySteps.map((step, index) => (
               <article data-reveal="up" key={step.title} style={{ '--reveal-delay': `${index * 80}ms` }}>
                 <div className={`landing-journey__visual landing-journey__visual--${index + 1}`}>
-                  {index === 0
-                    ? <div className="landing-journey__profile"><AppIcon name="person" /><span /><span /><b>START</b></div>
-                    : <img src="/media/plant-lab-tour.png" alt="" />}
+                  <img
+                    src={index === 0 ? '/media/register-tour.png' : '/media/plant-lab-tour.png'}
+                    alt={index === 0 ? 'Plant Growth Academy registration screen' : ''}
+                  />
                   <strong>0{index + 1}</strong>
                 </div>
                 <div className="landing-journey__content">
@@ -341,22 +342,31 @@ function HomePage({ user, onStart, onLearn, onOpenPage }) {
             {gameSpaces.map((space, index) => (
               <article className={`landing-space-card landing-space-card--${space.preview}`} data-reveal="up" key={space.page} style={{ '--reveal-delay': `${(index % 3) * 80}ms` }}>
                 <div className="landing-space-card__preview">
-                  {space.preview === 'lab' && <img src="/media/plant-lab-tour.png" alt="Plant Lab interface" />}
-                  {space.preview === 'settings' && <img src="/media/settings-language.png" alt="Language settings interface" />}
-                  {space.preview !== 'lab' && space.preview !== 'settings' && (
-                    <div className="landing-space-card__mock">
-                      <span><AppIcon name={space.icon} /></span>
-                      <i /><i /><i />
-                    </div>
-                  )}
+                  <img src={space.image} alt={space.imageAlt} loading="lazy" decoding="async" />
                   <span className="landing-space-card__icon"><AppIcon name={space.icon} /></span>
                 </div>
                 <div className="landing-space-card__body">
                   <small>{space.eyebrow}</small>
                   <h3>{space.title}</h3>
                   <p>{space.description}</p>
-                  <button type="button" onClick={() => space.page === 'learn' ? onLearn() : onOpenPage(space.page)}>
-                    {`Explore ${space.title}`}<AppIcon name="arrowForward" />
+                  <button
+                    data-testid={`landing-demo-${space.page}`}
+                    type="button"
+                    onClick={() => {
+                      if (space.page === 'learn') {
+                        onLearn()
+                        return
+                      }
+                      if (user) onOpenPage(space.page)
+                      else onOpenDemo(space.page)
+                    }}
+                  >
+                    {user
+                      ? `Explore ${space.title}`
+                      : space.page === 'learn'
+                        ? 'Learn more'
+                        : `Try ${space.title} preview`}
+                    <AppIcon name="arrowForward" />
                   </button>
                 </div>
               </article>
@@ -387,7 +397,9 @@ function HomePage({ user, onStart, onLearn, onOpenPage }) {
 
       <section className="landing-section landing-final-cta">
         <div className="landing-container landing-final-cta__inner" data-reveal="up">
-          <div className="landing-final-cta__icon"><AppIcon name="sprout" /></div>
+          <div className="landing-final-cta__icon">
+            <img src={plantGrowthLogo} alt="Plant Growth Academy" />
+          </div>
           <SectionEyebrow icon="bolt">Ready when you are</SectionEyebrow>
           <h2>Start with one plant. Leave with a better question.</h2>
           <p>Sign in to begin your first growing cycle and keep every result connected to your learner profile.</p>
@@ -892,7 +904,7 @@ function LandingFooter({ onHome, onLearn }) {
   )
 }
 
-export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn, onOpenPage }) {
+export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn, onOpenPage, onOpenDemo }) {
   const [articleSlug, setArticleSlug] = useState(null)
   const [language, setLanguage] = useState(() => loadSettings().language === 'th' ? 'th' : 'en')
 
@@ -945,7 +957,7 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
         ? articleSlug
           ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />
           : <LearnPage user={user} onHome={openHome} onOpenArticle={openArticle} onStart={onStart} />
-        : <HomePage user={user} onStart={onStart} onLearn={openLearningLibrary} onOpenPage={onOpenPage} />}
+        : <HomePage user={user} onStart={onStart} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onOpenDemo={onOpenDemo} />}
       <LandingFooter onHome={openHome} onLearn={openLearningLibrary} />
     </main>
   )

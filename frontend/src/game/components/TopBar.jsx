@@ -78,13 +78,22 @@ function notificationExactTime(value) {
   }).format(date)
 }
 
-export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, communityUnreadNotificationCount = 0, notificationError = '', notifications = [], notificationStatus = 'idle', onHelpOpen, onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
+export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, communityUnreadNotificationCount = 0, demoMode = false, notificationError = '', notifications = [], notificationStatus = 'idle', onDemoExit, onDemoSignIn, onHelpOpen, onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [coinDetailsOpen, setCoinDetailsOpen] = useState(false)
+  const [demoMenuOpen, setDemoMenuOpen] = useState(false)
   const accountMenuRef = useRef(null)
   const notificationMenuRef = useRef(null)
   const coinMenuRef = useRef(null)
+  const demoMenuRef = useRef(null)
+  const demoPageName = ({
+    lab: 'Plant Lab',
+    shop: 'Shop',
+    history: 'History',
+    community: 'Community',
+    settings: 'Settings',
+  })[activePage] ?? 'Academy'
   const displayName = user?.username ?? 'Learner'
   const learnerLevel = user?.level ?? 1
   const learnerExperience = Number(user?.experience ?? user?.level_progress?.experience ?? 0)
@@ -102,6 +111,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       if (profileOpen && !accountMenuRef.current?.contains(event.target)) setProfileOpen(false)
       if (notificationsOpen && !notificationMenuRef.current?.contains(event.target)) setNotificationsOpen(false)
       if (coinDetailsOpen && !coinMenuRef.current?.contains(event.target)) setCoinDetailsOpen(false)
+      if (demoMenuOpen && !demoMenuRef.current?.contains(event.target)) setDemoMenuOpen(false)
     }
 
     function handleKeyDown(event) {
@@ -110,6 +120,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       setMobileNavOpen(false)
       setNotificationsOpen(false)
       setCoinDetailsOpen(false)
+      setDemoMenuOpen(false)
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
@@ -118,7 +129,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [coinDetailsOpen, notificationsOpen, profileOpen, setProfileOpen])
+  }, [coinDetailsOpen, demoMenuOpen, notificationsOpen, profileOpen, setProfileOpen])
 
   function handleProfileClick() {
     if (!user) {
@@ -192,24 +203,78 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
   return (
     <header className="absolute left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-lime-100/15 bg-[#101511]/95 px-3 sm:px-5" data-tour="global-topbar">
       <div className="flex min-w-0 items-center gap-2 xl:gap-3">
-        <button
-          className="flex h-16 shrink-0 items-center border-r border-lime-100/10 pr-3 transition hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 sm:pr-5"
-          type="button"
-          aria-label="Go to home"
-          onClick={() => navigate('Home')}
-        >
-          <img
-            className="h-14 w-auto max-w-[112px] object-contain sm:h-16 sm:max-w-[150px]"
-            src={plantGrowthLogo}
-            alt="Plant Growth Academy"
-          />
-        </button>
-        <nav className="hidden h-16 min-w-0 items-end overflow-x-auto xl:flex" data-tour="global-navigation" aria-label="Primary">
-          <ul className="flex min-w-max text-center text-sm font-medium text-slate-300">{renderNavItems()}</ul>
-        </nav>
+        {demoMode ? (
+          <div className="group flex h-16 shrink-0 items-center overflow-hidden pr-3 sm:pr-5" aria-label={`${demoPageName} preview`}>
+            <img
+              className="h-20 w-auto max-w-[128px] object-contain sm:h-24 sm:max-w-[160px]"
+              src={plantGrowthLogo}
+              alt="Plant Growth Academy"
+            />
+          </div>
+        ) : (
+          <button
+            className="group flex h-16 shrink-0 items-center overflow-hidden border-r border-lime-100/10 pr-3 transition hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 sm:pr-5"
+            type="button"
+            aria-label="Go to home"
+            onClick={() => navigate('Home')}
+          >
+            <img
+              className="h-20 w-auto max-w-[128px] object-contain transition-transform duration-300 ease-out group-hover:scale-[1.04] sm:h-24 sm:max-w-[160px]"
+              src={plantGrowthLogo}
+              alt="Plant Growth Academy"
+            />
+          </button>
+        )}
+        {demoMode ? (
+          <div className="hidden min-w-0 sm:block">
+            <strong className="block truncate text-sm text-lime-50">{demoPageName} Preview</strong>
+            <span className="block truncate text-[11px] text-slate-400">Browser-only sandbox - no data is saved</span>
+          </div>
+        ) : (
+          <nav className="hidden h-16 min-w-0 items-end overflow-x-auto xl:flex" data-tour="global-navigation" aria-label="Primary">
+            <ul className="flex min-w-max text-center text-sm font-medium text-slate-300">{renderNavItems()}</ul>
+          </nav>
+        )}
       </div>
 
       <div ref={accountMenuRef} className="relative flex items-center gap-2 text-sm">
+        {demoMode && (
+          <div className="relative" ref={demoMenuRef}>
+            <button
+              aria-expanded={demoMenuOpen}
+              aria-haspopup="dialog"
+              aria-label="Interactive demo options"
+              className={`flex h-11 items-center justify-center gap-2 rounded-md border px-3 text-amber-100 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 sm:h-12 ${demoMenuOpen ? 'border-amber-200/40 bg-amber-300/15' : 'border-amber-200/20 bg-amber-300/[.08] hover:bg-amber-300/[.14]'}`}
+              data-demo-session
+              title="Interactive demo — changes are temporary"
+              type="button"
+              onClick={() => {
+                setProfileOpen(false)
+                setNotificationsOpen(false)
+                setCoinDetailsOpen(false)
+                setDemoMenuOpen((value) => !value)
+              }}
+            >
+              <AppIcon className="h-4 w-4" name="shield" />
+              <span className="hidden text-[10px] font-black tracking-[.12em] 2xl:inline">DEMO</span>
+            </button>
+            {demoMenuOpen && (
+              <section className="absolute right-0 top-14 z-[90] w-[min(310px,calc(100vw-24px))] overflow-hidden rounded-xl border border-amber-200/20 bg-[#12160f]/98 shadow-[0_22px_55px_rgba(0,0,0,.52)] backdrop-blur-xl" aria-label="Interactive demo session" role="dialog">
+                <div className="flex items-start gap-3 px-4 py-4">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-300/15 text-amber-200"><AppIcon name="shield" /></span>
+                  <span>
+                    <strong className="block text-sm text-amber-100">{demoPageName} preview</strong>
+                    <small className="mt-1 block leading-5 text-slate-400">Explore this interface safely. Every change stays in temporary browser memory and never reaches the database.</small>
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-t border-white/[.08] p-3">
+                  <button className="h-9 rounded-lg border border-white/10 bg-white/[.05] text-xs font-bold text-slate-200 transition hover:bg-white/[.09]" type="button" onClick={onDemoExit}>Exit demo</button>
+                  <button className="h-9 rounded-lg bg-[#a5d98b] text-xs font-black text-[#101510] transition hover:bg-[#b7e6a0]" type="button" onClick={onDemoSignIn}>Sign in</button>
+                </div>
+              </section>
+            )}
+          </div>
+        )}
         {user && (
           <button
             className="hidden h-11 w-11 place-items-center rounded-md border border-lime-100/10 bg-white/[0.04] text-slate-200 transition hover:border-[#9bcf82]/35 hover:bg-[#9bcf82]/10 hover:text-lime-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 sm:grid sm:h-12 sm:w-12"
@@ -229,7 +294,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           </button>
         )}
 
-        {user && (
+        {!demoMode && user && (
           <div className="relative" data-tour="global-notifications" ref={notificationMenuRef}>
             <button
               className={`relative grid h-11 w-11 place-items-center rounded-md border text-slate-200 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 sm:h-12 sm:w-12 ${notificationsOpen ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100' : 'border-lime-100/10 bg-white/[0.04] hover:bg-white/[0.075]'}`}
@@ -336,7 +401,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           </div>
         )}
 
-        {user && (
+        {!demoMode && user && (
           <div className="group relative" data-tour="global-coins" ref={coinMenuRef}>
             <button
               className="relative flex h-11 items-center gap-1.5 rounded-md border border-lime-100/10 bg-white/[0.04] px-2 shadow-[0_8px_18px_rgba(0,0,0,.18)] transition hover:border-amber-200/30 hover:bg-amber-200/[0.07] focus-visible:border-amber-200/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200 sm:h-12 sm:gap-2 sm:px-3"
@@ -407,7 +472,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           </div>
         )}
 
-        <button
+        {!demoMode && <button
           className="grid h-11 w-11 place-items-center rounded-md border border-lime-100/10 bg-white/[0.04] text-slate-200 transition hover:bg-white/[0.075] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 xl:hidden"
           type="button"
           aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
@@ -419,9 +484,9 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           }}
         >
           <AppIcon className="h-5 w-5" name={mobileNavOpen ? 'panelClose' : 'sort'} />
-        </button>
+        </button>}
 
-        <button
+        {!demoMode && <button
           className="flex items-center gap-3 rounded-md bg-white/[0.045] px-3 py-2 text-left transition hover:bg-white/[0.075] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
           data-tour="global-profile"
           type="button"
@@ -435,9 +500,9 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             <small className="mt-1 block text-xs text-slate-400">{user ? 'profile' : 'Login or create account'}</small>
           </span>
           <AppIcon className={`h-4 w-4 text-slate-300 transition ${profileOpen && user ? 'rotate-180' : ''}`} name="arrowDown" />
-        </button>
+        </button>}
 
-        {profileOpen && user && (
+        {!demoMode && profileOpen && user && (
           <div className="absolute right-0 top-12 z-[70] w-64 overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511] shadow-[0_12px_28px_rgba(0,0,0,.38)]" role="menu">
             <div className="border-b border-lime-100/10 px-3 py-3">
               <div className="mb-3 flex items-center gap-3">
@@ -524,7 +589,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         )}
       </div>
 
-      {mobileNavOpen && (
+      {!demoMode && mobileNavOpen && (
         <nav className="absolute left-3 right-3 top-[68px] z-[65] rounded-xl border border-lime-100/15 bg-[#101511]/98 p-3 shadow-[0_22px_50px_rgba(0,0,0,.48)] backdrop-blur-xl xl:hidden" aria-label="Mobile navigation">
           <ul className="grid grid-cols-2 gap-2">{renderNavItems(true)}</ul>
         </nav>

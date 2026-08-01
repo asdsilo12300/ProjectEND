@@ -1,3 +1,11 @@
+import {
+  getDemoApiToken,
+  handleDemoApiRequest,
+  isDemoApiSessionActive,
+  recordDemoPublicResponse,
+  updateDemoProfile,
+} from '../demo/demoApiSession'
+
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '')
 const API_BASE_URL = configuredApiBaseUrl || (import.meta.env.DEV ? 'http://localhost:8000/api' : '')
 
@@ -10,7 +18,7 @@ const inflightGetRequests = new Map()
 const responseCache = new Map()
 
 export function getToken() {
-  return window.localStorage.getItem('plant_game_token')
+  return getDemoApiToken() ?? window.localStorage.getItem('plant_game_token')
 }
 
 export function setToken(token) {
@@ -75,11 +83,20 @@ export async function apiFetch(path, options = {}) {
   const { auth = true, cacheTtl = 0, ...fetchOptions } = options
   const token = getToken()
   const method = String(fetchOptions.method ?? 'GET').toUpperCase()
+
+  if (isDemoApiSessionActive()) {
+    const demoResponse = await handleDemoApiRequest(path, { ...fetchOptions, method })
+    if (demoResponse.handled) return demoResponse.payload
+  }
+
   const canShareRequest = method === 'GET' && !fetchOptions.signal
   const requestKey = canShareRequest ? `${auth ? token ?? 'guest' : 'public'}:${path}` : null
   const cached = requestKey ? responseCache.get(requestKey) : null
 
   if (cached && cached.expiresAt > Date.now()) {
+    if (isDemoApiSessionActive()) {
+      recordDemoPublicResponse(path, cached.payload)
+    }
     return cached.payload
   }
 
@@ -115,6 +132,10 @@ export async function apiFetch(path, options = {}) {
 
     if (requestKey && cacheTtl > 0) {
       responseCache.set(requestKey, { payload, expiresAt: Date.now() + cacheTtl })
+    }
+
+    if (isDemoApiSessionActive()) {
+      recordDemoPublicResponse(path, payload)
     }
 
     return payload
@@ -457,6 +478,10 @@ export async function completePasswordReset(resetToken, password, passwordConfir
 }
 
 export async function updateMe(profile) {
+  if (isDemoApiSessionActive()) {
+    return updateDemoProfile(profile)
+  }
+
   const token = getToken()
   const form = new FormData()
   form.append('username', profile.username ?? '')
