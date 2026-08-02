@@ -314,6 +314,7 @@ export function OnboardingExperience({
   onHelpClose,
   onNavigate,
   onProgressChange,
+  pageReady = true,
   user,
 }) {
   const [language, setLanguage] = useState(() => getAppLanguage())
@@ -333,6 +334,8 @@ export function OnboardingExperience({
   }, [])
 
   useEffect(() => {
+    if (!pageReady) return undefined
+
     let pendingGuide = null
     try {
       pendingGuide = window.sessionStorage.getItem(pendingTourKey)
@@ -349,7 +352,7 @@ export function OnboardingExperience({
       setStepIndex(0)
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [activePage])
+  }, [activePage, pageReady])
 
   useEffect(() => {
     if (!helpOpen) return undefined
@@ -383,13 +386,13 @@ export function OnboardingExperience({
 
   useEffect(() => {
     const guideId = autoGuideByPage[activePage]
-    if (!userId || !guideId || helpOpen || promptPage || tourPage) return undefined
+    if (!pageReady || !userId || !guideId || helpOpen || promptPage || tourPage) return undefined
     if (hasFinishedCurrentGuide(progress, guideId) || autoPromptedRef.current.has(guideId)) return undefined
 
     autoPromptedRef.current.add(guideId)
     const timer = window.setTimeout(() => setPromptPage(guideId), activePage === 'lab' ? 1100 : 700)
     return () => window.clearTimeout(timer)
-  }, [activePage, helpOpen, progress, promptPage, tourPage, userId])
+  }, [activePage, helpOpen, pageReady, progress, promptPage, tourPage, userId])
 
   const startTour = useCallback((guideId) => {
     const guide = tutorialCatalog[guideId]

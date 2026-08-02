@@ -33,6 +33,13 @@ const SettingsPage = lazy(() => import('./game/settings/SettingsPage').then((mod
 const ShopPage = lazy(() => import('./game/shop/ShopPage').then((module) => ({ default: module.ShopPage })))
 const SimulationStage = lazy(() => import('./game/scene/SimulationStage').then((module) => ({ default: module.SimulationStage })))
 
+const plantKnowledgeAutoOpenPrefix = 'plant-growth-academy:plant-knowledge:auto-opened'
+
+function plantKnowledgeAutoOpenKey(userId, plantAsset) {
+  const plantId = plantAsset?.backendId ?? plantAsset?.id ?? plantAsset?.name ?? 'plant'
+  return `${plantKnowledgeAutoOpenPrefix}:${userId ?? 'guest'}:${plantId}`
+}
+
 const initialOutdoorWeather = {
   status: 'idle',
   message: '',
@@ -481,6 +488,8 @@ function App() {
   const [pendingPageAfterAuth, setPendingPageAfterAuth] = useState(null)
   const [visitingFriend, setVisitingFriend] = useState(null)
   const [plantKnowledgeAsset, setPlantKnowledgeAsset] = useState(null)
+  const [pendingPlantKnowledge, setPendingPlantKnowledge] = useState(null)
+  const [labSceneReady, setLabSceneReady] = useState(false)
   const [friendGardenLoading, setFriendGardenLoading] = useState(initialFriendGardenLoading)
   const [growingMode, setGrowingMode] = useState(null)
   const [modeLoading, setModeLoading] = useState(false)
@@ -1204,6 +1213,15 @@ function App() {
       }
     })
   }, [])
+
+  const handleStageSceneReady = useCallback((payload = {}) => {
+    if (String(payload.loadKey ?? '').startsWith('lab:')) {
+      setLabSceneReady(true)
+      return
+    }
+
+    handleFriendSceneReady(payload)
+  }, [handleFriendSceneReady])
 
   const handleFriendCommentsLoadState = useCallback(({ ready, simulatorId }) => {
     setFriendGardenLoading((current) => {
@@ -1950,6 +1968,17 @@ function App() {
       setResetPending(false)
       openPlantWindows()
       setActionMessage(`${asset.name} planted in ${mode === 'outdoor' ? 'Outdoor' : 'Environment Control'} mode`)
+
+      const knowledgeKey = plantKnowledgeAutoOpenKey(user?.id, asset)
+      let knowledgeAlreadyOpened = false
+      try {
+        knowledgeAlreadyOpened = window.localStorage.getItem(knowledgeKey) === 'shown'
+      } catch {
+        // The guide can still open when local storage is unavailable.
+      }
+      if (!knowledgeAlreadyOpened) {
+        setPendingPlantKnowledge({ asset, key: knowledgeKey })
+      }
     } catch (error) {
       setPendingPlant(asset)
       setActionMessage(error.message || `Unable to plant ${asset.name}`)
@@ -2968,7 +2997,59 @@ function App() {
     setActivePage('auth')
   }
 
+  const ownSceneLoadKey = activePage === 'lab' && growingMode && !visitingFriend
+    ? `lab:${growingMode}:${simulationVisual?.id ?? 'empty'}:${simulationVisual?.current_model_url ?? 'model'}`
+    : null
+
+  useEffect(() => {
+    setLabSceneReady(false)
+  }, [modeLoading, ownSceneLoadKey])
+
+  useEffect(() => {
+    if (
+      !pendingPlantKnowledge
+      || activePage !== 'lab'
+      || visitingFriend
+      || modeLoading
+      || !labSceneReady
+      || plantKnowledgeAsset
+    ) {
+      return undefined
+    }
+
+    const revealTimer = window.setTimeout(() => {
+      setPlantKnowledgeAsset(pendingPlantKnowledge.asset)
+      setPendingPlantKnowledge(null)
+      try {
+        window.localStorage.setItem(pendingPlantKnowledge.key, 'shown')
+      } catch {
+        // Opening the guide does not depend on browser storage.
+      }
+    }, 220)
+
+    return () => window.clearTimeout(revealTimer)
+  }, [activePage, labSceneReady, modeLoading, pendingPlantKnowledge, plantKnowledgeAsset, visitingFriend])
+
+  useEffect(() => {
+    setPendingPlantKnowledge(null)
+    setPlantKnowledgeAsset(null)
+    setLabSceneReady(false)
+  }, [user?.id])
+
   const labReady = Boolean(saveHydrated && growingMode && !modeLoading)
+  const labDataReady = Boolean(
+    saveHydrated
+    && !modeLoading
+    && inventoryStatus !== 'loading'
+    && plantCatalogStatus !== 'loading'
+    && !friendGardenLoading.active
+  )
+  const onboardingPageReady = activePage !== 'lab' || Boolean(
+    labDataReady
+    && (!growingMode || labSceneReady)
+    && !pendingPlantKnowledge
+    && !plantKnowledgeAsset
+  )
   const visitorName = visitingFriend?.user?.username ?? visitingFriend?.user?.email?.split('@')[0] ?? 'Friend'
   const visitorReturnLabel = visitingFriend?.source === 'community'
     ? 'Back to Community'
@@ -3061,6 +3142,7 @@ function App() {
         onHelpClose={() => setHelpCenterOpen(false)}
         onNavigate={navigateToPage}
         onProgressChange={updateUserOnboardingProgress}
+        pageReady={onboardingPageReady}
         user={user}
       />
       {saveCompleteHistory && (
@@ -3126,7 +3208,7 @@ function App() {
                 awaitingFirstCycle={awaitingFirstCycle}
                 cycleStatus={cycleStatus}
                 nextCycleAt={nextSimulationTickAt}
-                onSceneReady={handleFriendSceneReady}
+                onSceneReady={handleStageSceneReady}
                 selectedItemCursorUrl={selectedItemCursorUrl}
                 onUseSelectedItem={applySelectedItem}
                 readOnly={Boolean(visitingFriend)}
@@ -3136,7 +3218,7 @@ function App() {
                 resetSimulation={resetSimulation}
                 saveSimulation={saveSimulation}
                 sceneAssets={modelAssets}
-                sceneLoadKey={friendGardenLoading.active ? friendGardenLoading.loadKey : null}
+                sceneLoadKey={friendGardenLoading.active ? friendGardenLoading.loadKey : ownSceneLoadKey}
                 simulationVisual={previewSimulationVisual}
                 snapshotRef={stageSnapshotRef}
               />
