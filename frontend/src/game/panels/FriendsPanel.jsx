@@ -417,16 +417,16 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
               return (
                 <button
                   key={tab.id}
-                  className={`relative flex h-9 min-w-0 items-center justify-center gap-1 rounded-md px-1 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${active ? 'bg-[#9bcf82]/18 text-lime-50 shadow-[inset_0_0_0_1px_rgba(155,207,130,.28)]' : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'}`}
+                  className={`relative flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md px-1 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${active ? 'bg-[#9bcf82]/18 text-lime-50 shadow-[inset_0_0_0_1px_rgba(155,207,130,.28)]' : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'}`}
                   type="button"
                   role="tab"
                   aria-selected={active}
                   onClick={() => changeMode(tab.id)}
                 >
-                  <AppIcon className={`h-3.5 w-3.5 ${active ? 'text-[#aee094]' : ''}`} name={tab.icon} />
-                  <span>{tab.label}</span>
+                  <AppIcon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-[#aee094]' : ''}`} name={tab.icon} />
+                  <span className="max-w-full whitespace-nowrap text-center leading-none">{tab.label}</span>
                   {tab.id === 'requests' && tab.count > 0 && (
-                    <span className="grid h-4 min-w-4 place-items-center rounded-full bg-red-400 px-1 text-[10px] font-black leading-none text-[#101511]">
+                    <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-400 px-1 text-[10px] font-black leading-none text-[#101511] shadow-[0_2px_5px_rgba(0,0,0,.35)]">
                       {tab.count > 9 ? '9+' : tab.count}
                     </span>
                   )}

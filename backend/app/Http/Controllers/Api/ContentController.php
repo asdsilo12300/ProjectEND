@@ -14,6 +14,7 @@ class ContentController extends Controller
     public function index(): JsonResponse
     {
         $contents = $this->cache->remember('contents', fn () => Content::query()
+            ->whereNull('deleted_at')
             ->where('status', 'published')
             ->where(function ($query): void {
                 $query->whereNull('published_at')->orWhere('published_at', '<=', now());
@@ -35,6 +36,7 @@ class ContentController extends Controller
     public function show(string $slug): JsonResponse
     {
         $content = Content::query()
+            ->whereNull('deleted_at')
             ->where('slug', $slug)
             ->where('status', 'published')
             ->where(function ($query): void {

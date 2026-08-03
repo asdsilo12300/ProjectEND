@@ -8,6 +8,17 @@ import './OnboardingExperience.css'
 const storagePrefix = 'plant-growth-academy:onboarding'
 const pendingTourKey = 'plant-growth-academy:pending-tour'
 
+const guidePreviewByTopic = {
+  lab: { src: '/media/plant-lab-preview.png', focus: 'center' },
+  'lab-items': { src: '/media/plant-lab-preview.png', focus: 'left center' },
+  'lab-friends': { src: '/media/plant-lab-preview.png', focus: 'right center' },
+  navigation: { src: '/media/community-preview.png', focus: 'left top' },
+  shop: { src: '/media/shop-preview.png', focus: 'center' },
+  history: { src: '/media/history-preview.png', focus: 'center' },
+  community: { src: '/media/community-preview.png', focus: 'center top' },
+  settings: { src: '/media/settings-preview.png', focus: 'center top' },
+}
+
 function storageKey(userId) {
   return `${storagePrefix}:${userId ?? 'guest'}`
 }
@@ -37,6 +48,18 @@ function hasFinishedCurrentGuide(progress, page) {
 function hasCompletedCurrentGuide(progress, page) {
   const entry = progress?.[page]
   return Number(entry?.version) >= TUTORIAL_VERSION && entry?.state === 'completed'
+}
+
+function isRequirementComplete(requirement, context = {}) {
+  if (!requirement) return true
+
+  const requirements = {
+    'lab-mode-selected': Boolean(context.labModeSelected),
+    'lab-plant-selected': Boolean(context.labPlantSelected),
+    'lab-knowledge-viewed': Boolean(context.labKnowledgeViewed),
+  }
+
+  return Boolean(requirements[requirement])
 }
 
 function visibleTarget(selectors = []) {
@@ -69,26 +92,24 @@ function paddedRect(rect, padding = 8) {
   }
 }
 
-function GuidePreview({ icon, steps }) {
+function GuidePreview({ guide, language, topic }) {
+  const preview = guidePreviewByTopic[topic] ?? guidePreviewByTopic[guide.page] ?? guidePreviewByTopic.lab
+  const label = tutorialText(guide.label, language)
+
   return (
-    <div className="onboarding-preview" aria-hidden="true">
-      <div className="onboarding-preview__topbar">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="onboarding-preview__body">
-        <div className="onboarding-preview__sidebar">
-          {steps.slice(0, 4).map((step, index) => <span className={index === 0 ? 'is-active' : ''} key={step.title.en} />)}
-        </div>
-        <div className="onboarding-preview__canvas">
-          <span className="onboarding-preview__plant"><AppIcon name={icon} /></span>
-          <span className="onboarding-preview__panel onboarding-preview__panel--left" />
-          <span className="onboarding-preview__panel onboarding-preview__panel--right" />
-          <span className="onboarding-preview__focus" />
-        </div>
-      </div>
-    </div>
+    <figure className="onboarding-preview">
+      <img
+        alt={language === 'th' ? `ภาพหน้าจอจริงของหัวข้อ ${label}` : `Real interface screenshot for ${label}`}
+        decoding="async"
+        loading="eager"
+        src={preview.src}
+        style={{ objectPosition: preview.focus }}
+      />
+      <figcaption>
+        <AppIcon name="camera" />
+        {language === 'th' ? 'ภาพจากหน้าจอจริง' : 'Real interface'}
+      </figcaption>
+    </figure>
   )
 }
 
@@ -100,7 +121,7 @@ function FirstVisitPrompt({ language, onDismiss, onStart, page }) {
     <div className="onboarding-overlay onboarding-overlay--prompt" role="presentation">
       <section className="onboarding-prompt" role="dialog" aria-modal="true" aria-labelledby="onboarding-prompt-title">
         <div className="onboarding-prompt__visual">
-          <GuidePreview icon={guide.icon} steps={guide.steps} />
+          <GuidePreview guide={guide} language={language} topic={page} />
           <span className="onboarding-prompt__badge"><AppIcon name="sprout" /> {language === 'th' ? 'คู่มือสำหรับผู้ใช้ใหม่' : 'New user guide'}</span>
         </div>
         <div className="onboarding-prompt__content">
@@ -173,7 +194,7 @@ function HelpCenter({ activePage, allowedPages = tutorialPageOrder, language, on
 
           <main className="help-center__content">
             <div className="help-center__intro">
-              <GuidePreview icon={guide.icon} steps={guide.steps} />
+              <GuidePreview guide={guide} language={language} topic={selectedPage} />
               <div>
                 <span className="onboarding-eyebrow">{tutorialText(guide.eyebrow, language)}</span>
                 <h3>{tutorialText(guide.label, language)}</h3>
@@ -220,7 +241,7 @@ function HelpCenter({ activePage, allowedPages = tutorialPageOrder, language, on
   )
 }
 
-function TourOverlay({ language, onBack, onClose, onNext, page, rect, stepIndex }) {
+function TourOverlay({ language, onBack, onClose, onNext, page, rect, stepComplete, stepIndex }) {
   const guide = tutorialCatalog[page]
   const step = guide?.steps[stepIndex]
   const [cardSize, setCardSize] = useState({ width: 370, height: 300 })
@@ -285,6 +306,12 @@ function TourOverlay({ language, onBack, onClose, onNext, page, rect, stepIndex 
           <button type="button" onClick={onClose} aria-label={language === 'th' ? 'ออกจากคำแนะนำ' : 'Exit guide'}><AppIcon name="close" /></button>
         </header>
         <p>{tutorialText(step.description, language)}</p>
+        {step.requirement && !stepComplete ? (
+          <div className="guided-tour__required" role="status">
+            <AppIcon name="mouse" />
+            <span>{tutorialText(step.actionHint, language) || (language === 'th' ? 'ทำขั้นตอนที่ไฮไลต์เพื่อไปต่อ' : 'Complete the highlighted action to continue')}</span>
+          </div>
+        ) : null}
         <div className="guided-tour__progress" aria-hidden="true">
           {guide.steps.map((item, index) => <span className={index <= stepIndex ? 'is-active' : ''} key={item.title.en} />)}
         </div>
@@ -296,7 +323,7 @@ function TourOverlay({ language, onBack, onClose, onNext, page, rect, stepIndex 
             <button className="onboarding-button onboarding-button--secondary" type="button" onClick={onBack} disabled={stepIndex === 0}>
               <AppIcon name="arrowBack" /> {language === 'th' ? 'ย้อนกลับ' : 'Back'}
             </button>
-            <button className="onboarding-button onboarding-button--primary" type="button" onClick={onNext}>
+            <button className="onboarding-button onboarding-button--primary" type="button" onClick={onNext} disabled={Boolean(step.requirement && !stepComplete)}>
               {isLast ? (language === 'th' ? 'เสร็จสิ้น' : 'Finish') : (language === 'th' ? 'ถัดไป' : 'Next')}
               <AppIcon name={isLast ? 'check' : 'arrowForward'} />
             </button>
@@ -314,6 +341,7 @@ export function OnboardingExperience({
   onHelpClose,
   onNavigate,
   onProgressChange,
+  guideContext = {},
   pageReady = true,
   user,
 }) {
@@ -324,14 +352,37 @@ export function OnboardingExperience({
   const [stepIndex, setStepIndex] = useState(0)
   const [targetRect, setTargetRect] = useState(null)
   const autoPromptedRef = useRef(new Set())
+  const completionRef = useRef({ key: '', satisfied: false })
   const userId = user?.id
   const progress = useMemo(() => ({ ...localProgress, ...(user?.onboarding_progress ?? {}) }), [localProgress, user?.onboarding_progress])
+  const activeStep = tutorialCatalog[tourPage]?.steps?.[stepIndex] ?? null
+  const stepComplete = isRequirementComplete(activeStep?.requirement, guideContext)
 
   useEffect(() => {
     const handleSettings = (event) => setLanguage(event.detail?.language === 'th' ? 'th' : 'en')
     window.addEventListener('plant-settings-change', handleSettings)
     return () => window.removeEventListener('plant-settings-change', handleSettings)
   }, [])
+
+  useEffect(() => {
+    if (tourPage !== 'lab') return undefined
+
+    const earliestRequiredStep = !guideContext.labModeSelected
+      ? 0
+      : !guideContext.labPlantSelected
+        ? 1
+        : !guideContext.labKnowledgeViewed
+          ? 2
+          : null
+
+    if (earliestRequiredStep == null || stepIndex <= earliestRequiredStep) return undefined
+
+    const timer = window.setTimeout(() => {
+      setTargetRect(null)
+      setStepIndex(earliestRequiredStep)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [guideContext, stepIndex, tourPage])
 
   useEffect(() => {
     if (!pageReady) return undefined
@@ -423,6 +474,47 @@ export function OnboardingExperience({
     setTargetRect(null)
   }, [recordProgress, tourPage])
 
+  const moveToNextStep = useCallback(() => {
+    const guide = tutorialCatalog[tourPage]
+    const step = guide?.steps?.[stepIndex]
+    if (!guide || !step || !isRequirementComplete(step.requirement, guideContext)) return
+
+    const finalIndex = guide.steps.length - 1
+    if (stepIndex >= finalIndex) finishTour()
+    else {
+      setTargetRect(null)
+      setStepIndex((current) => current + 1)
+    }
+  }, [finishTour, guideContext, stepIndex, tourPage])
+
+  const moveToPreviousStep = useCallback(() => {
+    setTargetRect(null)
+    setStepIndex((current) => Math.max(0, current - 1))
+  }, [])
+
+  useEffect(() => {
+    const guide = tutorialCatalog[tourPage]
+    const step = guide?.steps?.[stepIndex]
+    if (!guide || !step) {
+      completionRef.current = { key: '', satisfied: false }
+      return undefined
+    }
+
+    const key = `${tourPage}:${stepIndex}`
+    const satisfied = isRequirementComplete(step.requirement, guideContext)
+    if (completionRef.current.key !== key) {
+      completionRef.current = { key, satisfied }
+      return undefined
+    }
+
+    const becameComplete = !completionRef.current.satisfied && satisfied
+    completionRef.current = { key, satisfied }
+    if (!becameComplete || !step.autoAdvance) return undefined
+
+    const timer = window.setTimeout(moveToNextStep, 520)
+    return () => window.clearTimeout(timer)
+  }, [guideContext, moveToNextStep, stepIndex, tourPage])
+
   useEffect(() => {
     const guide = tutorialCatalog[tourPage]
     if (!guide || activePage !== guide.page) return undefined
@@ -489,17 +581,13 @@ export function OnboardingExperience({
         }
       }
       if (!tourPage) return
-      if (event.key === 'ArrowLeft') setStepIndex((current) => Math.max(0, current - 1))
-      if (event.key === 'ArrowRight') {
-        const finalIndex = tutorialCatalog[tourPage].steps.length - 1
-        if (stepIndex >= finalIndex) finishTour()
-        else setStepIndex((current) => current + 1)
-      }
+      if (event.key === 'ArrowLeft') moveToPreviousStep()
+      if (event.key === 'ArrowRight') moveToNextStep()
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [closeTour, finishTour, helpOpen, onHelpClose, promptPage, recordProgress, stepIndex, tourPage])
+  }, [closeTour, helpOpen, moveToNextStep, moveToPreviousStep, onHelpClose, promptPage, recordProgress, tourPage])
 
   return (
     <>
@@ -525,18 +613,15 @@ export function OnboardingExperience({
           progress={progress}
         />
       ) : null}
-      {tourPage ? (
+      {tourPage && pageReady ? (
         <TourOverlay
           language={language}
-          onBack={() => setStepIndex((current) => Math.max(0, current - 1))}
+          onBack={moveToPreviousStep}
           onClose={closeTour}
-          onNext={() => {
-            const finalIndex = tutorialCatalog[tourPage].steps.length - 1
-            if (stepIndex >= finalIndex) finishTour()
-            else setStepIndex((current) => current + 1)
-          }}
+          onNext={moveToNextStep}
           page={tourPage}
           rect={targetRect}
+          stepComplete={stepComplete}
           stepIndex={stepIndex}
         />
       ) : null}

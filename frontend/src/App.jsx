@@ -35,8 +35,12 @@ const SimulationStage = lazy(() => import('./game/scene/SimulationStage').then((
 
 const plantKnowledgeAutoOpenPrefix = 'plant-growth-academy:plant-knowledge:auto-opened'
 
+function plantKnowledgeIdentity(plantAsset) {
+  return String(plantAsset?.backendId ?? plantAsset?.id ?? plantAsset?.name ?? 'plant')
+}
+
 function plantKnowledgeAutoOpenKey(userId, plantAsset) {
-  const plantId = plantAsset?.backendId ?? plantAsset?.id ?? plantAsset?.name ?? 'plant'
+  const plantId = plantKnowledgeIdentity(plantAsset)
   return `${plantKnowledgeAutoOpenPrefix}:${userId ?? 'guest'}:${plantId}`
 }
 
@@ -489,6 +493,7 @@ function App() {
   const [visitingFriend, setVisitingFriend] = useState(null)
   const [plantKnowledgeAsset, setPlantKnowledgeAsset] = useState(null)
   const [pendingPlantKnowledge, setPendingPlantKnowledge] = useState(null)
+  const [viewedPlantKnowledgeId, setViewedPlantKnowledgeId] = useState(null)
   const [labSceneReady, setLabSceneReady] = useState(false)
   const [friendGardenLoading, setFriendGardenLoading] = useState(initialFriendGardenLoading)
   const [growingMode, setGrowingMode] = useState(null)
@@ -1978,6 +1983,8 @@ function App() {
       }
       if (!knowledgeAlreadyOpened) {
         setPendingPlantKnowledge({ asset, key: knowledgeKey })
+      } else {
+        setViewedPlantKnowledgeId(plantKnowledgeIdentity(asset))
       }
     } catch (error) {
       setPendingPlant(asset)
@@ -3020,11 +3027,6 @@ function App() {
     const revealTimer = window.setTimeout(() => {
       setPlantKnowledgeAsset(pendingPlantKnowledge.asset)
       setPendingPlantKnowledge(null)
-      try {
-        window.localStorage.setItem(pendingPlantKnowledge.key, 'shown')
-      } catch {
-        // Opening the guide does not depend on browser storage.
-      }
     }, 220)
 
     return () => window.clearTimeout(revealTimer)
@@ -3033,8 +3035,40 @@ function App() {
   useEffect(() => {
     setPendingPlantKnowledge(null)
     setPlantKnowledgeAsset(null)
+    setViewedPlantKnowledgeId(null)
     setLabSceneReady(false)
   }, [user?.id])
+
+  useEffect(() => {
+    if (!selectedPlant) {
+      setViewedPlantKnowledgeId(null)
+      return
+    }
+
+    const plantId = plantKnowledgeIdentity(selectedPlant)
+    try {
+      setViewedPlantKnowledgeId(
+        window.localStorage.getItem(plantKnowledgeAutoOpenKey(user?.id, selectedPlant)) === 'shown'
+          ? plantId
+          : null,
+      )
+    } catch {
+      setViewedPlantKnowledgeId(null)
+    }
+  }, [selectedPlant, user?.id])
+
+  function closePlantKnowledge() {
+    if (plantKnowledgeAsset) {
+      const plantId = plantKnowledgeIdentity(plantKnowledgeAsset)
+      setViewedPlantKnowledgeId(plantId)
+      try {
+        window.localStorage.setItem(plantKnowledgeAutoOpenKey(user?.id, plantKnowledgeAsset), 'shown')
+      } catch {
+        // The tutorial can continue without browser storage.
+      }
+    }
+    setPlantKnowledgeAsset(null)
+  }
 
   const labReady = Boolean(saveHydrated && growingMode && !modeLoading)
   const labDataReady = Boolean(
@@ -3050,6 +3084,15 @@ function App() {
     && !pendingPlantKnowledge
     && !plantKnowledgeAsset
   )
+  const selectedPlantKnowledgeId = selectedPlant ? plantKnowledgeIdentity(selectedPlant) : null
+  const onboardingGuideContext = useMemo(() => ({
+    labKnowledgeViewed: Boolean(
+      selectedPlantKnowledgeId
+      && viewedPlantKnowledgeId === selectedPlantKnowledgeId
+    ),
+    labModeSelected: Boolean(growingMode && !pendingPlant),
+    labPlantSelected: Boolean(selectedPlantKnowledgeId),
+  }), [growingMode, pendingPlant, selectedPlantKnowledgeId, viewedPlantKnowledgeId])
   const visitorName = visitingFriend?.user?.username ?? visitingFriend?.user?.email?.split('@')[0] ?? 'Friend'
   const visitorReturnLabel = visitingFriend?.source === 'community'
     ? 'Back to Community'
@@ -3131,13 +3174,14 @@ function App() {
       )}
       {plantKnowledgeAsset && (
         <PlantKnowledgeModal
-          onClose={() => setPlantKnowledgeAsset(null)}
+          onClose={closePlantKnowledge}
           plantAsset={plantKnowledgeAsset}
         />
       )}
       <OnboardingExperience
         activePage={activePage}
         allowedPages={demoMode ? [demoPage ?? activePage] : undefined}
+        guideContext={onboardingGuideContext}
         helpOpen={helpCenterOpen}
         onHelpClose={() => setHelpCenterOpen(false)}
         onNavigate={navigateToPage}

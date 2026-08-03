@@ -42,6 +42,8 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
               <button
                 type="button"
                 className="group grid w-full grid-cols-[24px_72px_1fr] items-center gap-3 rounded-md border border-lime-100/12 bg-[#151b17] px-4 py-4 text-left transition hover:border-[#9bcf82]/60 hover:bg-[#192117] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 sm:grid-cols-[24px_112px_1fr] sm:gap-4 sm:px-5"
+                data-mode={option.id}
+                data-tour="lab-mode-option"
                 onClick={() => onSelect(option.id)}
               >
                 <span className="grid h-5 w-5 place-items-center rounded-full border border-slate-400/75 transition group-hover:border-[#9bcf82]">

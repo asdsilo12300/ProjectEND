@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { pestChances } from '../data/gameData'
 import { Panel } from '../components/Panel'
 import { PestChance } from '../components/PestChance'
+import { PestKnowledgeModal } from '../components/PestKnowledgeModal'
 import { resolveAssetUrl } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { AppIcon } from '../icons/FontAwesomeIcon'
@@ -562,6 +563,8 @@ function RealGrowthScale({ estimate, pace, referenceUrl }) {
 export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'idle', hasPlant = true, nextCycleAt = null, windows, setWindows, simulationVisual }) {
   const language = useAppLanguage()
   const visiblePestChances = buildPestChances(simulationVisual)
+  const [selectedPestId, setSelectedPestId] = useState(null)
+  const selectedPest = visiblePestChances.find((pest) => pest.icon === selectedPestId) ?? null
   const targetGrowthProgress = getGrowthProgress(simulationVisual)
   const targetHealth = getHealth(simulationVisual)
   const growthRate = Number(simulationVisual?.growth_rate ?? 0)
@@ -589,6 +592,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const recommendationTone = recommendationTones[recommendation.level]
 
   return (
+    <>
     <Panel id="monitor" title="Plant monitor" subtitle={hasPlant ? 'growth and next action' : 'Step 2 · choose a plant'} windows={windows} setWindows={setWindows} className="w-[360px] max-w-[calc(100vw-32px)]">
       <div className="max-h-[348px] overflow-y-auto pr-1 sm:max-h-none sm:overflow-visible sm:pr-0">
         {!hasPlant ? (
@@ -649,7 +653,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
           </div>
           <div className="grid grid-cols-3 gap-2">
             {visiblePestChances.map((pest) => (
-              <PestChance key={pest.label} {...pest} />
+              <PestChance key={pest.label} {...pest} onOpen={() => setSelectedPestId(pest.icon)} />
             ))}
           </div>
         </div>
@@ -657,6 +661,8 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
         )}
       </div>
     </Panel>
+    <PestKnowledgeModal language={language} onClose={() => setSelectedPestId(null)} pest={selectedPest} />
+    </>
   )
 }
 

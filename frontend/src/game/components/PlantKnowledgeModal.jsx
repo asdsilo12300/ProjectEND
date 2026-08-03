@@ -73,6 +73,7 @@ export function PlantKnowledgeModal({ onClose, plantAsset }) {
         aria-labelledby="plant-knowledge-title"
         aria-modal="true"
         className="flex max-h-[82vh] w-full max-w-[680px] flex-col overflow-hidden rounded-2xl border border-lime-100/20 bg-[#101511] text-slate-100 shadow-[0_28px_90px_rgba(0,0,0,.62)]"
+        data-tour="lab-plant-knowledge"
         role="dialog"
       >
         <header className="flex items-center justify-between gap-4 border-b border-lime-100/10 px-4 py-3">

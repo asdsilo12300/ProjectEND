@@ -16,14 +16,25 @@ if (!API_BASE_URL) {
 const API_ROOT_URL = API_BASE_URL.replace(/\/api$/, '')
 const inflightGetRequests = new Map()
 const responseCache = new Map()
+let responseCacheGeneration = 0
+
+function clearApiResponseCache() {
+  responseCacheGeneration += 1
+  inflightGetRequests.clear()
+  responseCache.clear()
+}
+
+function notifyContentCatalogChanged() {
+  clearApiResponseCache()
+  window.dispatchEvent(new Event('plant-game:content-catalog-updated'))
+}
 
 export function getToken() {
   return getDemoApiToken() ?? window.localStorage.getItem('plant_game_token')
 }
 
 export function setToken(token) {
-  inflightGetRequests.clear()
-  responseCache.clear()
+  clearApiResponseCache()
 
   if (token) {
     window.localStorage.setItem('plant_game_token', token)
@@ -92,6 +103,7 @@ export async function apiFetch(path, options = {}) {
   const canShareRequest = method === 'GET' && !fetchOptions.signal
   const requestKey = canShareRequest ? `${auth ? token ?? 'guest' : 'public'}:${path}` : null
   const cached = requestKey ? responseCache.get(requestKey) : null
+  const requestCacheGeneration = responseCacheGeneration
 
   if (cached && cached.expiresAt > Date.now()) {
     if (isDemoApiSessionActive()) {
@@ -130,7 +142,7 @@ export async function apiFetch(path, options = {}) {
       throw error
     }
 
-    if (requestKey && cacheTtl > 0) {
+    if (requestKey && cacheTtl > 0 && requestCacheGeneration === responseCacheGeneration) {
       responseCache.set(requestKey, { payload, expiresAt: Date.now() + cacheTtl })
     }
 
@@ -172,11 +184,11 @@ export async function getPlants() {
 }
 
 export async function getLearningContents() {
-  return apiFetch('/contents', { auth: false, cacheTtl: 30000 })
+  return apiFetch('/contents', { auth: false, cacheTtl: 30000, cache: 'no-store' })
 }
 
 export async function getLearningContent(slug) {
-  return apiFetch(`/contents/${encodeURIComponent(slug)}`, { auth: false, cacheTtl: 30000 })
+  return apiFetch(`/contents/${encodeURIComponent(slug)}`, { auth: false, cacheTtl: 30000, cache: 'no-store' })
 }
 
 export async function getAdminDashboard(selection = 7) {
@@ -205,10 +217,12 @@ export async function getAdminContent(contentId) {
 
 export async function saveAdminContent(content) {
   const hasId = Boolean(content.id)
-  return apiFetch(hasId ? `/admin/contents/${content.id}` : '/admin/contents', {
+  const payload = await apiFetch(hasId ? `/admin/contents/${content.id}` : '/admin/contents', {
     method: hasId ? 'PUT' : 'POST',
     body: JSON.stringify(content),
   })
+  notifyContentCatalogChanged()
+  return payload
 }
 
 export async function uploadAdminContentImage(file, signal) {
@@ -263,11 +277,15 @@ export async function uploadAdminImage({ file, scope }, signal) {
 }
 
 export async function deleteAdminContent(contentId) {
-  return apiFetch(`/admin/contents/${contentId}`, { method: 'DELETE' })
+  const payload = await apiFetch(`/admin/contents/${contentId}`, { method: 'DELETE' })
+  notifyContentCatalogChanged()
+  return payload
 }
 
 export async function restoreAdminContent(contentId) {
-  return apiFetch(`/admin/contents/${contentId}/restore`, { method: 'POST' })
+  const payload = await apiFetch(`/admin/contents/${contentId}/restore`, { method: 'POST' })
+  notifyContentCatalogChanged()
+  return payload
 }
 
 export async function getAdminUsers({ search = '', role = '', page = 1 } = {}) {

@@ -1,4 +1,4 @@
-export const TUTORIAL_VERSION = 2
+export const TUTORIAL_VERSION = 3
 
 export const tutorialCatalog = {
   lab: {
@@ -12,13 +12,40 @@ export const tutorialCatalog = {
     },
     steps: [
       {
-        icon: 'plant',
-        targets: ['[data-tour="lab-plants"]', '[data-tour="lab-assets"]', '.lab-library-toggle'],
-        title: { en: 'Choose a plant and growing mode', th: 'เลือกพืชและโหมดการปลูก' },
+        icon: 'controller',
+        targets: ['[data-tour="lab-mode-picker"]', '[data-tour="lab-mode-option"]'],
+        requirement: 'lab-mode-selected',
+        autoAdvance: true,
+        title: { en: 'Choose your growing mode', th: 'เลือกโหมดการปลูก' },
         description: {
-          en: 'Open Plants and select a species. A new species asks whether you want Environment Control or Outdoor mode before planting.',
-          th: 'เปิดหมวด Plants แล้วเลือกชนิดพืช เมื่อปลูกชนิดใหม่ ระบบจะให้เลือกโหมดควบคุมปัจจัยหรือโหมดกลางแจ้งก่อนเริ่ม',
+          en: 'Start with Environment Control to adjust every factor, or choose Outdoor to use real location, weather, daylight, and rain. Select one of the highlighted mode cards to continue.',
+          th: 'เริ่มด้วยโหมดควบคุมปัจจัยเพื่อปรับค่าได้ทั้งหมด หรือเลือกโหมดกลางแจ้งเพื่อใช้ตำแหน่ง อากาศ แสง และฝนจริง กดการ์ดโหมดที่ไฮไลต์เพื่อไปต่อ',
         },
+        actionHint: { en: 'Select a growing mode to continue', th: 'กรุณาเลือกโหมดการปลูกเพื่อไปต่อ' },
+      },
+      {
+        icon: 'plant',
+        targets: ['[data-tour="lab-plant-card"]', '[data-tour="lab-plants"]', '[data-tour="lab-assets"]', '.lab-library-toggle'],
+        requirement: 'lab-plant-selected',
+        autoAdvance: true,
+        title: { en: 'Choose your first plant', th: 'เลือกพืชต้นแรก' },
+        description: {
+          en: 'Open Plants in Lab assets and select a species marked Ready. Each species keeps its own growing mode, environment, and progress.',
+          th: 'เปิดหมวดพืชในอุปกรณ์ห้องทดลอง แล้วเลือกพืชที่มีสถานะพร้อม พืชแต่ละชนิดจะเก็บโหมด สภาพแวดล้อม และความคืบหน้าแยกจากกัน',
+        },
+        actionHint: { en: 'Select a plant marked Ready to continue', th: 'เลือกพืชที่มีสถานะพร้อมเพื่อไปต่อ' },
+      },
+      {
+        icon: 'help',
+        targets: ['[data-tour="lab-plant-knowledge"]', '[data-tour="lab-plant-guide-button"]', '[data-tour="lab-plant-card"]'],
+        requirement: 'lab-knowledge-viewed',
+        autoAdvance: true,
+        title: { en: 'Read the plant guide', th: 'อ่านข้อมูลความรู้ของพืช' },
+        description: {
+          en: 'After planting starts, review the scientific name, real-life growth time, healthy factor ranges, care instructions, photo, and trusted references. Close the guide when you understand the plant.',
+          th: 'หลังเริ่มปลูก ให้อ่านชื่อวิทยาศาสตร์ ระยะเติบโตจริง ช่วงปัจจัยที่เหมาะสม วิธีดูแล รูปภาพ และแหล่งอ้างอิงที่น่าเชื่อถือ แล้วปิดหน้าความรู้เมื่ออ่านเสร็จ',
+        },
+        actionHint: { en: 'Read and close the plant guide to continue', th: 'อ่านและปิดหน้าความรู้ของพืชเพื่อไปต่อ' },
       },
       {
         icon: 'controller',
@@ -45,6 +72,15 @@ export const tutorialCatalog = {
         description: {
           en: 'Environment Control lets you tune every factor. Outdoor mode follows real weather and only exposes factors you can manage.',
           th: 'โหมดควบคุมปัจจัยปรับค่าได้ครบ ส่วนโหมดกลางแจ้งอิงสภาพอากาศจริงและเปิดเฉพาะค่าที่ผู้ใช้ควบคุมได้',
+        },
+      },
+      {
+        icon: 'tool',
+        targets: ['[data-tour="lab-items"]', '[data-panel-id="monitor"]', '[data-tour="lab-assets"]'],
+        title: { en: 'Match plant-care items to the problem', th: 'เลือกไอเทมให้ตรงกับปัญหา' },
+        description: {
+          en: 'Use Insect Spray for aphids, Snail Spray for snails, Fungus Spray for fungus, or Hand Pick for supported pests. Check Pest monitoring before consuming an item.',
+          th: 'ใช้สเปรย์กำจัดแมลงกับเพลี้ย สเปรย์กำจัดหอยกับหอยทาก สเปรย์กำจัดเชื้อรากับเชื้อรา หรือเก็บด้วยมือกับศัตรูพืชที่รองรับ โดยตรวจตัวติดตามศัตรูพืชก่อนใช้ไอเทม',
         },
       },
       {

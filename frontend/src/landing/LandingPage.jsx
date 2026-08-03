@@ -638,6 +638,23 @@ function LearningLibrary({ onOpenArticle }) {
   const language = getContentLanguage()
 
   useEffect(() => {
+    const refresh = () => setReloadKey((key) => key + 1)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+
+    window.addEventListener('focus', refresh)
+    window.addEventListener('plant-game:content-catalog-updated', refresh)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('plant-game:content-catalog-updated', refresh)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
 
     async function loadArticles() {
