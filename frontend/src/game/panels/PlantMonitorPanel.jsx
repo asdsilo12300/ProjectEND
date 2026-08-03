@@ -318,11 +318,13 @@ function hasBrokenEncoding(value) {
   return text.includes('\u00c3') || text.includes('\u00c2') || text.includes('\u00e0') || text.includes('\ufffd')
 }
 
-function readablePlantName(value) {
-  const text = String(value ?? '').trim()
-  if (!text || hasBrokenEncoding(text)) return 'Elephant Ear'
+function readablePlantName(plant, language) {
+  const preferredName = language === 'th' ? plant?.name_th : plant?.name_en
+  const fallbackName = language === 'th' ? plant?.name_en : plant?.name_th
+  const text = String(preferredName ?? fallbackName ?? '').trim()
+  if (!text || hasBrokenEncoding(text)) return language === 'th' ? 'ต้นหูช้าง' : 'Elephant Ear'
   const normalized = text.toLowerCase()
-  if (normalized === 'simulation sprout' || normalized === 'sprout') return 'Elephant Ear'
+  if (normalized === 'simulation sprout' || normalized === 'sprout') return language === 'th' ? 'ต้นหูช้าง' : 'Elephant Ear'
   return text
 }
 
@@ -576,7 +578,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const growthStages = getGrowthStageStops(simulationVisual?.plant)
   const realGrowth = getRealGrowthEstimate(simulationVisual)
   const stageName = simulationVisual?.current_stage?.stage_name ?? 'Seedling'
-  const plantName = readablePlantName(simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th)
+  const plantName = readablePlantName(simulationVisual?.plant, language)
   const plantImageUrl = resolveAssetUrl(simulationVisual?.plant?.base_image_url ?? simulationVisual?.plant?.image_url ?? simulationVisual?.plant?.icon_url)
   const visualState = simulationVisual?.visual_state ?? 'healthy'
   const statusLabel = visualStateLabels[visualState] ?? 'Monitoring'
@@ -615,7 +617,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
               )}
             </span>
             <div className="min-w-0">
-              <strong className="block text-[15px] font-black leading-5 text-lime-50">{plantName}</strong>
+              <strong className="block text-[15px] font-black leading-5 text-lime-50" data-i18n-skip="true">{plantName}</strong>
               <span className="text-xs leading-5 text-slate-300">
                 {stageName} - {statusLabel} - {growthProgress.toFixed(1)}% grown
               </span>

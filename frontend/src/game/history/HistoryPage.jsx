@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Swal from 'sweetalert2'
 import { deletePlantHistory, getPlantHistories, getToken, resolveAssetUrl, updatePlantHistoryVisibility } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { ParticleNetworkBackground } from '../components/ParticleNetworkBackground'
@@ -66,6 +67,12 @@ const historyMessages = {
     loginTitle: 'Sign in to view your history',
     loginDescription: 'Your saved simulations are connected to your account.',
     visibilityError: 'Sharing could not be updated. Your previous setting has been restored.',
+    shareConfirmTitle: 'Share this saved result?',
+    shareConfirmDescription: (name) => `${name} will appear in Community for other learners to view.`,
+    stopShareConfirmTitle: 'Make this result private?',
+    stopShareConfirmDescription: (name) => `${name} will be removed from Community and remain visible only to you.`,
+    confirmShare: 'Share result',
+    confirmPrivate: 'Make private',
     pageNumber: (page) => `History page ${page}`,
     previousPage: 'Previous history page',
     nextPage: 'Next history page',
@@ -131,6 +138,12 @@ const historyMessages = {
     loginTitle: 'เข้าสู่ระบบเพื่อดูประวัติ',
     loginDescription: 'การจำลองที่บันทึกไว้จะเชื่อมต่อกับบัญชีของคุณ',
     visibilityError: 'ไม่สามารถอัปเดตการแชร์ได้ ระบบคืนค่าเดิมให้แล้ว',
+    shareConfirmTitle: 'แชร์ผลการปลูกนี้หรือไม่?',
+    shareConfirmDescription: (name) => `${name} จะแสดงในชุมชนให้ผู้เรียนคนอื่นเปิดดูได้`,
+    stopShareConfirmTitle: 'เปลี่ยนผลการปลูกนี้เป็นส่วนตัวหรือไม่?',
+    stopShareConfirmDescription: (name) => `${name} จะถูกนำออกจากชุมชนและมีเพียงคุณที่เปิดดูได้`,
+    confirmShare: 'แชร์ผลการปลูก',
+    confirmPrivate: 'ตั้งเป็นส่วนตัว',
     pageNumber: (page) => `หน้าประวัติที่ ${page}`,
     previousPage: 'หน้าประวัติก่อนหน้า',
     nextPage: 'หน้าประวัติถัดไป',
@@ -547,6 +560,33 @@ export function HistoryPage({ onOpenGameState, onStartGrowing }) {
 
   async function toggleVisibility(save, visibility) {
     const previousVisibility = save.visibility ?? 'private'
+    if (previousVisibility === visibility) return
+
+    const isSharing = visibility === 'public'
+    const confirmation = await Swal.fire({
+      title: isSharing ? copy.shareConfirmTitle : copy.stopShareConfirmTitle,
+      text: isSharing
+        ? copy.shareConfirmDescription(saveTitle(save, language, copy))
+        : copy.stopShareConfirmDescription(saveTitle(save, language, copy)),
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: isSharing ? copy.confirmShare : copy.confirmPrivate,
+      cancelButtonText: copy.cancel,
+      focusCancel: true,
+      reverseButtons: true,
+      background: '#101511',
+      color: '#eaf7df',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'plantsim-shop-alert',
+        title: 'plantsim-shop-alert__title',
+        actions: 'plantsim-shop-alert__actions',
+        confirmButton: 'plantsim-shop-alert__confirm',
+        cancelButton: 'plantsim-shop-alert__cancel',
+      },
+    })
+    if (!confirmation.isConfirmed) return
+
     setVisibilityBusyId(save.id)
     setFeedback('')
     setSaves((current) => current.map((item) => (item.id === save.id ? { ...item, visibility } : item)))

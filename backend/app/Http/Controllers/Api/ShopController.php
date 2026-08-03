@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ShopItem;
+use App\Models\User;
 use App\Models\UserItem;
 use App\Models\WalletTransaction;
 use App\Services\PublicCatalogCache;
@@ -44,7 +45,7 @@ class ShopController extends Controller
     public function buy(Request $request, ShopItem $shopItem): JsonResponse
     {
         $data = $request->validate([
-            'quantity' => ['nullable', 'integer', 'min:1'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:99'],
         ]);
 
         $quantity = (int) ($data['quantity'] ?? 1);
@@ -56,13 +57,13 @@ class ShopController extends Controller
             'This shop item is no longer available.',
         );
 
-        $user = $request->user();
-        $totalCoin = $shopItem->price_coin * $quantity;
-        $totalGem = $shopItem->price_gem * $quantity;
+        [$inventory, $user, $totalCoin, $totalGem] = DB::transaction(function () use ($quantity, $request, $shopItem) {
+            $user = User::query()->lockForUpdate()->findOrFail($request->user()->id);
+            $totalCoin = $shopItem->price_coin * $quantity;
+            $totalGem = $shopItem->price_gem * $quantity;
 
-        abort_if($user->coin < $totalCoin || $user->gem < $totalGem, 422, 'Not enough currency.');
+            abort_if($user->coin < $totalCoin || $user->gem < $totalGem, 422, 'Not enough currency.');
 
-        $inventory = DB::transaction(function () use ($quantity, $shopItem, $totalCoin, $totalGem, $user) {
             $user->decrement('coin', $totalCoin);
             $user->decrement('gem', $totalGem);
 
@@ -96,12 +97,17 @@ class ShopController extends Controller
             $inventory->quantity = ($inventory->quantity ?? 0) + $quantity;
             $inventory->save();
 
-            return $inventory->load('item');
+            return [$inventory->load('item'), $user->refresh(), $totalCoin, $totalGem];
         });
 
         return response()->json([
             'data' => $inventory,
-            'user' => $user->refresh(),
+            'user' => $user,
+            'purchase' => [
+                'quantity' => $quantity,
+                'total_coin' => $totalCoin,
+                'total_gem' => $totalGem,
+            ],
         ], 201);
     }
 }

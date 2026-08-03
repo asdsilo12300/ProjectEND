@@ -90,13 +90,16 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
   }
 
   async function resetSettings() {
+    const isThai = settings.language === 'th'
     const result = await Swal.fire({
-      title: 'Restore default settings?',
-      text: 'Text size, contrast, motion, and language will return to their original values.',
+      title: isThai ? 'คืนค่าการตั้งค่าเริ่มต้นหรือไม่?' : 'Restore default settings?',
+      text: isThai
+        ? 'ขนาดตัวอักษร ความต่างสี การเคลื่อนไหว และภาษาจะกลับเป็นค่าเริ่มต้น'
+        : 'Text size, contrast, motion, and language will return to their original values.',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Restore defaults',
-      cancelButtonText: 'Keep my settings',
+      confirmButtonText: isThai ? 'คืนค่าเริ่มต้น' : 'Restore defaults',
+      cancelButtonText: isThai ? 'ใช้การตั้งค่าปัจจุบันต่อ' : 'Keep my settings',
       background: '#111713',
       color: '#ecfccb',
       confirmButtonColor: '#4f7947',

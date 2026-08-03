@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 
 const modeOptions = [
@@ -21,9 +22,36 @@ const modeOptions = [
 export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
   const choosingForPlant = Boolean(plantName)
 
+  useEffect(() => {
+    if (!onCancel) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onCancel()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onCancel])
+
   return (
-    <div className="absolute inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-[2px]">
-      <section className="w-full max-w-[680px] rounded-lg border border-lime-100/15 bg-[#101511] p-5 text-slate-100 shadow-[0_20px_48px_rgba(0,0,0,.46)]" data-tour="lab-mode-picker">
+    <div
+      className="absolute inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-[2px]"
+      onClick={(event) => {
+        if (onCancel && event.target === event.currentTarget) onCancel()
+      }}
+    >
+      <section className="relative w-full max-w-[680px] rounded-lg border border-lime-100/15 bg-[#101511] p-5 text-slate-100 shadow-[0_20px_48px_rgba(0,0,0,.46)]" data-tour="lab-mode-picker">
+        {onCancel && (
+          <button
+            aria-label="Cancel"
+            className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-md border border-lime-100/15 bg-white/[0.04] text-slate-300 transition hover:border-red-300/35 hover:bg-red-400/10 hover:text-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+            title="Cancel"
+            type="button"
+            onClick={onCancel}
+          >
+            <AppIcon className="h-4 w-4" name="close" />
+          </button>
+        )}
         <div className="mb-4 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9bcf82]">{choosingForPlant ? 'New planted species · Growing mode' : 'Step 1 of 3 · Growing mode'}</p>
           <h2 className="mt-1 text-xl font-bold text-lime-50">{choosingForPlant ? `Choose a mode for ${plantName}` : 'Choose growing mode'}</h2>

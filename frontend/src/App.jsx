@@ -24,6 +24,7 @@ import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFix
 import { getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from './game/utils/realGrowth'
 import { defaultWindows, panelExpandedPosition, reflowWindowsForViewport } from './game/utils/windows'
 import { applySettings, loadSettings } from './game/settings/settingsPreferences'
+import { getAppLanguage } from './i18n/appI18n'
 
 const AdminPage = lazy(() => import('./admin/AdminPage').then((module) => ({ default: module.AdminPage })))
 const CommunityPage = lazy(() => import('./game/community/CommunityPage').then((module) => ({ default: module.CommunityPage })))
@@ -181,6 +182,20 @@ const itemNameToKey = {
   'Snail Prank': 'snail-prank',
 }
 
+const thaiItemNames = {
+  'Hand Pick': 'เก็บด้วยมือ',
+  'Insect Spray': 'สเปรย์กำจัดแมลง',
+  'Snail Spray': 'สเปรย์กำจัดหอยทาก',
+  'Fungus Spray': 'สเปรย์กำจัดเชื้อรา',
+  'Aphid Prank': 'ไอเทมเพลี้ยแกล้งเพื่อน',
+  'Snail Prank': 'ไอเทมหอยทากแกล้งเพื่อน',
+}
+
+function localizedItemName(item, language = getAppLanguage()) {
+  const name = String(item?.name ?? 'Lab item')
+  return language === 'th' ? thaiItemNames[name] ?? name : name
+}
+
 function growthAnimationDurationForRate(growthRate) {
   const rate = Math.max(0, Number(growthRate) || 0)
   if (rate <= 0) return 0
@@ -275,11 +290,30 @@ function readablePlantName(plant) {
   return name
 }
 
+function localizedPlantName(plant, language = getAppLanguage()) {
+  const source = plant?.plantData ?? plant ?? {}
+  const preferredName = language === 'th' ? source.name_th : source.name_en
+  const fallbackName = language === 'th' ? source.name_en : source.name_th
+  const name = String(preferredName ?? fallbackName ?? plant?.name ?? '').trim()
+
+  if (!name || name === 'Simulation Sprout' || name === 'Sprout') {
+    return language === 'th' ? 'ต้นหูช้าง' : 'Elephant Ear'
+  }
+
+  return name
+}
+
+function localizedText(english, thai) {
+  return getAppLanguage() === 'th' ? thai : english
+}
+
 function plantAssetFromApi(plant, planted = false) {
   return {
     id: `plant-${plant.id}`,
     backendId: plant.id,
     name: readablePlantName(plant),
+    nameEn: plant.name_en,
+    nameTh: plant.name_th,
     detail: plant.description ? 'Database plant' : 'Plant',
     color: '#9bcf82',
     type: 'plant',
@@ -1710,15 +1744,19 @@ function App() {
     }
     if (prankBusyRef.current) return
 
-    const targetName = visitingFriend?.user?.username ?? 'your friend'
-    const plantName = selectedPlant?.name ?? 'plant'
+    const isThai = getAppLanguage() === 'th'
+    const targetName = visitingFriend?.user?.username ?? (isThai ? 'เพื่อนของคุณ' : 'your friend')
+    const plantName = localizedPlantName(selectedPlant, isThai ? 'th' : 'en')
+    const assetName = localizedItemName(asset, isThai ? 'th' : 'en')
     const confirmation = await Swal.fire({
-      title: `Use ${asset.name}?`,
-      text: `Send this prank to ${targetName}'s ${plantName}? One item will be used.`,
+      title: isThai ? `ใช้ ${assetName} หรือไม่?` : `Use ${assetName}?`,
+      text: isThai
+        ? `ส่งไอเทมแกล้งไปยัง ${plantName} ของ ${targetName} หรือไม่? ระบบจะใช้ไอเทม 1 ชิ้น`
+        : `Send this prank to ${targetName}'s ${plantName}? One item will be used.`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Send prank',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: isThai ? 'ส่งไอเทม' : 'Send prank',
+      cancelButtonText: isThai ? 'ยกเลิก' : 'Cancel',
       background: '#101511',
       color: '#eaf7df',
       buttonsStyling: false,
@@ -1734,7 +1772,7 @@ function App() {
     if (!confirmation.isConfirmed) return
 
     prankBusyRef.current = true
-    setActionMessage(`Sending ${asset.name} to ${targetName}...`)
+    setActionMessage(isThai ? `กำลังส่ง ${assetName} ไปยัง ${targetName}...` : `Sending ${assetName} to ${targetName}...`)
 
     try {
       const payload = await prankFriendSimulator(simulatorId, asset.itemKey ?? asset.id)
@@ -1759,9 +1797,9 @@ function App() {
       }
 
       setAppliedAsset(null)
-      setActionMessage(result.message ?? `${asset.name} sent successfully`)
+      setActionMessage(result.message ?? (isThai ? `ส่ง ${assetName} สำเร็จแล้ว` : `${assetName} sent successfully`))
     } catch (error) {
-      setActionMessage(error.message || 'Unable to send this prank')
+      setActionMessage(isThai ? 'ไม่สามารถส่งไอเทมแกล้งเพื่อนได้' : error.message || 'Unable to send this prank')
     } finally {
       prankBusyRef.current = false
     }
@@ -2201,6 +2239,34 @@ function App() {
       return
     }
 
+    const harvestConfirmation = await Swal.fire({
+      title: localizedText(
+        `Harvest ${localizedPlantName(selectedPlant, 'en')}?`,
+        `เก็บเกี่ยว ${localizedPlantName(selectedPlant, 'th')} หรือไม่?`,
+      ),
+      text: localizedText(
+        'The completed result and growth calculation will be saved to History.',
+        'ผลลัพธ์และการคำนวณการเติบโตจะถูกบันทึกลงในหน้าประวัติ',
+      ),
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: localizedText('Harvest and save', 'เก็บเกี่ยวและบันทึก'),
+      cancelButtonText: localizedText('Cancel', 'ยกเลิก'),
+      focusCancel: true,
+      reverseButtons: true,
+      background: '#101511',
+      color: '#eaf7df',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'plantsim-shop-alert',
+        title: 'plantsim-shop-alert__title',
+        actions: 'plantsim-shop-alert__actions',
+        confirmButton: 'plantsim-shop-alert__confirm',
+        cancelButton: 'plantsim-shop-alert__cancel',
+      },
+    })
+    if (!harvestConfirmation.isConfirmed) return
+
     isEndingSimulationRef.current = true
     try {
       const snapshotImageData = stageSnapshotRef.current?.capture?.() ?? null
@@ -2261,6 +2327,39 @@ function App() {
 
     const previousVisibility = previewSimulationVisual?.share_visibility ?? 'private'
     const visibility = previousVisibility === 'private' ? 'public' : 'private'
+    const isStartingShare = visibility === 'public'
+    const shareConfirmation = await Swal.fire({
+      title: localizedText(
+        isStartingShare ? 'Share this garden live?' : 'Stop live sharing?',
+        isStartingShare ? 'แชร์สวนนี้แบบสดหรือไม่?' : 'หยุดแชร์สวนแบบสดหรือไม่?',
+      ),
+      text: localizedText(
+        isStartingShare
+          ? 'People in Community will be able to open and view the current garden state.'
+          : 'This live garden will no longer be visible in Community.',
+        isStartingShare
+          ? 'ผู้ใช้ในชุมชนจะสามารถเปิดดูสถานะปัจจุบันของสวนนี้ได้'
+          : 'สวนแบบสดนี้จะไม่แสดงในชุมชนอีกต่อไป',
+      ),
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: localizedText(isStartingShare ? 'Share garden' : 'Stop sharing', isStartingShare ? 'แชร์สวน' : 'หยุดแชร์'),
+      cancelButtonText: localizedText('Cancel', 'ยกเลิก'),
+      focusCancel: true,
+      reverseButtons: true,
+      background: '#101511',
+      color: '#eaf7df',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'plantsim-shop-alert',
+        title: 'plantsim-shop-alert__title',
+        actions: 'plantsim-shop-alert__actions',
+        confirmButton: 'plantsim-shop-alert__confirm',
+        cancelButton: 'plantsim-shop-alert__cancel',
+      },
+    })
+    if (!shareConfirmation.isConfirmed) return
+
     setShareBusy(true)
     mergeCanonicalSimulator({ ...canonicalSimulationRef.current, share_visibility: visibility })
 
@@ -2340,14 +2439,17 @@ function App() {
   async function resetSimulation() {
     if (isResettingRef.current || !selectedPlant) return
 
-    const plantName = selectedPlant.name || 'this plant'
+    const isThai = getAppLanguage() === 'th'
+    const plantName = localizedPlantName(selectedPlant, isThai ? 'th' : 'en')
     const confirmation = await Swal.fire({
-      title: `Uproot ${plantName}?`,
-      text: 'This ends the active simulation and removes its current growing progress. This action cannot be undone.',
+      title: isThai ? `ถอน ${plantName} หรือไม่?` : `Uproot ${plantName}?`,
+      text: isThai
+        ? 'การดำเนินการนี้จะจบการจำลองและลบความคืบหน้าปัจจุบัน โดยไม่สามารถย้อนกลับได้'
+        : 'This ends the active simulation and removes its current growing progress. This action cannot be undone.',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Yes, uproot plant',
-      cancelButtonText: 'Keep growing',
+      confirmButtonText: isThai ? 'ยืนยัน ถอนพืช' : 'Yes, uproot plant',
+      cancelButtonText: isThai ? 'ปลูกต่อ' : 'Keep growing',
       focusCancel: true,
       reverseButtons: true,
       background: '#101511',
@@ -3219,7 +3321,7 @@ function App() {
 
       <Suspense fallback={<GamePageLoading />}>
       {activePage === 'shop' ? (
-        <ShopPage onInventoryItemChange={upsertInventoryItem} onUserUpdate={setUser} />
+        <ShopPage coinBalance={user?.coin ?? 0} onInventoryItemChange={upsertInventoryItem} onUserUpdate={setUser} />
       ) : activePage === 'history' ? (
         <HistoryPage onOpenGameState={viewSavedGameState} onStartGrowing={() => navigateToPage('lab')} />
       ) : activePage === 'community' ? (

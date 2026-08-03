@@ -6,7 +6,7 @@ import { getAppLanguage } from '../../i18n/appI18n'
 import { imageAssets } from '../data/gameData'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { shopItems } from './data/shopItems'
-import { getShopCopy } from './shopCopy'
+import { getShopCopy, localizeShopItem } from './shopCopy'
 import { ProductGrid } from './components/ProductGrid'
 import { ShopPagination } from './components/ShopPagination'
 import { ShopSidebar } from './components/ShopSidebar'
@@ -18,6 +18,32 @@ const recentPurchasesKey = 'plantsim-shop-latest-purchases'
 const itemsPerPage = 8
 const defaultPriceRange = { min: 0, max: 100 }
 
+function escapeHtml(value) {
+  const entities = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  }
+
+  return String(value ?? '').replace(/[&<>"']/g, (character) => entities[character])
+}
+
+function useAppLanguage() {
+  const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
+
+  useEffect(() => {
+    const updateLanguage = (event) => {
+      setLanguage(event?.detail?.language === 'th' || getAppLanguage() === 'th' ? 'th' : 'en')
+    }
+    window.addEventListener('plant-settings-change', updateLanguage)
+    return () => window.removeEventListener('plant-settings-change', updateLanguage)
+  }, [])
+
+  return language
+}
+
 function mapApiShopItem(shopItem) {
   const item = shopItem.item ?? {}
   const fallback = fallbackByName.get(item.name) ?? {}
@@ -27,6 +53,7 @@ function mapApiShopItem(shopItem) {
     ...fallback,
     id: `shop-${shopItem.id}`,
     backendId: shopItem.id,
+    sourceName: item.name ?? fallback.name ?? 'Lab item',
     name: item.name ?? fallback.name ?? 'Lab item',
     category: isFriendPrank ? 'Friend Prank' : 'Lab Item',
     price: Number(shopItem.price_coin ?? fallback.price ?? 0),
@@ -39,7 +66,7 @@ function mapApiShopItem(shopItem) {
   }
 }
 
-export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
+export function ShopPage({ coinBalance = 0, onInventoryItemChange, onUserUpdate }) {
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [maxPrice, setMaxPrice] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -82,10 +109,14 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
     }
   }, [reloadKey])
 
-  const language = getAppLanguage()
+  const language = useAppLanguage()
   const copy = getShopCopy(language)
 
-  const products = apiItems
+  const products = useMemo(() => apiItems.map((item) => localizeShopItem(item, language)), [apiItems, language])
+  const localizedLatestPurchases = useMemo(
+    () => latestPurchases.map((item) => localizeShopItem(item, language)),
+    [language, latestPurchases],
+  )
 
   const priceBounds = useMemo(() => {
     if (!products.length) return defaultPriceRange
@@ -201,18 +232,36 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
       return
     }
 
+    const maximumAffordableQuantity = item.price > 0
+      ? Math.min(99, Math.max(1, Math.floor(Number(coinBalance) / item.price)))
+      : 99
+    const quantityLimit = Math.max(1, maximumAffordableQuantity)
+    const totalPriceId = `plantsim-shop-total-${item.backendId}`
+    const safeItemName = escapeHtml(item.name)
+    const safeImageUrl = escapeHtml(item.imageUrl)
     const confirmation = await Swal.fire({
       title: copy.confirmTitle(item.name),
       html: `
         <div class="plantsim-shop-confirm">
-          ${item.imageUrl ? `<img class="plantsim-shop-confirm__item" src="${item.imageUrl}" alt="">` : ''}
-          <div class="plantsim-shop-confirm__price">
+          ${item.imageUrl ? `<img class="plantsim-shop-confirm__item" src="${safeImageUrl}" alt="">` : ''}
+          <div class="plantsim-shop-confirm__price" aria-label="${copy.totalPrice}">
             <img src="${imageAssets.coin}" alt="">
-            <strong>${item.price}</strong>
+            <span>${copy.totalPrice}</span>
+            <strong id="${totalPriceId}">${item.price}</strong>
           </div>
           <p>${copy.confirmDescription}</p>
+          <small class="plantsim-shop-confirm__hint">${copy.quantityHint}</small>
         </div>
       `,
+      input: 'number',
+      inputLabel: copy.quantity,
+      inputValue: 1,
+      inputAttributes: {
+        min: '1',
+        max: String(quantityLimit),
+        step: '1',
+        inputmode: 'numeric',
+      },
       showCancelButton: true,
       confirmButtonText: copy.confirmBuy,
       cancelButtonText: copy.cancel,
@@ -226,16 +275,74 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
         actions: 'plantsim-shop-alert__actions',
         confirmButton: 'plantsim-shop-alert__confirm',
         cancelButton: 'plantsim-shop-alert__cancel',
+        input: 'plantsim-shop-alert__quantity',
+      },
+      didOpen: () => {
+        const input = Swal.getInput()
+        const total = document.getElementById(totalPriceId)
+        const updateTotal = () => {
+          const quantity = Math.min(quantityLimit, Math.max(1, Number.parseInt(input?.value ?? '1', 10) || 1))
+          if (total) total.textContent = String(item.price * quantity)
+        }
+        input?.addEventListener('input', updateTotal)
+        input?.select()
+        updateTotal()
+      },
+      preConfirm: (value) => {
+        const quantity = Number(value)
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > quantityLimit) {
+          Swal.showValidationMessage(
+            quantity > maximumAffordableQuantity && item.price > 0
+              ? copy.notEnoughCurrency
+              : copy.quantityError,
+          )
+          return false
+        }
+        return quantity
       },
     })
 
     if (!confirmation.isConfirmed) return
+    const quantity = Number(confirmation.value)
+    const totalPrice = item.price * quantity
+    const finalConfirmation = await Swal.fire({
+      title: copy.finalConfirmTitle,
+      html: `
+        <div class="plantsim-shop-confirm plantsim-shop-confirm--final">
+          ${item.imageUrl ? `<img class="plantsim-shop-confirm__item" src="${safeImageUrl}" alt="">` : ''}
+          <strong class="plantsim-shop-confirm__name">${safeItemName}</strong>
+          <div class="plantsim-shop-confirm__summary">
+            <span>${copy.finalQuantity}<strong>${quantity}</strong></span>
+            <span>${copy.totalPrice}<strong class="plantsim-shop-confirm__summary-price"><img src="${imageAssets.coin}" alt="">${totalPrice}</strong></span>
+          </div>
+          <p>${copy.finalConfirmDescription}</p>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: copy.confirmPurchase,
+      cancelButtonText: copy.cancel,
+      focusCancel: true,
+      reverseButtons: true,
+      background: '#101511',
+      color: '#eaf7df',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'plantsim-shop-alert',
+        title: 'plantsim-shop-alert__title',
+        actions: 'plantsim-shop-alert__actions',
+        confirmButton: 'plantsim-shop-alert__confirm',
+        cancelButton: 'plantsim-shop-alert__cancel',
+      },
+    })
+
+    if (!finalConfirmation.isConfirmed) return
 
     setBuyingId(item.id)
     setShopNotice(null)
 
     try {
-      const payload = await buyShopItem(item.backendId, 1)
+      const payload = await buyShopItem(item.backendId, quantity)
       const inventory = payload.data ?? payload.inventory ?? null
 
       if (inventory) {
@@ -250,7 +357,8 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
         const purchase = {
           id: item.id,
           name: item.name,
-          price: item.price,
+          price: totalPrice,
+          quantity,
           accent: item.accent,
           imageUrl: item.imageUrl,
         }
@@ -259,9 +367,17 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
         return next
       })
 
-      setShopNotice({ type: 'success', text: copy.purchaseSuccess(item.name) })
+      setShopNotice({ type: 'success', text: copy.purchaseSuccess(item.name, quantity) })
     } catch (error) {
-      setShopNotice({ type: 'error', text: error.message || copy.purchaseError })
+      const message = String(error?.message ?? '')
+      const localizedMessage = language === 'th'
+        ? /not enough currency/i.test(message)
+          ? copy.notEnoughCurrency
+          : /no longer available|not found/i.test(message)
+            ? copy.unavailableError
+            : copy.purchaseError
+        : message || copy.purchaseError
+      setShopNotice({ type: 'error', text: localizedMessage })
     } finally {
       setBuyingId(null)
     }
@@ -307,7 +423,7 @@ export function ShopPage({ onInventoryItemChange, onUserUpdate }) {
               categories={categories}
               copy={copy}
               hasActiveFilters={hasActiveFilters}
-              latestItems={latestPurchases}
+              latestItems={localizedLatestPurchases}
               maxPrice={effectiveMaxPrice}
               onPriceChange={updateMaxPrice}
               onResetFilters={resetFilters}

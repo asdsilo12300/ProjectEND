@@ -23,6 +23,7 @@ const messages = {
     noCategories: 'No categories available',
     resetFilters: 'Reset filters',
     labItem: 'Lab item',
+    friendPrank: 'Friend prank',
     favoriteSave: (name) => `Save ${name} to favorites`,
     favoriteRemove: (name) => `Remove ${name} from favorites`,
     buy: 'Buy',
@@ -49,10 +50,20 @@ const messages = {
     buyUnavailable: 'This item is not connected to the shop yet.',
     confirmTitle: (name) => `Buy ${name}?`,
     confirmDescription: 'This item will be added to your lab inventory.',
-    confirmBuy: 'Buy item',
+    quantity: 'Quantity',
+    quantityHint: 'Choose from 1 to 99 items.',
+    quantityError: 'Enter a whole number from 1 to 99.',
+    totalPrice: 'Total price',
+    confirmBuy: 'Review order',
+    finalConfirmTitle: 'Confirm this purchase?',
+    finalConfirmDescription: 'Please review the quantity and total before coins are deducted.',
+    finalQuantity: 'Quantity',
+    confirmPurchase: 'Confirm purchase',
     cancel: 'Cancel',
-    purchaseSuccess: (name) => `${name} was added to your inventory.`,
+    purchaseSuccess: (name, quantity) => `${quantity} × ${name} were added to your inventory.`,
     purchaseError: 'This item could not be purchased. Please try again.',
+    notEnoughCurrency: 'You do not have enough coins for this quantity.',
+    unavailableError: 'This item is no longer available.',
     nextPage: 'Next shop page',
     pageNumber: (page) => `Shop page ${page}`,
   },
@@ -80,6 +91,7 @@ const messages = {
     noCategories: 'ยังไม่มีหมวดหมู่',
     resetFilters: 'ล้างตัวกรอง',
     labItem: 'อุปกรณ์ห้องทดลอง',
+    friendPrank: 'ไอเทมแกล้งเพื่อน',
     favoriteSave: (name) => `บันทึก ${name} เป็นรายการโปรด`,
     favoriteRemove: (name) => `นำ ${name} ออกจากรายการโปรด`,
     buy: 'ซื้อ',
@@ -106,10 +118,20 @@ const messages = {
     buyUnavailable: 'สินค้านี้ยังไม่ได้เชื่อมต่อกับร้านค้า',
     confirmTitle: (name) => `ซื้อ ${name} หรือไม่?`,
     confirmDescription: 'สินค้านี้จะถูกเพิ่มไปยังคลังอุปกรณ์ของคุณ',
-    confirmBuy: 'ซื้อสินค้า',
+    quantity: 'จำนวนที่ต้องการซื้อ',
+    quantityHint: 'เลือกได้ตั้งแต่ 1 ถึง 99 ชิ้น',
+    quantityError: 'กรุณากรอกจำนวนเต็มตั้งแต่ 1 ถึง 99',
+    totalPrice: 'ราคารวม',
+    confirmBuy: 'ตรวจสอบรายการ',
+    finalConfirmTitle: 'ยืนยันการซื้ออีกครั้งหรือไม่?',
+    finalConfirmDescription: 'กรุณาตรวจสอบจำนวนและราคารวมก่อนระบบหักเหรียญ',
+    finalQuantity: 'จำนวนสินค้า',
+    confirmPurchase: 'ยืนยันการซื้อ',
     cancel: 'ยกเลิก',
-    purchaseSuccess: (name) => `เพิ่ม ${name} ไปยังคลังของคุณแล้ว`,
+    purchaseSuccess: (name, quantity) => `เพิ่ม ${name} จำนวน ${quantity} ชิ้นไปยังคลังของคุณแล้ว`,
     purchaseError: 'ไม่สามารถซื้อสินค้านี้ได้ กรุณาลองอีกครั้ง',
+    notEnoughCurrency: 'เหรียญของคุณไม่เพียงพอสำหรับจำนวนที่เลือก',
+    unavailableError: 'สินค้านี้ไม่พร้อมจำหน่ายแล้ว',
     nextPage: 'หน้าร้านค้าถัดไป',
     pageNumber: (page) => `หน้าร้านค้าที่ ${page}`,
   },
@@ -117,4 +139,18 @@ const messages = {
 
 export function getShopCopy(language) {
   return messages[language === 'th' ? 'th' : 'en']
+}
+
+const thaiShopItems = {
+  'Insect Spray': { name: 'สเปรย์กำจัดแมลง', description: 'กำจัดเพลี้ยได้สำเร็จ 100%' },
+  'Snail Spray': { name: 'สเปรย์กำจัดหอยทาก', description: 'กำจัดหอยทากได้สำเร็จ 100%' },
+  'Fungus Spray': { name: 'สเปรย์กำจัดเชื้อรา', description: 'กำจัดเชื้อราได้สำเร็จ 100%' },
+  'Aphid Prank': { name: 'ไอเทมเพลี้ยแกล้งเพื่อน', description: 'ส่งเพลี้ยไปยังพืชที่กำลังปลูก 1 ต้นในสวนของเพื่อน' },
+  'Snail Prank': { name: 'ไอเทมหอยทากแกล้งเพื่อน', description: 'ส่งหอยทากไปยังพืชที่กำลังปลูก 1 ต้นในสวนของเพื่อน' },
+}
+
+export function localizeShopItem(item, language) {
+  if (language !== 'th') return item
+  const localized = thaiShopItems[item?.sourceName ?? item?.name]
+  return localized ? { ...item, ...localized } : item
 }

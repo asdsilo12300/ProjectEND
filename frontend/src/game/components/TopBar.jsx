@@ -44,12 +44,39 @@ const navPages = {
 
 const MAX_COIN_BALANCE = 2_000_000_000
 
-function notificationAction(type) {
-  if (type === 'like') return 'liked your post'
-  if (type === 'comment_like') return 'liked your comment'
-  if (type === 'reply') return 'replied to your comment'
-  if (type === 'garden_prank') return 'sent a prank to your garden'
-  return 'commented on your post'
+function topBarCopy(language, english, thai) {
+  return language === 'th' ? thai : english
+}
+
+function useTopBarLanguage() {
+  const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
+
+  useEffect(() => {
+    const updateLanguage = (event) => {
+      setLanguage(event?.detail?.language === 'th' || getAppLanguage() === 'th' ? 'th' : 'en')
+    }
+
+    window.addEventListener('plant-settings-change', updateLanguage)
+    return () => window.removeEventListener('plant-settings-change', updateLanguage)
+  }, [])
+
+  return language
+}
+
+function notificationAction(type, language) {
+  if (type === 'like') return topBarCopy(language, 'liked your post', 'ถูกใจโพสต์ของคุณ')
+  if (type === 'comment_like') return topBarCopy(language, 'liked your comment', 'ถูกใจความคิดเห็นของคุณ')
+  if (type === 'reply') return topBarCopy(language, 'replied to your comment', 'ตอบกลับความคิดเห็นของคุณ')
+  if (type === 'garden_prank') return topBarCopy(language, 'sent a prank to your garden', 'ส่งของแกล้งมายังสวนของคุณ')
+  return topBarCopy(language, 'commented on your post', 'แสดงความคิดเห็นในโพสต์ของคุณ')
+}
+
+function notificationExcerpt(notification, language) {
+  const excerpt = String(notification?.excerpt ?? '')
+  if (language !== 'th' || notification?.type !== 'garden_prank') return excerpt
+  if (/aphid/i.test(excerpt)) return 'พบเพลี้ยบนพืชที่กำลังปลูกของคุณ'
+  if (/snail/i.test(excerpt)) return 'พบหอยทากบนพืชที่กำลังปลูกของคุณ'
+  return excerpt
 }
 
 function isCommunityNotification(notification) {
@@ -57,28 +84,29 @@ function isCommunityNotification(notification) {
   return ['like', 'comment', 'reply', 'comment_like'].includes(notification?.type)
 }
 
-function notificationTime(value) {
+function notificationTime(value, language) {
   const timestamp = new Date(value).getTime()
   if (!Number.isFinite(timestamp)) return ''
   const elapsed = Math.max(0, Date.now() - timestamp)
-  if (elapsed < 60_000) return 'now'
-  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m`
-  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h`
-  return `${Math.floor(elapsed / 86_400_000)}d`
+  if (elapsed < 60_000) return topBarCopy(language, 'now', 'ตอนนี้')
+  if (elapsed < 3_600_000) return topBarCopy(language, `${Math.floor(elapsed / 60_000)}m`, `${Math.floor(elapsed / 60_000)} นาที`)
+  if (elapsed < 86_400_000) return topBarCopy(language, `${Math.floor(elapsed / 3_600_000)}h`, `${Math.floor(elapsed / 3_600_000)} ชม.`)
+  return topBarCopy(language, `${Math.floor(elapsed / 86_400_000)}d`, `${Math.floor(elapsed / 86_400_000)} วัน`)
 }
 
-function notificationExactTime(value) {
+function notificationExactTime(value, language) {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
 
-  return new Intl.DateTimeFormat(getAppLanguage() === 'th' ? 'th-TH' : 'en-GB', {
+  return new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-GB', {
     dateStyle: 'full',
     timeStyle: 'medium',
   }).format(date)
 }
 
 export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, communityUnreadNotificationCount = 0, demoMode = false, notificationError = '', notifications = [], notificationStatus = 'idle', onDemoExit, onDemoSignIn, onHelpOpen, onNavigate, onNotificationRead, onNotificationsRefresh, openWindow, profileOpen, setProfileOpen, unreadNotificationCount = 0, user, onAuthRequired, onLogout }) {
+  const language = useTopBarLanguage()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [coinDetailsOpen, setCoinDetailsOpen] = useState(false)
@@ -299,7 +327,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             <button
               className={`relative grid h-11 w-11 place-items-center rounded-md border text-slate-200 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 sm:h-12 sm:w-12 ${notificationsOpen ? 'border-[#9bcf82]/45 bg-[#9bcf82]/12 text-lime-100' : 'border-lime-100/10 bg-white/[0.04] hover:bg-white/[0.075]'}`}
               type="button"
-              aria-label={`Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ''}`}
+              aria-label={topBarCopy(language, `Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ''}`, `การแจ้งเตือน${unreadNotificationCount ? ` มี ${unreadNotificationCount} รายการที่ยังไม่ได้อ่าน` : ''}`)}
               aria-haspopup="dialog"
               aria-expanded={notificationsOpen}
               onClick={() => {
@@ -319,34 +347,35 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             </button>
 
             {notificationsOpen && (
-              <section className="absolute right-0 top-14 z-[80] w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-xl border border-lime-100/15 bg-[#101511]/98 shadow-[0_22px_55px_rgba(0,0,0,.52)] backdrop-blur-xl" aria-label="Notifications" role="dialog">
+              <section className="absolute right-0 top-14 z-[80] w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-xl border border-lime-100/15 bg-[#101511]/98 shadow-[0_22px_55px_rgba(0,0,0,.52)] backdrop-blur-xl" aria-label={topBarCopy(language, 'Notifications', 'การแจ้งเตือน')} role="dialog">
                 <header className="flex items-center justify-between border-b border-lime-100/10 px-4 py-3">
                   <span>
-                    <strong className="block text-sm text-lime-50">Notifications</strong>
-                    <small className="mt-0.5 block text-xs text-slate-400">Community, garden, and game updates</small>
+                    <strong className="block text-sm text-lime-50">{topBarCopy(language, 'Notifications', 'การแจ้งเตือน')}</strong>
+                    <small className="mt-0.5 block text-xs text-slate-400">{topBarCopy(language, 'Community, garden, and game updates', 'อัปเดตจากชุมชน สวน และเกม')}</small>
                   </span>
-                  {unreadNotificationCount > 0 ? <span className="rounded-full bg-red-500/15 px-2 py-1 text-xs font-black text-red-300">{notificationBadge} new</span> : null}
+                  {unreadNotificationCount > 0 ? <span className="rounded-full bg-red-500/15 px-2 py-1 text-xs font-black text-red-300">{notificationBadge} {topBarCopy(language, 'new', 'ใหม่')}</span> : null}
                 </header>
 
                 <div className="game-themed-scrollbar max-h-[min(430px,calc(100vh-150px))] overflow-y-auto">
-                  {notificationStatus === 'loading' ? <LoadingSkeleton count={4} label="Loading notifications" variant="list" /> : null}
+                  {notificationStatus === 'loading' ? <LoadingSkeleton count={4} label={topBarCopy(language, 'Loading notifications', 'กำลังโหลดการแจ้งเตือน')} variant="list" /> : null}
                   {notificationStatus !== 'loading' && notificationError && !notifications.length ? (
                     <div className="px-5 py-8 text-center">
                       <AppIcon className="mx-auto h-6 w-6 text-red-300" name="notifications" />
-                      <p className="mt-2 text-xs text-slate-400">{notificationError}</p>
-                      <button className="mt-3 rounded-md border border-lime-100/15 px-3 py-2 text-xs font-bold text-lime-100 hover:bg-white/[0.05]" type="button" onClick={() => onNotificationsRefresh?.()}>Try again</button>
+                      <p className="mt-2 text-xs text-slate-400">{topBarCopy(language, notificationError, 'ไม่สามารถโหลดการแจ้งเตือนได้')}</p>
+                      <button className="mt-3 rounded-md border border-lime-100/15 px-3 py-2 text-xs font-bold text-lime-100 hover:bg-white/[0.05]" type="button" onClick={() => onNotificationsRefresh?.()}>{topBarCopy(language, 'Try again', 'ลองอีกครั้ง')}</button>
                     </div>
                   ) : null}
                   {notificationStatus !== 'loading' && !notificationError && !notifications.length ? (
                     <div className="px-6 py-10 text-center">
                       <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-white/[0.04] text-slate-400"><AppIcon className="h-5 w-5" name="notifications" /></span>
-                      <strong className="mt-3 block text-sm text-lime-50">You're all caught up</strong>
-                      <span className="mt-1 block text-xs text-slate-400">New activity will appear here.</span>
+                      <strong className="mt-3 block text-sm text-lime-50">{topBarCopy(language, "You're all caught up", 'อ่านการแจ้งเตือนครบแล้ว')}</strong>
+                      <span className="mt-1 block text-xs text-slate-400">{topBarCopy(language, 'New activity will appear here.', 'กิจกรรมใหม่จะแสดงที่นี่')}</span>
                     </div>
                   ) : null}
                   {notifications.map((notification) => {
-                    const actorName = notification.actor?.username ?? 'Learner'
+                    const actorName = notification.actor?.username ?? topBarCopy(language, 'Learner', 'ผู้เรียน')
                     const isPlantDanger = notification.type === 'garden_prank'
+                    const excerpt = notificationExcerpt(notification, language)
                     return (
                       <button
                         className={`relative flex w-full items-start gap-3 border-b border-lime-100/[0.08] px-4 py-3.5 text-left transition hover:bg-white/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-lime-200 ${
@@ -361,34 +390,34 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                         {isPlantDanger ? (
                           <span
                             className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg border border-red-400/25 bg-red-500/10 text-red-300"
-                            aria-label="Plant at risk from pests"
-                            title="Plant at risk from pests"
+                            aria-label={topBarCopy(language, 'Plant at risk from pests', 'พืชอยู่ในอันตรายจากศัตรูพืช')}
+                            title={topBarCopy(language, 'Plant at risk from pests', 'พืชอยู่ในอันตรายจากศัตรูพืช')}
                           >
                             <AppIcon className="h-4 w-4" name="warning" />
-                            {!notification.is_read ? <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_#101511]" aria-label="Unread" /> : null}
+                            {!notification.is_read ? <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_#101511]" aria-label={topBarCopy(language, 'Unread', 'ยังไม่ได้อ่าน')} /> : null}
                           </span>
                         ) : !notification.is_read ? (
-                          <span className="absolute right-3 top-4 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,.12)]" aria-label="Unread" />
+                          <span className="absolute right-3 top-4 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,.12)]" aria-label={topBarCopy(language, 'Unread', 'ยังไม่ได้อ่าน')} />
                         ) : null}
                         <ProfileAvatar initial={actorName.slice(0, 1).toUpperCase()} user={notification.actor} />
                         <span className={`min-w-0 flex-1 ${isPlantDanger ? 'pr-10' : 'pr-5'}`}>
                           <span className="block text-xs leading-5">
                             <strong className="text-lime-50">{actorName}</strong>{' '}
-                            <span className={notification.is_read ? 'text-slate-400' : 'text-slate-200'}>{notificationAction(notification.type)}</span>
+                            <span className={notification.is_read ? 'text-slate-400' : 'text-slate-200'}>{notificationAction(notification.type, language)}</span>
                           </span>
-                          {notification.excerpt ? <span className="mt-0.5 block truncate text-xs text-slate-400">“{notification.excerpt}”</span> : null}
+                          {excerpt ? <span className="mt-0.5 block truncate text-xs text-slate-400">“{excerpt}”</span> : null}
                           {isPlantDanger ? (
                             <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-red-400/20 bg-red-500/10 px-2 py-1 text-xs font-black text-red-300">
                               <AppIcon className="h-3 w-3" name="warning" />
-                              {getAppLanguage() === 'th' ? 'พืชอยู่ในอันตราย' : 'Plant at risk'}
+                              {topBarCopy(language, 'Plant at risk', 'พืชอยู่ในอันตราย')}
                             </span>
                           ) : null}
                           <time
                             className={`mt-1 block cursor-help text-xs decoration-dotted underline-offset-4 hover:text-slate-200 hover:underline ${notification.is_read ? 'text-slate-500' : 'font-bold text-red-300'}`}
                             dateTime={notification.created_at || undefined}
-                            title={notificationExactTime(notification.created_at)}
+                            title={notificationExactTime(notification.created_at, language)}
                           >
-                            {notificationTime(notification.created_at)}
+                            {notificationTime(notification.created_at, language)}
                           </time>
                         </span>
                       </button>

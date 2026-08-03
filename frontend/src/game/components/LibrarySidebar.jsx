@@ -64,6 +64,19 @@ function readableItemName(item) {
   return name || 'Plant'
 }
 
+function localizedPlantName(item, language) {
+  const plant = item?.plantData ?? item ?? {}
+  const preferredName = language === 'th' ? plant.name_th : plant.name_en
+  const fallbackName = language === 'th' ? plant.name_en : plant.name_th
+  const name = String(preferredName ?? fallbackName ?? item?.name ?? '').trim()
+
+  if (!name || hasBrokenEncoding(name) || ['Simulation Sprout', 'Sprout'].includes(name)) {
+    return language === 'th' ? 'ต้นหูช้าง' : 'Elephant Ear'
+  }
+
+  return name
+}
+
 function PlantLibraryCard({ item, itemLocked, itemName, lockLabel, onApply, onShowPlantInfo, selected, setDrawerOpen }) {
   return (
     <div
@@ -90,7 +103,7 @@ function PlantLibraryCard({ item, itemLocked, itemName, lockLabel, onApply, onSh
           <LibraryThumb item={item} />
         </span>
         <span className="min-w-0 flex-1">
-          <strong className="block truncate text-[12px] text-lime-50">{itemName}</strong>
+          <strong className="block truncate text-[12px] text-lime-50" data-i18n-skip="true">{itemName}</strong>
           <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-400" aria-label={item.current ? 'Growing now' : item.planted ? 'Planted' : item.readOnly ? 'Not planted' : 'Ready to plant'}>
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : item.readOnly ? 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
             <span className="shrink-0">{item.current ? 'Growing' : item.planted ? 'Planted' : item.readOnly ? 'Not planted' : 'Ready'}</span>
@@ -274,7 +287,7 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                     </section>
                   ))}
                   {!loading && section === 'Plants' && visibleItems.map((item) => {
-                    const itemName = readableItemName(item)
+                    const itemName = localizedPlantName(item, language)
                     const friendPlantUnavailable = readOnly && !item.planted
                     const itemLocked = busy || friendPlantUnavailable
                     const lockLabel = friendPlantUnavailable

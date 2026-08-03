@@ -39,7 +39,7 @@ function CoinPrice({ className = '', price }) {
 }
 
 export function ProductCard({ copy, isBuying = false, isFavorite, item, onBuy, onToggleFavorite }) {
-  const category = item.category === 'Lab Item' ? copy.labItem : item.category
+  const category = item.category === 'Lab Item' ? copy.labItem : item.category === 'Friend Prank' ? copy.friendPrank : item.category
 
   return (
     <article className="group flex min-h-full flex-col rounded-2xl bg-[#121c17] p-3.5 ring-1 ring-[#31463a]/70 transition hover:-translate-y-0.5 hover:ring-[#5ee49c]/55 focus-within:ring-[#5ee49c]/65 motion-reduce:transform-none">

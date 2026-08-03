@@ -104,7 +104,7 @@ export function ShopSidebar({ categories = [], copy, hasActiveFilters = false, l
                 aria-pressed={active}
                 onClick={() => onSelectCategory(category.label)}
               >
-                <span className="text-xs font-semibold">{category.label === 'Lab Item' ? copy.labItem : category.label}</span>
+                <span className="text-xs font-semibold">{category.label === 'Lab Item' ? copy.labItem : category.label === 'Friend Prank' ? copy.friendPrank : category.label}</span>
                 <span className={`text-xs font-semibold ${active ? 'text-[#78eda8]' : 'text-slate-500'}`}>{category.count}</span>
               </button>
             )
@@ -138,6 +138,7 @@ export function ShopSidebar({ categories = [], copy, hasActiveFilters = false, l
                 <small className="inline-flex items-center gap-1 text-xs text-slate-500">
                   <img className="h-3 w-3" src={imageAssets.coin} alt="" />
                   {item.price}
+                  {Number(item.quantity) > 1 ? <span>· ×{item.quantity}</span> : null}
                 </small>
               </span>
             </article>

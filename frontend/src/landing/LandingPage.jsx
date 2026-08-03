@@ -43,10 +43,46 @@ const tourSteps = [
 ]
 
 const journeySteps = [
-  { icon: 'person', title: 'Create your learner profile', description: 'Sign in to keep every plant, item, achievement, and experiment connected to your account.' },
-  { icon: 'sprout', title: 'Select your first plant', description: 'Choose a plant, review its needs, and decide whether to grow in the controlled lab or outdoors.' },
-  { icon: 'controller', title: 'Run the experiment', description: 'Adjust environmental factors and observe cause and effect through the live 3D simulation.' },
-  { icon: 'history', title: 'Review and grow smarter', description: 'Harvest when ready, save the result, and compare your history before starting the next plant.' },
+  {
+    icon: 'person',
+    title: 'Create your learner profile',
+    eyebrow: 'Your learning identity',
+    description: 'Sign in to keep every plant, item, achievement, and experiment connected to your account.',
+    detail: 'Your profile keeps progress consistent across the Plant Lab, Shop, History, and Community. Every experiment becomes part of one continuous learning record that you can return to at any time.',
+    image: '/media/register-tour.png',
+    imageAlt: 'Complete Plant Growth Academy registration screen',
+    highlights: ['Keep plant progress with your account', 'Carry coins and purchased items forward', 'Build a personal record of every experiment'],
+  },
+  {
+    icon: 'sprout',
+    title: 'Select your first plant',
+    eyebrow: 'Know before you grow',
+    description: 'Choose a plant, review its needs, and decide whether to grow in the controlled lab or outdoors.',
+    detail: 'Each species reacts differently to water, light, soil, temperature, and pests. Read the plant guide, compare healthy ranges, and choose the growing mode that matches the experiment you want to run.',
+    image: '/media/plant-lab-preview.png',
+    imageAlt: 'Complete Plant Lab plant selection screen',
+    highlights: ['Review scientific and common plant information', 'Compare controlled and outdoor growing modes', 'Begin with recommended healthy values'],
+  },
+  {
+    icon: 'controller',
+    title: 'Run the experiment',
+    eyebrow: 'Observe cause and effect',
+    description: 'Adjust environmental factors and observe cause and effect through the live 3D simulation.',
+    detail: 'Change one factor at a time and watch the live model respond. Plant Monitor explains health, growth pace, pests, and the next recommended action while visual changes make stress and recovery easier to understand.',
+    image: '/media/plant-lab-tour.png',
+    imageAlt: 'Complete live 3D Plant Lab experiment screen',
+    highlights: ['Balance six connected environmental factors', 'Observe growth and plant health in real time', 'Choose the correct item when a problem appears'],
+  },
+  {
+    icon: 'history',
+    title: 'Review and grow smarter',
+    eyebrow: 'Turn results into insight',
+    description: 'Harvest when ready, save the result, and compare your history before starting the next plant.',
+    detail: 'Harvesting records the final condition, score, elapsed time, and real-life growth equivalent. Use the saved evidence to identify what worked and make a stronger plan for your next growing cycle.',
+    image: '/media/history-preview.png',
+    imageAlt: 'Complete saved experiment history screen',
+    highlights: ['Harvest when biological maturity is reached', 'Save health, score, duration, and conditions', 'Compare results before starting the next plant'],
+  },
 ]
 
 const gameSpaces = [
@@ -213,7 +249,83 @@ function ProductTour() {
   )
 }
 
+function JourneyDetailModal({ index, onClose, onStart, step }) {
+  return (
+    <div
+      className="landing-journey-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <section
+        className={`landing-journey-modal landing-journey-modal--${index + 1}${index === 1 ? ' landing-journey-modal--landscape' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="journey-modal-title"
+      >
+        <button autoFocus className="landing-journey-modal__close" type="button" onClick={onClose} aria-label="Close step details">
+          <AppIcon name="close" />
+        </button>
+
+        <div className="landing-journey-modal__media">
+          <img className="landing-journey-modal__media-backdrop" src={step.image} alt="" aria-hidden="true" />
+          <img className="landing-journey-modal__media-image" src={step.image} alt={step.imageAlt} />
+          <div className="landing-journey-modal__media-shade" />
+          <span className="landing-journey-modal__step">STEP {String(index + 1).padStart(2, '0')}</span>
+          <span className="landing-journey-modal__image-note"><AppIcon name="eye" /> Full interface preview</span>
+        </div>
+
+        <div className="landing-journey-modal__content">
+          <span className="landing-journey-modal__eyebrow">{step.eyebrow}</span>
+          <h2 id="journey-modal-title">{step.title}</h2>
+          <p className="landing-journey-modal__lead">{step.description}</p>
+          <p className="landing-journey-modal__detail">{step.detail}</p>
+
+          <div className="landing-journey-modal__highlights" aria-label="What you will do">
+            {step.highlights.map((highlight, highlightIndex) => (
+              <div key={highlight}>
+                <span>{String(highlightIndex + 1).padStart(2, '0')}</span>
+                <p>{highlight}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="landing-journey-modal__actions">
+            <button className="landing-button landing-button--primary" type="button" onClick={() => { onClose(); onStart() }}>
+              <AppIcon name="controller" />
+              Start growing
+              <AppIcon name="arrowForward" />
+            </button>
+            <button className="landing-button landing-button--secondary" type="button" onClick={onClose}>Back to the steps</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
+  const [selectedJourneyIndex, setSelectedJourneyIndex] = useState(null)
+  const selectedJourney = selectedJourneyIndex === null ? null : journeySteps[selectedJourneyIndex]
+
+  useEffect(() => {
+    if (!selectedJourney) return undefined
+
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setSelectedJourneyIndex(null)
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [selectedJourney])
+
   return (
     <>
       <section className="landing-hero" data-tour="home-hero">
@@ -310,18 +422,31 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
           </div>
           <div className="landing-journey__grid">
             {journeySteps.map((step, index) => (
-              <article data-reveal="up" key={step.title} style={{ '--reveal-delay': `${index * 80}ms` }}>
+              <article
+                aria-haspopup="dialog"
+                aria-label={`View details: ${step.title}`}
+                data-reveal="up"
+                key={step.title}
+                onClick={() => setSelectedJourneyIndex(index)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setSelectedJourneyIndex(index)
+                  }
+                }}
+                role="button"
+                style={{ '--reveal-delay': `${index * 80}ms` }}
+                tabIndex={0}
+              >
                 <div className={`landing-journey__visual landing-journey__visual--${index + 1}`}>
-                  <img
-                    src={index === 0 ? '/media/register-tour.png' : '/media/plant-lab-tour.png'}
-                    alt={index === 0 ? 'Plant Growth Academy registration screen' : ''}
-                  />
+                  <img src={step.image} alt={step.imageAlt} />
                   <strong>0{index + 1}</strong>
                 </div>
                 <div className="landing-journey__content">
-                  <span><AppIcon name={step.icon} /></span>
+                  <span className="landing-journey__icon"><AppIcon name={step.icon} /></span>
                   <h3>{step.title}</h3>
                   <p>{step.description}</p>
+                  <div className="landing-journey__open">View full step <AppIcon name="arrowForward" /></div>
                 </div>
               </article>
             ))}
@@ -411,6 +536,14 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
         </div>
       </section>
       </div>
+      {selectedJourney ? (
+        <JourneyDetailModal
+          index={selectedJourneyIndex}
+          onClose={() => setSelectedJourneyIndex(null)}
+          onStart={onStart}
+          step={selectedJourney}
+        />
+      ) : null}
     </>
   )
 }
@@ -636,23 +769,6 @@ function LearningLibrary({ onOpenArticle }) {
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const language = getContentLanguage()
-
-  useEffect(() => {
-    const refresh = () => setReloadKey((key) => key + 1)
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') refresh()
-    }
-
-    window.addEventListener('focus', refresh)
-    window.addEventListener('plant-game:content-catalog-updated', refresh)
-    document.addEventListener('visibilitychange', refreshWhenVisible)
-
-    return () => {
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('plant-game:content-catalog-updated', refresh)
-      document.removeEventListener('visibilitychange', refreshWhenVisible)
-    }
-  }, [])
 
   useEffect(() => {
     let cancelled = false
