@@ -8,6 +8,8 @@ import { loadSettings, saveSettings } from '../game/settings/settingsPreferences
 import { getLearningContent, getLearningContents, resolveAssetUrl } from '../lib/api'
 import './LandingPage.css'
 
+const LANDING_THEME_KEY = 'plant-growth-landing-theme'
+
 const factors = [
   { icon: 'bolt', title: 'Light', value: '85%', description: 'Light supplies the energy plants need to create food through photosynthesis.' },
   { icon: 'drop', title: 'Water', value: '72%', description: 'Water carries nutrients, regulates temperature, and keeps plant cells firm.' },
@@ -125,7 +127,43 @@ function BrandButton({ onClick, compact = false }) {
   )
 }
 
-function LandingHeader({ language, onLanguageChange, page, user, onHome, onLearn, onOpenPage, onStart, onSignIn }) {
+function LandingThemeToggle({ language, theme, onThemeChange }) {
+  const themeLabel = language === 'th'
+    ? theme === 'dark' ? 'เปลี่ยนเป็นธีมสว่าง' : 'เปลี่ยนเป็นธีมมืด'
+    : theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+
+  return (
+    <button
+      className="landing-theme-toggle"
+      type="button"
+      aria-label={themeLabel}
+      aria-pressed={theme === 'light'}
+      title={themeLabel}
+      onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')}
+    >
+      <AppIcon name={theme === 'dark' ? 'lightMode' : 'darkMode'} />
+    </button>
+  )
+}
+
+function LandingLanguageToggle({ language, onLanguageChange }) {
+  const isThai = language === 'th'
+  const languageLabel = isThai ? 'เปลี่ยนเป็นภาษาอังกฤษ' : 'Switch to Thai'
+
+  return (
+    <button
+      className="landing-language-circle"
+      type="button"
+      aria-label={languageLabel}
+      title={languageLabel}
+      onClick={() => onLanguageChange(isThai ? 'en' : 'th')}
+    >
+      <span lang={isThai ? 'th' : 'en'}>{isThai ? 'TH' : 'EN'}</span>
+    </button>
+  )
+}
+
+function LandingHeader({ page, user, onHome, onLearn, onOpenPage, onStart, onSignIn }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   function run(action) {
@@ -147,38 +185,27 @@ function LandingHeader({ language, onLanguageChange, page, user, onHome, onLearn
               <button type="button" onClick={() => run(() => onOpenPage?.('community'))}>Community</button>
             </>
           ) : null}
-          <div className="landing-language-toggle" role="group" aria-label="Interface language">
-            <button className={language === 'en' ? 'is-active' : ''} type="button" aria-pressed={language === 'en'} onClick={() => onLanguageChange('en')}>EN</button>
-            <button className={language === 'th' ? 'is-active' : ''} type="button" aria-pressed={language === 'th'} onClick={() => onLanguageChange('th')}>ไทย</button>
-          </div>
           {!user && <button type="button" onClick={() => run(onSignIn)}>Log in</button>}
           <button className="landing-nav__cta" type="button" onClick={() => run(onStart)}>
             <AppIcon name="sprout" />
             {user ? 'Open Plant Lab' : 'Start growing'}
           </button>
         </nav>
-        <button
-          className="landing-menu"
-          type="button"
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <span />
-          <span />
-          <span />
-        </button>
+        <div className="landing-header__actions">
+          <button
+            className="landing-menu"
+            type="button"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+        </div>
       </div>
     </header>
-  )
-}
-
-function SectionEyebrow({ icon = 'eco', children }) {
-  return (
-    <div className="landing-eyebrow">
-      <AppIcon name={icon} />
-      <span>{children}</span>
-    </div>
   )
 }
 
@@ -204,7 +231,6 @@ function ProductTour() {
       <div className="landing-container">
         <div className="landing-section-heading landing-product-tour__heading" data-reveal="up">
           <div>
-            <SectionEyebrow icon="live">A guided game preview</SectionEyebrow>
             <h2 id="product-tour-title">See one growing cycle in under a minute.</h2>
           </div>
           <p>A short visual tour shows how each decision becomes an observable result inside the plant lab.</p>
@@ -336,7 +362,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
         <div className="landing-hero__orb landing-hero__orb--two" />
         <div className="landing-container landing-hero__content landing-hero__content--product">
           <div className="landing-hero__copy">
-            <SectionEyebrow>Plant science, made interactive</SectionEyebrow>
             <h1>Grow a plant.<br />Understand the science.</h1>
             <p>
               Plant Growth Academy is a learning simulation where you shape a 3D plant's environment,
@@ -394,7 +419,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
       <section className="landing-section landing-game-intro" id="about">
         <div className="landing-container">
           <div className="landing-game-intro__copy" data-reveal="up">
-            <SectionEyebrow icon="eco">What kind of game is it?</SectionEyebrow>
             <h2>A science learning game built around meaningful choices.</h2>
             <p>Instead of memorizing plant facts, you investigate them. Every adjustment changes the simulation, giving you clear feedback to observe, question, and understand.</p>
           </div>
@@ -416,7 +440,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
       <section className="landing-section landing-journey" aria-labelledby="journey-title">
         <div className="landing-container">
           <div className="landing-section-heading landing-section-heading--center" data-reveal="up">
-            <SectionEyebrow icon="sprout">Your first growing cycle</SectionEyebrow>
             <h2 id="journey-title">From first login to your first harvest.</h2>
             <p>Four clear steps help new players begin quickly while leaving room for deeper experimentation.</p>
           </div>
@@ -458,7 +481,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
         <div className="landing-container">
           <div className="landing-section-heading landing-spaces__heading" data-reveal="up">
             <div>
-              <SectionEyebrow icon="home">Explore the academy</SectionEyebrow>
               <h2 id="spaces-title">Every page supports the next experiment.</h2>
             </div>
             <p>The lab, learning content, tools, records, and community work together as one connected experience.</p>
@@ -512,7 +534,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
             <span><AppIcon name="eco" />Growth</span>
           </div>
           <div>
-            <SectionEyebrow icon="bookmark">Learn before you adjust</SectionEyebrow>
             <h2>Every control connects to real plant science.</h2>
             <p>Use the Knowledge Library to understand plant structures, environmental factors, and photosynthesis—then test those ideas in the simulation.</p>
             <button className="landing-text-link" type="button" onClick={onLearn}>Open the Knowledge Library<AppIcon name="arrowForward" /></button>
@@ -525,7 +546,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
           <div className="landing-final-cta__icon">
             <img src={plantGrowthLogo} alt="Plant Growth Academy" />
           </div>
-          <SectionEyebrow icon="bolt">Ready when you are</SectionEyebrow>
           <h2>Start with one plant. Leave with a better question.</h2>
           <p>Sign in to begin your first growing cycle and keep every result connected to your learner profile.</p>
           <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
@@ -799,7 +819,6 @@ function LearningLibrary({ onOpenArticle }) {
       <div className="landing-container">
         <div className="learning-library__heading" data-reveal="up">
           <div>
-            <SectionEyebrow icon="history">Knowledge library</SectionEyebrow>
             <h2 id="learning-library-title">Choose a topic and explore it in depth.</h2>
           </div>
           <p>Three focused lessons connect plant biology to the decisions you make inside the simulation.</p>
@@ -891,7 +910,6 @@ function LearningArticlePage({ slug, user, onBack, onStart }) {
             <button className="landing-text-link landing-text-link--back" type="button" onClick={onBack}>
               <AppIcon name="arrowBack" /> Back to learning library
             </button>
-            <SectionEyebrow icon={article.icon || 'eco'}>{localizedContent(article, 'eyebrow', language)}</SectionEyebrow>
             <h1>{title}</h1>
             <p>{summary}</p>
             <div className="learning-article-hero__meta">
@@ -934,7 +952,7 @@ function LearningArticlePage({ slug, user, onBack, onStart }) {
 
       <section className="landing-section learning-article-cta">
         <div className="landing-container learning-article-cta__inner">
-          <div><SectionEyebrow icon="controller">Apply what you learned</SectionEyebrow><h2>Test the idea in the plant lab.</h2></div>
+          <div><h2>Test the idea in the plant lab.</h2></div>
           <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
             <AppIcon name="sprout" />{user ? 'Enter the plant lab' : 'Log in to start'}<AppIcon name="arrowForward" />
           </button>
@@ -954,7 +972,6 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
           <button className="landing-text-link landing-text-link--back" type="button" onClick={onHome}>
             <AppIcon name="arrowBack" /> Back to home
           </button>
-          <SectionEyebrow icon="history">Learn about plant growth</SectionEyebrow>
           <h1>The science behind every new leaf.</h1>
           <p>Understand the six environmental factors that shape plant health before applying them in the simulation.</p>
         </div>
@@ -968,7 +985,6 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
         <section className="landing-section landing-section--intro">
           <div className="landing-container landing-split">
             <div data-reveal="left">
-              <SectionEyebrow icon="bolt">The essential process</SectionEyebrow>
               <h2>Photosynthesis powers plant life.</h2>
               <p className="landing-lead">
                 Plants combine light energy, water, and carbon dioxide to produce glucose for growth and release oxygen.
@@ -989,7 +1005,6 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
         <section className="landing-section landing-section--factors" data-tour="learn-factors">
           <div className="landing-container">
             <div className="landing-section-heading landing-section-heading--center" data-reveal="up">
-              <SectionEyebrow icon="eco">Plant growth essentials</SectionEyebrow>
               <h2>Six factors, one connected system.</h2>
               <p>Use these principles to diagnose problems and make better decisions inside the plant lab.</p>
             </div>
@@ -1040,11 +1055,28 @@ function LandingFooter({ onHome, onLearn }) {
 export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn, onOpenPage, onOpenDemo }) {
   const [articleSlug, setArticleSlug] = useState(null)
   const [language, setLanguage] = useState(() => loadSettings().language === 'th' ? 'th' : 'en')
+  const [theme, setTheme] = useState(() => {
+    try {
+      return window.localStorage.getItem(LANDING_THEME_KEY) === 'light' ? 'light' : 'dark'
+    } catch {
+      return 'dark'
+    }
+  })
 
   function changeLanguage(nextLanguage) {
     const normalizedLanguage = nextLanguage === 'th' ? 'th' : 'en'
     setLanguage(normalizedLanguage)
     saveSettings({ ...loadSettings(), language: normalizedLanguage })
+  }
+
+  function changeTheme(nextTheme) {
+    const normalizedTheme = nextTheme === 'light' ? 'light' : 'dark'
+    setTheme(normalizedTheme)
+    try {
+      window.localStorage.setItem(LANDING_THEME_KEY, normalizedTheme)
+    } catch {
+      // Theme still works for this visit when storage is unavailable.
+    }
   }
 
   function openHome() {
@@ -1084,8 +1116,12 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
   }, [articleSlug, page])
 
   return (
-    <main className="landing-shell">
-      <LandingHeader language={language} onLanguageChange={changeLanguage} page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onStart={onStart} onSignIn={onSignIn} />
+    <main className="landing-shell" data-theme={theme}>
+      <LandingHeader page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onStart={onStart} onSignIn={onSignIn} />
+      <div className="landing-display-controls" aria-label={language === 'th' ? 'การตั้งค่าการแสดงผล' : 'Display preferences'}>
+        <LandingLanguageToggle language={language} onLanguageChange={changeLanguage} />
+        <LandingThemeToggle language={language} theme={theme} onThemeChange={changeTheme} />
+      </div>
       {page === 'learn'
         ? articleSlug
           ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />

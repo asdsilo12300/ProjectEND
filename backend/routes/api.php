@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\ContentController;
+use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\GameProgressController;
 use App\Http\Controllers\Api\GoogleAuthController;
@@ -29,6 +30,9 @@ Route::options('/{any}', fn () => response()->noContent())->where('any', '.*');
 Route::prefix('auth')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:3,1');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::post('/email/verify-code', [EmailVerificationController::class, 'verifyCode'])->middleware('throttle:10,10');
+    Route::post('/email/verify-link', [EmailVerificationController::class, 'verifyLink'])->middleware('throttle:10,10');
+    Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
     Route::get('/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:20,1');
     Route::get('/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:30,1');
 });

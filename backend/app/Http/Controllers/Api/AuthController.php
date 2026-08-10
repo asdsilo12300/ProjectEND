@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\EmailVerificationService;
 use App\Services\JwtService;
 use App\Services\MediaStorage;
 use App\Services\StarterInventoryService;
@@ -18,6 +19,7 @@ class AuthController extends Controller
 {
     public function __construct(
         private readonly JwtService $jwt,
+        private readonly EmailVerificationService $emailVerification,
         private readonly MediaStorage $media,
         private readonly StarterInventoryService $starterInventory,
     ) {}
@@ -47,9 +49,19 @@ class AuthController extends Controller
             return $user;
         });
 
+        $delivery = $this->emailVerification->send($user, $request->ip());
+
         return response()->json([
-            'token' => $this->jwt->issue($user),
-            'user' => $this->userPayload($user),
+            'message' => $delivery['delivered']
+                ? 'Account created. Check your email to verify your account.'
+                : 'Account created, but the verification email could not be sent. Use resend to try again.',
+            'requires_email_verification' => true,
+            'email' => $user->email,
+            'email_hint' => $this->emailVerification->maskEmail($user->email),
+            'delivery_status' => $delivery['delivered'] ? 'sent' : 'failed',
+            'expires_in' => $delivery['expires_in'],
+            'resend_available_in' => $delivery['delivered'] ? $delivery['resend_available_in'] : 0,
+            'configuration_error' => config('app.debug') ? $delivery['configuration_error'] : null,
         ], 201);
     }
 
@@ -70,6 +82,16 @@ class AuthController extends Controller
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
+        }
+
+        if (! $user->email_verified_at) {
+            return response()->json([
+                'message' => 'Verify your email before signing in.',
+                'code' => 'EMAIL_NOT_VERIFIED',
+                'requires_email_verification' => true,
+                'email' => $user->email,
+                'email_hint' => $this->emailVerification->maskEmail($user->email),
+            ], 403);
         }
 
         $user->forceFill(['last_login_at' => now()])->save();
@@ -177,6 +199,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'username' => $user->username,
             'email' => $user->email,
+            'email_verified_at' => $user->email_verified_at?->toIso8601String(),
             'avatar_url' => $user->avatar_url,
             'cover_url' => $user->cover_url,
             'bio' => $user->bio,

@@ -15,6 +15,7 @@ import { FriendsPanel } from './game/panels/FriendsPanel'
 import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { OnboardingExperience } from './game/onboarding/OnboardingExperience'
 import { LoginPage } from './auth/LoginPage'
+import { EmailVerificationPage } from './auth/EmailVerificationPage'
 import { DemoSafetyBar } from './demo/DemoSafetyBar'
 import { isDemoApiSessionActive, seedDemoSimulator, startDemoApiSession, stopDemoApiSession } from './demo/demoApiSession'
 import { LandingPage } from './landing/LandingPage'
@@ -509,6 +510,22 @@ function GamePageLoading({ label = 'Loading academy workspace' }) {
   )
 }
 
+function initialEmailVerificationState() {
+  const params = new URLSearchParams(window.location.search)
+  const linkToken = params.get('verify_email_token')?.trim() ?? ''
+  if (!linkToken) return null
+
+  return {
+    active: true,
+    deliveryStatus: 'sent',
+    email: params.get('email')?.trim() ?? '',
+    emailHint: params.get('email')?.trim() ?? '',
+    expiresIn: 0,
+    linkToken,
+    resendAvailableIn: 0,
+  }
+}
+
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
   const [activeMobileLabPanel, setActiveMobileLabPanel] = useState('monitor')
@@ -574,6 +591,7 @@ function App() {
   const [authForm, setAuthForm] = useState({ username: '', email: '', password: '', passwordConfirmation: '' })
   const [authStatus, setAuthStatus] = useState('idle')
   const [authError, setAuthError] = useState('')
+  const [emailVerification, setEmailVerification] = useState(initialEmailVerificationState)
   const [inventoryItems, setInventoryItems] = useState([])
   const [shopCatalog, setShopCatalog] = useState([])
   const [inventoryStatus, setInventoryStatus] = useState('loading')
@@ -2599,6 +2617,21 @@ function App() {
         ? await registerUser(authForm.username.trim(), authForm.email.trim(), authForm.password, authForm.passwordConfirmation)
         : await loginUser(authForm.email.trim(), authForm.password)
 
+      if (payload.requires_email_verification) {
+        setEmailVerification({
+          active: true,
+          deliveryStatus: payload.delivery_status ?? 'sent',
+          email: payload.email ?? authForm.email.trim(),
+          emailHint: payload.email_hint ?? payload.email ?? authForm.email.trim(),
+          expiresIn: payload.expires_in ?? 0,
+          linkToken: '',
+          resendAvailableIn: payload.resend_available_in ?? 0,
+        })
+        setAuthStatus('idle')
+        setAuthForm((current) => ({ ...current, password: '', passwordConfirmation: '' }))
+        return
+      }
+
       const signedInUser = payload.user ?? payload.data ?? null
       if (!signedInUser?.id) {
         clearToken()
@@ -2613,8 +2646,54 @@ function App() {
       setPendingPageAfterAuth(null)
     } catch (error) {
       setAuthStatus('idle')
+      if (error.payload?.requires_email_verification) {
+        setEmailVerification({
+          active: true,
+          deliveryStatus: 'unknown',
+          email: error.payload.email ?? authForm.email.trim(),
+          emailHint: error.payload.email_hint ?? error.payload.email ?? authForm.email.trim(),
+          expiresIn: 0,
+          linkToken: '',
+          resendAvailableIn: 0,
+        })
+        setAuthForm((current) => ({ ...current, password: '', passwordConfirmation: '' }))
+        return
+      }
       setAuthError(error.message || 'Unable to sign in right now')
     }
+  }
+
+  async function completeEmailVerification() {
+    const payload = await getMe()
+    const signedInUser = payload.data ?? payload.user ?? null
+    if (!signedInUser?.id) {
+      clearToken()
+      throw new Error('The server did not return your account details.')
+    }
+
+    clearClientSimulationSession({ hydrated: false })
+    setUser(signedInUser)
+    setSessionStatus('authenticated')
+    setAuthStatus('idle')
+    setAuthError('')
+    setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
+    setEmailVerification(null)
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`)
+    setActivePage(pendingPageAfterAuth ?? (signedInUser.role === 'admin' ? 'admin' : 'lab'))
+    setPendingPageAfterAuth(null)
+  }
+
+  function leaveEmailVerification() {
+    const email = emailVerification?.email ?? ''
+    clearToken()
+    setEmailVerification(null)
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`)
+    setAuthMode('login')
+    setAuthError('')
+    setAuthStatus('idle')
+    setAuthForm({ username: '', email, password: '', passwordConfirmation: '' })
+    setSessionStatus('guest')
+    setActivePage('auth')
   }
 
   async function submitGoogleAuth() {
@@ -3204,6 +3283,18 @@ function App() {
 
   if (sessionStatus === 'checking') {
     return <SessionLoadingScreen />
+  }
+
+  if (emailVerification?.active) {
+    return (
+      <main className="relative h-screen w-screen overflow-hidden bg-[#eef5eb] text-[#101511]">
+        <EmailVerificationPage
+          onBack={leaveEmailVerification}
+          onVerified={completeEmailVerification}
+          verification={emailVerification}
+        />
+      </main>
+    )
   }
 
   if (activePage === 'home' || activePage === 'learn') {

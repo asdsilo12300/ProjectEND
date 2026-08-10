@@ -151,6 +151,13 @@ export function LoginPage({ mode, setMode, form, setForm, status, error, onSubmi
                 </label>
               )}
 
+              {isRegister && (
+                <div className="flex gap-3 rounded-xl border border-[#cfe0ca] bg-[#f2f8ef] px-3.5 py-3 text-xs leading-5 text-[#526457]">
+                  <AppIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#538d47]" name="shield" />
+                  <span>After creating your account, verify the email we send before your first login.</span>
+                </div>
+              )}
+
               {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p>}
 
               <button

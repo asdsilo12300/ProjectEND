@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\EmailVerificationMail;
 use App\Models\Item;
 use App\Models\User;
 use App\Models\UserItem;
 use App\Services\JwtService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -17,14 +19,17 @@ class AuthEmailNormalizationTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['user_items', 'items', 'plant_histories', 'friendships', 'users'] as $table) {
+        foreach (['email_verifications', 'user_items', 'items', 'plant_histories', 'friendships', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
+
+        Mail::fake();
 
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
             $table->string('username')->unique();
             $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->string('avatar_url')->nullable();
             $table->string('cover_url')->nullable();
@@ -36,6 +41,19 @@ class AuthEmailNormalizationTest extends TestCase
             $table->unsignedInteger('coin')->default(0);
             $table->unsignedInteger('gem')->default(0);
             $table->timestamp('last_login_at')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('email_verifications', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('user_id');
+            $table->string('otp_hash', 64);
+            $table->string('token_hash', 64)->unique();
+            $table->unsignedTinyInteger('attempts')->default(0);
+            $table->timestamp('expires_at');
+            $table->timestamp('resend_available_at');
+            $table->timestamp('used_at')->nullable();
+            $table->string('requested_ip', 45)->nullable();
             $table->timestamps();
         });
 
@@ -82,9 +100,12 @@ class AuthEmailNormalizationTest extends TestCase
 
         $response
             ->assertCreated()
-            ->assertJsonPath('user.email', 'mixed.case@example.com');
+            ->assertJsonPath('email', 'mixed.case@example.com')
+            ->assertJsonPath('requires_email_verification', true)
+            ->assertJsonMissingPath('token');
 
         $this->assertDatabaseHas('users', ['email' => 'mixed.case@example.com']);
+        Mail::assertSent(EmailVerificationMail::class, fn (EmailVerificationMail $mail): bool => $mail->hasTo('mixed.case@example.com'));
     }
 
     public function test_login_matches_a_legacy_mixed_case_email(): void
@@ -92,6 +113,7 @@ class AuthEmailNormalizationTest extends TestCase
         User::query()->create([
             'username' => 'legacy_user',
             'email' => 'Legacy.User@Example.COM',
+            'email_verified_at' => now(),
             'password' => Hash::make('password123'),
         ]);
 
@@ -101,6 +123,50 @@ class AuthEmailNormalizationTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('user.email', 'Legacy.User@Example.COM');
+    }
+
+    public function test_unverified_account_is_blocked_until_the_emailed_code_is_confirmed(): void
+    {
+        $this->postJson('/api/auth/register', [
+            'username' => 'awaiting_verification',
+            'email' => 'verify@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertCreated();
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'verify@example.com',
+            'password' => 'password123',
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'EMAIL_NOT_VERIFIED');
+
+        $otp = null;
+        Mail::assertSent(EmailVerificationMail::class, function (EmailVerificationMail $mail) use (&$otp): bool {
+            if ($mail->hasTo('verify@example.com')) {
+                $otp = $mail->otp;
+
+                return true;
+            }
+
+            return false;
+        });
+
+        $this->assertNotNull($otp);
+
+        $this->postJson('/api/auth/email/verify-code', [
+            'email' => 'verify@example.com',
+            'otp' => $otp,
+        ])
+            ->assertOk()
+            ->assertJsonStructure(['token', 'email_verified_at']);
+
+        $this->assertNotNull(User::query()->where('email', 'verify@example.com')->value('email_verified_at'));
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'verify@example.com',
+            'password' => 'password123',
+        ])->assertOk()->assertJsonStructure(['token', 'user']);
     }
 
     public function test_registration_rejects_an_email_that_differs_only_by_case(): void

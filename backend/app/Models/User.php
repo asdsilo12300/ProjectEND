@@ -89,6 +89,11 @@ class User extends Authenticatable
         return $this->hasMany(SocialNotification::class, 'recipient_id');
     }
 
+    public function emailVerifications(): HasMany
+    {
+        return $this->hasMany(EmailVerification::class);
+    }
+
     public function requestedFriendships(): HasMany
     {
         return $this->hasMany(Friendship::class, 'requester_id');

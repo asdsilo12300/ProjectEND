@@ -390,8 +390,36 @@ export async function register(username, email, password, passwordConfirmation) 
     }),
   })
 
-  setToken(payload.token)
+  if (payload.token) setToken(payload.token)
   return payload
+}
+
+export async function verifyEmailCode(email, otp) {
+  const payload = await apiFetch('/auth/email/verify-code', {
+    auth: false,
+    method: 'POST',
+    body: JSON.stringify({ email, otp }),
+  })
+  if (payload.token) setToken(payload.token)
+  return payload
+}
+
+export async function verifyEmailLink(token) {
+  const payload = await apiFetch('/auth/email/verify-link', {
+    auth: false,
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+  if (payload.token) setToken(payload.token)
+  return payload
+}
+
+export async function resendVerificationEmail(email) {
+  return apiFetch('/auth/email/resend', {
+    auth: false,
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
 }
 
 export function loginWithGoogle() {
