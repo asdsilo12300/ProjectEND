@@ -10,6 +10,15 @@ const libraryIconMap = {
   snail: 'snail',
 }
 
+const actionIconMap = {
+  water: 'drop',
+  fertilizer: 'fertilizer',
+  drainage: 'soil',
+  shade: 'shade',
+  windbreak: 'wind',
+  'frost-cover': 'frost',
+}
+
 function TargetBadges({ targets }) {
   if (!targets?.length) return null
 
@@ -26,6 +35,8 @@ function TargetBadges({ targets }) {
 
 export function LibraryThumb({ item, display = 'cover' }) {
   const showFullImage = display === 'contain'
+  const actionKey = item.actionKey ?? item.itemKey ?? ''
+  const fallbackIcon = actionIconMap[actionKey] ?? libraryIconMap[item.icon] ?? 'leaf'
 
   return (
     <span
@@ -40,7 +51,9 @@ export function LibraryThumb({ item, display = 'cover' }) {
           draggable="false"
         />
       ) : (
-        <AppIcon className="h-8 w-8" name={libraryIconMap[item.icon] ?? 'leaf'} />
+        <span className="grid h-11 w-11 place-items-center rounded-full border border-black/10 bg-white/30 shadow-[0_5px_14px_rgba(18,64,35,.12)]">
+          <AppIcon className="h-6 w-6" name={fallbackIcon} />
+        </span>
       )}
       <TargetBadges targets={item.targetImages} />
     </span>

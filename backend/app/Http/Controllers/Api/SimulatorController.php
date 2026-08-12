@@ -19,10 +19,12 @@ use App\Models\UserItem;
 use App\Services\MediaStorage;
 use App\Services\PlantSimulationEngine;
 use App\Services\SimulationActivityTracker;
+use App\Services\SimulationEventService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -42,7 +44,7 @@ class SimulatorController extends Controller
 
         return SimulatorResource::collection(
             Simulator::query()
-                ->with(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
+                ->with($this->simulatorRelations())
                 ->where('user_id', $request->user()->id)
                 ->when($data['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
                 ->latest()
@@ -53,7 +55,7 @@ class SimulatorController extends Controller
     public function latest(Request $request)
     {
         $simulator = Simulator::query()
-            ->with(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])
+            ->with($this->simulatorRelations())
             ->where('user_id', $request->user()->id)
             ->where('status', 'active')
             ->latest('updated_at')
@@ -75,6 +77,7 @@ class SimulatorController extends Controller
             'location_name' => ['nullable', 'string', 'max:191'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'location_timezone' => ['nullable', 'string', 'max:80'],
             'season' => ['nullable', Rule::in(['summer', 'rainy', 'winter'])],
         ]);
 
@@ -126,17 +129,30 @@ class SimulatorController extends Controller
             ]);
         });
 
-        return new SimulatorResource($simulator->load(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
+        if (
+            $simulator->mode === 'outdoor'
+            && Schema::hasColumn('simulators', 'starter_pack_granted_at')
+            && ! $simulator->starter_pack_granted_at
+        ) {
+            $this->grantOutdoorStarterPack($simulator, (int) $request->user()->id);
+        }
+
+        return new SimulatorResource($simulator->load($this->simulatorRelations()));
     }
 
     public function show(Request $request, Simulator $simulator): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
 
-        return new SimulatorResource($simulator->load(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']));
+        return new SimulatorResource($simulator->load($this->simulatorRelations()));
     }
 
-    public function tick(Request $request, Simulator $simulator, PlantSimulationEngine $engine): SimulatorResource
+    public function tick(
+        Request $request,
+        Simulator $simulator,
+        PlantSimulationEngine $engine,
+        SimulationEventService $events,
+    ): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
 
@@ -152,10 +168,73 @@ class SimulatorController extends Controller
             'root_temperature_controlled' => ['nullable', 'boolean'],
         ]);
 
-        $updated = $engine->tick($simulator, $factors);
-        $updated->loadMissing('user');
+        // Water and nutrients are consumable plant reserves. They are owned by
+        // the server so a stale browser slider/snapshot cannot refill them on
+        // every cycle. Weather and scheduled events may still modify the
+        // authoritative values after this point.
+        $factors['water'] = (int) $simulator->water;
+        $factors['fertilizer'] = (int) $simulator->fertilizer;
+
+        $eventState = $events->advance($simulator, $factors);
+        $updated = $engine->tick($simulator->fresh(), $eventState['factors']);
+        $updated->loadMissing(['user', 'simulationEvents.definition', 'modifiers']);
+        $updated->setAttribute('event_tick_count', $eventState['tick']);
 
         return new SimulatorResource($updated);
+    }
+
+    private function grantOutdoorStarterPack(Simulator $simulator, int $userId): void
+    {
+        DB::transaction(function () use ($simulator, $userId): void {
+            $locked = Simulator::query()->whereKey($simulator->id)->lockForUpdate()->firstOrFail();
+            if ($locked->starter_pack_granted_at) {
+                return;
+            }
+
+            $alreadyGranted = Simulator::query()
+                ->where('user_id', $userId)
+                ->where('id', '!=', $locked->id)
+                ->whereNotNull('starter_pack_granted_at')
+                ->exists();
+            if ($alreadyGranted) {
+                return;
+            }
+
+            $quantities = [
+                'water' => 4,
+                'fertilizer' => 3,
+                'drainage' => 1,
+                'shade' => 1,
+                'windbreak' => 1,
+                'frost-cover' => 1,
+            ];
+            Item::query()->whereIn('action_key', array_keys($quantities))->get()->each(
+                function (Item $item) use ($userId, $quantities): void {
+                    $inventory = UserItem::query()->firstOrNew([
+                        'user_id' => $userId,
+                        'item_id' => $item->id,
+                    ]);
+                    $inventory->quantity = (int) ($inventory->quantity ?? 0) + $quantities[$item->action_key];
+                    $inventory->save();
+                }
+            );
+
+            $locked->forceFill(['starter_pack_granted_at' => now()])->save();
+        });
+    }
+
+    /** @return array<int, string> */
+    private function simulatorRelations(): array
+    {
+        $relations = ['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'];
+        if (Schema::hasTable('simulation_events')) {
+            $relations[] = 'simulationEvents.definition';
+        }
+        if (Schema::hasTable('simulation_modifiers')) {
+            $relations[] = 'modifiers.action';
+        }
+
+        return $relations;
     }
 
     public function sync(Request $request, Simulator $simulator): SimulatorResource
@@ -179,9 +258,7 @@ class SimulatorController extends Controller
         ]);
 
         $state = [
-            'water' => $data['water'],
             'light' => $data['light'],
-            'fertilizer' => $data['fertilizer'],
             'soil_humidity' => $data['soil_humidity'],
             'air_humidity' => $data['air_humidity'],
             'soil_temp' => $data['soil_temp'],
@@ -829,18 +906,18 @@ class SimulatorController extends Controller
     }
 
     /**
-     * Start every new simulation in the middle of its plant's healthy range.
-     * Values are stored on the plant record so the same behaviour applies to
-     * Tulip and to any future plant created from the admin catalog.
+     * Water and nutrients are reserves, so a newly planted specimen starts
+     * fully supplied. The remaining environmental factors start in the middle
+     * of the species-specific healthy range.
      *
      * @return array<string, int|float>
      */
     private function initialEnvironmentFor(Plant $plant): array
     {
         return [
-            'water' => $this->rangeMidpoint($plant->water_min, $plant->water_max, 55),
+            'water' => 100,
             'light' => $this->rangeMidpoint($plant->light_min, $plant->light_max, 72),
-            'fertilizer' => $this->rangeMidpoint($plant->fertilizer_min, $plant->fertilizer_max, 35),
+            'fertilizer' => 100,
             'soil_humidity' => $this->rangeMidpoint($plant->soil_humidity_min, $plant->soil_humidity_max, 62),
             'air_humidity' => $this->rangeMidpoint($plant->air_humidity_min, $plant->air_humidity_max, 58),
             'soil_temp' => $this->rangeMidpoint($plant->soil_temp_min, $plant->soil_temp_max, 25, false),

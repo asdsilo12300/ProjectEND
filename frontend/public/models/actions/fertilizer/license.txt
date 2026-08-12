@@ -1,0 +1,11 @@
+Model Information:
+* title:	Fertilizer
+* source:	https://sketchfab.com/3d-models/fertilizer-a7ec96ac6e2c4f31b6d0341724e4715c
+* author:	DutchTheWood (https://sketchfab.com/anrico.opperman)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Fertilizer" (https://sketchfab.com/3d-models/fertilizer-a7ec96ac6e2c4f31b6d0341724e4715c) by DutchTheWood (https://sketchfab.com/anrico.opperman) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

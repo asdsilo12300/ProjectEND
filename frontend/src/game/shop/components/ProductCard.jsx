@@ -11,6 +11,12 @@ const productIconMap = {
   helmet: 'hardware',
   gun: 'gun',
   robot: 'robot',
+  water: 'drop',
+  fertilizer: 'fertilizer',
+  soil: 'soil',
+  shade: 'shade',
+  wind: 'wind',
+  frost: 'frost',
 }
 
 function ProductVisual({ imageUrl, type, accent }) {

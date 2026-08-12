@@ -3,13 +3,13 @@ import { Html, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Box3, Color, DoubleSide, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
 import { getRainVisualIntensity } from './rainUtils'
+import { findGroundSurface, findPlantingHeight, PLANTING_CENTER } from './plantingSurface'
 
 const GRASS_MODEL_URLS = {
   meadow: '/scenes/grass/scene.gltf',
   pack: '/scenes/grass-pack-lp/scene.gltf',
   cemetery: '/scenes/grass-tuft-cemetery/scene.gltf',
 }
-const PLANTING_CENTER = [0.75, 0]
 const PLANTING_CLEAR_RADIUS = 1
 const DOWN = new Vector3(0, -1, 0)
 
@@ -22,51 +22,12 @@ function seededRandom(seed) {
   }
 }
 
-function findGroundSurface(groundObject) {
-  let groundSurface = null
-  let largestFootprint = 0
-
-  groundObject.updateMatrixWorld(true)
-  groundObject.traverse((child) => {
-    if (!child.isMesh || !child.geometry) return
-
-    const name = child.name?.toLowerCase?.() ?? ''
-    if (name.includes('irregular_ground_surface')) {
-      groundSurface = child
-      largestFootprint = Number.POSITIVE_INFINITY
-      return
-    }
-
-    if (largestFootprint === Number.POSITIVE_INFINITY) return
-
-    const bounds = new Box3().setFromObject(child)
-    const size = bounds.getSize(new Vector3())
-    const footprint = size.x * size.z
-    if (footprint > largestFootprint) {
-      largestFootprint = footprint
-      groundSurface = child
-    }
-  })
-
-  return groundSurface
-}
-
-function findPlantingHeight(groundObject) {
-  const groundSurface = findGroundSurface(groundObject)
-  if (!groundSurface) return -0.4
-
-  const bounds = new Box3().setFromObject(groundSurface)
-  const raycaster = new Raycaster(
-    new Vector3(PLANTING_CENTER[0], bounds.max.y + 4, PLANTING_CENTER[1]),
-    DOWN,
-  )
-
-  return raycaster.intersectObject(groundSurface, false)[0]?.point.y ?? bounds.max.y
-}
-
-export function PlantingSpot({ groundObject, label = 'Planting area', plantSelected }) {
+export function PlantingSpot({ groundObject, label = 'Planting area', plantSelected, plantingHeight: suppliedPlantingHeight }) {
   const ringRef = useRef(null)
-  const plantingHeight = useMemo(() => findPlantingHeight(groundObject), [groundObject])
+  const calculatedPlantingHeight = useMemo(() => findPlantingHeight(groundObject), [groundObject])
+  const plantingHeight = Number.isFinite(suppliedPlantingHeight)
+    ? suppliedPlantingHeight
+    : calculatedPlantingHeight
 
   useFrame(({ clock }) => {
     const ring = ringRef.current

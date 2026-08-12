@@ -43,6 +43,11 @@ class Simulator extends Model
         'ended_at',
         'maturity_reward_claimed_at',
         'maturity_reward_amount',
+        'location_timezone',
+        'location_changed_at',
+        'event_tick_count',
+        'last_harmful_event_at',
+        'starter_pack_granted_at',
     ];
 
     protected function casts(): array
@@ -61,6 +66,10 @@ class Simulator extends Model
             'shared_at' => 'datetime',
             'active_seconds' => 'integer',
             'last_active_at' => 'datetime',
+            'location_changed_at' => 'datetime',
+            'last_harmful_event_at' => 'datetime',
+            'starter_pack_granted_at' => 'datetime',
+            'event_tick_count' => 'integer',
         ];
     }
 
@@ -97,5 +106,20 @@ class Simulator extends Model
     public function posts(): HasMany
     {
         return $this->hasMany(Post::class);
+    }
+
+    public function simulationEvents(): HasMany
+    {
+        return $this->hasMany(SimulationEvent::class);
+    }
+
+    public function actions(): HasMany
+    {
+        return $this->hasMany(SimulationAction::class);
+    }
+
+    public function modifiers(): HasMany
+    {
+        return $this->hasMany(SimulationModifier::class);
     }
 }

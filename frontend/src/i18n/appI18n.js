@@ -128,9 +128,13 @@ const thaiMessages = {
   'Environment Control Mode': 'โหมดควบคุมสภาพแวดล้อม',
   'Full lab controls': 'ควบคุมห้องทดลองเต็มรูปแบบ',
   'Tune water, light, fertilizer, soil, air, and temperature inside the controlled simulator.': 'ปรับน้ำ แสง ปุ๋ย ดิน อากาศ และอุณหภูมิภายในเครื่องจำลอง',
+  'Use care items for water and nutrients, then tune light, soil, air, and temperature inside the controlled simulator.': 'ใช้อุปกรณ์ดูแลเพื่อเติมน้ำและธาตุอาหาร แล้วจึงปรับแสง ดิน อากาศ และอุณหภูมิภายในเครื่องจำลอง',
   Outdoor: 'กลางแจ้ง',
   'Fixed local weather': 'สภาพอากาศตามพื้นที่',
   'Use saved location weather from Open-Meteo. Only water and fertilizer stay adjustable.': 'ใช้สภาพอากาศของตำแหน่งที่บันทึกจาก Open-Meteo โดยปรับได้เฉพาะน้ำและปุ๋ย',
+  'Use saved-location weather from Open-Meteo and care items to replenish water or nutrients.': 'ใช้สภาพอากาศของตำแหน่งที่บันทึกจาก Open-Meteo และใช้อุปกรณ์ดูแลเพื่อเติมน้ำหรือธาตุอาหาร',
+  'The plant water reserve is already full.': 'หลอดน้ำสำรองของพืชเต็มแล้ว ยังไม่จำเป็นต้องรดน้ำเพิ่ม',
+  'The plant nutrient reserve is already full.': 'หลอดธาตุอาหารของพืชเต็มแล้ว ยังไม่จำเป็นต้องใส่ปุ๋ยเพิ่ม',
   'Outdoor mode saves your first approved location on this device and keeps using it for future weather.': 'โหมดกลางแจ้งจะบันทึกตำแหน่งที่อนุญาตครั้งแรกไว้ในอุปกรณ์นี้เพื่อใช้กับสภาพอากาศครั้งต่อไป',
   'Step 1 of 3 · Growing mode': 'ขั้นที่ 1 จาก 3 · โหมดการปลูก',
   'Choose the kind of environment you want to manage. You will select a plant next.': 'เลือกสภาพแวดล้อมที่ต้องการดูแล จากนั้นจึงเลือกพืชในขั้นถัดไป',
@@ -1469,4 +1473,43 @@ export function setAppLanguage(language) {
 
 export function getAppLanguage() {
   return activeLanguage
+}
+
+const runtimeThaiMessages = {
+  'Only active simulations accept care actions.': 'ใช้การดูแลพืชได้เฉพาะการจำลองที่กำลังดำเนินอยู่',
+  'Outdoor care and inventory actions require an available item.': 'การดูแลพืชกลางแจ้งต้องใช้ไอเท็มที่มีอยู่ในคลัง',
+  'This item cannot be used in the selected growing mode.': 'ไอเท็มนี้ใช้ไม่ได้กับโหมดปลูกที่เลือก',
+  'Not enough item quantity.': 'จำนวนไอเท็มไม่เพียงพอ',
+  'This laboratory control is not available.': 'ไม่พบการควบคุมห้องทดลองนี้',
+  'No matching active pest or care target was found.': 'ไม่พบศัตรูพืชหรือเป้าหมายที่ตรงกับการดูแลนี้',
+  'Only active simulations can change location.': 'ย้ายสถานที่ได้เฉพาะการจำลองที่กำลังดำเนินอยู่',
+  'Only outdoor simulations have a transferable growing location.': 'ย้ายสถานที่ปลูกได้เฉพาะโหมดกลางแจ้ง',
+  'Select a plant before using an item': 'เลือกพืชก่อนใช้ไอเท็ม',
+  'Log in before using lab items': 'เข้าสู่ระบบก่อนใช้ไอเท็ม',
+  'Save or plant first, then use items': 'เริ่มปลูกพืชก่อนจึงจะใช้ไอเท็มได้',
+  'The action could not be completed.': 'ไม่สามารถดำเนินการนี้ได้',
+}
+
+const appMessageCatalog = {
+  'game.action.applied': {
+    en: 'The care action was applied after its animation completed.',
+    th: 'ใช้การดูแลพืชสำเร็จหลังแอนิเมชันทำงานครบแล้ว',
+  },
+  'game.action.pest_treated': {
+    en: 'The matching pest treatment was applied successfully.',
+    th: 'ใช้วิธีกำจัดศัตรูพืชที่ตรงกับปัญหาสำเร็จแล้ว',
+  },
+}
+
+export function translateAppText(source, language = activeLanguage) {
+  if (language !== 'th') return source
+  return runtimeThaiMessages[source] ?? translatedPhrase(source)
+}
+
+export function translateAppMessage(code, parameters = {}, language = activeLanguage) {
+  const template = appMessageCatalog[code]?.[language] ?? appMessageCatalog[code]?.en ?? code
+  return Object.entries(parameters).reduce(
+    (message, [key, value]) => message.replaceAll(`:${key}`, String(value)),
+    template,
+  )
 }

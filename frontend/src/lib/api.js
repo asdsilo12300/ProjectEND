@@ -754,6 +754,57 @@ export async function applySimulatorItem(simulatorId, itemKey, quantity = 1, ite
   })
 }
 
+export async function applySimulationAction(simulatorId, action) {
+  return apiFetch(`/simulators/${simulatorId}/actions`, {
+    method: 'POST',
+    body: JSON.stringify(action),
+  })
+}
+
+export async function updateSimulatorLocation(simulatorId, location) {
+  return apiFetch(`/simulators/${simulatorId}/location`, {
+    method: 'POST',
+    body: JSON.stringify(location),
+  })
+}
+
+export async function searchLocations(query) {
+  return apiFetch(`/locations/search?q=${encodeURIComponent(query)}`)
+}
+
+export async function reverseLocation(latitude, longitude) {
+  return apiFetch(`/locations/reverse?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`)
+}
+
+export async function getLocationWeatherPreview(latitude, longitude) {
+  return apiFetch(`/locations/weather-preview?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`)
+}
+
+export async function getSimulatorEvents(simulatorId) {
+  return apiFetch(`/simulators/${simulatorId}/events`)
+}
+
+export async function getAdminEventDefinitions(params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== '' && value != null))
+  return apiFetch(`/admin/event-definitions${query.size ? `?${query}` : ''}`)
+}
+
+export async function createAdminEventDefinition(data) {
+  return apiFetch('/admin/event-definitions', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function updateAdminEventDefinition(id, data) {
+  return apiFetch(`/admin/event-definitions/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export async function deleteAdminEventDefinition(id) {
+  return apiFetch(`/admin/event-definitions/${id}`, { method: 'DELETE' })
+}
+
+export async function restoreAdminEventDefinition(id) {
+  return apiFetch(`/admin/event-definitions/${id}/restore`, { method: 'POST' })
+}
+
 export async function prankFriendSimulator(simulatorId, itemKey) {
   return apiFetch(`/simulators/${simulatorId}/prank`, {
     method: 'POST',

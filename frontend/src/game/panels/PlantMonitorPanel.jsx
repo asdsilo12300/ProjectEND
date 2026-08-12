@@ -77,26 +77,11 @@ const recommendationTones = {
 
 const factorDefinitions = [
   {
-    key: 'water',
-    label: 'Water',
-    labelTh: 'น้ำ',
-    states: ['underwatered', 'overwatered'],
-    unit: 'ml',
-    display: (value) => Number(value) * 10,
-  },
-  {
     key: 'light',
     label: 'Light',
     labelTh: 'แสง',
     states: ['low_light', 'stunted'],
     unit: 'lx',
-  },
-  {
-    key: 'fertilizer',
-    label: 'Fertilizer',
-    labelTh: 'ปุ๋ย',
-    states: ['nutrient_deficient', 'burnt'],
-    unit: 'g',
   },
   {
     key: 'soil_humidity',
@@ -208,6 +193,80 @@ function getActivePestRecommendation(simulationVisual, language) {
   }
 }
 
+function getActiveEventRecommendation(simulationVisual, language) {
+  const event = (simulationVisual?.events ?? [])
+    .filter((entry) => ['announced', 'active'].includes(entry?.status))
+    .sort((left, right) => {
+      const severityRank = { critical: 4, high: 3, medium: 2, low: 1 }
+      return (severityRank[right?.severity] ?? 0) - (severityRank[left?.severity] ?? 0)
+    })[0]
+
+  if (!event) return null
+
+  const name = language === 'th'
+    ? event.name_th || event.name_en
+    : event.name_en || event.name_th
+  const description = language === 'th'
+    ? event.description_th || event.description_en
+    : event.description_en || event.description_th
+  const harmfulLevel = {
+    critical: 'critical',
+    high: 'danger',
+    medium: 'warning',
+    low: 'warning',
+  }[event.severity] ?? 'warning'
+
+  return {
+    detail: description || (language === 'th'
+      ? 'ตรวจสอบสภาพพืชและเลือกวิธีรับมือก่อนการอัปเดตครั้งถัดไป'
+      : 'Review the plant and choose a response before the next update.'),
+    level: event.is_harmful ? harmfulLevel : 'info',
+    text: name || (language === 'th' ? 'มีเหตุการณ์ที่ควรตรวจสอบ' : 'An event needs your attention.'),
+  }
+}
+
+function getPlantNeedRecommendation(simulationVisual, language) {
+  const water = clampPercent(simulationVisual?.plant_needs?.water ?? simulationVisual?.water ?? 100)
+  const nutrients = clampPercent(simulationVisual?.plant_needs?.fertilizer ?? simulationVisual?.fertilizer ?? 100)
+  const needs = [
+    {
+      key: 'water',
+      value: water,
+      label: language === 'th' ? 'น้ำ' : 'Water',
+      item: language === 'th' ? 'ไอเท็มรดน้ำ' : 'a watering item',
+    },
+    {
+      key: 'fertilizer',
+      value: nutrients,
+      label: language === 'th' ? 'ธาตุอาหาร' : 'Nutrients',
+      item: language === 'th' ? 'ไอเท็มปุ๋ย' : 'a fertilizer item',
+    },
+  ]
+    .filter((need) => need.value <= 50)
+    .sort((left, right) => left.value - right.value)
+
+  if (needs.length === 0) return null
+
+  const primary = needs[0]
+  const secondary = needs[1]
+  const level = primary.value <= 10 ? 'critical' : primary.value <= 25 ? 'danger' : 'warning'
+  const secondaryText = secondary
+    ? language === 'th'
+      ? ` และ${secondary.label}เหลือ ${Math.round(secondary.value)}%`
+      : `; ${secondary.label.toLowerCase()} are at ${Math.round(secondary.value)}%`
+    : ''
+
+  return {
+    level,
+    text: language === 'th'
+      ? `${primary.label}สำรองเหลือ ${Math.round(primary.value)}%${secondaryText}`
+      : `${primary.label} reserve is at ${Math.round(primary.value)}%${secondaryText}.`,
+    detail: language === 'th'
+      ? `ใช้${primary.item}จากคลังก่อนหลอดหมด ระบบจะหักไอเท็มเมื่อใช้งานสำเร็จเท่านั้น`
+      : `Use ${primary.item} from Lab assets before the reserve runs out. The item is consumed only after a successful action.`,
+  }
+}
+
 function buildRecommendation(simulationVisual, {
   awaitingFirstCycle,
   cycleSeconds,
@@ -216,6 +275,9 @@ function buildRecommendation(simulationVisual, {
   health,
   language,
 }) {
+  const eventRecommendation = getActiveEventRecommendation(simulationVisual, language)
+  if (eventRecommendation) return eventRecommendation
+
   if (growthProgress >= 100 && health > 0) {
     return {
       detail: language === 'th'
@@ -241,6 +303,9 @@ function buildRecommendation(simulationVisual, {
       text: pestRecommendation.text,
     }
   }
+
+  const plantNeedRecommendation = getPlantNeedRecommendation(simulationVisual, language)
+  if (plantNeedRecommendation) return plantNeedRecommendation
 
   const visualState = simulationVisual?.visual_state ?? 'healthy'
   const issues = getEnvironmentIssues(simulationVisual)
@@ -583,15 +648,6 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const visualState = simulationVisual?.visual_state ?? 'healthy'
   const statusLabel = visualStateLabels[visualState] ?? 'Monitoring'
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
-  const recommendation = buildRecommendation(simulationVisual, {
-    awaitingFirstCycle,
-    cycleSeconds,
-    growthProgress: targetGrowthProgress,
-    growthRate,
-    health: targetHealth,
-    language,
-  })
-  const recommendationTone = recommendationTones[recommendation.level]
 
   return (
     <>
@@ -626,26 +682,6 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
           <div className="flex shrink-0 items-center whitespace-nowrap rounded-md bg-[#9bcf82]/12 px-2 py-1 text-xs font-semibold leading-none text-lime-100">{pace.label}</div>
         </div>
 
-        <div
-          className={`mb-3 rounded-md border px-3 py-2.5 ${recommendationTone.border} ${recommendationTone.background}`}
-          data-i18n-skip="true"
-          role={recommendation.level === 'critical' || recommendation.level === 'danger' ? 'alert' : undefined}
-        >
-          <div className="flex items-center gap-2">
-            <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md ${recommendationTone.iconBackground}`}>
-              <AppIcon className={`h-3.5 w-3.5 ${recommendationTone.iconColor}`} name={recommendationTone.icon} />
-            </span>
-            <span className={`min-w-0 flex-1 text-xs font-black uppercase tracking-[0.08em] ${recommendationTone.label}`}>
-              {language === 'th' ? 'สิ่งที่แนะนำให้ทำต่อ' : 'Recommended next action'}
-            </span>
-            <span className={`shrink-0 rounded-full border border-current/20 bg-black/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.06em] ${recommendationTone.label}`}>
-              {language === 'th' ? recommendationTone.badgeTh : recommendationTone.badge}
-            </span>
-          </div>
-          <strong className="mt-2 block text-xs leading-5 text-slate-100">{recommendation.text}</strong>
-          <span className="mt-0.5 block text-[11px] leading-4 text-slate-300">{recommendation.detail}</span>
-        </div>
-
         <GrowthTimeline awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} estimate={realGrowth} progress={growthProgress} history={growthHistory} pace={pace} rate={growthRate} referenceUrl={simulationVisual?.plant?.growth_reference_url} stages={growthStages} />
 
         <div className="mt-3 border-t border-lime-100/10 pt-3">
@@ -665,6 +701,47 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
     </Panel>
     <PestKnowledgeModal language={language} onClose={() => setSelectedPestId(null)} pest={selectedPest} />
     </>
+  )
+}
+
+export function PlantRecommendationBanner({ awaitingFirstCycle = false, nextCycleAt = null, simulationVisual }) {
+  const language = useAppLanguage()
+  const cycleSeconds = useCountdownSeconds(nextCycleAt)
+  const growthProgress = getGrowthProgress(simulationVisual)
+  const health = getHealth(simulationVisual)
+  const recommendation = buildRecommendation(simulationVisual, {
+    awaitingFirstCycle,
+    cycleSeconds,
+    growthProgress,
+    growthRate: Number(simulationVisual?.growth_rate ?? 0),
+    health,
+    language,
+  })
+  const tone = recommendationTones[recommendation.level] ?? recommendationTones.info
+  const isUrgent = ['critical', 'danger'].includes(recommendation.level)
+
+  return (
+    <aside
+      className={`plant-recommendation-rail plant-recommendation-rail--${recommendation.level}`}
+      data-tour="plant-recommendation"
+      data-i18n-skip="true"
+      role={isUrgent ? 'alert' : 'status'}
+      aria-live={isUrgent ? 'assertive' : 'polite'}
+    >
+      <span className={`plant-recommendation-rail__icon ${tone.iconBackground}`} aria-hidden="true">
+        <AppIcon className={`${tone.iconColor}`} name={tone.icon} />
+      </span>
+      <span className="plant-recommendation-rail__copy">
+        <span className={`plant-recommendation-rail__eyebrow ${tone.label}`}>
+          {language === 'th' ? 'สิ่งที่แนะนำให้ทำต่อ' : 'Recommended next action'}
+        </span>
+        <strong>{recommendation.text}</strong>
+        <span className="plant-recommendation-rail__detail">{recommendation.detail}</span>
+      </span>
+      <span className={`plant-recommendation-rail__badge ${tone.label}`}>
+        {language === 'th' ? tone.badgeTh : tone.badge}
+      </span>
+    </aside>
   )
 }
 

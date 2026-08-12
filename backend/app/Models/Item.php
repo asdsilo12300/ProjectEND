@@ -18,10 +18,14 @@ class Item extends Model
         'effect_value',
         'rarity',
         'is_active',
+        'action_key',
+        'mode_scope',
+        'effect_payload',
+        'animation_key',
     ];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'effect_payload' => 'array'];
     }
 }

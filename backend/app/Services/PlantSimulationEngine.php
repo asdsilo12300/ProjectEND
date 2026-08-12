@@ -12,6 +12,7 @@ use App\Models\SimulationPest;
 use App\Models\Simulator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PlantSimulationEngine
@@ -38,15 +39,27 @@ class PlantSimulationEngine
             $simulator->loadMissing(['plant.conditionRules', 'plant.visualVariants', 'currentStage']);
             $plant = $simulator->plant;
             $repairedLegacyRootTemperature = $this->repairLegacyGreenhouseRootTemperature($simulator, $plant, $factors);
+            $resourceState = $this->consumePlantResources($simulator, $plant, $factors);
+            $factors['water'] = $resourceState['water'];
+            $factors['fertilizer'] = $resourceState['fertilizer'];
             $matchedRules = $plant->conditionRules
                 ->where('is_active', true)
+                // Water and fertilizer now represent remaining reserves. Old
+                // upper-bound rules would incorrectly punish a full meter.
+                ->whereNotIn('factor', ['water', 'fertilizer'])
                 ->filter(fn (PlantConditionRule $rule) => $this->matchesRule($rule, $factors))
                 ->sortByDesc('severity')
                 ->values();
 
-            $healthDelta = (int) $matchedRules->sum('health_delta');
-            $growthDelta = (int) $matchedRules->sum('growth_delta');
-            $stressCount = $matchedRules->filter(fn (PlantConditionRule $rule) => $rule->health_delta < 0 || $rule->growth_delta < 0)->count();
+            $healthDelta = (int) $matchedRules->sum('health_delta') + $resourceState['health_delta'];
+            if ($simulator->mode === 'outdoor') {
+                // Outdoor weather may combine several rules at once. Cap the
+                // environmental loss so the player always gets a recovery turn.
+                $healthDelta = max(-16, $healthDelta);
+            }
+            $growthDelta = (int) $matchedRules->sum('growth_delta') + $resourceState['growth_delta'];
+            $stressCount = $matchedRules->filter(fn (PlantConditionRule $rule) => $rule->health_delta < 0 || $rule->growth_delta < 0)->count()
+                + $resourceState['stress_count'];
             $wasDepleted = (int) $simulator->health === 0;
             $naturalRecovery = $stressCount === 0 ? 3 : 0;
 
@@ -55,7 +68,9 @@ class PlantSimulationEngine
             // stresses, but replacing a specific cause such as heat stress
             // with the generic "stunted" state hides the corresponding colour
             // and deformation from the 3D plant.
-            $dominantVisualState = $matchedRules->first()?->visual_state;
+            $dominantVisualState = $resourceState['critical']
+                ? $resourceState['visual_state']
+                : ($matchedRules->first()?->visual_state ?? $resourceState['visual_state']);
             $visualState = $dominantVisualState ?? 'healthy';
 
             $pestRisks = $this->pestRiskMap($simulator, $factors);
@@ -71,6 +86,9 @@ class PlantSimulationEngine
                 : (int) $simulator->health;
             $healthAfterEnvironment = $this->clamp($startingHealth + $healthDelta + $naturalRecovery, 0, 100);
             $nextHealth = $this->clamp($healthAfterEnvironment - $pestDamage, 0, 100);
+            if ($simulator->mode === 'outdoor') {
+                $nextHealth = max($nextHealth, max(0, $startingHealth - 20));
+            }
 
             // Low health caused only by an active pest has no environmental
             // symptom to display, so the generic stunted appearance remains
@@ -97,8 +115,12 @@ class PlantSimulationEngine
                 ->first();
             $variant = $this->variantFor($plant->id, $stage?->id, $visualState);
             $visualOverrides = $this->visualOverrides($visualState, $variant);
-            $analysis = $this->analysisText($matchedRules->pluck('analysis_result')->filter()->values()->all(), $visualState);
-            $direction = $this->directionText($matchedRules->pluck('direction')->filter()->values()->all(), $visualState);
+            $analysisMessages = $matchedRules->pluck('analysis_result')->filter()->values()->all();
+            $directionMessages = $matchedRules->pluck('direction')->filter()->values()->all();
+            if ($resourceState['analysis']) $analysisMessages[] = $resourceState['analysis'];
+            if ($resourceState['direction']) $directionMessages[] = $resourceState['direction'];
+            $analysis = $this->analysisText($analysisMessages, $visualState);
+            $direction = $this->directionText($directionMessages, $visualState);
             if ($pestDamage > 0) {
                 $analysis .= " Active pests caused {$pestDamage} health damage this cycle.";
                 $direction .= ' Use an appropriate pest treatment to stop further damage.';
@@ -160,9 +182,101 @@ class PlantSimulationEngine
 
             $freshSimulator = $simulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules']);
             $freshSimulator->setAttribute('pest_risks', $pestRisks);
+            $freshSimulator->setAttribute('plant_need_rates', [
+                'water_per_cycle' => $resourceState['water_consumed'],
+                'fertilizer_per_cycle' => $resourceState['fertilizer_consumed'],
+                'rain_recovery' => $resourceState['rain_recovery'],
+            ]);
 
             return $freshSimulator;
         });
+    }
+
+    /**
+     * Convert the old adjustable water/fertilizer factors into persistent
+     * reserves. Water responds quickly to plant size, heat, light and dry air;
+     * nutrients are intentionally consumed about an order of magnitude more
+     * slowly so care remains understandable instead of becoming busywork.
+     *
+     * @param  array<string, int|float|null>  $factors
+     * @return array<string, int|float|string|bool|null>
+     */
+    private function consumePlantResources(Simulator $simulator, Plant $plant, array $factors): array
+    {
+        $water = $this->clamp((int) Arr::get($factors, 'water', $simulator->water), 0, 100);
+        $fertilizer = $this->clamp((int) Arr::get($factors, 'fertilizer', $simulator->fertilizer), 0, 100);
+        $maxGrowth = max(1, (int) $plant->stages()->max('required_growth_point'));
+        $growthRatio = min(1, max(0, (float) $simulator->growth_point / $maxGrowth));
+        $airTemperature = (float) Arr::get($factors, 'air_temp', $simulator->air_temp);
+        $airHumidity = (float) Arr::get($factors, 'air_humidity', $simulator->air_humidity);
+        $light = (float) Arr::get($factors, 'light', $simulator->light);
+        $rain = $simulator->mode === 'outdoor' ? max(0, (float) Arr::get($factors, 'rain', 0)) : 0;
+
+        $heatLoad = max(0, $airTemperature - (float) $plant->air_temp_max) * 0.18;
+        $dryAirLoad = max(0, (float) $plant->air_humidity_min - $airHumidity) * 0.04;
+        $lightLoad = max(0, $light - (float) $plant->light_max) * 0.025;
+        $waterConsumed = max(1, min(8, (int) round(2.2 + ($growthRatio * 1.8) + $heatLoad + $dryAirLoad + $lightLoad)));
+        $rainRecovery = min(12, (int) round($rain * 4));
+        $nextWater = $this->clamp($water - $waterConsumed + $rainRecovery, 0, 100);
+
+        $tick = max(1, (int) ($simulator->event_tick_count ?? 1));
+        $fertilizerConsumed = $tick % 4 === 0 ? 1 : 0;
+        $nextFertilizer = $this->clamp($fertilizer - $fertilizerConsumed, 0, 100);
+
+        $healthDelta = 0;
+        $growthDelta = 0;
+        $stressCount = 0;
+        $visualState = null;
+        $analysis = null;
+        $direction = null;
+        $critical = false;
+
+        if ($nextWater <= 8) {
+            $healthDelta -= 12;
+            $growthDelta -= 14;
+            $stressCount++;
+            $visualState = 'underwatered';
+            $analysis = 'The plant water reserve is critically low.';
+            $direction = 'Use a watering item before the next update.';
+            $critical = true;
+        } elseif ($nextWater <= 25) {
+            $healthDelta -= 5;
+            $growthDelta -= 7;
+            $stressCount++;
+            $visualState = 'underwatered';
+            $analysis = 'The plant is using its remaining water reserve.';
+            $direction = 'Water the plant soon to keep growth stable.';
+        }
+
+        if ($nextFertilizer <= 10) {
+            $healthDelta -= 5;
+            $growthDelta -= 9;
+            $stressCount++;
+            if (! $critical) $visualState = 'nutrient_deficient';
+            $analysis = trim(($analysis ? $analysis.' ' : '').'The nutrient reserve is critically low.');
+            $direction = trim(($direction ? $direction.' ' : '').'Apply fertilizer to restore available nutrients.');
+        } elseif ($nextFertilizer <= 22) {
+            $growthDelta -= 4;
+            $stressCount++;
+            $visualState ??= 'nutrient_deficient';
+            $analysis = trim(($analysis ? $analysis.' ' : '').'The nutrient reserve is running low.');
+            $direction = trim(($direction ? $direction.' ' : '').'Plan a fertilizer application soon.');
+        }
+
+        return [
+            'water' => $nextWater,
+            'fertilizer' => $nextFertilizer,
+            'water_consumed' => $waterConsumed,
+            'fertilizer_consumed' => $fertilizerConsumed,
+            'rain_recovery' => $rainRecovery,
+            'health_delta' => $healthDelta,
+            'growth_delta' => $growthDelta,
+            'stress_count' => $stressCount,
+            'visual_state' => $visualState,
+            'analysis' => $analysis,
+            'direction' => $direction,
+            'critical' => $critical,
+        ];
     }
 
     /** @param array<string, int|float|null> $factors */
@@ -292,6 +406,10 @@ class PlantSimulationEngine
         $activeCount = 0;
         $damage = 0;
         $changed = false;
+        $newPestCreated = false;
+        $tick = (int) ($simulator->event_tick_count ?? 0);
+        $hasEventClock = Schema::hasColumn('simulators', 'event_tick_count');
+        $canIntroducePest = ! $hasEventClock || ($tick > 2 && $tick % 2 === 0);
         $pests = Pest::query()->with('conditionRules')->get();
 
         foreach ($pests as $pest) {
@@ -309,7 +427,8 @@ class PlantSimulationEngine
                 continue;
             }
 
-            if ($chance > 0 && ($chance >= 100 || random_int(1, 100) <= $chance)) {
+            $roll = (abs(crc32($simulator->id.':'.$tick.':pest:'.$pest->id)) % 100) + 1;
+            if (! $newPestCreated && $canIntroducePest && $chance > 0 && ($chance >= 100 || $roll <= $chance)) {
                 SimulationPest::query()->create([
                     'simulator_id' => $simulator->id,
                     'pest_id' => $pest->id,
@@ -319,6 +438,7 @@ class PlantSimulationEngine
                 $activeCount++;
                 $damage += max(0, (int) $pest->damage_per_turn);
                 $changed = true;
+                $newPestCreated = true;
             }
         }
 

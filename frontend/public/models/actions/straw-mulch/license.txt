@@ -1,0 +1,11 @@
+Model Information:
+* title:	Dry straw on the ground tile texture
+* source:	https://sketchfab.com/3d-models/dry-straw-on-the-ground-tile-texture-130d488324454f5ca8d06cd06113c390
+* author:	Tijerín Art Studio (https://sketchfab.com/tijerin_art)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Dry straw on the ground tile texture" (https://sketchfab.com/3d-models/dry-straw-on-the-ground-tile-texture-130d488324454f5ca8d06cd06113c390) by Tijerín Art Studio (https://sketchfab.com/tijerin_art) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

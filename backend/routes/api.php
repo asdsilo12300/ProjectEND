@@ -23,6 +23,11 @@ use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Api\PublicMediaController;
 use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\SimulatorController;
+use App\Http\Controllers\Api\SimulationActionController;
+use App\Http\Controllers\Api\SimulationEventController;
+use App\Http\Controllers\Api\SimulatorLocationController;
+use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\AdminEventDefinitionController;
 use Illuminate\Support\Facades\Route;
 
 Route::options('/{any}', fn () => response()->noContent())->where('any', '.*');
@@ -81,6 +86,12 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/spectator/simulators/{simulator}', [SimulatorController::class, 'spectate']);
     Route::post('/simulators/{simulator}/claim-maturity-reward', [SimulatorController::class, 'claimMaturityReward']);
     Route::post('/simulators/{simulator}/use-item', [SimulatorController::class, 'useItem']);
+    Route::post('/simulators/{simulator}/actions', [SimulationActionController::class, 'store']);
+    Route::post('/simulators/{simulator}/location', [SimulatorLocationController::class, 'update']);
+    Route::get('/simulators/{simulator}/events', [SimulationEventController::class, 'index']);
+    Route::get('/locations/search', [LocationController::class, 'search'])->middleware('throttle:30,1');
+    Route::get('/locations/reverse', [LocationController::class, 'reverse'])->middleware('throttle:30,1');
+    Route::get('/locations/weather-preview', [LocationController::class, 'weather'])->middleware('throttle:60,1');
     Route::post('/simulators/{simulator}/prank', [SimulatorController::class, 'prank']);
 
     Route::get('/inventory', [ShopController::class, 'inventory']);
@@ -130,6 +141,11 @@ Route::middleware('jwt')->group(function (): void {
         Route::put('/resources/{resource}/{record}', [AdminResourceController::class, 'update']);
         Route::delete('/resources/{resource}/{record}', [AdminResourceController::class, 'destroy']);
         Route::post('/resources/{resource}/{record}/restore', [AdminResourceController::class, 'restore']);
+        Route::get('/event-definitions', [AdminEventDefinitionController::class, 'index']);
+        Route::post('/event-definitions', [AdminEventDefinitionController::class, 'store']);
+        Route::put('/event-definitions/{eventDefinition}', [AdminEventDefinitionController::class, 'update']);
+        Route::delete('/event-definitions/{eventDefinition}', [AdminEventDefinitionController::class, 'destroy']);
+        Route::post('/event-definitions/{eventDefinition}/restore', [AdminEventDefinitionController::class, 'restore']);
 
     });
 });

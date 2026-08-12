@@ -147,6 +147,12 @@ const thaiShopItems = {
   'Fungus Spray': { name: 'สเปรย์กำจัดเชื้อรา', description: 'กำจัดเชื้อราได้สำเร็จ 100%' },
   'Aphid Prank': { name: 'ไอเทมเพลี้ยแกล้งเพื่อน', description: 'ส่งเพลี้ยไปยังพืชที่กำลังปลูก 1 ต้นในสวนของเพื่อน' },
   'Snail Prank': { name: 'ไอเทมหอยทากแกล้งเพื่อน', description: 'ส่งหอยทากไปยังพืชที่กำลังปลูก 1 ต้นในสวนของเพื่อน' },
+  'Watering Dose': { name: 'น้ำสำหรับรดพืช', description: 'เติมหลอดน้ำสำรองของพืช น้ำจะค่อย ๆ ลดลงในทุกรอบจำลอง' },
+  'Fertilizer Dose': { name: 'ปุ๋ยสำหรับพืช', description: 'เติมหลอดธาตุอาหารของพืช โดยธาตุอาหารจะลดช้ากว่าน้ำ' },
+  'Drainage Mix': { name: 'วัสดุช่วยระบายน้ำ', description: 'ลดความชื้นดินส่วนเกินในโหมดกลางแจ้งหลังฝนตกหนัก' },
+  'Shade Cloth': { name: 'ผ้าบังแดด', description: 'ลดผลกระทบจากแสงจัดและคลื่นความร้อนชั่วคราว' },
+  Windbreak: { name: 'แนวกันลม', description: 'ลดความเครียดจากลมแรงในโหมดกลางแจ้งชั่วคราว' },
+  'Frost Cover': { name: 'วัสดุป้องกันอากาศเย็น', description: 'ป้องกันพืชจากอากาศเย็นฉับพลันชั่วคราว' },
 }
 
 export function localizeShopItem(item, language) {

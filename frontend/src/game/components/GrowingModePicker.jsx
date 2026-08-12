@@ -6,7 +6,7 @@ const modeOptions = [
     id: 'greenhouse',
     title: 'Environment Control Mode',
     subtitle: 'Full lab controls',
-    detail: 'Tune water, light, fertilizer, soil, air, and temperature inside the controlled simulator.',
+    detail: 'Use care items for water and nutrients, then tune light, soil, air, and temperature inside the controlled simulator.',
     icon: 'plant',
     recommended: true,
   },
@@ -14,7 +14,7 @@ const modeOptions = [
     id: 'outdoor',
     title: 'Outdoor',
     subtitle: 'Fixed local weather',
-    detail: 'Use saved location weather from Open-Meteo. Only water and fertilizer stay adjustable.',
+    detail: 'Use saved-location weather from Open-Meteo and care items to replenish water or nutrients.',
     icon: 'wind',
   },
 ]

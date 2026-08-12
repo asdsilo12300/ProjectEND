@@ -1,17 +1,19 @@
+import { useMemo, useState } from 'react'
 import { climateIcons } from '../data/gameData'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { MetricIcon } from '../icons/MetricIcon'
 import { Panel } from '../components/Panel'
 import { getOutdoorReadings } from '../utils/outdoorWeather'
+import { getAppLanguage } from '../../i18n/appI18n'
 
 const climateLabels = {
-  water: 'Water',
-  light: 'Light',
-  fertilizer: 'Fertilizer',
-  soil: 'Soil',
-  air: 'Air',
-  soilTemp: 'Soil temp',
-  temp: 'Temp',
+  water: { en: 'Water', th: 'น้ำ' },
+  light: { en: 'Light', th: 'แสง' },
+  fertilizer: { en: 'Fertilizer', th: 'ปุ๋ย' },
+  soil: { en: 'Soil', th: 'ความชื้นดิน' },
+  air: { en: 'Air', th: 'ความชื้นอากาศ' },
+  soilTemp: { en: 'Soil temp', th: 'อุณหภูมิดิน' },
+  temp: { en: 'Temp', th: 'อุณหภูมิ' },
 }
 
 const climateUnits = {
@@ -24,7 +26,7 @@ const climateUnits = {
   temp: 'C',
 }
 
-const outdoorControlKeys = ['water', 'fertilizer']
+const outdoorControlKeys = []
 
 function ClimateValue({ climateKey, value }) {
   const displayValue = climateKey === 'water' ? Math.round(Number(value || 0) * 10) : value
@@ -37,16 +39,17 @@ function ClimateValue({ climateKey, value }) {
   )
 }
 
-function ClimateControl({ climateKey, value, onChange, compact = false, disabled = false }) {
+function ClimateControl({ climateKey, value, onChange, compact = false, disabled = false, language = 'en' }) {
   const icon = climateIcons[climateKey] ?? climateIcons.temp
+  const label = climateLabels[climateKey]?.[language] ?? climateLabels[climateKey]?.en ?? climateKey
   const layout = compact ? 'grid-cols-[26px_34px_minmax(72px,1fr)_56px] sm:grid-cols-[28px_38px_minmax(78px,1fr)_60px]' : 'grid-cols-[26px_72px_minmax(52px,1fr)_50px]'
   const isTemperature = climateKey === 'temp' || climateKey === 'soilTemp'
   const rangeProgress = isTemperature ? (Number(value) / 45) * 100 : Number(value)
 
   return (
     <label className={`grid ${layout} items-center gap-1.5 text-xs text-slate-300 ${disabled ? 'opacity-55' : ''}`}>
-      <MetricIcon className={climateKey === 'soilTemp' ? 'h-6 w-6 rounded-[4px]' : ''} type={icon.icon} color={icon.color} imageUrl={icon.imageUrl} label={`${climateLabels[climateKey]} icon`} size="sm" />
-      <span className="whitespace-nowrap text-xs">{climateLabels[climateKey]}</span>
+      <MetricIcon className={climateKey === 'soilTemp' ? 'h-6 w-6 rounded-[4px]' : ''} type={icon.icon} color={icon.color} imageUrl={icon.imageUrl} label={`${label} icon`} size="sm" />
+      <span className="whitespace-nowrap text-xs">{label}</span>
       <input
         className="sim-range sim-range-compact"
         style={{ '--range-progress': `${rangeProgress}%` }}
@@ -72,51 +75,51 @@ function WeatherReading({ icon, color, imageUrl, label, value }) {
   )
 }
 
-function formatLocation(addressLabel, status) {
-  if (status === 'loading') return 'Finding saved location'
-  if (status === 'error') return 'Map location not found'
-  return addressLabel || 'Saved map location'
+function formatLocation(addressLabel, status, isThai) {
+  if (status === 'loading') return isThai ? 'กำลังค้นหาสถานที่ที่บันทึกไว้' : 'Finding saved location'
+  if (status === 'error') return isThai ? 'ไม่พบตำแหน่งบนแผนที่' : 'Map location not found'
+  return addressLabel || (isThai ? 'ตำแหน่งที่บันทึกไว้' : 'Saved map location')
 }
 
-function buildWeatherCards(readings) {
+function buildWeatherCards(readings, isThai) {
   return [
     {
-      label: 'Temp',
+      label: isThai ? 'อุณหภูมิ' : 'Temp',
       value: readings?.temperature == null ? '--' : `${readings.temperature} C`,
       icon: climateIcons.temp.icon,
       color: climateIcons.temp.color,
       imageUrl: climateIcons.temp.imageUrl,
     },
     {
-      label: 'Humidity',
+      label: isThai ? 'ความชื้นอากาศ' : 'Humidity',
       value: readings?.humidity == null ? '--' : `${readings.humidity}%RH`,
       icon: climateIcons.air.icon,
       color: climateIcons.air.color,
       imageUrl: climateIcons.air.imageUrl,
     },
     {
-      label: 'Soil moisture',
+      label: isThai ? 'ความชื้นดิน' : 'Soil moisture',
       value: readings?.soilMoisture == null ? '--' : `${readings.soilMoisture}%`,
       icon: climateIcons.soil.icon,
       color: climateIcons.soil.color,
       imageUrl: climateIcons.soil.imageUrl,
     },
     {
-      label: 'Soil temp',
+      label: isThai ? 'อุณหภูมิดิน' : 'Soil temp',
       value: readings?.soilTemp == null ? '--' : `${readings.soilTemp} C`,
       icon: climateIcons.soilTemp.icon,
       color: climateIcons.soilTemp.color,
       imageUrl: climateIcons.soilTemp.imageUrl,
     },
     {
-      label: 'Rain',
+      label: isThai ? 'ปริมาณฝน' : 'Rain',
       value: readings?.rain == null ? '--' : `${readings.rain} mm`,
       icon: climateIcons.water.icon,
       color: climateIcons.water.color,
       imageUrl: climateIcons.water.imageUrl,
     },
     {
-      label: 'Wind',
+      label: isThai ? 'ความเร็วลม' : 'Wind',
       value: readings?.windSpeed == null
         ? '--'
         : `${Math.round(readings.windSpeed)} km/h`,
@@ -125,8 +128,8 @@ function buildWeatherCards(readings) {
       imageUrl: climateIcons.air.imageUrl,
     },
     {
-      label: 'Time',
-      value: readings ? (readings.isDay ? 'Day' : 'Night') : '--',
+      label: isThai ? 'ช่วงเวลา' : 'Time',
+      value: readings ? (readings.isDay ? (isThai ? 'กลางวัน' : 'Day') : (isThai ? 'กลางคืน' : 'Night')) : '--',
       icon: climateIcons.light.icon,
       color: climateIcons.light.color,
       imageUrl: climateIcons.light.imageUrl,
@@ -134,29 +137,47 @@ function buildWeatherCards(readings) {
   ]
 }
 
-function locationSourceLabel(source) {
-  if (source === 'browser') return 'current'
-  if (source === 'saved') return 'saved'
-  if (source === 'simulation') return 'locked'
-  if (source === 'fallback') return 'fallback'
+function locationSourceLabel(source, isThai) {
+  if (source === 'browser') return isThai ? 'ปัจจุบัน' : 'current'
+  if (source === 'saved') return isThai ? 'บันทึกแล้ว' : 'saved'
+  if (source === 'simulation') return isThai ? 'บันทึกแล้ว' : 'saved'
+  if (source === 'fallback') return isThai ? 'สำรอง' : 'fallback'
   return ''
 }
 
-export function EnvironmentPanel({ climate, setClimate, windows, setWindows, locationLocked = false, mode = 'greenhouse', onRefreshLocation, outdoorWeather, plantSelected = true }) {
+export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenhouse', onApplyFactors, actionPhase = 'idle', onRefreshLocation, onTransferLocation, outdoorWeather, plantSelected = true }) {
+  const language = getAppLanguage()
+  const isThai = language === 'th'
   const isOutdoor = mode === 'outdoor'
-  const controlKeys = isOutdoor ? outdoorControlKeys : Object.keys(climate)
+  // Water and fertilizer are consumable reserves managed through care items,
+  // not arbitrary environment sliders.
+  const controlKeys = isOutdoor ? outdoorControlKeys : Object.keys(climate).filter((key) => !['water', 'fertilizer'].includes(key))
   const outdoorReadings = getOutdoorReadings(outdoorWeather?.forecast)
-  const weatherCards = buildWeatherCards(outdoorReadings)
+  const weatherCards = buildWeatherCards(outdoorReadings, isThai)
+  const [pendingClimate, setPendingClimate] = useState({})
+  const draftClimate = useMemo(() => ({ ...climate, ...pendingClimate }), [climate, pendingClimate])
+  const changes = useMemo(() => Object.fromEntries(controlKeys
+    .filter((key) => Object.hasOwn(pendingClimate, key) && Number(pendingClimate[key]) !== Number(climate[key]))
+    .map((key) => [key, Number(pendingClimate[key])])), [climate, controlKeys, pendingClimate])
+  const hasChanges = Object.keys(changes).length > 0
+  const actionBusy = ['animating', 'applying'].includes(actionPhase)
 
   function updateClimate(key, value) {
-    setClimate((next) => ({ ...next, [key]: value }))
+    setPendingClimate((current) => {
+      if (Number(value) === Number(climate[key])) {
+        const next = { ...current }
+        delete next[key]
+        return next
+      }
+      return { ...current, [key]: value }
+    })
   }
 
   return (
     <Panel
       id="climate"
-      title={isOutdoor ? 'Outdoor environment' : 'Environment'}
-      subtitle={isOutdoor ? 'weather data from Open-Meteo' : 'water light fertilizer'}
+      title={isOutdoor ? (isThai ? 'สภาพแวดล้อมกลางแจ้ง' : 'Outdoor environment') : (isThai ? 'สภาพแวดล้อม' : 'Environment')}
+      subtitle={isOutdoor ? (isThai ? 'ข้อมูลอากาศจริงจาก Open-Meteo' : 'weather data from Open-Meteo') : (isThai ? 'แสง ความชื้น และอุณหภูมิ' : 'light humidity and temperature')}
       windows={windows}
       setWindows={setWindows}
       className={isOutdoor ? 'w-[390px] max-w-[calc(100vw-32px)]' : 'w-[520px] max-w-[calc(100vw-32px)]'}
@@ -164,50 +185,80 @@ export function EnvironmentPanel({ climate, setClimate, windows, setWindows, loc
       <div className={isOutdoor ? 'max-h-[186px] overflow-y-auto pr-1 sm:max-h-[330px]' : ''}>
         <div className={`mb-3 rounded-md border px-3 py-2 text-xs leading-4 ${plantSelected ? 'border-lime-100/10 bg-[#9bcf82]/[0.07] text-slate-300' : 'border-amber-200/15 bg-amber-300/[0.07] text-amber-100'}`}>
           {plantSelected
-            ? 'Changes are saved automatically and applied at the next simulation update.'
-            : 'Select a plant first. Environment controls unlock when the simulation starts.'}
+            ? (isOutdoor
+              ? (isThai ? 'ระบบใช้อากาศจริงอัตโนมัติ เลือกไอเทมจากคลังเพื่อดูแลหรือปกป้องพืช' : 'Real weather is applied automatically. Use inventory items to protect or care for the plant.')
+              : (isThai ? 'น้ำและธาตุอาหารจะแสดงเป็นหลอดความต้องการของพืช ใช้บัวรดน้ำหรือปุ๋ยจากคลัง ส่วนปัจจัยอื่นปรับค่าแล้วกดยืนยันเพื่อเล่นแอนิเมชัน 3D' : 'Water and nutrients are plant-need reserves. Use watering and fertilizer items; adjust the other factors, then confirm to play the 3D action.'))
+            : (isThai ? 'เลือกพืชก่อน ระบบควบคุมสภาพแวดล้อมจะเปิดเมื่อเริ่มการจำลอง' : 'Select a plant first. Environment controls unlock when the simulation starts.')}
         </div>
         <div className={`grid gap-x-3 gap-y-3 ${isOutdoor ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {controlKeys.map((key) => (
-            <ClimateControl key={key} climateKey={key} value={climate[key]} onChange={updateClimate} compact={isOutdoor} disabled={!plantSelected} />
+            <ClimateControl key={key} climateKey={key} value={draftClimate[key]} onChange={updateClimate} compact={isOutdoor} disabled={!plantSelected || actionBusy} language={language} />
           ))}
         </div>
+
+        {!isOutdoor && plantSelected && (
+          <div className={`environment-apply-bar ${hasChanges ? 'is-visible' : ''}`} aria-live="polite">
+            <span>{hasChanges
+              ? (isThai ? `รอยืนยัน ${Object.keys(changes).length} รายการ` : `${Object.keys(changes).length} pending ${Object.keys(changes).length === 1 ? 'change' : 'changes'}`)
+              : (isThai ? 'ไม่มีค่าที่รอยืนยัน' : 'No pending changes')}</span>
+            <button type="button" disabled={!hasChanges || actionBusy} onClick={async () => {
+              const applied = await onApplyFactors?.(changes)
+              if (applied !== false) {
+                setPendingClimate({})
+              }
+            }}>
+              <AppIcon name={actionBusy ? 'live' : 'save'} />
+              {actionBusy ? (isThai ? 'กำลังดำเนินการ…' : 'Applying action…') : (isThai ? 'ยืนยันและเล่นแอนิเมชัน' : 'Confirm & animate')}
+            </button>
+          </div>
+        )}
+
+        {isOutdoor && plantSelected && (
+          <div className="mb-3 rounded-lg border border-emerald-600/20 bg-emerald-50/80 px-3 py-2.5 text-xs leading-5 text-emerald-950 shadow-sm">
+            <strong className="block">{isThai ? 'โหมดกลางแจ้งใช้ไอเทมจากคลัง' : 'Outdoor care uses inventory items'}</strong>
+            <span>{isThai ? 'เลือกน้ำ ปุ๋ย วัสดุระบายน้ำ ผ้าบังแดด แนวกันลม วัสดุป้องกันความเย็น หรือไอเทมกำจัดศัตรูพืชจากคลัง โดยไม่สามารถเปลี่ยนฝน ลม และแสงอาทิตย์จริงด้วย Slider ได้' : 'Choose water, fertilizer, drainage, shade, windbreak, frost cover, or pest treatment from Lab assets. Real rain, wind, and sunlight cannot be changed with sliders.'}</span>
+          </div>
+        )}
 
         {isOutdoor && (
           <div className="mt-3 rounded-md border border-lime-100/10 bg-[#0b0f0c]/70 p-3">
             <div className="mb-2 flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <strong className="block text-xs leading-4 text-lime-50">Address</strong>
-                <span className="mt-0.5 block truncate text-xs leading-4 text-slate-400">{formatLocation(outdoorWeather?.addressLabel, outdoorWeather?.status)}</span>
+                <strong className="block text-xs leading-4 text-lime-50">{isThai ? 'สถานที่ปลูก' : 'Address'}</strong>
+                <span className="mt-0.5 block truncate text-xs leading-4 text-slate-400">{formatLocation(outdoorWeather?.addressLabel, outdoorWeather?.status, isThai)}</span>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {outdoorWeather?.location && (
                   <span className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${outdoorWeather.location.source === 'fallback' ? 'bg-amber-300/10 text-amber-100' : 'bg-lime-100/10 text-lime-100'}`}>
-                    {locationSourceLabel(outdoorWeather.location.source)}
+                    {locationSourceLabel(outdoorWeather.location.source, isThai)}
                   </span>
                 )}
                 <button
                   className="grid h-7 w-7 place-items-center rounded-md border border-lime-100/15 bg-white/[0.035] text-slate-300 transition hover:border-lime-100/30 hover:bg-lime-100/10 hover:text-lime-100 disabled:cursor-wait disabled:opacity-50"
                   type="button"
                   onClick={onRefreshLocation}
-                  disabled={outdoorWeather?.status === 'loading' || locationLocked}
-                  aria-label={locationLocked ? 'Location locked while this plant is growing' : 'Use current location'}
-                  title={locationLocked ? 'Location locked until this growing cycle ends' : 'Use current location'}
+                  disabled={outdoorWeather?.status === 'loading'}
+                  aria-label={isThai ? 'รีเฟรชอากาศจากสถานที่ที่บันทึก' : 'Refresh weather from saved location'}
+                  title={isThai ? 'รีเฟรชสภาพอากาศ' : 'Refresh weather'}
                 >
                   <AppIcon className={`h-3.5 w-3.5 ${outdoorWeather?.status === 'loading' ? 'animate-spin' : ''}`} name="restartAlt" />
                 </button>
+                {plantSelected && (
+                  <button
+                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-emerald-500/25 bg-emerald-50 px-2 text-[10px] font-black text-emerald-900 transition hover:bg-emerald-100"
+                    type="button"
+                    onClick={onTransferLocation}
+                  >
+                    <AppIcon className="h-3 w-3" name="location" />
+                    {isThai ? 'ย้ายสถานที่' : 'Transfer'}
+                  </button>
+                )}
               </div>
             </div>
 
-            {locationLocked && (
-              <p className="mb-2 rounded-md border border-sky-200/15 bg-sky-300/[0.06] px-2.5 py-2 text-[10px] leading-4 text-sky-100/85">
-                This plant location is locked until it is harvested or uprooted. Weather updates continue from this saved location.
-              </p>
-            )}
-
             {outdoorWeather?.location?.source === 'fallback' && (
               <p className="mb-2 rounded-md border border-amber-200/15 bg-amber-300/[0.06] px-2.5 py-2 text-[10px] leading-4 text-amber-100/85">
-                Location permission is unavailable. Allow location access in your browser, then press the refresh button.
+                {isThai ? 'ไม่สามารถใช้สิทธิ์ตำแหน่งได้ โปรดอนุญาตการเข้าถึงตำแหน่งในเบราว์เซอร์ แล้วกดปุ่มรีเฟรช' : 'Location permission is unavailable. Allow location access in your browser, then press the refresh button.'}
               </p>
             )}
 

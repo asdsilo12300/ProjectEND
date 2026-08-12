@@ -61,8 +61,10 @@ function mapApiShopItem(shopItem) {
     visual: fallback.visual ?? 'spray',
     accent: fallback.accent ?? '#34d981',
     imageUrl: resolveAssetUrl(item.image_url) ?? fallback.imageUrl,
-    description: item.description ?? fallback.description,
+    description: fallback.description ?? item.description,
     effectType: item.effect_type ?? '',
+    actionKey: item.action_key ?? fallback.id ?? '',
+    modeScope: item.mode_scope ?? 'both',
   }
 }
 
@@ -387,7 +389,7 @@ export function ShopPage({ coinBalance = 0, onInventoryItemChange, onUserUpdate 
   const activeFilterCount = [searchQuery.trim(), selectedCategory, maxPrice !== null && effectiveMaxPrice < priceBounds.max].filter(Boolean).length
 
   return (
-    <section className="particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] text-slate-100" aria-label={copy.pageLabel}>
+    <section className="user-page user-page--shop particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] text-slate-100" aria-label={copy.pageLabel}>
       <ParticleNetworkBackground variant="shop" />
       <div className="relative z-[1] mx-auto min-h-full w-full max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
         <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between" data-tour="shop-header">

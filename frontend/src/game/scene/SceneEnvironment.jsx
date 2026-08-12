@@ -5,6 +5,7 @@ import { Group, MathUtils } from 'three'
 import { resolveAssetUrl } from '../../lib/api'
 import { GrassGround, PlantingSpot } from './GrassGround'
 import { OutdoorRain } from './OutdoorRain'
+import { findPlantingHeight, PLANTING_CENTER } from './plantingSurface'
 import { getRainVisualIntensity } from './rainUtils'
 
 function getDirtModelUrl(dirtModelUrl) {
@@ -29,6 +30,7 @@ export function SceneEnvironment({
   mode = 'greenhouse',
   plantingAreaLabel = 'Planting area',
   plantSelected = false,
+  onPlantingSurface,
   rainfall = 0,
   windDirection = 0,
   windSpeed = 0,
@@ -87,7 +89,15 @@ export function SceneEnvironment({
     return { object: root, wetMaterials }
   }, [mode, scene])
   const groundObject = ground.object
+  const plantingHeight = useMemo(() => findPlantingHeight(groundObject), [groundObject])
   const targetWetness = mode === 'outdoor' ? getRainVisualIntensity(rainfall) : 0
+
+  useEffect(() => {
+    onPlantingSurface?.({
+      position: [PLANTING_CENTER[0], plantingHeight + 0.018, PLANTING_CENTER[1]],
+      radius: 0.96,
+    })
+  }, [onPlantingSurface, plantingHeight])
 
   useFrame((_, delta) => {
     if (mode !== 'outdoor' && wetnessRef.current === 0) return
@@ -125,7 +135,7 @@ export function SceneEnvironment({
   return (
     <group>
       <primitive object={groundObject} />
-      <PlantingSpot groundObject={groundObject} label={plantingAreaLabel} plantSelected={plantSelected} />
+      <PlantingSpot groundObject={groundObject} label={plantingAreaLabel} plantSelected={plantSelected} plantingHeight={plantingHeight} />
       {mode === 'outdoor' && (
         <>
           <GrassGround

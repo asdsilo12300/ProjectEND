@@ -1,4 +1,4 @@
-export const TUTORIAL_VERSION = 3
+export const TUTORIAL_VERSION = 4
 
 export const tutorialCatalog = {
   lab: {
@@ -68,10 +68,19 @@ export const tutorialCatalog = {
       {
         icon: 'settings',
         targets: ['[data-panel-id="climate"]', '[data-tour="mobile-panel-dock"]'],
-        title: { en: 'Tune only the factors your mode allows', th: 'ปรับปัจจัยตามโหมดที่เลือก' },
+        title: { en: 'Preview, confirm, then watch the action', th: 'ตรวจค่า ยืนยัน แล้วดูแอนิเมชัน' },
         description: {
-          en: 'Environment Control lets you tune every factor. Outdoor mode follows real weather and only exposes factors you can manage.',
-          th: 'โหมดควบคุมปัจจัยปรับค่าได้ครบ ส่วนโหมดกลางแจ้งอิงสภาพอากาศจริงและเปิดเฉพาะค่าที่ผู้ใช้ควบคุมได้',
+          en: 'In Environment Control, slider changes are only a preview. Confirm them to play the 3D action; the server changes the real values only after the animation reaches Apply.',
+          th: 'ในโหมดควบคุมปัจจัย ค่า Slider เป็นเพียงตัวอย่าง ต้องกดยืนยันเพื่อเล่นแอนิเมชัน 3D และ Server จะเปลี่ยนค่าจริงเมื่อแอนิเมชันถึงจุดใช้งานแล้วเท่านั้น',
+        },
+      },
+      {
+        icon: 'location',
+        targets: ['[data-panel-id="climate"]', '[data-tour="mobile-panel-dock"]'],
+        title: { en: 'Outdoor weather belongs to the saved plant', th: 'อากาศกลางแจ้งผูกกับพืชที่บันทึก' },
+        description: {
+          en: 'Outdoor mode uses the plant’s saved location for weather, daylight, and rain. Transfer location with GPS, search, or the map; growth progress stays unchanged and the new weather starts next cycle.',
+          th: 'โหมดกลางแจ้งใช้อากาศ แสง และฝนจากตำแหน่งที่บันทึกกับต้นพืช ย้ายสถานที่ได้ด้วย GPS การค้นหา หรือแผนที่ โดยความคืบหน้าไม่หายและอากาศใหม่เริ่มใช้รอบถัดไป',
         },
       },
       {
@@ -85,11 +94,11 @@ export const tutorialCatalog = {
       },
       {
         icon: 'clock',
-        targets: ['[data-panel-id="monitor"]'],
-        title: { en: 'Wait for simulation updates', th: 'รอรอบอัปเดตการจำลอง' },
+        targets: ['[data-panel-id="monitor"]', '[data-tour="lab-items"]'],
+        title: { en: 'Respond to naturally scheduled events', th: 'รับมือเหตุการณ์ที่เกิดตามธรรมชาติ' },
         description: {
-          en: 'Changes apply on the next update. Healthy conditions increase growth pace; stress or pests slow or pause growth.',
-          th: 'ค่าที่ปรับจะมีผลในรอบอัปเดตถัดไป สภาพเหมาะสมช่วยให้โตเร็วขึ้น ส่วนความเครียดหรือศัตรูพืชทำให้โตช้าหรือหยุด',
+          en: 'Important events appear as a centered alert and recommend a matching item. New players receive a grace period; harmful events have cooldowns and never stack more than one at a time.',
+          th: 'เหตุการณ์สำคัญจะแจ้งกลางจอพร้อมแนะนำไอเทมรับมือ ผู้เล่นใหม่มีช่วงปลอดภัย เหตุการณ์อันตรายมี Cooldown และจะไม่เกิดซ้อนกันเกินหนึ่งรายการ',
         },
       },
       {
@@ -145,8 +154,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="lab-stage"]'],
         title: { en: 'Click the plant to apply the selected item', th: 'คลิกต้นพืชเพื่อใช้ไอเทมที่เลือก' },
         description: {
-          en: 'After selecting an item, the cursor changes. Click the plant once, then wait for the result toast and the refreshed monitor.',
-          th: 'เมื่อเลือกไอเทมแล้วเคอร์เซอร์จะเปลี่ยน ให้คลิกต้นพืชหนึ่งครั้ง จากนั้นดูผลจาก Toast และ Monitor ที่อัปเดต',
+          en: 'After selecting an item, click the plant once. The action moves through targeting, animation, apply, and success; the centered result and refreshed monitor appear after the server accepts it.',
+          th: 'หลังเลือกไอเทมให้คลิกต้นพืชหนึ่งครั้ง ระบบจะทำงานตามลำดับ เล็งเป้าหมาย เล่นแอนิเมชัน ใช้งาน และสำเร็จ จากนั้นจึงแสดงผลกลางจอและอัปเดต Monitor หลัง Server ยอมรับ',
         },
       },
       {
@@ -154,8 +163,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="lab-items"]', '.lab-library-toggle', '[data-panel-id="monitor"]'],
         title: { en: 'Use items only when needed', th: 'ใช้ไอเทมเมื่อจำเป็นเท่านั้น' },
         description: {
-          en: 'A successful use consumes one item. Selecting the wrong treatment can fail, so confirm the pest type first.',
-          th: 'เมื่อใช้สำเร็จจะหักไอเทมหนึ่งชิ้น การเลือกอุปกรณ์ผิดชนิดอาจไม่สำเร็จ จึงควรตรวจชนิดศัตรูพืชก่อนเสมอ',
+          en: 'A successful server response consumes one item. Repeated clicks use the same action id and cannot charge twice; a failed or mismatched treatment does not consume inventory.',
+          th: 'ระบบจะหักหนึ่งชิ้นเมื่อ Server ยืนยันสำเร็จเท่านั้น การกดซ้ำด้วย Action เดิมจะไม่หักซ้ำ และหากล้มเหลวหรือเลือกการรักษาไม่ตรงจะไม่เสียไอเทม',
         },
       },
     ],

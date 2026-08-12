@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Component, Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, Html, OrbitControls } from '@react-three/drei'
 import { imageAssets } from '../data/gameData'
@@ -10,6 +10,9 @@ import { PlantAttachmentProvider } from './plantAttachments'
 import { SceneEnvironment } from './SceneEnvironment'
 import { TimeOfDayEnvironment } from './TimeOfDayEnvironment'
 import { useTimeOfDayLighting } from './useTimeOfDayLighting'
+import { ActionAnimation, ActiveCareEffects } from './ActionAnimation'
+import { preloadActionModels } from './actionModelAssets'
+import { PlantRecommendationBanner } from '../panels/PlantMonitorPanel'
 
 function useCurrentAppLanguage() {
   const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
@@ -127,12 +130,16 @@ function getHudPace(growthRate, growthPoint, health) {
   return 78
 }
 
-function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycleStatus = 'idle', growthPoint = 0, growthRate = 0, health = 100 }) {
+function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycleStatus = 'idle', fertilizer = 100, growthPoint = 0, growthRate = 0, health = 100, plantNeeds = null, water = 100 }) {
   const healthValue = clampPercent(health)
   const growthValue = clampPercent(growthPoint)
   const paceValue = clampPercent(getHudPace(growthRate, growthPoint, healthValue))
   const isThai = getAppLanguage() === 'th'
   const isHarvestReady = growthValue >= 100 && healthValue > 0
+  const waterValue = clampPercent(plantNeeds?.water ?? water)
+  const fertilizerValue = clampPercent(plantNeeds?.fertilizer ?? fertilizer)
+  const waterRate = Number(plantNeeds?.rates?.water_per_cycle ?? 3)
+  const fertilizerRate = Number(plantNeeds?.rates?.fertilizer_per_cycle ?? 0.25)
   const statusLabel = isHarvestReady
     ? isThai ? 'พร้อมเก็บเกี่ยว' : 'HARVEST READY'
     : cycleStatus === 'updating'
@@ -141,16 +148,33 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
         ? isThai ? `รอบแรก ${cycleSeconds} วิ` : `FIRST ${cycleSeconds}s`
         : isThai ? 'กำลังเติบโต' : 'GROWING'
   const stats = [
-    { label: 'Health', value: healthValue, color: '#ef6f61', icon: 'heart' },
-    { label: 'Growth', value: growthValue, color: '#9bcf82', icon: 'sprout' },
-    { label: 'Pace', value: paceValue, color: paceValue === 0 ? '#7b8778' : '#d8f3c9', icon: 'speed' },
+    { label: isThai ? 'สุขภาพ' : 'Health', value: healthValue, color: '#ef6f61', icon: 'heart', key: 'health' },
+    { label: isThai ? 'การเติบโต' : 'Growth', value: growthValue, color: '#9bcf82', icon: 'sprout', key: 'growth' },
+    { label: isThai ? 'ความเร็ว' : 'Pace', value: paceValue, color: paceValue === 0 ? '#7b8778' : '#d8f3c9', icon: 'speed', key: 'pace' },
   ]
+  const needRows = [
+    { key: 'water', label: isThai ? 'น้ำ' : 'Water', value: waterValue, rate: waterRate, color: '#55c9e8', icon: 'drop' },
+    { key: 'fertilizer', label: isThai ? 'ธาตุอาหาร' : 'Nutrients', value: fertilizerValue, rate: fertilizerRate, color: '#f0c85b', icon: 'plus' },
+  ]
+
+  function needTone(value, preferredColor) {
+    if (value <= 25) return '#ef6f61'
+    if (value <= 50) return '#f0c85b'
+    return preferredColor
+  }
+
+  function needLabel(value) {
+    if (value <= 25) return isThai ? 'ต่ำ' : 'LOW'
+    if (value <= 50) return isThai ? 'ใกล้หมด' : 'SOON'
+    return isThai ? 'เพียงพอ' : 'SUPPLIED'
+  }
 
   return (
     <Html position={[1.78, 0.68, 0.08]} center zIndexRange={[18, 0]}>
-      <div className="pointer-events-none w-[230px] rounded-lg border border-lime-100/25 bg-[#101511]/96 px-3 py-2 text-slate-100 shadow-[0_14px_34px_rgba(0,0,0,.45),0_0_0_1px_rgba(0,0,0,.35)]">
+      <div className="pointer-events-none flex w-[230px] flex-col gap-2">
+      <div className="rounded-lg border border-lime-100/25 bg-[#101511]/96 px-3 py-2 text-slate-100 shadow-[0_14px_34px_rgba(0,0,0,.45),0_0_0_1px_rgba(0,0,0,.35)]">
         <div className="mb-2 flex items-center justify-between border-b border-lime-100/10 pb-1.5">
-          <strong className="text-xs text-lime-50">Plant status</strong>
+          <strong className="text-xs text-lime-50">{isThai ? 'สถานะพืช' : 'Plant status'}</strong>
           <span
             className={`rounded px-1.5 py-0.5 text-xs font-black ${isHarvestReady ? 'bg-emerald-300/20 text-emerald-100' : 'bg-[#9bcf82]/12 text-lime-100'}`}
             data-i18n-skip="true"
@@ -160,7 +184,7 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
         </div>
         <div className="grid gap-2">
           {stats.map((stat) => (
-            <div className="grid grid-cols-[22px_48px_1fr_30px] items-center gap-2" key={stat.label}>
+            <div className="grid grid-cols-[22px_52px_1fr_30px] items-center gap-2" key={stat.key}>
               <span className="grid h-5 w-5 place-items-center rounded bg-white/[0.08]" style={{ color: stat.color }}>
                 <AppIcon className="h-3.5 w-3.5" name={stat.icon} />
               </span>
@@ -168,10 +192,43 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
               <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.12]">
                 <span className="block h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${stat.value}%`, backgroundColor: stat.color }} />
               </span>
-              <strong className="text-right text-xs text-lime-50">{awaitingFirstCycle && stat.label === 'Pace' ? '—' : Math.round(stat.value)}</strong>
+              <strong className="text-right text-xs text-lime-50">{awaitingFirstCycle && stat.key === 'pace' ? '—' : Math.round(stat.value)}</strong>
             </div>
           ))}
         </div>
+      </div>
+      <section className="rounded-lg border border-cyan-100/20 bg-[#0d1715]/96 px-3 py-2 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.4)]" aria-label={isThai ? 'ความต้องการของพืช' : 'Plant needs'}>
+        <div className="mb-2 flex items-center justify-between border-b border-cyan-100/10 pb-1.5">
+          <strong className="text-xs text-cyan-50">{isThai ? 'ความต้องการของพืช' : 'Plant needs'}</strong>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{isThai ? 'ลดตามเวลา' : 'USES OVER TIME'}</span>
+        </div>
+        <div className="grid gap-2.5">
+          {needRows.map((need) => {
+            const color = needTone(need.value, need.color)
+            return (
+              <div key={need.key}>
+                <div className="mb-1 grid grid-cols-[20px_1fr_auto] items-center gap-2">
+                  <span className="grid h-5 w-5 place-items-center rounded bg-white/[0.07]" style={{ color }}>
+                    <AppIcon className="h-3.5 w-3.5" name={need.icon} />
+                  </span>
+                  <span className="text-xs font-semibold text-slate-200">{need.label}</span>
+                  <span className="flex items-center gap-1 text-[9px] font-black" style={{ color }}>
+                    {needLabel(need.value)} <strong className="text-xs text-lime-50">{Math.round(need.value)}%</strong>
+                  </span>
+                </div>
+                <span className="block h-2 overflow-hidden rounded-full bg-white/[0.1]">
+                  <span className="block h-full rounded-full transition-[width,background-color] duration-500" style={{ width: `${need.value}%`, backgroundColor: color }} />
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-2 border-t border-white/[0.06] pt-1.5 text-[9px] leading-4 text-slate-400">
+          {isThai
+            ? `น้ำลดประมาณ ${Math.max(1, Math.round(waterRate))}% ต่อรอบ · ปุ๋ยลดช้ากว่าน้ำ`
+            : `Water uses about ${Math.max(1, Math.round(waterRate))}% per cycle · nutrients drain more slowly`}
+        </p>
+      </section>
       </div>
     </Html>
   )
@@ -250,7 +307,7 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
 
   return (
     <section
-      className="outdoor-status-panel pointer-events-none absolute left-1/2 top-20 z-30 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-xl border border-lime-100/20 bg-[#0c130f]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.4)] backdrop-blur-md"
+      className="outdoor-status-panel pointer-events-none min-w-0 flex-[0_1_400px] overflow-hidden rounded-xl border border-lime-100/20 bg-[#0c130f]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.4)] backdrop-blur-md"
       aria-label={isThai ? 'สถานะโหมดกลางแจ้ง' : 'Outdoor mode status'}
       aria-live="polite"
     >
@@ -302,7 +359,7 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
   )
 }
 
-function ControlledGrowthStatusPanel({ plantSelected, readOnly = false, simulationVisual }) {
+function ControlledGrowthStatusPanel({ plantSelected, simulationVisual }) {
   const language = getAppLanguage()
   const isThai = language === 'th'
   const estimate = getRealGrowthEstimate(simulationVisual)
@@ -311,12 +368,12 @@ function ControlledGrowthStatusPanel({ plantSelected, readOnly = false, simulati
 
   return (
     <section
-      className={`pointer-events-none absolute left-1/2 z-30 w-[320px] max-w-[calc(100vw-32px)] -translate-x-1/2 overflow-hidden rounded-xl border border-emerald-100/20 bg-[#0c1710]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.36)] backdrop-blur-md ${readOnly ? 'top-[136px]' : 'top-20'}`}
+      className="controlled-growth-status-panel pointer-events-none min-w-0 flex-[0_0_218px] overflow-hidden rounded-xl border border-emerald-100/20 bg-[#0c1710]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.36)] backdrop-blur-md"
       aria-label={isThai ? 'ข้อมูลวันเติบโตโหมดควบคุมปัจจัย' : 'Environment control growth status'}
       aria-live="polite"
     >
-      <div className="flex items-center gap-3 px-4 py-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-100/10 bg-emerald-300/10 text-emerald-200">
+      <div className="flex items-center gap-2 px-2.5 py-1.5">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-emerald-100/10 bg-emerald-300/10 text-emerald-200">
           <AppIcon className="h-4 w-4" name="sprout" />
         </span>
         <div className="min-w-0 flex-1">
@@ -324,14 +381,14 @@ function ControlledGrowthStatusPanel({ plantSelected, readOnly = false, simulati
             <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-100/60">
               {isThai ? 'วันเติบโต' : 'Growth day'}
             </span>
-            <span className="rounded-md bg-emerald-200/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-100">
+            <span className="rounded-md bg-emerald-200/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em] text-emerald-100">
               {isThai ? 'ควบคุมปัจจัย' : 'Controlled'}
             </span>
           </div>
-          <strong className="mt-0.5 block truncate text-lg leading-tight text-lime-50">
+          <strong className="block truncate text-[15px] leading-tight text-lime-50">
             {plantSelected ? `${formatRealDays(estimate.equivalentDays)} / ~${formatRealDays(estimate.maturityDays)}` : '—'}
           </strong>
-          <span className="mt-0.5 block truncate text-[10px] text-slate-400">
+          <span className="block truncate text-[9px] leading-tight text-slate-400">
             {plantSelected
               ? isThai ? 'วันเทียบการเติบโตในชีวิตจริง' : 'real-life growth equivalent'
               : isThai ? 'เลือกพืชเพื่อเริ่มคำนวณ' : 'Select a plant to begin calculation'}
@@ -339,14 +396,14 @@ function ControlledGrowthStatusPanel({ plantSelected, readOnly = false, simulati
         </div>
       </div>
 
-      <div className="h-1 bg-black/25">
+      <div className="h-0.5 bg-black/25">
         <span
           className="block h-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-lime-300 transition-[width] duration-500 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      <div className="flex items-center justify-center gap-2 border-t border-emerald-100/10 bg-black/20 px-3 py-1.5 text-[10px] text-slate-300">
+      <div className="flex items-center justify-center gap-1.5 border-t border-emerald-100/10 bg-black/20 px-2 py-1 text-[9px] leading-tight text-slate-300">
         <AppIcon className="h-3 w-3 text-cyan-300" name="clock" />
         <span>
           {plantSelected
@@ -360,7 +417,7 @@ function ControlledGrowthStatusPanel({ plantSelected, readOnly = false, simulati
   )
 }
 
-export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onSceneReady, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare, weatherStatus = 'idle' }) {
+export function SimulationStage({ actionState = null, awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onSceneReady, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare, weatherStatus = 'idle' }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -392,8 +449,25 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
   // The source animation is empty at its exact first frame. Keep a small
   // visible seedling pose while the first authoritative server cycle starts.
   const growthProgress = Math.min(1, Math.max(plantSelected ? 0.05 : 0, growthPoint / 100))
-  const hasSelectedItem = Boolean(selectedItemCursorUrl)
+  const plantName = String(simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th ?? '').toLowerCase()
+  const speciesScale = plantName.includes('elephant') || plantName.includes('xanthosoma') || plantName.includes('หูช้าง') ? 1.18 : 0.92
+  const protectionScale = speciesScale * (0.7 + growthProgress * 0.3)
+  const [plantingSurface, setPlantingSurface] = useState({ position: [0.75, -0.38, 0], radius: 0.96 })
+  const handlePlantingSurface = useCallback((nextSurface) => {
+    setPlantingSurface((current) => {
+      const currentPosition = current?.position ?? []
+      const nextPosition = nextSurface?.position ?? []
+      const unchanged = currentPosition.every((value, index) => Math.abs(value - nextPosition[index]) < 0.001)
+        && Math.abs((current?.radius ?? 0) - (nextSurface?.radius ?? 0)) < 0.001
+      return unchanged ? current : nextSurface
+    })
+  }, [])
+  const hasSelectedItem = Boolean(selectedItemCursorUrl) && (readOnly || !actionState || actionState.phase === 'targeting')
   const itemCursorStyle = hasSelectedItem ? { cursor: 'none' } : undefined
+
+  useEffect(() => {
+    if (plantSelected) preloadActionModels()
+  }, [plantSelected])
 
   function moveItemCursor(event) {
     if (!hasSelectedItem || !stageRef.current) return
@@ -467,6 +541,7 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
               mode={mode}
               plantingAreaLabel={plantingAreaLabel}
               plantSelected={plantSelected}
+              onPlantingSurface={handlePlantingSurface}
               rainfall={outdoorReadings?.rain}
               windDirection={outdoorReadings?.windDirection}
               windSpeed={outdoorReadings?.windSpeed}
@@ -482,7 +557,21 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
                   isMature={isMature}
                   growthProgress={growthProgress}
                 />
-                <PlantStatusHud awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} growthPoint={growthPoint} growthRate={growthRate} health={health} />
+                <Suspense fallback={null}>
+                  <ActiveCareEffects modifiers={simulationVisual?.active_modifiers ?? []} plantingSurface={plantingSurface} plantScale={protectionScale} />
+                  <ActionAnimation actionState={actionState} plantingSurface={plantingSurface} plantScale={protectionScale} />
+                </Suspense>
+                <PlantStatusHud
+                  awaitingFirstCycle={awaitingFirstCycle}
+                  cycleSeconds={cycleSeconds}
+                  cycleStatus={cycleStatus}
+                  fertilizer={simulationVisual?.fertilizer}
+                  growthPoint={growthPoint}
+                  growthRate={growthRate}
+                  health={health}
+                  plantNeeds={simulationVisual?.plant_needs}
+                  water={simulationVisual?.water}
+                />
                 {pests.map((pest, index) => {
                   const pestKey = `${pest.pest?.name_en ?? pest.name_en ?? pest.type ?? 'pest'}-${pest.id ?? index}`
 
@@ -527,7 +616,7 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
         )}
         {hasSelectedItem && itemCursorPoint && (
           <img
-            className="pointer-events-none absolute z-40 h-14 w-14 -translate-x-3 -translate-y-3 select-none object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,.38)]"
+            className="pointer-events-none absolute z-40 h-20 w-20 -translate-x-4 -translate-y-4 select-none object-contain drop-shadow-[0_10px_16px_rgba(0,0,0,.42)] sm:h-24 sm:w-24"
             src={selectedItemCursorUrl}
             alt=""
             style={{ left: itemCursorPoint.x, top: itemCursorPoint.y }}
@@ -548,22 +637,32 @@ export function SimulationStage({ awaitingFirstCycle = false, coinBurst = null, 
             <span className="mt-1 block text-xs leading-5 text-slate-300">Open Lab assets and choose the plant card. Your simulation will be saved to this account.</span>
           </div>
         )}
-        {mode === 'outdoor' && (
-          <OutdoorStatusPanel
-            outdoorReadings={outdoorReadings}
-            plantSelected={plantSelected}
-            simulationVisual={simulationVisual}
-            solarLighting={solarLighting}
-            weatherStatus={weatherStatus}
-          />
-        )}
-        {mode !== 'outdoor' && (
-          <ControlledGrowthStatusPanel
-            plantSelected={plantSelected}
-            readOnly={readOnly}
-            simulationVisual={simulationVisual}
-          />
-        )}
+        <div
+          className={`simulation-guidance-cluster simulation-guidance-cluster--${mode === 'outdoor' ? 'outdoor' : 'controlled'} ${readOnly ? 'simulation-guidance-cluster--readonly' : ''}`}
+          data-tour="simulation-guidance"
+        >
+          {mode === 'outdoor' ? (
+            <OutdoorStatusPanel
+              outdoorReadings={outdoorReadings}
+              plantSelected={plantSelected}
+              simulationVisual={simulationVisual}
+              solarLighting={solarLighting}
+              weatherStatus={weatherStatus}
+            />
+          ) : (
+            <ControlledGrowthStatusPanel
+              plantSelected={plantSelected}
+              simulationVisual={simulationVisual}
+            />
+          )}
+          {plantSelected && !readOnly && (
+            <PlantRecommendationBanner
+              awaitingFirstCycle={awaitingFirstCycle}
+              nextCycleAt={nextCycleAt}
+              simulationVisual={simulationVisual}
+            />
+          )}
+        </div>
         {!readOnly && plantSelected && <div className="lab-simulation-actions absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" data-tour="lab-actions" data-i18n-skip="true" aria-label={isThai ? 'คำสั่งการจำลอง' : 'Simulation actions'}>
           <button
             className="box-border inline-flex min-h-12 items-center gap-2 rounded-full border border-lime-100/15 bg-white/[0.035] px-4 py-2 text-sm font-medium leading-5 text-slate-200 shadow-xs transition hover:bg-white/[0.075] hover:text-lime-50 focus:outline-none focus:ring-4 focus:ring-lime-100/10"

@@ -1,13 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --pg-bg: #0b0f0c;
-  --pg-surface: #121914;
-  --pg-surface-raised: #18221b;
-  --pg-border: rgba(216, 243, 201, 0.13);
-  --pg-text: #f2f7ee;
-  --pg-text-muted: #aebbb1;
-  --pg-primary: #9bcf82;
+  --pg-bg: #f4f8f2;
+  --pg-surface: #ffffff;
+  --pg-surface-raised: #e7f1e5;
+  --pg-structure: #173d2a;
+  --pg-border: rgba(35, 93, 61, 0.2);
+  --pg-text: #173323;
+  --pg-text-muted: #587062;
+  --pg-primary: #4f9d67;
+  --pg-primary-strong: #287447;
   --pg-shop: #e9b95f;
   --pg-history: #6ca7ef;
   --pg-community: #ac87eb;
@@ -15,6 +17,18 @@
   --pg-warning: #f0b45d;
   --pg-danger: #ef7d73;
   --pg-font-sans: "Inter Variable", "Noto Sans Thai Variable", Inter, "Noto Sans Thai", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+}
+
+html.settings-theme-dark {
+  --pg-bg: #0b0f0c;
+  --pg-surface: #121914;
+  --pg-surface-raised: #18221b;
+  --pg-structure: #d8f3c9;
+  --pg-border: rgba(216, 243, 201, 0.13);
+  --pg-text: #f2f7ee;
+  --pg-text-muted: #aebbb1;
+  --pg-primary: #9bcf82;
+  --pg-primary-strong: #bdeba7;
 }
 
 html,
@@ -26,8 +40,8 @@ body,
 }
 
 body {
-  background: #020304;
-  color: #ecfeff;
+  background: var(--pg-bg);
+  color: var(--pg-text);
   font-family: var(--pg-font-sans);
   font-optical-sizing: auto;
   text-rendering: optimizeLegibility;

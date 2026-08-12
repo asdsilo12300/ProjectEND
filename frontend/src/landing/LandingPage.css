@@ -1007,7 +1007,7 @@
 /* Home product tour */
 .landing-hero__content--product {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(500px, 1.1fr);
+  grid-template-columns: minmax(0, 1.9fr) minmax(500px, 1.9fr);
   gap: 56px;
   padding-block: 80px;
 }

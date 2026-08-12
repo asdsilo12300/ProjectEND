@@ -1,0 +1,11 @@
+Model Information:
+* title:	Watering Can [derivative]
+* source:	https://sketchfab.com/3d-models/watering-can-derivative-b2432b27683f46f48cc2b6d532bd5525
+* author:	romullus (https://sketchfab.com/romullus)
+
+Model License:
+* license type:	CC-BY-SA-4.0 (http://creativecommons.org/licenses/by-sa/4.0/)
+* requirements:	Author must be credited. Modified versions must have the same license. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Watering Can [derivative]" (https://sketchfab.com/3d-models/watering-can-derivative-b2432b27683f46f48cc2b6d532bd5525) by romullus (https://sketchfab.com/romullus) licensed under CC-BY-SA-4.0 (http://creativecommons.org/licenses/by-sa/4.0/)

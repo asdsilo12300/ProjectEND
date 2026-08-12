@@ -12,6 +12,13 @@ export const defaultSimulationVisual = {
   },
   pest_risks: { aphid: 0, snail: 0, fungus: 0 },
   active_pests: [],
+  water: 100,
+  fertilizer: 100,
+  plant_needs: {
+    water: 100,
+    fertilizer: 100,
+    rates: { water_per_cycle: 3, fertilizer_per_cycle: 0.25, rain_recovery: 0 },
+  },
 }
 
 const visualPresets = {
@@ -35,17 +42,21 @@ export function buildSimulationFactors(climate, outdoorWeather, mode = 'greenhou
   const current = forecast?.current
   const hourly = forecast?.hourly
   const first = (key) => (Array.isArray(hourly?.[key]) ? hourly[key][0] : null)
+  const outdoorLight = Number(current?.is_day) === 1 ? 72 : 8
 
   return {
     water: climate.water,
-    light: climate.light ?? (current?.is_day ? 72 : 16),
+    // Outdoor sunlight is owned by local time and weather, never by the
+    // greenhouse light slider. Care items may add temporary modifiers on the
+    // server, but the baseline always comes from the current day/night state.
+    light: mode === 'outdoor' ? outdoorLight : climate.light,
     fertilizer: climate.fertilizer,
     soil_humidity: climate.soil,
     air_humidity: climate.air,
     soil_temp: first('soil_temperature_6cm') ?? climate.soilTemp ?? climate.temp,
     air_temp: first('temperature_2m') ?? climate.temp,
     rain: current?.rain ?? 0,
-    root_temperature_controlled: climate.soilTemp != null && Number.isFinite(Number(climate.soilTemp)),
+    root_temperature_controlled: mode === 'greenhouse' && climate.soilTemp != null && Number.isFinite(Number(climate.soilTemp)),
   }
 }
 
@@ -65,12 +76,10 @@ export function evaluateLocalSimulation(factors) {
   if (factors.water <= 10) addHardStop('underwatered')
   else if (factors.water < 35) addStress('underwatered')
 
-  if (factors.water >= 95 || factors.soil_humidity >= 95) addHardStop('overwatered')
-  else if (factors.water > 82 || factors.soil_humidity > 82) addStress('overwatered')
+  if (factors.soil_humidity >= 95) addHardStop('overwatered')
+  else if (factors.soil_humidity > 82) addStress('overwatered')
 
   if (factors.fertilizer < 25) addStress('nutrient_deficient')
-  if (factors.fertilizer >= 90) addHardStop('burnt')
-  else if (factors.fertilizer > 75) addStress('burnt')
 
   if (factors.light <= 8) addHardStop('stunted')
   else if (factors.light < 22) addStress('stunted')

@@ -8,24 +8,28 @@ import { LibrarySidebar } from './game/components/LibrarySidebar'
 import { CircularLoader } from './game/components/LoadingSkeleton'
 import { PlantKnowledgeModal } from './game/components/PlantKnowledgeModal'
 import { ToastStack } from './game/components/ToastStack'
+import { CriticalAlertCenter } from './game/components/CriticalAlertCenter'
+import { ActionConfirmDialog } from './game/components/ActionConfirmDialog'
+import { LocationTransferModal } from './game/components/LocationTransferModal'
 import { TopBar } from './game/components/TopBar'
 import { CommentsPanel } from './game/panels/CommentsPanel'
 import { EnvironmentPanel } from './game/panels/EnvironmentPanel'
 import { FriendsPanel } from './game/panels/FriendsPanel'
 import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { OnboardingExperience } from './game/onboarding/OnboardingExperience'
+import { useSimulationAction } from './game/actions/useSimulationAction'
 import { LoginPage } from './auth/LoginPage'
 import { EmailVerificationPage } from './auth/EmailVerificationPage'
 import { DemoSafetyBar } from './demo/DemoSafetyBar'
 import { isDemoApiSessionActive, seedDemoSimulator, startDemoApiSession, stopDemoApiSession } from './demo/demoApiSession'
 import { LandingPage } from './landing/LandingPage'
-import { clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, applySimulatorItem, savePlantHistory, resolveAssetUrl, uprootSimulator } from './lib/api'
+import { applySimulationAction, clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, savePlantHistory, resolveAssetUrl, uprootSimulator, updateSimulatorLocation } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation, getOutdoorReadings } from './game/utils/outdoorWeather'
 import { getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from './game/utils/realGrowth'
 import { defaultWindows, panelExpandedPosition, reflowWindowsForViewport } from './game/utils/windows'
 import { applySettings, loadSettings } from './game/settings/settingsPreferences'
-import { getAppLanguage } from './i18n/appI18n'
+import { getAppLanguage, translateAppMessage, translateAppText } from './i18n/appI18n'
 
 const AdminPage = lazy(() => import('./admin/AdminPage').then((module) => ({ default: module.AdminPage })))
 const CommunityPage = lazy(() => import('./game/community/CommunityPage').then((module) => ({ default: module.CommunityPage })))
@@ -36,6 +40,15 @@ const ShopPage = lazy(() => import('./game/shop/ShopPage').then((module) => ({ d
 const SimulationStage = lazy(() => import('./game/scene/SimulationStage').then((module) => ({ default: module.SimulationStage })))
 
 const plantKnowledgeAutoOpenPrefix = 'plant-growth-academy:plant-knowledge:auto-opened'
+
+function createClientActionId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16)
+    const value = character === 'x' ? random : (random & 0x3) | 0x8
+    return value.toString(16)
+  })
+}
 
 function plantKnowledgeIdentity(plantAsset) {
   return String(plantAsset?.backendId ?? plantAsset?.id ?? plantAsset?.name ?? 'plant')
@@ -181,6 +194,12 @@ const itemNameToKey = {
   'Fungus Spray': 'antifungal-spray',
   'Aphid Prank': 'aphid-prank',
   'Snail Prank': 'snail-prank',
+  'Watering Dose': 'water',
+  'Fertilizer Dose': 'fertilizer',
+  'Drainage Mix': 'drainage',
+  'Shade Cloth': 'shade',
+  Windbreak: 'windbreak',
+  'Frost Cover': 'frost-cover',
 }
 
 const thaiItemNames = {
@@ -190,6 +209,12 @@ const thaiItemNames = {
   'Fungus Spray': 'สเปรย์กำจัดเชื้อรา',
   'Aphid Prank': 'ไอเทมเพลี้ยแกล้งเพื่อน',
   'Snail Prank': 'ไอเทมหอยทากแกล้งเพื่อน',
+  'Watering Dose': 'น้ำสำหรับรดพืช',
+  'Fertilizer Dose': 'ปุ๋ยสำหรับพืช',
+  'Drainage Mix': 'วัสดุช่วยระบายน้ำ',
+  'Shade Cloth': 'ผ้าบังแดด',
+  Windbreak: 'แนวกันลม',
+  'Frost Cover': 'วัสดุป้องกันอากาศเย็น',
 }
 
 function localizedItemName(item, language = getAppLanguage()) {
@@ -214,6 +239,12 @@ const itemImageByKey = {
   'antifungal-spray': imageAssets.antifungal,
   'aphid-prank': imageAssets.aphid,
   'snail-prank': imageAssets.snail,
+  water: imageAssets.wateringCan,
+  fertilizer: imageAssets.fertilizerCare,
+  drainage: imageAssets.soil,
+  shade: imageAssets.shadeCloth,
+  windbreak: imageAssets.windbreak,
+  'frost-cover': imageAssets.frostCover,
 }
 
 const itemTargetsByKey = {
@@ -264,6 +295,72 @@ const itemMetaByKey = {
     help: 'Use this in a friend garden to add a snail to the selected plant.',
     icon: 'snail',
   },
+  water: {
+    detail: 'restores plant water safely',
+    detailTh: 'เติมน้ำให้พืชอย่างเหมาะสม',
+    successText: 'Restores the active plant water reserve',
+    successTextTh: 'เติมหลอดน้ำสำรองของพืชที่กำลังปลูก',
+    failText: 'Consumed only after the action succeeds',
+    failTextTh: 'หักไอเท็มเมื่อระบบใช้สำเร็จเท่านั้น',
+    help: 'Use the watering can when the water need meter gets low. Water is consumed every simulation cycle.',
+    helpTh: 'ใช้บัวรดน้ำเมื่อหลอดความต้องการน้ำลดลง น้ำจะถูกใช้ในทุกรอบจำลอง',
+    icon: 'drop',
+  },
+  fertilizer: {
+    detail: 'feeds the active plant',
+    detailTh: 'เติมธาตุอาหารให้พืช',
+    successText: 'Restores the active plant nutrient reserve',
+    successTextTh: 'เติมหลอดธาตุอาหารของพืชที่กำลังปลูก',
+    failText: 'Consumed only after the action succeeds',
+    failTextTh: 'หักไอเท็มเมื่อระบบใช้สำเร็จเท่านั้น',
+    help: 'Add fertilizer when the nutrient meter gets low. Nutrients drain more slowly than water.',
+    helpTh: 'เติมปุ๋ยเมื่อหลอดธาตุอาหารลดลง โดยธาตุอาหารจะลดช้ากว่าน้ำ',
+    icon: 'fertilizer',
+  },
+  drainage: {
+    detail: 'reduces excess soil moisture',
+    detailTh: 'ลดความชื้นส่วนเกินในดิน',
+    successText: 'Outdoor drainage support',
+    successTextTh: 'ช่วยระบายน้ำในโหมดกลางแจ้ง',
+    failText: 'Outdoor mode only',
+    failTextTh: 'ใช้ได้เฉพาะโหมดกลางแจ้ง',
+    help: 'Use after heavy rain or waterlogging to move soil moisture toward a healthy range.',
+    helpTh: 'ใช้หลังฝนตกหนักหรือน้ำขัง เพื่อปรับความชื้นดินเข้าสู่ช่วงเหมาะสม',
+    icon: 'soil',
+  },
+  shade: {
+    detail: 'protects from intense sunlight',
+    detailTh: 'ลดผลกระทบจากแดดจัด',
+    successText: 'Temporary heat and light protection',
+    successTextTh: 'ลดความร้อนและแสงชั่วคราว',
+    failText: 'Outdoor mode only',
+    failTextTh: 'ใช้ได้เฉพาะโหมดกลางแจ้ง',
+    help: 'Deploy shade cloth when strong sunlight or a heat wave threatens the plant.',
+    helpTh: 'กางผ้าบังแดดเมื่อแสงแรงหรือเกิดคลื่นความร้อน',
+    icon: 'shade',
+  },
+  windbreak: {
+    detail: 'reduces strong wind stress',
+    detailTh: 'ลดความเครียดจากลมแรง',
+    successText: 'Temporary wind protection',
+    successTextTh: 'ป้องกันลมแรงชั่วคราว',
+    failText: 'Outdoor mode only',
+    failTextTh: 'ใช้ได้เฉพาะโหมดกลางแจ้ง',
+    help: 'Place a windbreak before or during strong-wind events.',
+    helpTh: 'วางแนวกันลมก่อนหรือระหว่างเหตุการณ์ลมแรง',
+    icon: 'wind',
+  },
+  'frost-cover': {
+    detail: 'protects from sudden cold',
+    detailTh: 'ลดผลกระทบจากอากาศเย็น',
+    successText: 'Temporary cold protection',
+    successTextTh: 'ป้องกันความเย็นชั่วคราว',
+    failText: 'Outdoor mode only',
+    failTextTh: 'ใช้ได้เฉพาะโหมดกลางแจ้ง',
+    help: 'Cover the plant before a cold snap lowers air and soil temperature.',
+    helpTh: 'คลุมพืชก่อนอากาศเย็นฉับพลันจะลดอุณหภูมิอากาศและดิน',
+    icon: 'frost',
+  },
 }
 
 function getActionToastType(message) {
@@ -282,7 +379,7 @@ function isCommunityNotification(notification) {
 
 function inventoryItemKey(entry) {
   const item = entry?.item ?? entry
-  return itemNameToKey[item?.name] ?? String(item?.name ?? '').toLowerCase().replace(/\s+/g, '-')
+  return item?.action_key ?? itemNameToKey[item?.name] ?? String(item?.name ?? '').toLowerCase().replace(/\s+/g, '-')
 }
 
 function readablePlantName(plant) {
@@ -354,7 +451,9 @@ function itemAssetFromApi(entry, quantity = null) {
     itemKey,
     backendId: item?.id,
     name: item?.name ?? 'Lab item',
+    nameTh: thaiItemNames[item?.name] ?? item?.name ?? 'ไอเท็มดูแลพืช',
     detail: meta.detail ?? item?.description ?? 'lab item',
+    detailTh: meta.detailTh ?? item?.description ?? 'ไอเท็มดูแลพืช',
     color: '#9bcf82',
     type: 'item',
     icon: meta.icon ?? 'hand',
@@ -363,9 +462,16 @@ function itemAssetFromApi(entry, quantity = null) {
     quantity: Number.isFinite(Number(quantity)) ? Number(quantity) : 0,
     quantityLabel: Number.isFinite(Number(quantity)) ? `x${quantity}` : 'x0',
     successText: meta.successText,
+    successTextTh: meta.successTextTh,
     failText: meta.failText,
+    failTextTh: meta.failTextTh,
     help: meta.help ?? item?.description,
+    helpTh: meta.helpTh ?? item?.description,
     friendUsable,
+    actionKey: item?.action_key ?? null,
+    animationKey: item?.animation_key ?? item?.action_key ?? null,
+    modeScope: item?.mode_scope ?? 'both',
+    effectPayload: item?.effect_payload ?? null,
   }
 }
 
@@ -532,6 +638,10 @@ function App() {
   const [climate, setClimate] = useState(defaultClimate)
   const [openSections, setOpenSections] = useState({ Plants: true, Items: true })
   const [appliedAsset, setAppliedAsset] = useState(null)
+  const [actionConfirmAsset, setActionConfirmAsset] = useState(null)
+  const { actionState, cancelAction, executeAction, selectAction } = useSimulationAction()
+  const [criticalAlert, setCriticalAlert] = useState(null)
+  const [locationTransferOpen, setLocationTransferOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [actionToasts, setActionToasts] = useState([])
   const actionToastTimersRef = useRef(new Map())
@@ -1823,8 +1933,10 @@ function App() {
     }
   }
 
-  async function applySelectedItem() {
-    const asset = appliedAsset?.type === 'item' ? appliedAsset : null
+  async function applySelectedItem(assetOverride = null) {
+    const asset = assetOverride?.type === 'item'
+      ? assetOverride
+      : appliedAsset?.type === 'item' ? appliedAsset : null
     if (!asset) return
 
     if (visitingFriend) {
@@ -1833,80 +1945,80 @@ function App() {
     }
 
     if (!selectedPlant) {
-      setActionMessage('Select a plant before using an item')
+      setActionMessage(translateAppText('Select a plant before using an item'))
       return
     }
 
     if (!getToken()) {
-      setActionMessage('Log in before using lab items')
+      setActionMessage(translateAppText('Log in before using lab items'))
       openAuth('login')
       return
     }
 
     const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
     if (!simulatorId) {
-      setActionMessage('Save or plant first, then use items')
+      setActionMessage(translateAppText('Save or plant first, then use items'))
       return
     }
     if (itemUseBusyRef.current) return
 
     itemUseBusyRef.current = true
-    setActionMessage(`Using ${asset.name}...`)
+    setActionMessage(getAppLanguage() === 'th' ? `กำลังใช้ ${localizedItemName(asset)}...` : `Using ${asset.name}...`)
 
     try {
-      const accountSession = accountSessionRef.current
-      if (
-        autosaveStateRef.current.visitingFriend
-        || isResettingRef.current
-        || isEndingSimulationRef.current
-      ) return
+      await executeAction(async (selectedAsset) => {
+        const accountSession = accountSessionRef.current
+        if (autosaveStateRef.current.visitingFriend || isResettingRef.current || isEndingSimulationRef.current) return null
 
-      // Item usage only mutates inventory and pest records. It can safely run
-      // beside environment autosaves instead of waiting behind their network queue.
-      const payload = await applySimulatorItem(
-        simulatorId,
-        asset.itemKey ?? asset.id,
-        1,
-        asset.backendId,
-      )
-      if (
-        !payload
-        || accountSession !== accountSessionRef.current
-        || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
-        || isResettingRef.current
-        || isEndingSimulationRef.current
-      ) return
-
-      const result = payload.data ?? payload
-      const simulator = result.simulator ?? null
-
-      if (result.inventory) {
-        upsertInventoryItem(result.inventory)
-      }
-
-      if (autosaveStateRef.current.visitingFriend) {
-        if (simulator) stashOwnGardenSimulator(simulator, { preservePestRisks: true })
-        if (ownGardenSnapshotRef.current) ownGardenSnapshotRef.current.appliedAsset = null
-        return
-      }
-
-      if (simulator) {
-        const removedPestIds = result.removed_pest_ids ?? []
-        removedPestIds.forEach((pestId) => {
-          recentlyRemovedPestIdsRef.current.set(String(pestId), Date.now() + 60_000)
+        const actionKey = selectedAsset.actionKey ?? selectedAsset.itemKey ?? selectedAsset.id
+        const relatedEvent = (canonicalSimulationRef.current?.events ?? []).find((event) =>
+          ['announced', 'active'].includes(event.status) && event.response_action_keys?.includes(actionKey),
+        )
+        const payload = await applySimulationAction(simulatorId, {
+          client_action_id: createClientActionId(),
+          action_key: actionKey,
+          item_id: selectedAsset.backendId,
+          event_id: relatedEvent?.id ?? undefined,
         })
-        mergeCanonicalSimulator({
-          ...simulator,
-          active_pests: applyPestDelta(canonicalSimulationRef.current?.active_pests ?? [], {
-            removedPestIds,
-          }),
-        }, { preservePestRisks: true })
-      }
+        if (
+          !payload
+          || accountSession !== accountSessionRef.current
+          || window.localStorage.getItem('plant_game_simulator_id') !== String(simulatorId)
+          || isResettingRef.current
+          || isEndingSimulationRef.current
+        ) return null
 
-      setAppliedAsset(null)
-      setActionMessage(result.message ?? `${asset.name} applied`)
+        const result = payload.data ?? payload
+        const simulator = result.simulator ?? null
+        if (Number.isFinite(Number(result.inventory_quantity))) {
+          setInventoryItems((current) => current.map((entry) => {
+            const entryId = entry.item_id ?? entry.item?.id
+            return Number(entryId) === Number(selectedAsset.backendId)
+              ? { ...entry, quantity: Number(result.inventory_quantity) }
+              : entry
+          }))
+        }
+        if (simulator) mergeCanonicalSimulator(simulator, { preservePestRisks: false })
+
+        const language = getAppLanguage()
+        const isThai = language === 'th'
+        const displayName = localizedItemName(selectedAsset, language)
+        const resultMessage = translateAppMessage(result.message_code ?? 'game.action.applied', {}, language)
+        setCriticalAlert({
+          tone: 'success',
+          title: isThai ? 'ใช้ไอเท็มสำเร็จ' : 'Action complete',
+          message: isThai ? `${displayName}: ${resultMessage}` : resultMessage,
+        })
+        setAppliedAsset(null)
+        setActionConfirmAsset(null)
+        setActionMessage(isThai ? `ใช้ ${displayName} สำเร็จ` : `${displayName} applied`)
+        return result
+      })
     } catch (error) {
-      setActionMessage(error.message || 'Unable to use this item')
+      const isThai = getAppLanguage() === 'th'
+      const errorMessage = translateAppText(error.message || 'The action could not be completed.', isThai ? 'th' : 'en')
+      setCriticalAlert({ tone: 'danger', title: isThai ? 'ใช้ไอเท็มไม่สำเร็จ' : 'Action failed', message: errorMessage })
+      setActionMessage(errorMessage || (isThai ? 'ไม่สามารถใช้ไอเท็มนี้ได้' : 'Unable to use this item'))
     } finally {
       itemUseBusyRef.current = false
     }
@@ -1964,6 +2076,92 @@ function App() {
     } finally {
       setModeLoading(false)
       setPlantingBusy(false)
+    }
+  }
+
+  async function applyControlledFactors(changes) {
+    const simulatorId = simulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
+    if (!simulatorId || growingMode !== 'greenhouse' || !selectedPlant) return false
+
+    const factorMap = {
+      water: 'water', light: 'light', fertilizer: 'fertilizer', soil: 'soil',
+      air: 'air', soilTemp: 'soil-temp', temp: 'temp',
+    }
+    const isThai = getAppLanguage() === 'th'
+
+    try {
+      for (const [climateKey, targetValue] of Object.entries(changes)) {
+        const actionKey = factorMap[climateKey]
+        if (!actionKey) continue
+        const actionAsset = {
+          id: `lab-control-${actionKey}`,
+          name: climateKey,
+          actionKey,
+          animationKey: actionKey,
+          targetValue: Number(targetValue),
+          type: 'control',
+        }
+        await executeAction(async () => {
+          const payload = await applySimulationAction(simulatorId, {
+            client_action_id: createClientActionId(),
+            action_key: actionKey,
+            target_value: Number(targetValue),
+          })
+          const result = payload.data ?? payload
+          if (result.simulator) {
+            mergeCanonicalSimulator(result.simulator, { preservePestRisks: true })
+            setClimate({
+              water: Number(result.simulator.water ?? climate.water),
+              light: Number(result.simulator.light ?? climate.light),
+              fertilizer: Number(result.simulator.fertilizer ?? climate.fertilizer),
+              soil: Number(result.simulator.soil_humidity ?? climate.soil),
+              air: Number(result.simulator.air_humidity ?? climate.air),
+              soilTemp: Number(result.simulator.soil_temp ?? climate.soilTemp),
+              temp: Number(result.simulator.air_temp ?? climate.temp),
+            })
+          }
+          return result
+        }, actionAsset)
+      }
+      setCriticalAlert({
+        tone: 'success',
+        title: isThai ? 'ปรับสภาพแวดล้อมแล้ว' : 'Environment updated',
+        message: isThai ? 'ระบบเปลี่ยนค่าจริงหลังเล่นแอนิเมชันครบแล้ว' : 'Real factor values changed only after each 3D action completed.',
+      })
+      return true
+    } catch (error) {
+      const errorMessage = translateAppText(error.message || 'The action could not be completed.', isThai ? 'th' : 'en')
+      setCriticalAlert({
+        tone: 'danger',
+        title: isThai ? 'ปรับสภาพแวดล้อมไม่สำเร็จ' : 'Environment action failed',
+        message: errorMessage,
+      })
+      return false
+    }
+  }
+
+  async function transferOutdoorLocation(location) {
+    const simulatorId = simulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
+    if (!simulatorId || growingMode !== 'outdoor') return
+
+    setModeLoading(true)
+    try {
+      const payload = await updateSimulatorLocation(simulatorId, location)
+      const simulator = payload.data ?? payload
+      mergeCanonicalSimulator(simulator, { preservePestRisks: true })
+      setLocationTransferOpen(false)
+      setOutdoorLocationRefreshKey((current) => current + 1)
+      const isThai = getAppLanguage() === 'th'
+      setCriticalAlert({
+        tone: 'success',
+        title: isThai ? 'ย้ายสถานที่สำเร็จ' : 'Location transferred',
+        message: isThai ? 'ความคืบหน้าของพืชยังคงเดิม และอากาศใหม่จะใช้ในรอบถัดไป' : 'Plant progress was preserved. New weather applies from the next cycle.',
+      })
+    } catch (error) {
+      const language = getAppLanguage()
+      setCriticalAlert({ tone: 'danger', title: language === 'th' ? 'ย้ายสถานที่ไม่สำเร็จ' : 'Transfer failed', message: translateAppText(error.message || 'The action could not be completed.', language) })
+    } finally {
+      setModeLoading(false)
     }
   }
 
@@ -2118,34 +2316,52 @@ function App() {
     if (asset.type === 'item') {
       if (Number(inventoryMap[asset.itemKey ?? asset.id] ?? asset.quantity ?? 0) <= 0) {
         setAppliedAsset(null)
+        cancelAction()
         setActionMessage(`${asset.name} is out of stock. Visit Shop to get more.`)
         return
       }
 
       if (appliedAsset?.type === 'item' && appliedAsset.id === asset.id) {
         setAppliedAsset(null)
+        setActionConfirmAsset(null)
+        cancelAction()
         setActionMessage(`${asset.name} cancelled`)
         return
       }
 
       setAppliedAsset(asset)
+      selectAction(asset)
 
       if (visitingFriend) {
         if (!asset.friendUsable) {
           setAppliedAsset(null)
+          cancelAction()
           setActionMessage('Only aphid and snail prank items can be used in a friend garden')
           return
         }
         if (!visitingFriend.simulatorId || !selectedPlant) {
           setAppliedAsset(null)
+          cancelAction()
           setActionMessage(`${visitingFriend.user?.username ?? 'This friend'} has not planted a plant yet`)
           return
         }
         setActionMessage(`Selected ${asset.name}. Click the friend's plant to send it.`)
+        cancelAction()
         return
       }
 
-      setActionMessage(`Selected ${asset.name}. Click a pest to use it.`)
+      const actionKey = asset.actionKey ?? asset.itemKey ?? asset.id
+      if (['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
+        setActionConfirmAsset(asset)
+        setActionMessage(getAppLanguage() === 'th'
+          ? `ตรวจสอบผลของ ${localizedItemName(asset)} แล้วกดยืนยัน`
+          : `Review ${asset.name}, then confirm the 3D action.`)
+        return
+      }
+
+      setActionMessage(getAppLanguage() === 'th'
+        ? `เลือก ${localizedItemName(asset)} แล้ว คลิกศัตรูพืชหรือพืชเพื่อใช้งาน`
+        : `Selected ${asset.name}. Click the matching pest or plant to use it.`)
       return
     }
 
@@ -3353,12 +3569,30 @@ function App() {
   }
 
   return (
-    <main className="game-themed-scrollbar relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100" data-mobile-lab-panel={activeMobileLabPanel}>
+    <main className="game-shell game-themed-scrollbar relative h-screen w-screen overflow-hidden bg-[#0b0f0c] text-slate-100" data-mobile-lab-panel={activeMobileLabPanel}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.16),transparent_25%),linear-gradient(135deg,#070a08_0%,#101511_54%,#080b09_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-55" />
 
       <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} demoMode={demoMode} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onDemoExit={() => exitDemoSession('home')} onDemoSignIn={() => exitDemoSession('auth')} onHelpOpen={() => setHelpCenterOpen(true)} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={demoMode ? () => exitDemoSession('home') : logoutUser} />
       <ToastStack onDismiss={dismissActionToast} toasts={actionToasts} />
+      <CriticalAlertCenter alert={criticalAlert} onClose={() => setCriticalAlert(null)} />
+      <ActionConfirmDialog
+        asset={actionConfirmAsset}
+        busy={['animating', 'applying'].includes(actionState.phase)}
+        language={getAppLanguage()}
+        onCancel={() => {
+          if (['animating', 'applying'].includes(actionState.phase)) return
+          setActionConfirmAsset(null)
+          setAppliedAsset(null)
+          cancelAction()
+        }}
+        onConfirm={async () => {
+          const asset = actionConfirmAsset
+          if (!asset || ['animating', 'applying'].includes(actionState.phase)) return
+          setActionConfirmAsset(null)
+          await applySelectedItem(asset)
+        }}
+      />
       {friendGardenLoading.active && (
         <FriendGardenLoadingScreen
           loading={friendGardenLoading}
@@ -3369,6 +3603,16 @@ function App() {
         <PlantKnowledgeModal
           onClose={closePlantKnowledge}
           plantAsset={plantKnowledgeAsset}
+        />
+      )}
+      {locationTransferOpen && (
+        <LocationTransferModal
+          initialLocation={outdoorWeather.location ? {
+            ...outdoorWeather.location,
+            name: outdoorWeather.addressLabel || simulationVisual?.location_name,
+          } : null}
+          onClose={() => setLocationTransferOpen(false)}
+          onConfirm={transferOutdoorLocation}
         />
       )}
       <OnboardingExperience
@@ -3432,8 +3676,9 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
+              <LibrarySidebar busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
               <SimulationStage
+                actionState={actionState}
                 coinBurst={coinBurst}
                 emptyGardenOwnerName={visitingFriend ? visitorName : ''}
                 expBurst={expBurst}
@@ -3486,12 +3731,13 @@ function App() {
               {!visitingFriend && (
                 <EnvironmentPanel
                   climate={climate}
-                  setClimate={setClimate}
                   windows={windows}
                   setWindows={setWindows}
                   mode={growingMode}
-                  locationLocked={Boolean(lockedOutdoorLocation)}
+                  onApplyFactors={applyControlledFactors}
+                  actionPhase={actionState.phase}
                   onRefreshLocation={() => setOutdoorLocationRefreshKey((current) => current + 1)}
+                  onTransferLocation={() => setLocationTransferOpen(true)}
                   outdoorWeather={outdoorWeather}
                   plantSelected={Boolean(selectedPlant)}
                 />

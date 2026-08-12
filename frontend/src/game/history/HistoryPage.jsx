@@ -607,7 +607,7 @@ export function HistoryPage({ onOpenGameState, onStartGrowing }) {
   }
 
   return (
-    <section className="particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7" aria-label={copy.pageLabel}>
+    <section className="user-page user-page--history particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b1210] px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7" aria-label={copy.pageLabel}>
       <ParticleNetworkBackground variant="history" />
       <div className="relative z-[1] mx-auto max-w-[1220px]">
         <header className="mb-6 flex flex-col gap-4 border-b border-[#30453a]/65 pb-6 sm:flex-row sm:items-end sm:justify-between" data-tour="history-header">

@@ -2041,7 +2041,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
 
   return (
     <CommunityLanguageContext.Provider value={language}>
-      <section className="particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-hidden bg-[#111514] text-slate-100">
+      <section className="user-page user-page--community particle-network-surface particle-network-surface--game absolute inset-x-0 bottom-0 top-16 z-10 overflow-hidden bg-[#111514] text-slate-100">
         <ParticleNetworkBackground variant="community" />
         <div
           className="community-shared-scroll relative z-[1] mx-auto grid h-full max-w-[1180px] items-start overflow-y-auto overscroll-contain border-x border-lime-100/10 grid-cols-[220px_minmax(420px,1fr)_260px] max-lg:grid-cols-[180px_minmax(0,1fr)] max-md:grid-cols-1 max-md:pb-20"

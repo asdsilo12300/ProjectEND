@@ -134,10 +134,10 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame('yellowing', $result->visual_overrides['leafState']);
     }
 
-    public function test_high_fertilizer_sets_burnt_visual_state(): void
+    public function test_full_nutrient_reserve_does_not_burn_the_plant(): void
     {
         [$plant, $simulator] = $this->seedPlantAndSimulator();
-        $this->seedVariant($plant, 'burnt');
+        $this->seedVariant($plant, 'healthy');
         PlantConditionRule::query()->create([
             'plant_id' => $plant->id,
             'factor' => 'fertilizer',
@@ -151,9 +151,37 @@ class PlantSimulationEngineTest extends TestCase
 
         $result = app(PlantSimulationEngine::class)->tick($simulator, $this->healthyFactors(['fertilizer' => 90]));
 
-        $this->assertSame('burnt', $result->visual_state);
-        $this->assertSame('root_burn', $result->visual_overrides['leafState']);
-        $this->assertSame('#b87536', $result->visual_overrides['leafColor']);
+        $this->assertSame('healthy', $result->visual_state);
+        $this->assertSame('upright', $result->visual_overrides['leafState']);
+        $this->assertSame(90, (int) $result->fertilizer);
+    }
+
+    public function test_water_reserve_is_consumed_each_cycle_and_reports_the_rate(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+
+        $result = app(PlantSimulationEngine::class)->tick(
+            $simulator,
+            $this->healthyFactors(['water' => 100, 'fertilizer' => 100]),
+        );
+
+        $this->assertLessThan(100, (int) $result->water);
+        $this->assertGreaterThanOrEqual(1, (int) $result->getAttribute('plant_need_rates')['water_per_cycle']);
+        $this->assertSame(0, (int) $result->getAttribute('plant_need_rates')['fertilizer_per_cycle']);
+    }
+
+    public function test_nutrient_reserve_is_consumed_more_slowly_than_water(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['event_tick_count' => 4]);
+
+        $result = app(PlantSimulationEngine::class)->tick(
+            $simulator->fresh(),
+            $this->healthyFactors(['water' => 100, 'fertilizer' => 100]),
+        );
+
+        $this->assertSame(99, (int) $result->fertilizer);
+        $this->assertGreaterThan(1, 100 - (int) $result->water);
     }
 
     public function test_low_health_does_not_hide_dominant_heat_stress_visuals(): void
@@ -234,6 +262,7 @@ class PlantSimulationEngineTest extends TestCase
     public function test_high_humidity_activates_fungus_pest(): void
     {
         [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['event_tick_count' => 4]);
         $fungus = Pest::query()->create([
             'name_th' => 'เชื้อรา',
             'name_en' => 'fungus',
@@ -257,6 +286,7 @@ class PlantSimulationEngineTest extends TestCase
     public function test_base_chance_spawns_pest_and_applies_damage_without_matching_rules(): void
     {
         [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['event_tick_count' => 4]);
         $pest = Pest::query()->create([
             'name_th' => 'Base chance pest',
             'name_en' => 'base-pest',
@@ -491,6 +521,7 @@ class PlantSimulationEngineTest extends TestCase
             $table->decimal('air_temp', 5, 2)->default(0);
             $table->string('status')->default('active');
             $table->unsignedBigInteger('state_version')->default(1);
+            $table->unsignedInteger('event_tick_count')->default(0);
             $table->unsignedBigInteger('active_seconds')->default(0);
             $table->timestamp('last_active_at')->nullable();
             $table->timestamp('started_at')->nullable();

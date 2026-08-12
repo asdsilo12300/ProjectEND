@@ -115,7 +115,7 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
   }
 
   return (
-    <div className="absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b0f0c]/96">
+    <div className="user-page user-page--settings absolute inset-x-0 bottom-0 top-16 z-10 overflow-y-auto bg-[#0b0f0c]/96">
       <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -181,6 +181,14 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
 
         <div className="grid gap-5">
           <Section dataTour="settings-accessibility" icon="eye" title="Display & accessibility" description="Adjust readability and motion without changing simulation results.">
+            <SettingRow title="Color theme" description="Use the bright white-green theme by default, or switch to the darker lab theme.">
+              <ChoiceGroup
+                label="Color theme"
+                options={[{ label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }]}
+                value={settings.theme}
+                onChange={(value) => updateSetting('theme', value)}
+              />
+            </SettingRow>
             <SettingRow title="Text size" description="Increase interface text across the academy.">
               <ChoiceGroup
                 label="Text size"

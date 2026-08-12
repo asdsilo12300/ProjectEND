@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Achievement;
 use App\Models\AdminActivityLog;
 use App\Models\Comment;
+use App\Models\EventDefinition;
 use App\Models\Item;
 use App\Models\ModelAsset;
 use App\Models\Pest;
@@ -175,6 +176,7 @@ class AdminResourceController extends Controller
             'model-assets' => ['model' => ModelAsset::class, 'with' => [], 'with_count' => [], 'search' => ['asset_key', 'label', 'type', 'url']],
             'quests' => ['model' => Quest::class, 'with' => [], 'with_count' => [], 'search' => ['title', 'description', 'quest_type']],
             'achievements' => ['model' => Achievement::class, 'with' => [], 'with_count' => [], 'search' => ['title', 'description', 'condition_type']],
+            'event-definitions' => ['model' => EventDefinition::class, 'with' => [], 'with_count' => ['simulationEvents'], 'search' => ['event_key', 'name_en', 'name_th', 'description_en', 'description_th']],
             default => null,
         };
     }
@@ -207,11 +209,27 @@ class AdminResourceController extends Controller
             'plant-variants' => ['plant_id' => ['required', $activePlant], 'stage_id' => ['nullable', $activeStageForPlant], 'state_key' => ['required', 'string', 'max:100'], 'label' => ['nullable', 'string', 'max:191'], 'model_url' => $nullableUrl, 'leaf_color' => ['nullable', 'string', 'max:30'], 'stem_color' => ['nullable', 'string', 'max:30'], 'leaf_state' => ['nullable', 'string', 'max:80'], 'stem_state' => ['nullable', 'string', 'max:80'], 'scale' => ['required', 'numeric', 'between:0.01,20'], 'priority' => ['required', 'integer', 'between:0,999'], 'is_active' => ['required', 'boolean']],
             'pests' => ['name_th' => ['required', 'string', 'max:191', Rule::unique('pests', 'name_th')->ignore($id)], 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'base_chance' => ['required', 'numeric', 'between:0,100'], 'damage_per_turn' => ['required', 'integer', 'between:0,100'], 'behavior' => ['nullable', 'string', 'max:5000']],
             'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
-            'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
+            'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor'])], 'effect_payload' => ['nullable', 'array'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
             'shop-items' => ['item_id' => ['required', $activeItem, Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at']],
             'model-assets' => ['asset_key' => ['required', 'string', 'max:191', Rule::unique('model_assets', 'asset_key')->ignore($id)], 'label' => ['nullable', 'string', 'max:191'], 'type' => ['required', 'string', 'max:80'], 'url' => ['required', 'string', 'max:2048'], 'metadata' => ['nullable', 'array']],
             'quests' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'quest_type' => ['required', Rule::in(['daily', 'weekly', 'story', 'event'])], 'target_type' => ['required', 'string', 'max:100'], 'target_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'reward_gem' => ['required', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],
             'achievements' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'condition_type' => ['required', 'string', 'max:100'], 'condition_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'badge_image_url' => $nullableUrl, 'is_active' => ['required', 'boolean']],
+            'event-definitions' => [
+                'event_key' => ['required', 'string', 'max:120', Rule::unique('event_definitions', 'event_key')->ignore($id)],
+                'name_en' => ['required', 'string', 'max:191'], 'name_th' => ['required', 'string', 'max:191'],
+                'description_en' => ['nullable', 'string', 'max:4000'], 'description_th' => ['nullable', 'string', 'max:4000'],
+                'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor'])],
+                'severity' => ['required', Rule::in(['low', 'medium', 'high'])],
+                'weight' => ['required', 'integer', 'between:1,100'], 'trigger_chance' => ['required', 'integer', 'between:0,100'],
+                'warning_ticks' => ['required', 'integer', 'between:0,20'], 'duration_ticks' => ['required', 'integer', 'between:1,50'],
+                'cooldown_ticks' => ['required', 'integer', 'between:1,100'],
+                'conditions' => ['nullable', 'array'], 'effects' => ['nullable', 'array'], 'response_action_keys' => ['nullable', 'array'],
+                'conditions.*.factor' => ['nullable', 'string', Rule::in(['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'])],
+                'conditions.*.operator' => ['nullable', 'string', Rule::in(['above', 'above_or_equal', 'below', 'below_or_equal', 'between', 'outside', 'equals', '='])],
+                'conditions.*.value' => ['nullable', 'numeric'], 'conditions.*.min' => ['nullable', 'numeric'], 'conditions.*.max' => ['nullable', 'numeric'],
+                'effects.factor_delta' => ['nullable', 'array'], 'effects.factor_delta.*' => ['numeric', 'between:-100,100'],
+                'response_action_keys.*' => ['string', 'max:100'], 'is_harmful' => ['required', 'boolean'], 'is_active' => ['required', 'boolean'],
+            ],
             default => [],
         };
     }

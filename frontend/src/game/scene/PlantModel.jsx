@@ -472,9 +472,9 @@ const pestAnchors = {
     { position: [0.08, 3.278, -0.08], rotation: [-0.12, -0.28, 0.08], size: 0.064, modelOffset: [0, -0.005, 0] },
   ],
   snail: [
-    { position: [0.46, 1.3, 0.3], rotation: [0, 0.16, 0], size: 0.28, modelOffset: [0, 0.002, 0] },
-    { position: [-0.42, 1.3, 0.26], rotation: [0, -0.18, 0], size: 0.27, modelOffset: [0, 0.002, 0] },
-    { position: [0.12, 1.29, 0.34], rotation: [0, 0.04, 0], size: 0.26, modelOffset: [0, 0.002, 0] },
+    { position: [0.46, 1.3, 0.3], rotation: [0, 0.16, 0], size: 0.11, modelOffset: [0, 0.002, 0] },
+    { position: [-0.42, 1.3, 0.26], rotation: [0, -0.18, 0], size: 0.105, modelOffset: [0, 0.002, 0] },
+    { position: [0.12, 1.29, 0.34], rotation: [0, 0.04, 0], size: 0.1, modelOffset: [0, 0.002, 0] },
   ],
   fungus: [
     { position: [0.025, 2.19, 0.035], rotation: [-0.08, 0.12, 0.04], surface: 'leaf', scale: 1 },

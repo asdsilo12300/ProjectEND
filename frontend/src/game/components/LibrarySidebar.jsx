@@ -6,6 +6,14 @@ import { LoadingSkeleton } from './LoadingSkeleton'
 
 const ITEM_GROUPS = [
   {
+    id: 'care',
+    icon: 'drop',
+    label: { en: 'Plant & weather care', th: 'อุปกรณ์ดูแลพืชและสภาพอากาศ' },
+    detail: { en: 'Water, feed, and protect the active plant', th: 'ให้น้ำ ปุ๋ย และป้องกันพืชจากอากาศ' },
+    shellClass: 'border-sky-200/12 bg-sky-300/[0.035]',
+    iconClass: 'bg-sky-300/10 text-sky-200',
+  },
+  {
     id: 'treatment',
     icon: 'shield',
     label: { en: 'Plant treatments', th: 'อุปกรณ์รักษาพืช' },
@@ -50,6 +58,7 @@ function itemGroupId(item) {
   const itemId = String(item?.itemKey ?? item?.id ?? '').toLowerCase()
   if (item?.friendUsable || itemId.includes('prank')) return 'prank'
   if (itemId === 'hand-pick' || itemId.includes('manual')) return 'manual'
+  if (['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover'].includes(String(item?.actionKey ?? itemId))) return 'care'
   return 'treatment'
 }
 
@@ -124,8 +133,12 @@ function PlantLibraryCard({ item, itemLocked, itemName, lockLabel, onApply, onSh
   )
 }
 
-function ItemLibraryCard({ item, inventoryMap, mockItems, onApply, readOnly, friendHasPlant, selectedAsset, setDrawerOpen }) {
-  const itemName = readableItemName(item)
+function ItemLibraryCard({ item, inventoryMap, language, mockItems, onApply, readOnly, friendHasPlant, growingMode, plantNeeds, selectedAsset, setDrawerOpen }) {
+  const itemName = language === 'th' ? (item.nameTh || readableItemName(item)) : readableItemName(item)
+  const itemDetail = language === 'th' ? (item.detailTh || item.detail) : item.detail
+  const successText = language === 'th' ? (item.successTextTh || item.successText) : item.successText
+  const failText = language === 'th' ? (item.failTextTh || item.failText) : item.failText
+  const helpText = language === 'th' ? (item.helpTh || item.help) : item.help
   const itemQuantity = inventoryMap[item.itemKey ?? item.id] ?? item.quantity
   const hasInventoryQuantity = Number.isFinite(Number(itemQuantity))
   const quantityBadge = hasInventoryQuantity ? `x${itemQuantity}` : item.quantityLabel ?? 'x0'
@@ -133,18 +146,34 @@ function ItemLibraryCard({ item, inventoryMap, mockItems, onApply, readOnly, fri
   const ownGardenPrank = !readOnly && item.friendUsable
   const friendItemUnsupported = readOnly && !item.friendUsable
   const friendGardenEmpty = readOnly && item.friendUsable && !friendHasPlant
-  const itemLocked = mockItems || isZeroQuantity || ownGardenPrank || friendItemUnsupported || friendGardenEmpty
+  const wrongGrowingMode = !readOnly
+    && ['greenhouse', 'outdoor'].includes(item.modeScope)
+    && Boolean(growingMode)
+    && item.modeScope !== growingMode
+  const actionKey = String(item.actionKey ?? item.itemKey ?? item.id)
+  const reserveFull = !readOnly
+    && ['water', 'fertilizer'].includes(actionKey)
+    && Number(plantNeeds?.[actionKey] ?? -1) >= 100
+  const itemLocked = mockItems || isZeroQuantity || ownGardenPrank || friendItemUnsupported || friendGardenEmpty || wrongGrowingMode || reserveFull
   const selected = selectedAsset?.id === item.id
   const lockLabel = ownGardenPrank
-    ? 'Available only while visiting a friend garden'
+    ? (language === 'th' ? 'ใช้ได้เมื่อเยี่ยมชมสวนของเพื่อนเท่านั้น' : 'Available only while visiting a friend garden')
     : friendItemUnsupported
-    ? 'Only friend prank items can be used here'
+    ? (language === 'th' ? 'ที่สวนเพื่อนใช้ได้เฉพาะไอเท็มแกล้งเพื่อน' : 'Only friend prank items can be used here')
     : friendGardenEmpty
-      ? 'This friend has no active plant to prank'
+      ? (language === 'th' ? 'เพื่อนคนนี้ไม่มีพืชที่กำลังปลูกให้แกล้ง' : 'This friend has no active plant to prank')
       : mockItems
-        ? 'Friend tools are view-only'
+        ? (language === 'th' ? 'เครื่องมือของเพื่อนดูได้เท่านั้น' : 'Friend tools are view-only')
+        : wrongGrowingMode
+          ? (language === 'th'
+              ? `ใช้ได้เฉพาะ${item.modeScope === 'outdoor' ? 'โหมดกลางแจ้ง' : 'โหมดควบคุมสภาพแวดล้อม'}`
+              : `${item.modeScope === 'outdoor' ? 'Outdoor' : 'Environment Control'} mode only`)
+        : reserveFull
+          ? (language === 'th'
+              ? actionKey === 'water' ? 'หลอดน้ำสำรองเต็มแล้ว' : 'หลอดธาตุอาหารเต็มแล้ว'
+              : actionKey === 'water' ? 'Water reserve is full' : 'Nutrient reserve is full')
         : isZeroQuantity
-          ? 'Out of stock — visit Shop to get more'
+          ? (language === 'th' ? 'สินค้าหมด — ไปที่ร้านค้าเพื่อซื้อเพิ่ม' : 'Out of stock — visit Shop to get more')
           : undefined
 
   return (
@@ -155,7 +184,7 @@ function ItemLibraryCard({ item, inventoryMap, mockItems, onApply, readOnly, fri
       data-lab-asset={item.id}
       aria-disabled={itemLocked}
       aria-pressed={selected}
-      title={lockLabel ?? item.help}
+      title={lockLabel ?? helpText}
       onClick={() => {
         if (!itemLocked) {
           onApply(item)
@@ -170,11 +199,11 @@ function ItemLibraryCard({ item, inventoryMap, mockItems, onApply, readOnly, fri
         </span>
       )}
       <strong className="mt-1.5 block truncate text-xs text-lime-50">{itemName}</strong>
-      <span className="block truncate text-xs text-slate-400">{mockItems ? 'Coming soon' : isZeroQuantity ? 'Out of stock' : item.detail}</span>
-      {!mockItems && (item.successText || item.failText) && (
+      <span className="block truncate text-xs text-slate-400">{mockItems ? (language === 'th' ? 'เร็ว ๆ นี้' : 'Coming soon') : isZeroQuantity ? (language === 'th' ? 'สินค้าหมด' : 'Out of stock') : itemDetail}</span>
+      {!mockItems && (successText || failText) && (
         <span className="pointer-events-none absolute left-1.5 right-1.5 top-[54px] z-30 rounded-md border border-lime-100/15 bg-[#07100b]/95 p-2 text-xs leading-relaxed text-slate-200 opacity-0 shadow-[0_10px_22px_rgba(0,0,0,.42)] transition group-hover:opacity-100 group-focus-visible:opacity-100">
-          <span className="block font-black text-lime-100">{item.successText}</span>
-          <span className="block text-slate-400">{item.failText}</span>
+          <span className="block font-black text-lime-100">{successText}</span>
+          <span className="block text-slate-400">{failText}</span>
         </span>
       )}
       {mockItems && (
@@ -186,7 +215,7 @@ function ItemLibraryCard({ item, inventoryMap, mockItems, onApply, readOnly, fri
   )
 }
 
-export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true, loading = false, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo }) {
+export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true, growingMode = null, loading = false, plantNeeds = null, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const language = useAppLanguage()
 
@@ -273,11 +302,14 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                         {group.items.map((item) => (
                           <ItemLibraryCard
                             friendHasPlant={friendHasPlant}
+                            growingMode={growingMode}
                             inventoryMap={inventoryMap}
                             item={item}
                             key={item.id}
+                            language={language}
                             mockItems={mockItems}
                             onApply={onApply}
+                            plantNeeds={plantNeeds}
                             readOnly={readOnly}
                             selectedAsset={selectedAsset}
                             setDrawerOpen={setDrawerOpen}

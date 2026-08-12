@@ -46,6 +46,12 @@ const fallbackItems = [
   { id: 5, name: 'Hand Pick', type: 'tool', description: 'Manual removal for aphids and snails.', image_url: '/game-icons/hand-pick.png', effect_type: 'pest_control:manual' },
   { id: 6, name: 'Aphid Prank', type: 'friend_prank', description: 'Send aphids to a friend garden.', image_url: '/game-icons/aphid.png', effect_type: 'friend_pest:aphid' },
   { id: 7, name: 'Snail Prank', type: 'friend_prank', description: 'Send a snail to a friend garden.', image_url: '/game-icons/snail.png', effect_type: 'friend_pest:snail' },
+  { id: 8, name: 'Watering Dose', type: 'water', description: 'Restores 22% of the active plant water reserve.', effect_type: 'environment:water', effect_value: 22, action_key: 'water', animation_key: 'watering-can', mode_scope: 'both' },
+  { id: 9, name: 'Fertilizer Dose', type: 'fertilizer', description: 'Restores 18% of the active plant nutrient reserve.', effect_type: 'environment:fertilizer', effect_value: 18, action_key: 'fertilizer', animation_key: 'fertilizer-pour', mode_scope: 'both' },
+  { id: 10, name: 'Drainage Mix', type: 'booster', description: 'Reduce excessive outdoor soil moisture.', effect_type: 'environment:drainage', action_key: 'drainage', animation_key: 'soil-mix', mode_scope: 'outdoor' },
+  { id: 11, name: 'Shade Cloth', type: 'booster', description: 'Protect an outdoor plant from intense heat and light.', effect_type: 'environment:shade', action_key: 'shade', animation_key: 'shade-cover', mode_scope: 'outdoor' },
+  { id: 12, name: 'Windbreak', type: 'booster', description: 'Protect an outdoor plant from strong wind.', effect_type: 'environment:windbreak', action_key: 'windbreak', animation_key: 'windbreak', mode_scope: 'outdoor' },
+  { id: 13, name: 'Frost Cover', type: 'booster', description: 'Protect an outdoor plant from sudden cold.', effect_type: 'environment:frost-cover', action_key: 'frost-cover', animation_key: 'frost-cover', mode_scope: 'outdoor' },
 ]
 
 const demoUserTemplate = {
@@ -129,9 +135,14 @@ function createSimulator(plant = fallbackPlants[0], overrides = {}) {
     health: Number(overrides.health ?? 92),
     visual_state: overrides.visual_state ?? 'healthy',
     visual_overrides: overrides.visual_overrides ?? { scale: 1, leafColor: '#86bd72', leafState: 'upright', stemColor: '#735531', stemState: 'upright' },
-    water: Number(overrides.water ?? 55),
+    water: Number(overrides.water ?? 100),
     light: Number(overrides.light ?? 72),
-    fertilizer: Number(overrides.fertilizer ?? 35),
+    fertilizer: Number(overrides.fertilizer ?? 100),
+    plant_needs: overrides.plant_needs ?? {
+      water: Number(overrides.water ?? 100),
+      fertilizer: Number(overrides.fertilizer ?? 100),
+      rates: { water_per_cycle: 3, fertilizer_per_cycle: 0.25, rain_recovery: 0 },
+    },
     soil_humidity: Number(overrides.soil_humidity ?? 62),
     air_humidity: Number(overrides.air_humidity ?? 58),
     soil_temp: Number(overrides.soil_temp ?? 25),
@@ -219,11 +230,11 @@ function makeFriend(plants) {
 }
 
 function initialInventory() {
-  return fallbackItems.map((item, index) => ({ id: 9600 + index, user_id: demoUserTemplate.id, item_id: item.id, quantity: [3, 2, 2, 1, 1, 1][index], item }))
+  return fallbackItems.map((item, index) => ({ id: 9600 + index, user_id: demoUserTemplate.id, item_id: item.id, quantity: [3, 2, 2, 1, 1, 1, 4, 3, 2, 2, 2, 2][index] ?? 1, item }))
 }
 
 function initialShopItems() {
-  const prices = { 2: 50, 3: 25, 4: 50, 5: 50, 6: 100, 7: 100 }
+  const prices = { 2: 50, 3: 25, 4: 50, 5: 50, 6: 100, 7: 100, 8: 20, 9: 25, 10: 35, 11: 40, 12: 40, 13: 40 }
 
   return fallbackItems.map((item, index) => ({
     id: 9650 + index,
@@ -299,6 +310,7 @@ function createSession() {
     publicPosts: seedPublicPosts(histories),
     postComments: new Map(),
     simulatorComments: new Map(),
+    actionResults: new Map(),
     objectUrls: [],
     nextId: 100_000,
   }
@@ -465,6 +477,105 @@ export async function handleDemoApiRequest(path, options = {}) {
     return { handled: true, payload: { data: clone(simulator) } }
   }
 
+  const actionMatch = cleanPath.match(/^\/simulators\/([^/]+)\/actions$/)
+  if (actionMatch && method === 'POST') {
+    const simulatorId = actionMatch[1]
+    const idempotencyKey = String(body.client_action_id ?? '')
+    if (idempotencyKey && session.actionResults.has(idempotencyKey)) {
+      return { handled: true, payload: clone(session.actionResults.get(idempotencyKey)) }
+    }
+    const itemId = Number(body.item_id)
+    const itemEntry = session.inventory.find((entry) => Number(entry.item_id) === itemId)
+    if (itemId && (!itemEntry || Number(itemEntry.quantity) < 1)) {
+      const error = new Error('This preview item is out of stock.')
+      error.status = 422
+      throw error
+    }
+    const item = itemEntry?.item ?? fallbackItems.find((entry) => Number(entry.id) === itemId)
+    const actionKey = String(body.action_key || item?.action_key || item?.effect_type || '')
+    const activeSimulator = session.simulators.find((entry) => String(entry.id) === String(simulatorId))
+    if (itemId && ['water', 'fertilizer'].includes(actionKey) && Number(activeSimulator?.[actionKey] ?? 0) >= 100) {
+      const error = new Error(actionKey === 'water'
+        ? 'The plant water reserve is already full.'
+        : 'The plant nutrient reserve is already full.')
+      error.status = 422
+      throw error
+    }
+    if (itemId) {
+      session.inventory = session.inventory.map((entry) => Number(entry.item_id) === itemId
+        ? { ...entry, quantity: Math.max(0, Number(entry.quantity) - 1) }
+        : entry)
+    }
+    const next = updateSimulator(simulatorId, (current) => {
+      const updated = { ...current, updated_at: nowIso(), state_version: Number(current.state_version ?? 0) + 1 }
+      if (actionKey.includes('water')) updated.water = Math.min(100, Number(current.water) + Number(item?.effect_value ?? 22))
+      if (actionKey.includes('fertilizer')) updated.fertilizer = Math.min(100, Number(current.fertilizer) + Number(item?.effect_value ?? 18))
+      if (actionKey.includes('soil') && !actionKey.includes('drainage')) updated.soil_humidity = Math.min(100, Number(body.target_value ?? Number(current.soil_humidity) + 8))
+      if (actionKey.includes('drainage')) updated.soil_humidity = Math.max(0, Number(current.soil_humidity) - 15)
+      if (actionKey.includes('shade')) updated.light = Math.max(0, Number(current.light) - 10)
+      if (actionKey.includes('windbreak')) updated.air_humidity = Math.min(100, Number(current.air_humidity) + 8)
+      if (actionKey.includes('frost-cover')) updated.air_temp = Math.min(80, Number(current.air_temp) + 6)
+      if (actionKey.includes('pest_control')) updated.active_pests = []
+      if (['shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
+        const currentTick = Number(current.event_tick_count ?? 0)
+        const activeModifiers = Array.isArray(current.active_modifiers) ? current.active_modifiers : []
+        updated.active_modifiers = [
+          ...activeModifiers.filter((modifier) => String(modifier.action_key ?? '') !== actionKey),
+          {
+            id: `preview-${actionKey}-${currentTick}`,
+            action_key: actionKey,
+            animation_key: actionKey,
+            factor_key: actionKey === 'shade' ? 'light' : actionKey === 'windbreak' ? 'air_humidity' : 'air_temp',
+            starts_tick: currentTick,
+            ends_tick: currentTick + 3,
+          },
+        ]
+      }
+      updated.plant_needs = {
+        ...(current.plant_needs ?? {}),
+        water: Number(updated.water ?? current.water),
+        fertilizer: Number(updated.fertilizer ?? current.fertilizer),
+        rates: current.plant_needs?.rates ?? { water_per_cycle: 3, fertilizer_per_cycle: 0.25, rain_recovery: 0 },
+      }
+      return updated
+    })
+    const inventory = clone(session.inventory.find((entry) => Number(entry.item_id) === itemId) ?? null)
+    const payload = { data: {
+      id: session.nextId++, client_action_id: idempotencyKey, action_key: actionKey,
+      status: 'success', result_payload: { preview: true }, applied_at: nowIso(),
+      simulator: clone(next), inventory,
+      inventory_quantity: inventory?.quantity ?? null,
+      message_code: 'game.action.applied', message_params: { action: actionKey }, replayed: false,
+    } }
+    if (idempotencyKey) session.actionResults.set(idempotencyKey, clone(payload))
+    return { handled: true, payload }
+  }
+
+  const locationMatch = cleanPath.match(/^\/simulators\/([^/]+)\/location$/)
+  if (locationMatch && method === 'POST') {
+    const next = updateSimulator(locationMatch[1], (current) => ({
+      ...current,
+      latitude: Number(body.latitude), longitude: Number(body.longitude),
+      location_name: body.location_name || current.location_name,
+      location_timezone: body.timezone || current.location_timezone || 'Asia/Bangkok',
+      location_changed_at: nowIso(), updated_at: nowIso(),
+    }))
+    return { handled: true, payload: { data: clone(next), weather_preview: { temperature: 27, precipitation: 0, wind_speed: 8, timezone: next.location_timezone } } }
+  }
+
+  const eventMatch = cleanPath.match(/^\/simulators\/([^/]+)\/events$/)
+  if (eventMatch && method === 'GET') return { handled: true, payload: { data: [] } }
+
+  if (cleanPath === '/locations/search' && method === 'GET') {
+    return { handled: true, payload: { data: [{ name: 'Bangkok, Thailand (preview)', latitude: 13.7563, longitude: 100.5018 }] } }
+  }
+  if (cleanPath === '/locations/reverse' && method === 'GET') {
+    return { handled: true, payload: { data: { display_name: 'Current preview location', latitude: 13.7563, longitude: 100.5018 } } }
+  }
+  if (cleanPath === '/locations/weather-preview' && method === 'GET') {
+    return { handled: true, payload: { data: { current: { temperature_2m: 27, precipitation: 0, rain: 0, wind_speed_10m: 8, weather_code: 1 }, timezone: 'Asia/Bangkok' } } }
+  }
+
   const simulatorMatch = cleanPath.match(/^\/simulators\/([^/]+)(?:\/(tick|sync|finish|uproot|share|claim-maturity-reward|use-item|prank|histories|comments))?$/)
   if (simulatorMatch) {
     const [, simulatorId, action] = simulatorMatch
@@ -472,21 +583,30 @@ export async function handleDemoApiRequest(path, options = {}) {
     if (action === 'tick') {
       const next = updateSimulator(simulatorId, (current) => {
         const factors = body.factors ?? body
-        const water = Number(factors.water ?? current.water)
+        const rainRecovery = current.mode === 'outdoor' ? Math.min(12, Math.round(Number(factors.rain ?? 0) * 4)) : 0
+        const waterConsumed = Math.max(2, Math.min(8, Math.round(3 + Math.max(0, Number(factors.air_temp ?? current.air_temp) - 32) * .18)))
+        const water = Math.max(0, Math.min(100, Number(current.water) - waterConsumed + rainRecovery))
+        const fertilizerConsumed = (Number(current.event_tick_count ?? 0) + 1) % 4 === 0 ? 1 : 0
+        const fertilizer = Math.max(0, Number(current.fertilizer) - fertilizerConsumed)
         const light = Number(factors.light ?? current.light)
         const airTemp = Number(factors.air_temp ?? current.air_temp)
         const optimal = current.plant?.environment ?? {}
         const center = (range, fallback) => range ? (Number(range.min) + Number(range.max)) / 2 : fallback
-        const stress = Math.abs(water - center(optimal.water, 55)) * .45 + Math.abs(light - center(optimal.light, 72)) * .35 + Math.abs(airTemp - center(optimal.air_temp, 26)) * 2.2
+        const resourceStress = water <= 8 ? 55 : water <= 25 ? 25 : 0
+        const nutrientStress = fertilizer <= 10 ? 30 : fertilizer <= 22 ? 12 : 0
+        const stress = resourceStress + nutrientStress + Math.abs(light - center(optimal.light, 72)) * .35 + Math.abs(airTemp - center(optimal.air_temp, 26)) * 2.2
         const health = Math.max(0, Math.min(100, Math.round(100 - stress)))
         const growthRate = health >= 80 ? 8 : health >= 55 ? 3 : 0
         const growthPoint = Math.min(100, Number(current.growth_point) + growthRate)
-        return { ...current, ...factors, air_temp: airTemp, health, growth_rate: growthRate, growth_point: growthPoint, current_stage: stageForPlant(current.plant, growthPoint), current_model_url: stageForPlant(current.plant, growthPoint)?.model_url ?? current.plant?.base_model_url, state_version: Number(current.state_version ?? 0) + 1, active_seconds: Number(current.active_seconds ?? 0) + 30, visual_state: health < 45 ? 'stressed' : 'healthy', updated_at: nowIso() }
+        const eventTick = Number(current.event_tick_count ?? 0) + 1
+        return { ...current, ...factors, water, fertilizer, plant_needs: { water, fertilizer, rates: { water_per_cycle: waterConsumed, fertilizer_per_cycle: fertilizerConsumed, rain_recovery: rainRecovery } }, air_temp: airTemp, health, growth_rate: growthRate, growth_point: growthPoint, current_stage: stageForPlant(current.plant, growthPoint), current_model_url: stageForPlant(current.plant, growthPoint)?.model_url ?? current.plant?.base_model_url, state_version: Number(current.state_version ?? 0) + 1, event_tick_count: eventTick, active_seconds: Number(current.active_seconds ?? 0) + 30, visual_state: water <= 25 ? 'underwatered' : fertilizer <= 22 ? 'nutrient_deficient' : health < 45 ? 'stunted' : 'healthy', updated_at: nowIso() }
       })
       return { handled: true, payload: { data: clone(next) } }
     }
     if (action === 'sync') {
-      const next = updateSimulator(simulatorId, (current) => ({ ...current, ...body, plant: current.plant, current_stage: stageForPlant(current.plant, body.growth_point ?? current.growth_point), updated_at: nowIso() }))
+      const syncBody = Object.fromEntries(Object.entries(body)
+        .filter(([key]) => !['water', 'fertilizer', 'plant_needs'].includes(key)))
+      const next = updateSimulator(simulatorId, (current) => ({ ...current, ...syncBody, plant: current.plant, current_stage: stageForPlant(current.plant, syncBody.growth_point ?? current.growth_point), updated_at: nowIso() }))
       return { handled: true, payload: { data: clone(next) } }
     }
     if (action === 'finish' || action === 'uproot') {
@@ -531,7 +651,7 @@ export async function handleDemoApiRequest(path, options = {}) {
     const shopItem = session.shopItems.find((item) => String(item.id) === String(shopBuyMatch[1]))
     const item = shopItem?.item ?? fallbackItems[0]
     const quantity = Number(body.quantity ?? 1)
-    const fallbackPrices = { 2: 50, 3: 25, 4: 50, 5: 50, 6: 100, 7: 100 }
+    const fallbackPrices = { 2: 50, 3: 25, 4: 50, 5: 50, 6: 100, 7: 100, 8: 20, 9: 25, 10: 35, 11: 40, 12: 40, 13: 40 }
     const price = Number(shopItem?.price_coin ?? fallbackPrices[item.id] ?? 0) * quantity
     session.user.coin = Math.max(0, Number(session.user.coin) - price)
     const existing = session.inventory.find((entry) => Number(entry.item_id) === Number(item.id))
