@@ -385,17 +385,17 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
         event.stopPropagation()
         onOpenGame?.(post)
       }}
-      aria-label={isLive ? copy(language, 'Enter spectator mode', 'เข้าสู่โหมดผู้ชม') : copy(language, 'Open saved game state', 'เปิดสถานะเกมที่บันทึก')}
+      aria-label={isLive ? copy(language, 'Enter spectator mode', 'เข้าสู่โหมดผู้ชม') : copy(language, 'Open saved simulation state', 'เปิดสถานะการจำลองที่บันทึก')}
     >
       <div className="relative h-48 bg-[#080b09]">
         {imageUrl ? (
-          <img className={`h-full w-full transition duration-300 group-hover:scale-[1.015] ${snapshotUrl ? 'object-cover' : 'object-contain p-6'}`} src={resolveAssetUrl(imageUrl)} alt={isLive ? copy(language, 'Live plant garden', 'สวนพืชแบบสด') : copy(language, 'Saved plant game state', 'สถานะเกมพืชที่บันทึกไว้')} />
+          <img className={`h-full w-full transition duration-300 group-hover:scale-[1.015] ${snapshotUrl ? 'object-cover' : 'object-contain p-6'}`} src={resolveAssetUrl(imageUrl)} alt={isLive ? copy(language, 'Live plant garden', 'สวนพืชแบบสด') : copy(language, 'Saved plant simulation state', 'สถานะการจำลองพืชที่บันทึกไว้')} />
         ) : (
-          <div className="grid h-full place-items-center text-sm text-slate-400">{isLive ? copy(language, 'Live plant garden', 'สวนพืชแบบสด') : copy(language, 'Saved game state', 'สถานะเกมที่บันทึกไว้')}</div>
+          <div className="grid h-full place-items-center text-sm text-slate-400">{isLive ? copy(language, 'Live plant garden', 'สวนพืชแบบสด') : copy(language, 'Saved simulation state', 'สถานะการจำลองที่บันทึกไว้')}</div>
         )}
         <span className={`absolute left-3 top-3 inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-black ${isLive ? 'bg-[#9bcf82] text-[#101511]' : 'bg-[#101511]/90 text-lime-100'}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-[#101511]' : 'bg-slate-400'}`} />
-          {isLive ? copy(language, 'LIVE GARDEN', 'สวนแบบสด') : copy(language, 'SAVED GAME STATE', 'สถานะเกมที่บันทึก')}
+          {isLive ? copy(language, 'LIVE GARDEN', 'สวนแบบสด') : copy(language, 'SAVED SIMULATION', 'สถานะการจำลองที่บันทึก')}
         </span>
         <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/0 transition duration-200 group-hover:bg-black/35 group-focus-visible:bg-black/35">
           <span className="game-preview-eye grid h-12 w-12 scale-75 place-items-center rounded-full border border-lime-100/25 bg-[#101511]/90 text-lime-100 opacity-0 shadow-[0_8px_18px_rgba(0,0,0,.3)] group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -410,7 +410,7 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
         {growthCalculation && !isLive ? (
           <span
             className="rounded-md border border-cyan-300/10 bg-cyan-300/[0.045] px-2 py-2 text-slate-300"
-            title={copy(language, `1 real-life growth day ≈ ${formatGrowthNumber(secondsPerRealDay, 2)} game seconds`, `1 วันเติบโตจริง ≈ ${formatGrowthNumber(secondsPerRealDay, 2)} วินาทีในเกม`)}
+            title={copy(language, `1 real-life growth day ≈ ${formatGrowthNumber(secondsPerRealDay, 2)} simulation seconds`, `1 วันเติบโตจริง ≈ ${formatGrowthNumber(secondsPerRealDay, 2)} วินาทีจำลอง`)}
           >
             {copy(language, 'Real-life growth', 'วันเติบโตจริง')}{' '}
             <strong className="block truncate text-cyan-200">
@@ -421,7 +421,7 @@ function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
       </div>
       <span className="flex w-full items-center justify-center gap-2 border-t border-lime-100/10 bg-[#9bcf82]/10 px-3 py-3 text-xs font-black text-lime-100 transition group-hover:bg-[#9bcf82]/18">
         <AppIcon className="h-4 w-4" name="eye" />
-        {isLive ? copy(language, 'Enter spectator mode', 'เข้าสู่โหมดผู้ชม') : copy(language, 'Open saved game state', 'เปิดสถานะเกมที่บันทึก')}
+        {isLive ? copy(language, 'Enter spectator mode', 'เข้าสู่โหมดผู้ชม') : copy(language, 'Open saved simulation state', 'เปิดสถานะการจำลองที่บันทึก')}
       </span>
     </button>
   )

@@ -14,7 +14,7 @@ function suitabilityCopy(value, language) {
   const copies = {
     excellent: { en: ['Excellent match', 'Weather is well suited to this plant.'], th: ['เหมาะมาก', 'สภาพอากาศเหมาะกับพืชชนิดนี้'] },
     manageable: { en: ['Growable with care', 'Watch water and seasonal warnings closely.'], th: ['ปลูกได้แต่ต้องดูแล', 'ควรติดตามน้ำและคำเตือนตามฤดูกาล'] },
-    high_risk: { en: ['High risk', 'Growth may pause, but the game warns before severe weather.'], th: ['เสี่ยงสูง', 'พืชอาจหยุดโต แต่ระบบจะเตือนก่อนอากาศรุนแรง'] },
+    high_risk: { en: ['High risk', 'Growth may pause, but the simulation warns before severe weather.'], th: ['เสี่ยงสูง', 'พืชอาจหยุดโต แต่ระบบจะเตือนก่อนอากาศรุนแรง'] },
   }
   return copies[value]?.[language] ?? copies.manageable[language]
 }

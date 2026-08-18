@@ -98,7 +98,7 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
               <dl className="mt-3 grid grid-cols-[106px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs leading-5">
                 <dt className="text-slate-500">{copy('Group / family', 'กลุ่ม / วงศ์')}</dt>
                 <dd className="truncate italic text-lime-50" title={knowledge.scientificName}>{knowledge.scientificName}</dd>
-                <dt className="text-slate-500">{copy('Game status', 'สถานะในเกม')}</dt>
+                <dt className="text-slate-500">{copy('Simulation status', 'สถานะในระบบจำลอง')}</dt>
                 <dd className="text-slate-200">{pest.active ? copy('Treatment recommended now', 'แนะนำให้กำจัดในตอนนี้') : copy('Monitor at the next update', 'ติดตามในการอัปเดตครั้งถัดไป')}</dd>
               </dl>
               <p className="mt-3 text-xs leading-5 text-slate-300">{knowledge.summary}</p>
@@ -131,7 +131,7 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
                 <strong className="block text-sm text-lime-50">{copy('Items that can remove this pest', 'ไอเทมที่ใช้กำจัดได้')}</strong>
                 <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">{copy('Select the item in Lab assets, then click the matching pest on the plant.', 'เลือกไอเทมจากคลัง แล้วกดศัตรูพืชชนิดที่ตรงกันบนต้น')}</span>
               </span>
-              <span className="rounded-md bg-violet-300/10 px-2 py-1 text-[10px] font-bold text-violet-200">{copy('Game values', 'ค่าภายในเกม')}</span>
+              <span className="rounded-md bg-violet-300/10 px-2 py-1 text-[10px] font-bold text-violet-200">{copy('Simulation values', 'ค่าภายในระบบจำลอง')}</span>
             </div>
             <div className={`mt-3 grid gap-2 ${knowledge.treatments.length > 1 ? 'sm:grid-cols-2' : ''}`}>
               {knowledge.treatments.map((treatment) => (

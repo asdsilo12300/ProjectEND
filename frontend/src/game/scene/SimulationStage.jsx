@@ -493,8 +493,8 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
         <span>
           {plantSelected
             ? isThai
-              ? `${formatScaleSeconds(secondsPerDay)} วินาทีในเกม = 1 วันเติบโตจริง`
-              : `${formatScaleSeconds(secondsPerDay)} game seconds = 1 real-life growth day`
+              ? `${formatScaleSeconds(secondsPerDay)} วินาทีจำลอง = 1 วันเติบโตจริง`
+              : `${formatScaleSeconds(secondsPerDay)} simulation seconds = 1 real-life growth day`
             : isThai ? 'อัตราเวลาจะแสดงหลังเลือกพืช' : 'Time scale appears after selecting a plant'}
         </span>
       </div>
@@ -593,7 +593,7 @@ function ControlledGrowthStatusPanel({
   )
 }
 
-export function SimulationStage({ actionState = null, awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onAdvanceCycle, onSceneReady, onSimulationSpeedChange, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, seasonalContext = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationSpeed = 1, simulationVisual, snapshotRef = null, timeControlsLocked = false, timeControlsReason = '', toggleLiveShare, weatherStatus = 'idle' }) {
+export function SimulationStage({ actionState = null, awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onAdvanceCycle, onSceneReady, onSimulationSpeedChange, operationBusy = false, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, seasonalContext = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationSpeed = 1, simulationVisual, snapshotRef = null, timeControlsLocked = false, timeControlsReason = '', toggleLiveShare, weatherStatus = 'idle' }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
@@ -858,9 +858,10 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
         </div>
         {!readOnly && plantSelected && <div className="lab-simulation-actions absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-lime-100/15 bg-[#101511]/90 p-1.5 shadow-[0_8px_18px_rgba(0,0,0,.32)]" data-tour="lab-actions" data-i18n-skip="true" aria-label={isThai ? 'คำสั่งการจำลอง' : 'Simulation actions'}>
           <button
-            className="box-border inline-flex min-h-12 items-center gap-2 rounded-full border border-lime-100/15 bg-white/[0.035] px-4 py-2 text-sm font-medium leading-5 text-slate-200 shadow-xs transition hover:bg-white/[0.075] hover:text-lime-50 focus:outline-none focus:ring-4 focus:ring-lime-100/10"
+            className="box-border inline-flex min-h-12 items-center gap-2 rounded-full border border-lime-100/15 bg-white/[0.035] px-4 py-2 text-sm font-medium leading-5 text-slate-200 shadow-xs transition enabled:hover:bg-white/[0.075] enabled:hover:text-lime-50 focus:outline-none focus:ring-4 focus:ring-lime-100/10 disabled:cursor-wait disabled:opacity-55"
             type="button"
             onClick={resetSimulation}
+            disabled={operationBusy}
           >
             <img className="h-8 w-8 shrink-0 rounded-full border border-lime-100/15 object-cover shadow-[0_2px_6px_rgba(0,0,0,.28)]" src={imageAssets.uproot} alt="" draggable="false" />
             {isThai ? 'ถอนต้น' : 'Uproot'}
@@ -869,7 +870,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
             className="box-border inline-flex min-h-12 items-center gap-2 rounded-full border border-transparent bg-[#9bcf82] px-4 py-2 text-sm font-medium leading-5 text-[#101511] shadow-xs transition enabled:hover:bg-[#addf96] focus:outline-none focus:ring-4 focus:ring-[#9bcf82]/25 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-slate-200 disabled:opacity-80"
             type="button"
             onClick={saveSimulation}
-            disabled={!isMature}
+            disabled={!isMature || operationBusy}
             aria-describedby={!isMature ? 'harvest-requirement' : undefined}
             title={!isMature
               ? isThai
@@ -884,14 +885,14 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
             className={`box-border inline-flex min-h-12 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold leading-5 shadow-xs transition focus:outline-none focus:ring-4 focus:ring-lime-100/10 ${shareVisibility === 'private' ? 'border-lime-100/15 bg-white/[0.035] text-slate-200 hover:bg-white/[0.075] hover:text-lime-50' : 'border-red-300/30 bg-red-300/10 text-red-100 hover:bg-red-300/15'}`}
             type="button"
             onClick={toggleLiveShare}
-            disabled={shareBusy}
+            disabled={shareBusy || operationBusy}
             aria-label={shareVisibility === 'private'
-              ? isThai ? 'เริ่มแชร์แบบสด' : 'Start live sharing'
-              : isThai ? 'หยุดแชร์แบบสด' : 'Stop live sharing'}
+              ? isThai ? 'เริ่มแชร์หน้าจำลองแบบสด' : 'Start sharing this simulation live'
+              : isThai ? 'หยุดแชร์หน้าจำลองแบบสด' : 'Stop sharing this live simulation'}
             aria-pressed={shareVisibility !== 'private'}
             title={shareVisibility === 'private'
-              ? isThai ? 'แชร์สวนนี้แบบสดในชุมชน' : 'Share this garden live in Community'
-              : isThai ? 'หยุดแชร์สวนแบบสดนี้' : 'Stop sharing this live garden'}
+              ? isThai ? 'แชร์หน้าจำลองนี้แบบสดใน Community' : 'Share this simulation live in Community'
+              : isThai ? 'หยุดแชร์หน้าจำลองแบบสดนี้' : 'Stop sharing this live simulation'}
           >
             <span className="relative grid h-6 w-6 place-items-center">
               <AppIcon className={`h-4 w-4 ${shareBusy ? 'animate-pulse' : ''}`} name="live" />
@@ -900,8 +901,8 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
             <span>{shareBusy
               ? isThai ? 'กำลังอัปเดต…' : 'Updating…'
               : shareVisibility === 'private'
-                ? isThai ? 'เริ่มแชร์สด' : 'Go live'
-                : isThai ? 'กำลังแชร์สด' : 'Live'}</span>
+                ? isThai ? 'แชร์หน้าจำลอง' : 'Share live'
+                : isThai ? 'แชร์อยู่' : 'Live simulation'}</span>
           </button>
           {!isMature && <span className="sr-only" id="harvest-requirement">{isThai ? 'สามารถเก็บเกี่ยวได้เมื่อพืชเติบโตถึง 100 เปอร์เซ็นต์' : 'Harvest is available when plant growth reaches 100 percent.'}</span>}
         </div>}

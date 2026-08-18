@@ -21,7 +21,7 @@ export function ToastStack({ onDismiss, toasts = [] }) {
   const labels = toastLabels[language]
 
   return (
-    <section className="game-toast-stack" aria-label={language === 'th' ? 'การแจ้งเตือนของเกม' : 'Game notifications'} aria-live="polite" aria-relevant="additions">
+    <section className="game-toast-stack" aria-label={language === 'th' ? 'การแจ้งเตือนของระบบจำลอง' : 'Simulation notifications'} aria-live="polite" aria-relevant="additions">
       {toasts.map((toast) => {
         const meta = toastMeta[toast.type] ?? toastMeta.info
 

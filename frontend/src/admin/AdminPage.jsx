@@ -200,7 +200,7 @@ const navigationGroups = [
     { id: 'contents', icon: 'bookmark', label: 'Learning content' },
     { id: 'users', icon: 'groups', label: 'Users & access' },
   ] },
-  { label: 'GAME DATA', items: [
+  { label: 'SIMULATION DATA', items: [
     { id: 'plants', icon: 'plant', label: 'Plants' },
     { id: 'pests', icon: 'pest', label: 'Pests & rules' },
     { id: 'store', icon: 'shop', label: 'Items & store' },
@@ -314,7 +314,7 @@ const resourceGroups = {
   community: [
     { id: 'posts', label: 'Posts', icon: 'chat', moderation: true, statusField: 'visibility', statusOptions: ['public', 'friends', 'private'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Caption', render: (row) => row.caption || 'No caption' }, { label: 'Engagement', render: (row) => `${row.comments_count} comments · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
     { id: 'comments', label: 'Post comments', icon: 'chat', moderation: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Thread', render: (row) => `${row.replies_count} replies · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
-    { id: 'simulator-comments', label: 'Game comments', icon: 'live', moderation: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   simulations: [
     { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${row.plant?.name_en || row.plant?.name_th || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
@@ -510,7 +510,7 @@ const userActivityMeta = {
   plant_saved: { label: 'Saved a plant result', filterLabel: 'Plant results saved', badge: 'Result', icon: 'plant', tone: 'simulation' },
   post_created: { label: 'Published a community post', filterLabel: 'Posts created', badge: 'Post', icon: 'chat', tone: 'community' },
   post_commented: { label: 'Commented on a post', filterLabel: 'Post comments', badge: 'Comment', icon: 'chat', tone: 'community' },
-  simulation_commented: { label: 'Commented on a shared simulation', filterLabel: 'Game comments', badge: 'Comment', icon: 'controller', tone: 'community' },
+  simulation_commented: { label: 'Commented on a shared simulation', filterLabel: 'Simulation comments', badge: 'Comment', icon: 'controller', tone: 'community' },
   post_liked: { label: 'Liked a community post', filterLabel: 'Post likes', badge: 'Like', icon: 'heart', tone: 'reaction' },
   comment_liked: { label: 'Liked a comment', filterLabel: 'Comment likes', badge: 'Like', icon: 'thumbUp', tone: 'reaction' },
   item_used: { label: 'Used an item in the lab', filterLabel: 'Items used', badge: 'Item', icon: 'tool', tone: 'inventory' },
@@ -806,7 +806,7 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
         <MetricCard icon="chat" label="Community posts" value={metrics.community_posts} detail="Shared learning activity" tone="violet" />
         <MetricCard icon="live" label="All comments" value={totalComments} detail={`${metrics.hidden_comments ?? 0} require moderation`} tone="coral" />
         <MetricCard icon="plant" label="Plants & pests" value={totalSpecies} detail={`${metrics.plants ?? 0} plants · ${metrics.pests ?? 0} pests`} tone="green" />
-        <MetricCard icon="shop" label="Game catalog" value={totalGameCatalog} detail={`${metrics.items ?? 0} items · ${metrics.quests ?? 0} quests`} tone="blue" />
+        <MetricCard icon="shop" label="Simulation catalog" value={totalGameCatalog} detail={`${metrics.items ?? 0} items · ${metrics.quests ?? 0} quests`} tone="blue" />
       </div>
 
       <div className="admin-dashboard-grid">
@@ -1835,7 +1835,7 @@ export function AdminPage({ user, onLogout }) {
     events: ['Events & situations', 'Configure natural indoor and outdoor events, warning time, effects, response actions, and recovery periods.'],
     progression: ['Quests & achievements', 'Configure player goals, rewards, and achievement milestones.'],
     models: ['3D model assets', 'Maintain reusable model files and structured asset metadata.'],
-    community: ['Community moderation', 'Review posts and moderate comments across community and game sessions.'],
+    community: ['Community moderation', 'Review posts and moderate comments across community and simulation sessions.'],
     simulations: ['Simulation records', 'Review simulation runs and harvested plant histories.'],
     activity: ['Administrator activity', 'Review an immutable audit trail of management actions.'],
   }[section]), [section])

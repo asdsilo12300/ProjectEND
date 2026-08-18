@@ -259,8 +259,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="global-notifications"]'],
         title: { en: 'The bell combines important alerts', th: 'กระดิ่งรวมแจ้งเตือนสำคัญ' },
         description: {
-          en: 'It combines garden, game, and Community updates. A red badge is unread; plant-danger alerts also show a red warning icon.',
-          th: 'รวมแจ้งเตือนสวน เกม และ Community ป้ายแดงคือรายการที่ยังไม่อ่าน ส่วนอันตรายต่อพืชจะมีไอคอนเตือนสีแดง',
+          en: 'It combines garden, simulation, and Community updates. A red badge is unread; plant-danger alerts also show a red warning icon.',
+          th: 'รวมแจ้งเตือนสวน ระบบจำลอง และ Community ป้ายแดงคือรายการที่ยังไม่อ่าน ส่วนอันตรายต่อพืชจะมีไอคอนเตือนสีแดง',
         },
       },
       {
@@ -268,8 +268,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="global-coins"]'],
         title: { en: 'Track your coin balance', th: 'ติดตามจำนวนเหรียญ' },
         description: {
-          en: 'Coins are earned from game progress and spent in Shop. A small animation confirms rewards and purchase deductions.',
-          th: 'ได้รับเหรียญจากความก้าวหน้าในเกมและใช้ซื้อของใน Shop โดยมีแอนิเมชันแจ้งเมื่อได้รับหรือถูกหัก',
+          en: 'Coins are earned from simulation progress and spent in Shop. A small animation confirms rewards and purchase deductions.',
+          th: 'ได้รับเหรียญจากความก้าวหน้าของระบบจำลองและใช้ซื้อของใน Shop โดยมีแอนิเมชันแจ้งเมื่อได้รับหรือถูกหัก',
         },
       },
       {
@@ -346,8 +346,8 @@ export const tutorialCatalog = {
     label: { en: 'Saved experiments', th: 'ประวัติการทดลอง' },
     eyebrow: { en: 'Evidence and reflection', th: 'หลักฐานและการทบทวนผล' },
     summary: {
-      en: 'Search completed experiments, inspect calculations, replay saved game states, and control Community sharing.',
-      th: 'ค้นหาผลการปลูก ตรวจการคำนวณ เปิดสถานะเกมที่บันทึก และควบคุมการแชร์ไป Community',
+      en: 'Search completed experiments, inspect calculations, replay saved simulation states, and control Community sharing.',
+      th: 'ค้นหาผลการปลูก ตรวจการคำนวณ เปิดสถานะการจำลองที่บันทึก และควบคุมการแชร์ไป Community',
     },
     steps: [
       {
@@ -403,8 +403,8 @@ export const tutorialCatalog = {
     label: { en: 'Community', th: 'ชุมชน' },
     eyebrow: { en: 'Share and interact', th: 'แบ่งปันและมีส่วนร่วม' },
     summary: {
-      en: 'Browse shared results, react and discuss, open saved games, find people, manage your profile, and review social notifications.',
-      th: 'ดูผลที่แชร์ กดใจและสนทนา เปิดเกมที่บันทึก ค้นหาผู้ใช้ จัดการโปรไฟล์ และตรวจแจ้งเตือนของชุมชน',
+      en: 'Browse shared results, react and discuss, open saved simulations, find people, manage your profile, and review social notifications.',
+      th: 'ดูผลที่แชร์ กดใจและสนทนา เปิดผลจำลองที่บันทึก ค้นหาผู้ใช้ จัดการโปรไฟล์ และตรวจแจ้งเตือนของชุมชน',
     },
     steps: [
       {
@@ -437,10 +437,10 @@ export const tutorialCatalog = {
       {
         icon: 'eye',
         targets: ['[data-tour="community-feed"]'],
-        title: { en: 'Open the shared game state', th: 'เปิดดูสถานะเกมที่แชร์' },
+        title: { en: 'Open the shared simulation state', th: 'เปิดดูสถานะการจำลองที่แชร์' },
         description: {
-          en: 'Open saved game state enters a view-only 3D replay. Back returns to Community at the same feed position.',
-          th: 'Open saved game state จะเปิดฉาก 3D แบบดูอย่างเดียว และปุ่ม Back จะกลับ Community ที่ตำแหน่ง Feed เดิม',
+          en: 'Open saved simulation state enters a view-only 3D replay. Back returns to Community at the same feed position.',
+          th: 'การเปิดสถานะการจำลองที่บันทึกจะเข้าสู่ฉาก 3D แบบดูอย่างเดียว และปุ่มย้อนกลับจะพากลับ Community ที่ตำแหน่ง Feed เดิม',
         },
       },
       {

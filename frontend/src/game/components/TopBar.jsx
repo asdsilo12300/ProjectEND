@@ -351,7 +351,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 <header className="flex items-center justify-between border-b border-lime-100/10 px-4 py-3">
                   <span>
                     <strong className="block text-sm text-lime-50">{topBarCopy(language, 'Notifications', 'การแจ้งเตือน')}</strong>
-                    <small className="mt-0.5 block text-xs text-slate-400">{topBarCopy(language, 'Community, garden, and game updates', 'อัปเดตจากชุมชน สวน และเกม')}</small>
+                    <small className="mt-0.5 block text-xs text-slate-400">{topBarCopy(language, 'Community, garden, and simulation updates', 'อัปเดตจากชุมชน สวน และระบบจำลอง')}</small>
                   </span>
                   {unreadNotificationCount > 0 ? <span className="rounded-full bg-red-500/15 px-2 py-1 text-xs font-black text-red-300">{notificationBadge} {topBarCopy(language, 'new', 'ใหม่')}</span> : null}
                 </header>

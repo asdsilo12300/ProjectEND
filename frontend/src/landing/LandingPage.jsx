@@ -240,13 +240,13 @@ function ProductTour() {
           <div className="product-tour-player__screen">
             {tourSteps.map((step, index) => (
               <div className={`product-tour-frame product-tour-frame--${step.focus} ${activeStep === index ? 'is-active' : ''}`} key={step.title} aria-hidden={activeStep !== index}>
-                <img src="/media/plant-lab-tour.png" alt="Plant Growth Academy game interface" />
+                <img src="/media/plant-lab-tour.png" alt="Plant Growth Academy simulation interface" />
                 <div className="product-tour-frame__shade" />
               </div>
             ))}
             <div className="product-tour-player__chrome">
               <span><i /> Plant Growth Academy</span>
-              <strong>GAME PREVIEW</strong>
+              <strong>SIMULATION PREVIEW</strong>
             </div>
             <div className="product-tour-player__caption">
               <span>0{activeStep + 1}</span>
@@ -255,12 +255,12 @@ function ProductTour() {
                 <p>{tourSteps[activeStep].description}</p>
               </div>
             </div>
-            <button className="product-tour-player__control" type="button" onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause game preview' : 'Play game preview'}>
+            <button className="product-tour-player__control" type="button" onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause simulation preview' : 'Play simulation preview'}>
               <span className={playing ? 'is-pause' : 'is-play'} aria-hidden="true" />
             </button>
           </div>
 
-          <div className="product-tour-timeline" role="tablist" aria-label="Game preview steps">
+          <div className="product-tour-timeline" role="tablist" aria-label="Simulation preview steps">
             {tourSteps.map((step, index) => (
               <button className={activeStep === index ? 'is-active' : ''} type="button" role="tab" aria-selected={activeStep === index} onClick={() => selectStep(index)} key={step.title}>
                 <span className="product-tour-timeline__number">0{index + 1}</span>
@@ -375,7 +375,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
               </button>
               <button className="landing-button landing-button--secondary" type="button" onClick={() => document.querySelector('.landing-product-tour')?.scrollIntoView({ behavior: 'smooth' })}>
                 <AppIcon name="live" />
-                Watch game preview
+                Watch simulation preview
               </button>
             </div>
             <div className="landing-hero__proof">
@@ -385,7 +385,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
             </div>
           </div>
 
-          <div className="landing-hero-product" aria-label="Plant Lab game preview">
+          <div className="landing-hero-product" aria-label="Plant Lab simulation preview">
             <div className="landing-hero-product__topbar">
               <span><i /><i /><i /></span>
               <strong>PLANT LAB / LIVE SIMULATION</strong>
@@ -407,7 +407,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
       <div className="landing-home-content particle-network-surface">
         <ParticleNetworkBackground variant="green" />
 
-        <section className="landing-game-summary" aria-label="Game highlights">
+        <section className="landing-game-summary" aria-label="Simulation highlights">
           <div className="landing-container landing-game-summary__grid">
             <div><strong>3D</strong><span>living plant simulation</span></div>
             <div><strong>6</strong><span>connected growth factors</span></div>
@@ -419,7 +419,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
       <section className="landing-section landing-game-intro" id="about">
         <div className="landing-container">
           <div className="landing-game-intro__copy" data-reveal="up">
-            <h2>A science learning game built around meaningful choices.</h2>
+            <h2>A science learning simulation built around meaningful choices.</h2>
             <p>Instead of memorizing plant facts, you investigate them. Every adjustment changes the simulation, giving you clear feedback to observe, question, and understand.</p>
           </div>
           <div className="landing-game-intro__pillars">

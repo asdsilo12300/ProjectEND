@@ -545,7 +545,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimat
         </div>
         <span className="shrink-0 whitespace-nowrap rounded bg-[#9bcf82]/12 px-2 py-1 text-xs font-bold leading-none text-lime-100">{pace.label}</span>
       </div>
-      <svg className="h-28 w-full" viewBox="0 0 300 120" role="img" aria-label="Calculated game time compared with real-life plant growth">
+      <svg className="h-28 w-full" viewBox="0 0 300 120" role="img" aria-label="Calculated simulation time compared with real-life plant growth">
         <defs>
           <linearGradient id="growthTimelineFill" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="#9bcf82" stopOpacity="0.3" />
@@ -581,7 +581,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimat
         {elapsedWindow > 0 && <text x={plot.left} y="108" textAnchor="start" className="fill-slate-500 text-[8px]">-{formatGameTime(elapsedWindow)}</text>}
         {middleElapsed > 0 && <text x={(plot.left + plot.right) / 2} y="108" textAnchor="middle" className="fill-slate-600 text-[8px]">-{formatGameTime(middleElapsed)}</text>}
         <text x={plot.right} y="108" textAnchor="end" className="fill-slate-400 text-[8px]">Now</text>
-        <text x={plot.left} y="118" className="fill-slate-600 text-[7px]">game time →</text>
+        <text x={plot.left} y="118" className="fill-slate-600 text-[7px]">simulation time →</text>
       </svg>
       <RealGrowthScale estimate={estimate} pace={pace} referenceUrl={referenceUrl} />
     </div>
@@ -603,10 +603,10 @@ function RealGrowthScale({ estimate, pace, referenceUrl }) {
     ? `1 day ≈ ${formatScaleSeconds(scaleSeconds)}s now`
     : `1 day ≈ ${formatScaleSeconds(scaleSeconds)}s normal`
   const tooltip = estimate.currentSecondsPerRealDay
-    ? `${estimate.cycleSeconds}s per update ÷ ${formatRealDays(estimate.equivalentDaysPerCycle)} biological days = ${formatScaleSeconds(scaleSeconds)} game seconds per real-life growth day.`
+    ? `${estimate.cycleSeconds}s per update ÷ ${formatRealDays(estimate.equivalentDaysPerCycle)} biological days = ${formatScaleSeconds(scaleSeconds)} simulation seconds per real-life growth day.`
     : isPaused
-      ? `Growth is paused under the current conditions. At normal pace, one real-life growth day equals about ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} game seconds.`
-      : `At normal pace, one real-life growth day equals about ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} game seconds.`
+      ? `Growth is paused under the current conditions. At normal pace, one real-life growth day equals about ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} simulation seconds.`
+      : `At normal pace, one real-life growth day equals about ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} simulation seconds.`
 
   return (
     <div className="mt-1 flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 border-t border-lime-100/10 pt-2 text-[10px]" aria-label="Real-life growth scale" title={tooltip}>

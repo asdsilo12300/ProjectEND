@@ -9,6 +9,7 @@ import { LibrarySidebar } from './game/components/LibrarySidebar'
 import { CircularLoader } from './game/components/LoadingSkeleton'
 import { PlantKnowledgeModal } from './game/components/PlantKnowledgeModal'
 import { ToastStack } from './game/components/ToastStack'
+import { SimulationOperationLoading } from './game/components/SimulationOperationLoading'
 import { CriticalAlertCenter } from './game/components/CriticalAlertCenter'
 import { ActionConfirmDialog } from './game/components/ActionConfirmDialog'
 import { LocationTransferModal } from './game/components/LocationTransferModal'
@@ -713,6 +714,7 @@ function App() {
   const [inventoryStatus, setInventoryStatus] = useState('loading')
   const [plantCatalogStatus, setPlantCatalogStatus] = useState('loading')
   const [shareBusy, setShareBusy] = useState(false)
+  const [simulationOperation, setSimulationOperation] = useState(null)
   const [notifications, setNotifications] = useState([])
   const [notificationStatus, setNotificationStatus] = useState('idle')
   const [notificationError, setNotificationError] = useState('')
@@ -2582,10 +2584,14 @@ function App() {
 
     if (resetPending) {
       isEndingSimulationRef.current = true
+      setSimulationOperation({ type: 'uproot', step: 0 })
       try {
+        await wait(0)
+        setSimulationOperation({ type: 'uproot', step: 1 })
         if (simulatorId && getToken()) {
           await enqueueSimulationMutation(() => uprootSimulator(simulatorId))
         }
+        setSimulationOperation({ type: 'uproot', step: 2 })
       } finally {
         window.localStorage.removeItem('plant_game_simulator_id')
         if (simulatorId) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulatorId}`)
@@ -2605,6 +2611,7 @@ function App() {
         setCycleStatus('idle')
         setNextSimulationTickAt(null)
         isEndingSimulationRef.current = false
+        setSimulationOperation(null)
         setActionMessage('Reset saved. Choose a new growing mode.')
       }
       return
@@ -2639,8 +2646,11 @@ function App() {
     if (!harvestConfirmation.isConfirmed) return
 
     isEndingSimulationRef.current = true
+    setSimulationOperation({ type: 'harvest', step: 0 })
     try {
+      await wait(0)
       const snapshotImageData = stageSnapshotRef.current?.capture?.() ?? null
+      setSimulationOperation({ type: 'harvest', step: 1 })
       const simulator = await persistCurrentSimulation({ silent: false, allowEnding: true })
       const nextVisual = simulator ?? previewSimulationVisual
       const historySimulatorId = simulator?.id ?? simulatorId
@@ -2657,6 +2667,7 @@ function App() {
       )
 
       if (historySimulatorId && getToken() && selectedPlant) {
+        setSimulationOperation({ type: 'harvest', step: 2 })
         const historyVisibility = nextVisual?.share_visibility && nextVisual.share_visibility !== 'private'
           ? nextVisual.share_visibility
           : 'private'
@@ -2682,9 +2693,11 @@ function App() {
         setResetPending(false)
         setSaveReadyForNewPlant(true)
         setSaveCompleteHistory(history)
+        setSimulationOperation({ type: 'harvest', step: 3 })
         setActionMessage('Saved to history')
       } else {
         isEndingSimulationRef.current = false
+        setSimulationOperation({ type: 'harvest', step: 3 })
         setActionMessage('Saved locally')
       }
 
@@ -2692,6 +2705,8 @@ function App() {
     } catch (error) {
       isEndingSimulationRef.current = false
       setActionMessage(error.message || 'Unable to save history')
+    } finally {
+      setSimulationOperation(null)
     }
   }
 
@@ -2704,20 +2719,20 @@ function App() {
     const isStartingShare = visibility === 'public'
     const shareConfirmation = await Swal.fire({
       title: localizedText(
-        isStartingShare ? 'Share this garden live?' : 'Stop live sharing?',
-        isStartingShare ? 'แชร์สวนนี้แบบสดหรือไม่?' : 'หยุดแชร์สวนแบบสดหรือไม่?',
+        isStartingShare ? 'Share this simulation live?' : 'Stop sharing this simulation?',
+        isStartingShare ? 'แชร์หน้าจำลองนี้แบบสดหรือไม่?' : 'หยุดแชร์หน้าจำลองนี้หรือไม่?',
       ),
       text: localizedText(
         isStartingShare
-          ? 'People in Community will be able to open and view the current garden state.'
-          : 'This live garden will no longer be visible in Community.',
+          ? 'People in Community will be able to open and view the current simulation state.'
+          : 'This live simulation will no longer be visible in Community.',
         isStartingShare
-          ? 'ผู้ใช้ในชุมชนจะสามารถเปิดดูสถานะปัจจุบันของสวนนี้ได้'
-          : 'สวนแบบสดนี้จะไม่แสดงในชุมชนอีกต่อไป',
+          ? 'ผู้ใช้ใน Community จะสามารถเปิดดูสถานะปัจจุบันของหน้าจำลองนี้ได้'
+          : 'หน้าจำลองแบบสดนี้จะไม่แสดงใน Community อีกต่อไป',
       ),
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: localizedText(isStartingShare ? 'Share garden' : 'Stop sharing', isStartingShare ? 'แชร์สวน' : 'หยุดแชร์'),
+      confirmButtonText: localizedText(isStartingShare ? 'Share simulation' : 'Stop sharing', isStartingShare ? 'แชร์หน้าจำลอง' : 'หยุดแชร์'),
       cancelButtonText: localizedText('Cancel', 'ยกเลิก'),
       focusCancel: true,
       reverseButtons: true,
@@ -2735,11 +2750,14 @@ function App() {
     if (!shareConfirmation.isConfirmed) return
 
     setShareBusy(true)
+    setSimulationOperation({ type: isStartingShare ? 'share' : 'unshare', step: 0 })
     mergeCanonicalSimulator({ ...canonicalSimulationRef.current, share_visibility: visibility })
 
     try {
+      await wait(0)
       const accountSession = accountSessionRef.current
       const snapshotImageData = visibility === 'private' ? null : stageSnapshotRef.current?.capture?.() ?? null
+      setSimulationOperation({ type: isStartingShare ? 'share' : 'unshare', step: 1 })
       const payload = await enqueueSimulationMutation(() => {
         if (
           accountSession !== accountSessionRef.current
@@ -2762,7 +2780,8 @@ function App() {
       }
 
       mergeCanonicalSimulator(simulator, { preservePestRisks: true })
-      setActionMessage(visibility === 'private' ? 'Live sharing stopped' : 'Your live garden is now visible in Community')
+      setSimulationOperation({ type: isStartingShare ? 'share' : 'unshare', step: 2 })
+      setActionMessage(visibility === 'private' ? 'Live simulation sharing stopped' : 'Your live simulation is now visible in Community')
     } catch (error) {
       if (autosaveStateRef.current.visitingFriend && ownGardenSnapshotRef.current) {
         ownGardenSnapshotRef.current.simulationVisual = {
@@ -2775,6 +2794,7 @@ function App() {
       setActionMessage(error.message || 'Unable to change live sharing')
     } finally {
       setShareBusy(false)
+      setSimulationOperation(null)
     }
   }
 
@@ -2847,12 +2867,15 @@ function App() {
     const sessionToken = getToken()
 
     isResettingRef.current = true
+    setSimulationOperation({ type: 'uproot', step: 0 })
     window.localStorage.setItem(resetMarkerKey, String(simulatorId ?? ''))
     window.localStorage.removeItem('plant_game_simulator_id')
     setResetPending(false)
     setActionMessage('Resetting simulation...')
 
     try {
+      await wait(0)
+      setSimulationOperation({ type: 'uproot', step: 1 })
       if (simulatorId) {
         if (!sessionToken) throw new Error('Your session has expired. Please sign in again.')
 
@@ -2864,6 +2887,7 @@ function App() {
         if (!payload || accountSession !== accountSessionRef.current || getToken() !== sessionToken) return
       }
 
+      setSimulationOperation({ type: 'uproot', step: 2 })
       window.localStorage.removeItem(resetMarkerKey)
       latestSaveLoadedRef.current = true
       if (simulatorId) window.localStorage.removeItem(`${simulationTickMarkerPrefix}${simulatorId}`)
@@ -2904,6 +2928,7 @@ function App() {
       }
     } finally {
       isResettingRef.current = false
+      setSimulationOperation(null)
     }
   }
 
@@ -2955,6 +2980,7 @@ function App() {
     setCoinBurst(null)
     setExpBurst(null)
     setShareBusy(false)
+    setSimulationOperation(null)
     setActionMessage('')
   }
 
@@ -3110,7 +3136,7 @@ function App() {
 
   async function viewCommunityGame(post, source = 'community') {
     if (demoMode) {
-      setActionMessage('Game-state viewing is disabled in this page preview.')
+      setActionMessage('Simulation-state viewing is disabled in this page preview.')
       return
     }
 
@@ -3119,7 +3145,7 @@ function App() {
     const owner = post?.user ?? null
 
     if (!liveSimulator?.id && !savedSimulator) {
-      setActionMessage('This game state is not available.')
+      setActionMessage('This simulation state is not available.')
       return
     }
 
@@ -3205,7 +3231,7 @@ function App() {
         outdoorWeather: spectatorWeather,
         persistLocalId: false,
       })
-      setActionMessage('Viewing a saved game state')
+      setActionMessage('Viewing a saved simulation state')
       return
     }
 
@@ -3214,7 +3240,7 @@ function App() {
   function viewSavedGameState(save) {
     const simulator = save?.game_state?.simulator
     if (!simulator) {
-      setActionMessage('This older save does not contain a game state.')
+      setActionMessage('This older save does not contain a simulation state.')
       return
     }
 
@@ -3598,6 +3624,7 @@ function App() {
       <div className="soft-grid absolute inset-0 opacity-55" />
 
       <TopBar activePage={activePage} coinBalance={user?.coin ?? 0} coinDelta={coinDelta} communityUnreadNotificationCount={communityUnreadNotificationCount} demoMode={demoMode} notificationError={notificationError} notifications={notifications} notificationStatus={notificationStatus} onDemoExit={() => exitDemoSession('home')} onDemoSignIn={() => exitDemoSession('auth')} onHelpOpen={() => setHelpCenterOpen(true)} onNavigate={navigateToPage} onNotificationRead={readNotification} onNotificationsRefresh={refreshNotifications} openWindow={openWindow} profileOpen={profileOpen} setProfileOpen={setProfileOpen} unreadNotificationCount={allUnreadNotificationCount} user={user} onAuthRequired={openAuth} onLogout={demoMode ? () => exitDemoSession('home') : logoutUser} />
+      <SimulationOperationLoading language={getAppLanguage()} operation={simulationOperation} />
       <ToastStack onDismiss={dismissActionToast} toasts={actionToasts} />
       <CriticalAlertCenter alert={criticalAlert} onClose={() => setCriticalAlert(null)} />
       <ActionConfirmDialog
@@ -3719,6 +3746,7 @@ function App() {
                 selectedItemCursorUrl={selectedItemCursorUrl}
                 onUseSelectedItem={applySelectedItem}
                 readOnly={Boolean(visitingFriend)}
+                operationBusy={Boolean(simulationOperation)}
                 shareBusy={shareBusy}
                 shareVisibility={previewSimulationVisual?.share_visibility ?? 'private'}
                 toggleLiveShare={toggleLiveShare}
@@ -3733,7 +3761,7 @@ function App() {
               {visitingFriend && (
                 <div className={`absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)] ${['outdoor', 'seasonal'].includes(growingMode) ? 'top-[216px]' : 'top-20'}`} data-tour="friend-mode-banner">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
-                  <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved game state' : `${visitorName}'s garden`}</strong> - view only</span>
+                  <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved simulation state' : `${visitorName}'s garden`}</strong> - view only</span>
                   <button
                     className="rounded-md border border-lime-100/15 bg-white/[0.055] px-2 py-1 font-semibold text-lime-100 transition hover:bg-white/[0.09] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                     type="button"

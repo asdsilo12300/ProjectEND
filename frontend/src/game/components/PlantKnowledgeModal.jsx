@@ -169,7 +169,7 @@ export function PlantKnowledgeModal({ onClose, plantAsset }) {
                 <strong className="block text-sm text-lime-50">{copy('Simulation target ranges', 'ช่วงค่าปัจจัยเป้าหมาย')}</strong>
                 <span className="mt-0.5 block text-xs leading-4 text-slate-400">{copy('Keep these controls within range for healthy growth.', 'รักษาค่าควบคุมให้อยู่ในช่วงนี้เพื่อให้พืชเติบโตอย่างแข็งแรง')}</span>
               </span>
-              <span className="shrink-0 rounded-md bg-sky-300/10 px-2 py-1 text-xs font-bold text-sky-200">{copy('Game values', 'ค่าภายในเกม')}</span>
+              <span className="shrink-0 rounded-md bg-sky-300/10 px-2 py-1 text-xs font-bold text-sky-200">{copy('Simulation values', 'ค่าภายในระบบจำลอง')}</span>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {factorDefinitions.map((definition) => (
