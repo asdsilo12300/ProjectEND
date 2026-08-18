@@ -9,13 +9,11 @@ use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\ContentController;
-use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\FriendController;
 use App\Http\Controllers\Api\GameProgressController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\ModelAssetController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PlantController;
 use App\Http\Controllers\Api\PlantHistoryController;
 use App\Http\Controllers\Api\PlantModelController;
@@ -33,11 +31,6 @@ use Illuminate\Support\Facades\Route;
 Route::options('/{any}', fn () => response()->noContent())->where('any', '.*');
 
 Route::prefix('auth')->group(function (): void {
-    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:3,1');
-    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-    Route::post('/email/verify-code', [EmailVerificationController::class, 'verifyCode'])->middleware('throttle:10,10');
-    Route::post('/email/verify-link', [EmailVerificationController::class, 'verifyLink'])->middleware('throttle:10,10');
-    Route::post('/email/resend', [EmailVerificationController::class, 'resend'])->middleware('throttle:3,10');
     Route::get('/google/redirect', [GoogleAuthController::class, 'redirect'])->middleware('throttle:20,1');
     Route::get('/google/callback', [GoogleAuthController::class, 'callback'])->middleware('throttle:30,1');
 });
@@ -58,9 +51,6 @@ Route::middleware('jwt')->group(function (): void {
     Route::patch('/me', [AuthController::class, 'updateProfile']);
     Route::post('/me/profile', [AuthController::class, 'updateProfile']);
     Route::patch('/me/onboarding', [AuthController::class, 'updateOnboarding']);
-    Route::post('/auth/password-reset/request', [PasswordResetController::class, 'requestOtp'])->middleware('throttle:3,10');
-    Route::post('/auth/password-reset/verify', [PasswordResetController::class, 'verifyOtp'])->middleware('throttle:10,10');
-    Route::post('/auth/password-reset/complete', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:5,10');
     Route::get('/friends', [FriendController::class, 'index']);
     Route::get('/users/search', [FriendController::class, 'search']);
     Route::post('/friends/invite', [FriendController::class, 'invite']);

@@ -1,0 +1,100 @@
+services:
+  - type: web
+    name: plantgrow-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /up
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: APP_NAME
+        value: Plant Growth Academy
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: ASSET_URL
+        sync: false
+      - key: FRONTEND_URL
+        value: https://project-end-teal.vercel.app
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://project-end-teal.vercel.app
+      - key: APP_LOCALE
+        value: en
+      - key: APP_FALLBACK_LOCALE
+        value: en
+      - key: BCRYPT_ROUNDS
+        value: "12"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_TTL_DAYS
+        value: "7"
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        value: postgres
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SEARCH_PATH
+        value: public
+      - key: DB_SSLMODE
+        value: require
+      - key: DB_PERSISTENT
+        value: "false"
+      - key: SESSION_DRIVER
+        value: database
+      - key: SESSION_ENCRYPT
+        value: "true"
+      - key: CACHE_STORE
+        value: database
+      - key: CACHE_PREFIX
+        value: plant_growth_academy
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: MEDIA_DRIVER
+        value: supabase
+      - key: MEDIA_DISK
+        value: public
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: plant-media
+      - key: SUPABASE_STORAGE_TIMEOUT
+        value: "30"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_OAUTH_TIMEOUT
+        value: "10"
+      - key: MAIL_MAILER
+        value: log
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: EXTERNAL_HTTP_VERIFY_SSL
+        value: "true"
+      - key: NOMINATIM_BASE_URL
+        value: https://nominatim.openstreetmap.org
+      - key: NOMINATIM_USER_AGENT
+        sync: false

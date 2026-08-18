@@ -15,7 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Railway terminates HTTPS at its proxy; trust its forwarded scheme/host.
+        // Render and other managed hosts terminate HTTPS at their proxies.
         $middleware->trustProxies(at: '*');
         $middleware->alias([
             'jwt' => JwtAuthenticate::class,

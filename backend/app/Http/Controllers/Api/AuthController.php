@@ -4,103 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Services\EmailVerificationService;
-use App\Services\JwtService;
 use App\Services\MediaStorage;
-use App\Services\StarterInventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
     public function __construct(
-        private readonly JwtService $jwt,
-        private readonly EmailVerificationService $emailVerification,
         private readonly MediaStorage $media,
-        private readonly StarterInventoryService $starterInventory,
     ) {}
-
-    public function register(Request $request): JsonResponse
-    {
-        $this->normalizeEmailInput($request);
-
-        $data = $request->validate([
-            'username' => ['required', 'string', 'max:80', 'unique:users,username'],
-            'email' => ['required', 'email', 'max:191', $this->uniqueEmailIgnoringCase()],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'password_confirmation' => ['required', 'string'],
-        ]);
-
-        $user = DB::transaction(function () use ($data): User {
-            $user = User::query()->create([
-                'username' => $data['username'],
-                'email' => $data['email'],
-                'password' => Hash::make($data['password']),
-                'role' => 'member',
-                'status' => 'active',
-            ]);
-
-            $this->starterInventory->grant($user);
-
-            return $user;
-        });
-
-        $delivery = $this->emailVerification->send($user, $request->ip());
-
-        return response()->json([
-            'message' => $delivery['delivered']
-                ? 'Account created. Check your email to verify your account.'
-                : 'Account created, but the verification email could not be sent. Use resend to try again.',
-            'requires_email_verification' => true,
-            'email' => $user->email,
-            'email_hint' => $this->emailVerification->maskEmail($user->email),
-            'delivery_status' => $delivery['delivered'] ? 'sent' : 'failed',
-            'expires_in' => $delivery['expires_in'],
-            'resend_available_in' => $delivery['delivered'] ? $delivery['resend_available_in'] : 0,
-            'configuration_error' => config('app.debug') ? $delivery['configuration_error'] : null,
-        ], 201);
-    }
-
-    public function login(Request $request): JsonResponse
-    {
-        $this->normalizeEmailInput($request);
-
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-        ]);
-
-        $user = User::query()
-            ->whereRaw('LOWER(email) = ?', [$data['email']])
-            ->first();
-
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
-        }
-
-        if (! $user->email_verified_at) {
-            return response()->json([
-                'message' => 'Verify your email before signing in.',
-                'code' => 'EMAIL_NOT_VERIFIED',
-                'requires_email_verification' => true,
-                'email' => $user->email,
-                'email_hint' => $this->emailVerification->maskEmail($user->email),
-            ], 403);
-        }
-
-        $user->forceFill(['last_login_at' => now()])->save();
-
-        return response()->json([
-            'token' => $this->jwt->issue($user),
-            'user' => $this->userPayload($user),
-        ]);
-    }
 
     public function me(Request $request): JsonResponse
     {
@@ -167,24 +80,6 @@ class AuthController extends Controller
                 'onboarding_progress' => $progress,
             ],
         ]);
-    }
-
-    private function normalizeEmailInput(Request $request): void
-    {
-        $email = $request->input('email');
-
-        if (is_string($email)) {
-            $request->merge(['email' => mb_strtolower(trim($email))]);
-        }
-    }
-
-    private function uniqueEmailIgnoringCase(): \Closure
-    {
-        return function (string $attribute, mixed $value, \Closure $fail): void {
-            if (User::query()->whereRaw('LOWER(email) = ?', [(string) $value])->exists()) {
-                $fail('The email has already been taken.');
-            }
-        };
     }
 
     private function userPayload(User $user): array

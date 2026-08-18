@@ -34,7 +34,7 @@ php artisan migrate --force
 
 ## Laravel configuration
 
-Use `.env.supabase.example` or `.env.railway.example` as the template. Keep all real credentials in local `.env` files or deployment secrets. For deployed model and media uploads, configure a public Supabase Storage bucket and set `MEDIA_DRIVER=supabase`.
+Use `.env.supabase.example` locally or `.env.render.example` for deployment. Keep all real credentials in local `.env` files or Render secrets. For deployed model and media uploads, configure a public Supabase Storage bucket and set `MEDIA_DRIVER=supabase`.
 
 ## Security note
 

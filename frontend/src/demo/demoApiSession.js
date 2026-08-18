@@ -532,20 +532,6 @@ export async function handleDemoApiRequest(path, options = {}) {
     session.user.onboarding_progress = { ...(session.user.onboarding_progress ?? {}), [body.page]: { version: body.version, state: body.state } }
     return { handled: true, payload: { data: clone(session.user) } }
   }
-  if (cleanPath === '/auth/password-reset/request') {
-    return { handled: true, payload: { message: 'A preview verification code was created. Use 123456 in this demo.' } }
-  }
-  if (cleanPath === '/auth/password-reset/verify') {
-    if (String(body.otp ?? '') !== '123456') {
-      const error = new Error('For this preview, enter the code 123456.')
-      error.status = 422
-      throw error
-    }
-    return { handled: true, payload: { reset_token: 'demo-reset-token' } }
-  }
-  if (cleanPath === '/auth/password-reset/complete') {
-    return { handled: true, payload: { message: 'Password updated for this preview session only.' } }
-  }
   if (cleanPath === '/inventory') return { handled: true, payload: { data: clone(session.inventory) } }
   if (cleanPath === '/notifications') return { handled: true, payload: { data: clone(session.notifications) } }
   if (/^\/notifications\/[^/]+\/read$/.test(cleanPath)) {

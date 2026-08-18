@@ -20,11 +20,10 @@ import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
 import { OnboardingExperience } from './game/onboarding/OnboardingExperience'
 import { useSimulationAction } from './game/actions/useSimulationAction'
 import { LoginPage } from './auth/LoginPage'
-import { EmailVerificationPage } from './auth/EmailVerificationPage'
 import { DemoSafetyBar } from './demo/DemoSafetyBar'
 import { isDemoApiSessionActive, seedDemoSimulator, startDemoApiSession, stopDemoApiSession } from './demo/demoApiSession'
 import { LandingPage } from './landing/LandingPage'
-import { applySimulationAction, clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, savePlantHistory, resolveAssetUrl, uprootSimulator, updateSimulatorLocation } from './lib/api'
+import { applySimulationAction, clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, loginWithGoogle, markNotificationRead, prankFriendSimulator, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, savePlantHistory, resolveAssetUrl, uprootSimulator, updateSimulatorLocation } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation, getOutdoorReadings } from './game/utils/outdoorWeather'
 import { seasonalWeatherStateFromSimulator } from './game/utils/seasonalWeather'
@@ -36,7 +35,6 @@ import { getAppLanguage, translateAppMessage, translateAppText } from './i18n/ap
 const AdminPage = lazy(() => import('./admin/AdminPage').then((module) => ({ default: module.AdminPage })))
 const CommunityPage = lazy(() => import('./game/community/CommunityPage').then((module) => ({ default: module.CommunityPage })))
 const HistoryPage = lazy(() => import('./game/history/HistoryPage').then((module) => ({ default: module.HistoryPage })))
-const PasswordResetPage = lazy(() => import('./game/settings/PasswordResetPage').then((module) => ({ default: module.PasswordResetPage })))
 const SettingsPage = lazy(() => import('./game/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const ShopPage = lazy(() => import('./game/shop/ShopPage').then((module) => ({ default: module.ShopPage })))
 const SimulationStage = lazy(() => import('./game/scene/SimulationStage').then((module) => ({ default: module.SimulationStage })))
@@ -639,22 +637,6 @@ function GamePageLoading({ label = 'Loading academy workspace' }) {
   )
 }
 
-function initialEmailVerificationState() {
-  const params = new URLSearchParams(window.location.search)
-  const linkToken = params.get('verify_email_token')?.trim() ?? ''
-  if (!linkToken) return null
-
-  return {
-    active: true,
-    deliveryStatus: 'sent',
-    email: params.get('email')?.trim() ?? '',
-    emailHint: params.get('email')?.trim() ?? '',
-    expiresIn: 0,
-    linkToken,
-    resendAvailableIn: 0,
-  }
-}
-
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
   const [activeMobileLabPanel, setActiveMobileLabPanel] = useState('monitor')
@@ -724,11 +706,8 @@ function App() {
   const [coinBurst, setCoinBurst] = useState(null)
   const [expBurst, setExpBurst] = useState(null)
   const rewardClaimingRef = useRef(null)
-  const [authMode, setAuthMode] = useState('login')
-  const [authForm, setAuthForm] = useState({ username: '', email: '', password: '', passwordConfirmation: '' })
   const [authStatus, setAuthStatus] = useState('idle')
   const [authError, setAuthError] = useState('')
-  const [emailVerification, setEmailVerification] = useState(initialEmailVerificationState)
   const [inventoryItems, setInventoryItems] = useState([])
   const [shopCatalog, setShopCatalog] = useState([])
   const [inventoryStatus, setInventoryStatus] = useState('loading')
@@ -1381,7 +1360,6 @@ function App() {
       setProfileOpen(false)
       setSessionStatus('guest')
       setActivePage('auth')
-      setAuthMode('login')
       setAuthStatus('idle')
       setAuthError('Your session expired. Please sign in again.')
     }
@@ -2090,7 +2068,7 @@ function App() {
 
     if (!getToken()) {
       setActionMessage(translateAppText('Log in before using lab items'))
-      openAuth('login')
+      openAuth()
       return
     }
 
@@ -2323,7 +2301,7 @@ function App() {
     }
     if (!getToken()) {
       setActionMessage('Log in before planting')
-      openAuth('login')
+      openAuth()
       return
     }
 
@@ -2930,8 +2908,7 @@ function App() {
   }
 
 
-  function openAuth(mode = 'login') {
-    setAuthMode(mode)
+  function openAuth() {
     setAuthError('')
     setAuthStatus('idle')
     setProfileOpen(false)
@@ -2981,101 +2958,6 @@ function App() {
     setActionMessage('')
   }
 
-  async function submitAuth(event) {
-    event.preventDefault()
-    setAuthStatus('loading')
-    setAuthError('')
-
-    if (authMode === 'register' && authForm.password !== authForm.passwordConfirmation) {
-      setAuthStatus('idle')
-      setAuthError('Passwords do not match. Please enter the same password twice.')
-      return
-    }
-
-    try {
-      const payload = authMode === 'register'
-        ? await registerUser(authForm.username.trim(), authForm.email.trim(), authForm.password, authForm.passwordConfirmation)
-        : await loginUser(authForm.email.trim(), authForm.password)
-
-      if (payload.requires_email_verification) {
-        setEmailVerification({
-          active: true,
-          deliveryStatus: payload.delivery_status ?? 'sent',
-          email: payload.email ?? authForm.email.trim(),
-          emailHint: payload.email_hint ?? payload.email ?? authForm.email.trim(),
-          expiresIn: payload.expires_in ?? 0,
-          linkToken: '',
-          resendAvailableIn: payload.resend_available_in ?? 0,
-        })
-        setAuthStatus('idle')
-        setAuthForm((current) => ({ ...current, password: '', passwordConfirmation: '' }))
-        return
-      }
-
-      const signedInUser = payload.user ?? payload.data ?? null
-      if (!signedInUser?.id) {
-        clearToken()
-        throw new Error('The server did not return your account details.')
-      }
-      clearClientSimulationSession({ hydrated: false })
-      setUser(signedInUser)
-      setSessionStatus('authenticated')
-      setAuthStatus('idle')
-      setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
-      setActivePage(pendingPageAfterAuth ?? (signedInUser.role === 'admin' ? 'admin' : 'lab'))
-      setPendingPageAfterAuth(null)
-    } catch (error) {
-      setAuthStatus('idle')
-      if (error.payload?.requires_email_verification) {
-        setEmailVerification({
-          active: true,
-          deliveryStatus: 'unknown',
-          email: error.payload.email ?? authForm.email.trim(),
-          emailHint: error.payload.email_hint ?? error.payload.email ?? authForm.email.trim(),
-          expiresIn: 0,
-          linkToken: '',
-          resendAvailableIn: 0,
-        })
-        setAuthForm((current) => ({ ...current, password: '', passwordConfirmation: '' }))
-        return
-      }
-      setAuthError(error.message || 'Unable to sign in right now')
-    }
-  }
-
-  async function completeEmailVerification() {
-    const payload = await getMe()
-    const signedInUser = payload.data ?? payload.user ?? null
-    if (!signedInUser?.id) {
-      clearToken()
-      throw new Error('The server did not return your account details.')
-    }
-
-    clearClientSimulationSession({ hydrated: false })
-    setUser(signedInUser)
-    setSessionStatus('authenticated')
-    setAuthStatus('idle')
-    setAuthError('')
-    setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
-    setEmailVerification(null)
-    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`)
-    setActivePage(pendingPageAfterAuth ?? (signedInUser.role === 'admin' ? 'admin' : 'lab'))
-    setPendingPageAfterAuth(null)
-  }
-
-  function leaveEmailVerification() {
-    const email = emailVerification?.email ?? ''
-    clearToken()
-    setEmailVerification(null)
-    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`)
-    setAuthMode('login')
-    setAuthError('')
-    setAuthStatus('idle')
-    setAuthForm({ username: '', email, password: '', passwordConfirmation: '' })
-    setSessionStatus('guest')
-    setActivePage('auth')
-  }
-
   async function submitGoogleAuth() {
     setAuthStatus('google-loading')
     setAuthError('')
@@ -3092,7 +2974,6 @@ function App() {
       setUser(signedInUser)
       setSessionStatus('authenticated')
       setAuthStatus('idle')
-      setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
       setActivePage(pendingPageAfterAuth ?? (signedInUser.role === 'admin' ? 'admin' : 'lab'))
       setPendingPageAfterAuth(null)
     } catch (error) {
@@ -3432,7 +3313,7 @@ function App() {
     }
 
     if (sessionStatus !== 'authenticated' || !user) {
-      openAuth('login')
+      openAuth()
       return
     }
 
@@ -3454,7 +3335,7 @@ function App() {
   function enterGameFromLanding() {
     if (sessionStatus !== 'authenticated' || !user) {
       setPendingPageAfterAuth('lab')
-      openAuth('login')
+      openAuth()
       return
     }
 
@@ -3464,7 +3345,7 @@ function App() {
   function openGamePageFromLanding(page) {
     if (sessionStatus !== 'authenticated' || !user) {
       setPendingPageAfterAuth(page)
-      openAuth('login')
+      openAuth()
       return
     }
 
@@ -3533,10 +3414,8 @@ function App() {
     setNotificationError('')
     setProfileOpen(false)
     setHelpCenterOpen(false)
-    setAuthMode('login')
     setAuthStatus('idle')
     setAuthError('')
-    setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
     setPendingPageAfterAuth(null)
     setSessionStatus('guest')
     setActivePage(destination === 'auth' ? 'auth' : 'home')
@@ -3557,10 +3436,8 @@ function App() {
     setSessionStatus('guest')
     setProfileOpen(false)
     setHelpCenterOpen(false)
-    setAuthMode('login')
     setAuthStatus('idle')
     setAuthError('')
-    setAuthForm({ username: '', email: '', password: '', passwordConfirmation: '' })
     setPendingPageAfterAuth(null)
     setActivePage('auth')
   }
@@ -3665,18 +3542,6 @@ function App() {
     return <SessionLoadingScreen />
   }
 
-  if (emailVerification?.active) {
-    return (
-      <main className="relative h-screen w-screen overflow-hidden bg-[#eef5eb] text-[#101511]">
-        <EmailVerificationPage
-          onBack={leaveEmailVerification}
-          onVerified={completeEmailVerification}
-          verification={emailVerification}
-        />
-      </main>
-    )
-  }
-
   if (activePage === 'home' || activePage === 'learn') {
     return (
       <>
@@ -3687,7 +3552,7 @@ function App() {
           onHome={() => openLanding('home')}
           onLearn={() => openLanding('learn')}
           onStart={enterGameFromLanding}
-          onSignIn={() => openAuth('login')}
+          onSignIn={openAuth}
           onOpenPage={openGamePageFromLanding}
           onOpenDemo={enterDemoSession}
         />
@@ -3705,13 +3570,8 @@ function App() {
     return (
       <main className="relative h-screen w-screen overflow-hidden bg-[#f7faf5] text-slate-100">
         <LoginPage
-          mode={authMode}
-          setMode={setAuthMode}
-          form={authForm}
-          setForm={setAuthForm}
           status={authStatus}
           error={authError}
-          onSubmit={submitAuth}
           onGoogleLogin={submitGoogleAuth}
           onBack={() => openLanding('home')}
           backLabel="Back to home"
@@ -3830,12 +3690,7 @@ function App() {
           backLabel={`Back to ${settingsReturnPage === 'lab' ? 'Plant Lab' : settingsReturnPage[0].toUpperCase() + settingsReturnPage.slice(1)}`}
           user={user}
           onBack={() => navigateToPage(settingsReturnPage)}
-          onResetPassword={() => demoMode
-            ? setActionMessage('Password reset is disabled in preview mode.')
-            : navigateToPage('password-reset')}
         />
-      ) : activePage === 'password-reset' ? (
-        <PasswordResetPage user={user} onBack={() => navigateToPage('settings')} onDone={() => navigateToPage('settings')} />
       ) : (
         <>
           {labReady && (

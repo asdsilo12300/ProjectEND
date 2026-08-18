@@ -369,59 +369,6 @@ export async function getPlant(id) {
   return apiFetch(`/plants/${id}`)
 }
 
-export async function login(email, password) {
-  const payload = await apiFetch('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  })
-
-  setToken(payload.token)
-  return payload
-}
-
-export async function register(username, email, password, passwordConfirmation) {
-  const payload = await apiFetch('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({
-      username,
-      email,
-      password,
-      password_confirmation: passwordConfirmation,
-    }),
-  })
-
-  if (payload.token) setToken(payload.token)
-  return payload
-}
-
-export async function verifyEmailCode(email, otp) {
-  const payload = await apiFetch('/auth/email/verify-code', {
-    auth: false,
-    method: 'POST',
-    body: JSON.stringify({ email, otp }),
-  })
-  if (payload.token) setToken(payload.token)
-  return payload
-}
-
-export async function verifyEmailLink(token) {
-  const payload = await apiFetch('/auth/email/verify-link', {
-    auth: false,
-    method: 'POST',
-    body: JSON.stringify({ token }),
-  })
-  if (payload.token) setToken(payload.token)
-  return payload
-}
-
-export async function resendVerificationEmail(email) {
-  return apiFetch('/auth/email/resend', {
-    auth: false,
-    method: 'POST',
-    body: JSON.stringify({ email }),
-  })
-}
-
 export function loginWithGoogle() {
   return new Promise((resolve, reject) => {
     const popupWidth = 520
@@ -498,28 +445,6 @@ export async function updateOnboardingProgress(page, version, state) {
   return apiFetch('/me/onboarding', {
     method: 'PATCH',
     body: JSON.stringify({ page, version, state }),
-  })
-}
-
-export async function requestPasswordResetOtp() {
-  return apiFetch('/auth/password-reset/request', { method: 'POST' })
-}
-
-export async function verifyPasswordResetOtp(otp) {
-  return apiFetch('/auth/password-reset/verify', {
-    method: 'POST',
-    body: JSON.stringify({ otp }),
-  })
-}
-
-export async function completePasswordReset(resetToken, password, passwordConfirmation) {
-  return apiFetch('/auth/password-reset/complete', {
-    method: 'POST',
-    body: JSON.stringify({
-      reset_token: resetToken,
-      password,
-      password_confirmation: passwordConfirmation,
-    }),
   })
 }
 

@@ -1,6 +1,5 @@
 import { AppIcon } from '../game/icons/FontAwesomeIcon'
 import heroImage from '../assets/hero.png'
-import { useState } from 'react'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 
 function GoogleIcon() {
@@ -14,40 +13,42 @@ function GoogleIcon() {
   )
 }
 
-export function LoginPage({ mode, setMode, form, setForm, status, error, onSubmit, onGoogleLogin, onBack, backLabel = 'Back to simulator' }) {
-  const isRegister = mode === 'register'
-  const title = isRegister ? 'Create account' : 'Login'
-  const submitLabel = status === 'loading' ? 'Please wait...' : isRegister ? 'Create account' : 'Log in'
-  const isBusy = status === 'loading' || status === 'google-loading'
-  const [showPassword, setShowPassword] = useState(false)
-  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false)
+const accountBenefits = [
+  ['history', 'Keep every growing experiment in one account'],
+  ['shop', 'Carry coins, tools, friends, and achievements with you'],
+  ['shield', 'Google protects sign-in and verifies your email securely'],
+]
 
-  function updateField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }))
-  }
+export function LoginPage({ status, error, onGoogleLogin, onBack, backLabel = 'Back to home' }) {
+  const isBusy = status === 'google-loading'
 
   return (
-    <section className="absolute inset-0 z-[80] grid bg-[#f7faf5] text-[#101511] lg:grid-cols-[minmax(420px,0.96fr)_minmax(420px,1fr)]" aria-label="Authentication">
-      <div className="relative hidden min-h-screen overflow-hidden bg-[#24402f] lg:block">
-        <img className="absolute inset-0 h-full w-full object-cover" src={heroImage} alt="Plant learning illustration" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(12,23,15,.18),rgba(12,23,15,.04))]" />
-        <div className="absolute left-8 top-6 flex items-center gap-3 text-white">
-          <img className="h-16 w-auto object-contain" src={plantGrowthLogo} alt="Plant Growth Academy" />
+    <section className="absolute inset-0 z-[80] grid overflow-y-auto bg-[#f3f7f0] text-[#122016] lg:grid-cols-[minmax(440px,1.04fr)_minmax(460px,.96fr)]" aria-label="Sign in with Google">
+      <div className="relative hidden min-h-screen overflow-hidden bg-[#173321] lg:block">
+        <img className="absolute inset-0 h-full w-full scale-[1.02] object-cover" src={heroImage} alt="A young plant growing in soil" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,31,17,.35),rgba(9,31,17,.08)),linear-gradient(0deg,rgba(8,25,14,.78),transparent_62%)]" />
+        <div className="absolute left-9 top-7 flex items-center gap-3 text-white">
+          <img className="h-20 w-auto object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,.25)]" src={plantGrowthLogo} alt="Plant Growth Academy" />
         </div>
-        <div className="absolute bottom-8 left-8 max-w-sm rounded-xl border border-white/20 bg-white/16 p-5 text-white backdrop-blur-sm">
-          <p className="text-sm font-semibold">Plant Growth Academy</p>
-          <p className="mt-2 text-sm leading-6 text-white/82">Save simulations, continue lessons, and keep lab progress connected to your account.</p>
+        <div className="absolute inset-x-9 bottom-9 max-w-xl text-white">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-[#153622]/70 px-3 py-1.5 text-xs font-black uppercase tracking-[.18em] backdrop-blur-md">
+            <AppIcon className="h-4 w-4 text-[#b9eb9f]" name="sprout" />
+            One account, every growing cycle
+          </span>
+          <h2 className="mt-5 max-w-lg text-4xl font-black leading-[1.08] tracking-[-.035em]">Return to your garden without another password to remember.</h2>
+          <p className="mt-4 max-w-lg text-base leading-7 text-white/78">Your plants, learning progress, community profile, and inventory stay connected through your Google account.</p>
         </div>
       </div>
 
-      <div className="relative flex min-h-screen justify-center overflow-x-hidden overflow-y-auto px-5 py-8 sm:px-8">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-[#9bcf82]/28 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-8 h-64 w-64 rounded-full bg-[#4cc8c7]/18 blur-3xl" />
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-8 sm:px-9">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#a7dd8a]/25 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-20 h-80 w-80 rounded-full bg-[#54b99e]/14 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 opacity-[.055] [background-image:linear-gradient(#183822_1px,transparent_1px),linear-gradient(90deg,#183822_1px,transparent_1px)] [background-size:42px_42px]" />
 
-        <div className="relative my-auto w-full max-w-[420px]">
+        <div className="relative w-full max-w-[480px]">
           {onBack && (
             <button
-              className="mb-8 inline-flex items-center gap-2 rounded-md border border-[#203027]/12 bg-white px-3 py-2 text-sm font-medium text-[#203027] shadow-sm transition hover:bg-[#eef6e9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5f9f48]"
+              className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#244a2e]/14 bg-white/75 px-3.5 py-2 text-sm font-bold text-[#294830] shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-[#5f9f48]/35 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5f9f48]"
               type="button"
               onClick={onBack}
             >
@@ -56,152 +57,51 @@ export function LoginPage({ mode, setMode, form, setForm, status, error, onSubmi
             </button>
           )}
 
-          <div className="rounded-2xl border border-[#203027]/10 bg-white p-6 shadow-[0_18px_46px_rgba(16,21,17,.12)] sm:p-8">
-            <div className="mb-7 text-center">
-              <img className="mx-auto mb-3 h-20 w-auto object-contain lg:hidden" src={plantGrowthLogo} alt="Plant Growth Academy" />
-              <h1 className="text-4xl font-black tracking-normal text-[#0f1711]">{title}</h1>
-              <p className="mt-2 text-sm text-[#5f6b62]">
-                {isRegister ? 'Start saving your plant lab progress.' : 'Continue your plant growth lab session.'}
-              </p>
-            </div>
-
-            <form className="space-y-4" onSubmit={onSubmit}>
-              {isRegister && (
-                <label className="block text-sm font-semibold text-[#1d2a20]">
-                  Username
-                  <span className="mt-2 flex h-11 items-center gap-2 rounded-lg border border-[#203027]/18 bg-white px-3 transition-within focus-within:border-[#69a954] focus-within:ring-2 focus-within:ring-[#9bcf82]/35">
-                    <input
-                      className="min-w-0 flex-1 bg-transparent text-sm text-[#101511] outline-none placeholder:text-[#7d8b82]"
-                      autoComplete="username"
-                      value={form.username}
-                      onChange={(event) => updateField('username', event.target.value)}
-                      placeholder="Username"
-                      required={isRegister}
-                    />
-                    <AppIcon className="h-5 w-5 shrink-0 text-[#7d8b82]" name="profile" />
-                  </span>
-                </label>
-              )}
-
-              <label className="block text-sm font-semibold text-[#1d2a20]">
-                Email
-                <span className="mt-2 flex h-11 items-center gap-2 rounded-lg border border-[#203027]/18 bg-white px-3 transition-within focus-within:border-[#69a954] focus-within:ring-2 focus-within:ring-[#9bcf82]/35">
-                  <input
-                    className="min-w-0 flex-1 bg-transparent text-sm text-[#101511] outline-none placeholder:text-[#7d8b82]"
-                    autoComplete="email"
-                    type="email"
-                    value={form.email}
-                    onChange={(event) => updateField('email', event.target.value)}
-                    placeholder="User@email.com"
-                    required
-                  />
-                  <AppIcon className="h-5 w-5 shrink-0 text-[#7d8b82]" name="mail" />
+          <div className="overflow-hidden rounded-[28px] border border-[#244a2e]/12 bg-white/94 shadow-[0_30px_80px_rgba(25,54,32,.14)] backdrop-blur-xl">
+            <div className="h-1.5 bg-[linear-gradient(90deg,#4e9a52,#91d477_58%,#f2c660)]" />
+            <div className="p-7 sm:p-10">
+              <img className="mx-auto mb-4 h-24 w-auto object-contain lg:hidden" src={plantGrowthLogo} alt="Plant Growth Academy" />
+              <div className="text-center">
+                <span className="inline-flex items-center gap-2 rounded-full bg-[#eaf5e5] px-3 py-1.5 text-xs font-black uppercase tracking-[.14em] text-[#39703f]">
+                  <AppIcon className="h-4 w-4" name="shield" />
+                  Google-only account
                 </span>
-              </label>
+                <h1 className="mt-5 text-4xl font-black leading-tight tracking-[-.035em] text-[#102015]">Sign in to the academy</h1>
+                <p className="mx-auto mt-3 max-w-sm text-[15px] leading-6 text-[#5b6c60]">Use Google to sign in or create your learner account automatically. There is no separate registration form or password.</p>
+              </div>
 
-              <label className="block text-sm font-semibold text-[#1d2a20]">
-                Password
-                <span className="mt-2 flex h-11 items-center gap-2 rounded-lg border border-[#203027]/18 bg-white px-3 transition-within focus-within:border-[#69a954] focus-within:ring-2 focus-within:ring-[#9bcf82]/35">
-                  <input
-                    className="min-w-0 flex-1 bg-transparent text-sm text-[#101511] outline-none placeholder:text-[#7d8b82]"
-                    autoComplete={isRegister ? 'new-password' : 'current-password'}
-                    type={showPassword ? 'text' : 'password'}
-                    value={form.password}
-                    onChange={(event) => updateField('password', event.target.value)}
-                    placeholder={isRegister ? 'At least 8 characters' : 'Your password'}
-                    required
-                    minLength={isRegister ? 8 : undefined}
-                  />
-                  <button
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[#748078] transition hover:bg-[#eef5eb] hover:text-[#33543b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5f9f48]"
-                    type="button"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    aria-pressed={showPassword}
-                    onClick={() => setShowPassword((visible) => !visible)}
-                  >
-                    <AppIcon className="h-5 w-5" name={showPassword ? 'eyeOff' : 'eye'} />
-                  </button>
-                </span>
-              </label>
+              <div className="my-7 space-y-3 rounded-2xl border border-[#315c38]/10 bg-[#f4f8f1] p-4">
+                {accountBenefits.map(([icon, label]) => (
+                  <div className="flex items-center gap-3 text-sm leading-5 text-[#405347]" key={label}>
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#4b8b49] shadow-sm ring-1 ring-[#315c38]/10">
+                      <AppIcon className="h-4 w-4" name={icon} />
+                    </span>
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
 
-              {isRegister && (
-                <label className="block text-sm font-semibold text-[#1d2a20]">
-                  Confirm password
-                  <span className="mt-2 flex h-11 items-center gap-2 rounded-lg border border-[#203027]/18 bg-white px-3 transition-within focus-within:border-[#69a954] focus-within:ring-2 focus-within:ring-[#9bcf82]/35">
-                    <input
-                      className="min-w-0 flex-1 bg-transparent text-sm text-[#101511] outline-none placeholder:text-[#7d8b82]"
-                      autoComplete="new-password"
-                      type={showPasswordConfirmation ? 'text' : 'password'}
-                      value={form.passwordConfirmation}
-                      onChange={(event) => updateField('passwordConfirmation', event.target.value)}
-                      placeholder="Confirm your password"
-                      required
-                      minLength={8}
-                    />
-                    <button
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[#748078] transition hover:bg-[#eef5eb] hover:text-[#33543b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5f9f48]"
-                      type="button"
-                      aria-label={showPasswordConfirmation ? 'Hide password confirmation' : 'Show password confirmation'}
-                      aria-pressed={showPasswordConfirmation}
-                      onClick={() => setShowPasswordConfirmation((visible) => !visible)}
-                    >
-                      <AppIcon className="h-5 w-5" name={showPasswordConfirmation ? 'eyeOff' : 'eye'} />
-                    </button>
-                  </span>
-                </label>
+              {error && (
+                <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-700" role="alert">{error}</p>
               )}
-
-              {isRegister && (
-                <div className="flex gap-3 rounded-xl border border-[#cfe0ca] bg-[#f2f8ef] px-3.5 py-3 text-xs leading-5 text-[#526457]">
-                  <AppIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#538d47]" name="shield" />
-                  <span>After creating your account, verify the email we send before your first login.</span>
-                </div>
-              )}
-
-              {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p>}
 
               <button
-                className="flex h-11 w-full items-center justify-center rounded-lg bg-[#39bec8] px-4 text-sm font-bold text-white transition hover:bg-[#2cadb7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#247f87] disabled:cursor-not-allowed disabled:opacity-70"
-                type="submit"
+                className="group flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-[#1e3d27]/18 bg-white px-5 text-[15px] font-black text-[#1b2d20] shadow-[0_12px_28px_rgba(24,58,31,.1)] transition hover:-translate-y-0.5 hover:border-[#5d9f51]/40 hover:bg-[#f9fcf7] hover:shadow-[0_16px_34px_rgba(24,58,31,.15)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#4285f4] disabled:cursor-wait disabled:opacity-65 disabled:hover:translate-y-0"
+                type="button"
+                onClick={onGoogleLogin}
                 disabled={isBusy}
               >
-                {submitLabel}
+                {isBusy ? (
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#4285f4]/25 border-t-[#4285f4]" aria-hidden="true" />
+                ) : (
+                  <GoogleIcon />
+                )}
+                <span>{isBusy ? 'Connecting to Google...' : 'Continue with Google'}</span>
+                {!isBusy && <AppIcon className="ml-auto h-4 w-4 text-[#6d7d71] transition group-hover:translate-x-1" name="arrowForward" />}
               </button>
-            </form>
 
-            <div className="my-6 flex items-center gap-3 text-xs text-[#7d8b82]">
-              <span className="h-px flex-1 bg-[#203027]/12" />
-              <span>or</span>
-              <span className="h-px flex-1 bg-[#203027]/12" />
+              <p className="mt-5 text-center text-xs leading-5 text-[#758278]">By continuing, you allow Plant Growth Academy to use your Google name, email, and profile picture for your academy account.</p>
             </div>
-
-            <button
-              className="flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-[#203027]/16 bg-white px-4 text-sm font-semibold text-[#1d2a20] shadow-sm transition hover:border-[#203027]/28 hover:bg-[#f8faf7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4285f4] disabled:cursor-not-allowed disabled:opacity-65"
-              type="button"
-              onClick={onGoogleLogin}
-              disabled={isBusy}
-            >
-              {status === 'google-loading' ? (
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#4285f4]/30 border-t-[#4285f4]" aria-hidden="true" />
-              ) : (
-                <GoogleIcon />
-              )}
-              <span>{status === 'google-loading' ? 'Connecting to Google...' : 'Continue with Google'}</span>
-            </button>
-
-            <button
-              className="mt-3 w-full rounded-lg border border-[#203027]/14 bg-white px-4 py-3 text-sm font-semibold text-[#1d2a20] transition hover:bg-[#f2f8ef] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5f9f48] disabled:cursor-not-allowed disabled:opacity-65"
-              type="button"
-              disabled={isBusy}
-              onClick={() => {
-                setMode(isRegister ? 'login' : 'register')
-                setShowPassword(false)
-                setShowPasswordConfirmation(false)
-                setForm({ username: '', email: form.email, password: '', passwordConfirmation: '' })
-              }}
-            >
-              {isRegister ? 'Already have an account? Log in' : "Don't have an account? Sign up"}
-            </button>
           </div>
         </div>
       </div>

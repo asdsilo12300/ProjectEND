@@ -320,7 +320,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
             type="button"
             onClick={() => onAuthRequired?.('login')}
           >
-            Login or sign up
+            Continue with Google
           </button>
         </div>
       ) : mode === 'invite' ? (

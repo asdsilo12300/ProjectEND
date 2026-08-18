@@ -69,7 +69,7 @@ function ChoiceGroup({ label, options, value, onChange }) {
   )
 }
 
-export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user }) {
+export function SettingsPage({ backLabel = 'Back', onBack, user }) {
   const [settings, setSettings] = useState(loadSettings)
   const [savedPulse, setSavedPulse] = useState(false)
   const changedByUser = useRef(false)
@@ -164,18 +164,13 @@ export function SettingsPage({ backLabel = 'Back', onBack, onResetPassword, user
                   <span className="rounded-full bg-[#9bcf82]/10 px-2 py-0.5 text-xs font-black uppercase tracking-wider text-[#bdeba7]">Account</span>
                 </div>
                 <span className="block truncate text-xs text-slate-400">{user?.email ?? 'Sign in to manage your account'}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-400">Verify your email with OTP before changing your password.</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-400">Sign-in is managed securely by Google. No academy password is required.</span>
               </div>
             </div>
-            <button
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#9bcf82]/30 bg-[#9bcf82]/10 px-4 text-xs font-black text-lime-100 transition hover:border-[#9bcf82]/50 hover:bg-[#9bcf82]/15 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
-              type="button"
-              disabled={!user}
-              onClick={onResetPassword}
-            >
-              <AppIcon className="h-4 w-4" name="key" />
-              Change password
-            </button>
+            <span className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#9bcf82]/25 bg-[#9bcf82]/10 px-4 text-xs font-black text-[#bdeba7]">
+              <AppIcon className="h-4 w-4" name="shield" />
+              Google connected
+            </span>
           </div>
         </section>
 

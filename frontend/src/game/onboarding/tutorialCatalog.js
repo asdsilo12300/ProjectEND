@@ -492,12 +492,12 @@ export const tutorialCatalog = {
     },
     steps: [
       {
-        icon: 'key',
+        icon: 'shield',
         targets: ['[data-tour="settings-account"]'],
-        title: { en: 'Reset your password with email OTP', th: 'รีเซ็ตรหัสผ่านด้วย OTP ทางอีเมล' },
+        title: { en: 'Your Google account protects sign-in', th: 'บัญชี Google ปกป้องการเข้าสู่ระบบ' },
         description: {
-          en: 'Open Reset password, request the one-time code sent to your email, verify it, and then set the new password.',
-          th: 'เปิด Reset password ขอรหัสครั้งเดียวที่ส่งเข้าอีเมล ยืนยันรหัส แล้วจึงตั้งรหัสผ่านใหม่',
+          en: 'The academy does not store a separate password. Use the same verified Google account whenever you return.',
+          th: 'ระบบไม่เก็บรหัสผ่านแยกต่างหาก ให้ใช้บัญชี Google ที่ยืนยันแล้วบัญชีเดิมทุกครั้งที่กลับมา',
         },
       },
       {

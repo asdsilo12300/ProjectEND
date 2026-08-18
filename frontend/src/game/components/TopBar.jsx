@@ -526,7 +526,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
           <ProfileAvatar user={user} initial={initial} />
           <span className="hidden leading-none md:block">
             <strong className="block text-xs text-lime-50">{user ? `${displayName} Lv.${learnerLevel}` : 'Sign in'}</strong>
-            <small className="mt-1 block text-xs text-slate-400">{user ? 'profile' : 'Login or create account'}</small>
+            <small className="mt-1 block text-xs text-slate-400">{user ? 'profile' : 'Continue with Google'}</small>
           </span>
           <AppIcon className={`h-4 w-4 text-slate-300 transition ${profileOpen && user ? 'rotate-180' : ''}`} name="arrowDown" />
         </button>}

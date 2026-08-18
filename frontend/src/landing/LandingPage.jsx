@@ -47,13 +47,13 @@ const tourSteps = [
 const journeySteps = [
   {
     icon: 'person',
-    title: 'Create your learner profile',
+    title: 'Connect your learner profile',
     eyebrow: 'Your learning identity',
-    description: 'Sign in to keep every plant, item, achievement, and experiment connected to your account.',
-    detail: 'Your profile keeps progress consistent across the Plant Lab, Shop, History, and Community. Every experiment becomes part of one continuous learning record that you can return to at any time.',
+    description: 'Continue with Google to create or reopen your learner profile—no registration form or academy password.',
+    detail: 'Google securely verifies your identity while your academy profile keeps progress consistent across the Plant Lab, Shop, History, and Community. Every experiment becomes part of one continuous learning record that you can return to at any time.',
     image: '/media/register-tour.png',
-    imageAlt: 'Complete Plant Growth Academy registration screen',
-    highlights: ['Keep plant progress with your account', 'Carry coins and purchased items forward', 'Build a personal record of every experiment'],
+    imageAlt: 'Plant Growth Academy Google sign-in screen',
+    highlights: ['Sign in or create your profile with Google', 'Carry coins and purchased items forward', 'Build a personal record of every experiment'],
   },
   {
     icon: 'sprout',
@@ -550,7 +550,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
           <p>Sign in to begin your first growing cycle and keep every result connected to your learner profile.</p>
           <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
             <AppIcon name="controller" />
-            {user ? 'Continue your experiment' : 'Create an account and play'}
+            {user ? 'Continue your experiment' : 'Continue with Google and play'}
             <AppIcon name="arrowForward" />
           </button>
         </div>
