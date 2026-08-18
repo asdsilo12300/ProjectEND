@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Panel } from '../components/Panel'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { AppIcon } from '../icons/FontAwesomeIcon'
@@ -64,8 +64,21 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
   const [draft, setDraft] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const commentsViewportRef = useRef(null)
+  const followLatestCommentRef = useRef(true)
   const avatarUser = useMemo(() => currentUser ?? { username: 'Learner' }, [currentUser])
   const visibleComments = simulatorId ? comments : []
+
+  useEffect(() => {
+    if (!followLatestCommentRef.current) return undefined
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = commentsViewportRef.current
+      if (viewport) viewport.scrollTop = viewport.scrollHeight
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [comments.length])
 
   useEffect(() => {
     if (!simulatorId) {
@@ -80,32 +93,61 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
 
 
     let cancelled = false
+    let initialSettled = false
+    let requestRunning = false
 
-    async function loadComments() {
-      setStatus('loading')
-      setError('')
-      onLoadStateChange?.({ ready: false, simulatorId })
+    async function loadComments({ initial = false } = {}) {
+      if (requestRunning || (!initial && document.hidden)) return
+      requestRunning = true
+
+      if (!initialSettled) {
+        setStatus('loading')
+        setError('')
+        onLoadStateChange?.({ ready: false, simulatorId })
+      }
 
       try {
         const payload = await getSimulatorComments(simulatorId)
         if (!cancelled) {
-          setComments(payload.data ?? [])
-          setStatus('idle')
+          const incomingComments = payload.data ?? []
+          const viewport = commentsViewportRef.current
+          if (viewport) {
+            followLatestCommentRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 40
+          }
+          setComments((current) => {
+            const currentSignature = current.map((comment) => `${comment.id}:${comment.updated_at ?? comment.created_at ?? ''}`).join('|')
+            const incomingSignature = incomingComments.map((comment) => `${comment.id}:${comment.updated_at ?? comment.created_at ?? ''}`).join('|')
+            return currentSignature === incomingSignature ? current : incomingComments
+          })
+          setStatus((current) => current === 'posting' ? current : 'idle')
+          setError('')
           onLoadStateChange?.({ ready: true, simulatorId })
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError.message || 'Unable to load comments')
-          setStatus('idle')
+          // A transient background refresh must not replace comments that are
+          // already visible or reset a message the learner is composing.
+          if (!initialSettled) setError(loadError.message || 'Unable to load comments')
+          setStatus((current) => current === 'posting' ? current : 'idle')
           onLoadStateChange?.({ ready: true, simulatorId })
         }
+      } finally {
+        initialSettled = true
+        requestRunning = false
       }
     }
 
-    loadComments()
+    loadComments({ initial: true })
+    const interval = window.setInterval(loadComments, 2500)
+    const refreshWhenVisible = () => {
+      if (!document.hidden) loadComments()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     return () => {
       cancelled = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
   }, [onLoadStateChange, simulatorId])
 
@@ -125,7 +167,10 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
 
     try {
       const payload = await createSimulatorComment(simulatorId, text)
-      setComments((value) => [...value, payload.data])
+      followLatestCommentRef.current = true
+      setComments((value) => value.some((comment) => String(comment.id) === String(payload.data?.id))
+        ? value
+        : [...value, payload.data])
       setDraft('')
       setStatus('idle')
     } catch (postError) {
@@ -136,7 +181,14 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
 
   return (
       <Panel id="comments" title={title} windows={windows} setWindows={setWindows} className="comments-panel w-[370px]">
-        <div className="grid max-h-56 gap-2.5 overflow-y-auto pr-1">
+        <div
+          className="grid max-h-56 gap-2.5 overflow-y-auto pr-1"
+          ref={commentsViewportRef}
+          onScroll={(event) => {
+            const viewport = event.currentTarget
+            followLatestCommentRef.current = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 40
+          }}
+        >
           {!simulatorId && (
             <div className="rounded-md border border-sky-200/15 bg-[#132026]/78 px-3 py-4 text-center text-xs text-slate-300">
               Select a planted simulation to open comments.

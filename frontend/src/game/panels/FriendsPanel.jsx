@@ -109,27 +109,45 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
     if (!isLoggedIn) return undefined
 
     let cancelled = false
+    let initialSettled = false
+    let requestRunning = false
 
-    async function loadFriends() {
-      setStatus('loading')
-      setError('')
+    async function loadFriends({ initial = false } = {}) {
+      if (requestRunning || (!initial && document.hidden)) return
+      requestRunning = true
+      if (!initialSettled) {
+        setStatus('loading')
+        setError('')
+      }
 
       try {
         const payload = await getFriends()
         if (cancelled) return
         setFriends(payload.data ?? [])
-        setStatus('idle')
+        if (!initialSettled) setStatus('idle')
       } catch (loadError) {
         if (cancelled) return
-        setError(loadError.message || 'Unable to load friends')
-        setStatus('idle')
+        if (!initialSettled) {
+          setError(loadError.message || 'Unable to load friends')
+          setStatus('idle')
+        }
+      } finally {
+        initialSettled = true
+        requestRunning = false
       }
     }
 
-    loadFriends()
+    loadFriends({ initial: true })
+    const interval = window.setInterval(loadFriends, 10_000)
+    const refreshWhenVisible = () => {
+      if (!document.hidden) loadFriends()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     return () => {
       cancelled = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
   }, [isLoggedIn])
 

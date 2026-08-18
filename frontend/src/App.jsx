@@ -962,13 +962,15 @@ function App() {
     const refreshWhenVisible = () => {
       if (!document.hidden) refreshNotifications({ silent: true })
     }
-    const interval = window.setInterval(refreshWhenVisible, 30_000)
+    const interval = window.setInterval(refreshWhenVisible, 10_000)
     document.addEventListener('visibilitychange', refreshWhenVisible)
+    window.addEventListener('focus', refreshWhenVisible)
 
     return () => {
       window.clearTimeout(initialRefresh)
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
+      window.removeEventListener('focus', refreshWhenVisible)
     }
   }, [refreshNotifications, user])
 

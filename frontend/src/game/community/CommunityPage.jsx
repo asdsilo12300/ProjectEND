@@ -173,6 +173,17 @@ function mapPost(post) {
   }
 }
 
+function postListRevision(posts) {
+  return posts.map((post) => [
+    post.id,
+    post.updated_at ?? post.created_at ?? '',
+    Number(post.likes ?? post.likes_count ?? 0),
+    Number(post.replies ?? post.comments_count ?? 0),
+    Boolean(post.likedByMe ?? post.liked_by_me),
+    post.liveSimulator?.status ?? post.live_simulator?.status ?? null,
+  ])
+}
+
 function LeftNavItem({ active = false, badge = 0, icon, label, onClick }) {
   return (
     <button
@@ -362,6 +373,16 @@ function addReplyToTree(comments, parentId, reply) {
       replies: addReplyToTree(comment.replies ?? [], parentId, reply),
     }
   })
+}
+
+function commentTreeRevision(comments) {
+  return comments.map((comment) => [
+    comment.id,
+    comment.updated_at ?? comment.created_at ?? '',
+    Number(comment.likes_count ?? 0),
+    Boolean(comment.liked_by_me),
+    commentTreeRevision(comment.replies ?? []),
+  ])
 }
 
 function HistoryPreview({ history, liveSimulator, onOpenGame, post }) {
@@ -1576,7 +1597,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
       window.cancelAnimationFrame(frame)
       window.clearTimeout(settleTimer)
     }
-  }, [activeView, communityStatus, homeScrollTop, posts.length, selectedProfile?.id])
+  }, [activeView, communityStatus, homeScrollTop, selectedProfile?.id])
 
   useEffect(() => {
     const handleSettingsChange = (event) => {
@@ -1645,6 +1666,61 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
       cancelled = true
     }
   }, [communityReloadKey, language])
+
+  useEffect(() => {
+    if (activeView !== 'home') return undefined
+
+    let cancelled = false
+    let requestRunning = false
+
+    async function refreshCommunityFeed() {
+      if (requestRunning || document.hidden) return
+      requestRunning = true
+
+      try {
+        const [postsPayload, friendPostsPayload] = await Promise.all([
+          getPosts(),
+          getToken() ? getFriendPosts().catch(() => null) : Promise.resolve(null),
+        ])
+        if (cancelled) return
+
+        const nextPosts = (postsPayload.data ?? []).map(mapPost)
+        setPosts((current) => (
+          JSON.stringify(postListRevision(current)) === JSON.stringify(postListRevision(nextPosts))
+            ? current
+            : nextPosts
+        ))
+
+        if (friendPostsPayload) {
+          const nextFriendPosts = (friendPostsPayload.data ?? []).map(mapPost)
+          setFriendPosts((current) => (
+            JSON.stringify(postListRevision(current)) === JSON.stringify(postListRevision(nextFriendPosts))
+              ? current
+              : nextFriendPosts
+          ))
+        }
+      } catch {
+        // Keep the current feed on transient background failures. The manual
+        // retry state remains responsible for visible network errors.
+      } finally {
+        requestRunning = false
+      }
+    }
+
+    const interval = window.setInterval(refreshCommunityFeed, 12_000)
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshCommunityFeed()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    window.addEventListener('focus', refreshWhenVisible)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+      window.removeEventListener('focus', refreshWhenVisible)
+    }
+  }, [activeView])
 
   useEffect(() => {
     const query = searchQuery.trim()
@@ -1829,11 +1905,6 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
     setReplyDrafts({})
     setPostComments([])
     setPostCommentsLoading(true)
-
-    getPostComments(post.id)
-      .then((payload) => setPostComments(payload.data ?? []))
-      .catch(() => setPostComments([]))
-      .finally(() => setPostCommentsLoading(false))
   }, [])
 
   const handleClosePost = useCallback(() => {
@@ -1845,6 +1916,57 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
     setReplyingToId(null)
     setReplyDrafts({})
   }, [])
+
+  useEffect(() => {
+    const postId = selectedPost?.id
+    if (!postId) return undefined
+
+    let cancelled = false
+    let hasLoaded = false
+    let requestRunning = false
+
+    async function refreshPostDiscussion({ initial = false } = {}) {
+      if (
+        requestRunning
+        || (!initial && document.hidden)
+        || submittingComment
+        || submittingReply
+      ) return
+
+      requestRunning = true
+      try {
+        const payload = await getPostComments(postId)
+        if (cancelled) return
+        const incomingComments = payload.data ?? []
+        setPostComments((current) => (
+          JSON.stringify(commentTreeRevision(current)) === JSON.stringify(commentTreeRevision(incomingComments))
+            ? current
+            : incomingComments
+        ))
+        hasLoaded = true
+      } catch (error) {
+        if (!cancelled && !hasLoaded) {
+          setPostActionError(error.message || copy(language, 'Unable to load this discussion.', 'ไม่สามารถโหลดการสนทนานี้ได้'))
+        }
+      } finally {
+        if (!cancelled) setPostCommentsLoading(false)
+        requestRunning = false
+      }
+    }
+
+    refreshPostDiscussion({ initial: true })
+    const interval = window.setInterval(refreshPostDiscussion, 3000)
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshPostDiscussion()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [language, selectedPost?.id, submittingComment, submittingReply])
 
   const handleOpenNotification = useCallback(async (notification) => {
     onNotificationRead?.(notification)
