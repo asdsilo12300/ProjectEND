@@ -884,9 +884,9 @@ class SimulatorController extends Controller
 
     private function authorizeSimulatorConversation(Request $request, Simulator $simulator): void
     {
-        $userId = $request->user()->id;
+        $userId = (int) $request->user()->id;
 
-        if ($simulator->user_id === $userId) {
+        if ((int) $simulator->user_id === $userId || $simulator->share_visibility === 'public') {
             return;
         }
 

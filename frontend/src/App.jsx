@@ -3221,10 +3221,12 @@ function App() {
       setFriendGardenLoading((current) => current.loadKey === requestId
         ? {
             ...current,
-            commentsReady: false,
+            // Saved replays use the Community post conversation. Simulator
+            // comments are only available for an active live garden.
+            commentsReady: true,
             dataReady: true,
             sceneReady: false,
-            simulatorId: savedSimulator.id ?? null,
+            simulatorId: null,
           }
         : current)
       applySimulatorSnapshot(savedSimulator, {
@@ -3797,7 +3799,7 @@ function App() {
                 />
               )}
               {!visitingFriend && <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} />}
-              <CommentsPanel currentUser={user} onAuthRequired={openAuth} onLoadStateChange={handleFriendCommentsLoadState} simulatorId={previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
+              <CommentsPanel currentUser={user} onAuthRequired={openAuth} onLoadStateChange={handleFriendCommentsLoadState} simulatorId={visitingFriend?.historyReplay ? null : previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
               <nav className="lab-mobile-panel-dock" data-tour="mobile-panel-dock" aria-label="Lab panels">
                 {[
                   ['monitor', 'Plant'],

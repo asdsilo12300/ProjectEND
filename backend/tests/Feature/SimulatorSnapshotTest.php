@@ -189,6 +189,7 @@ class SimulatorSnapshotTest extends TestCase
 
         $latest = app(FriendController::class)->latestSimulator($request, $friendship);
         $spectator = app(SimulatorController::class)->spectate($request, $simulator->fresh());
+        $comments = app(SimulatorController::class)->comments($request, $simulator->fresh());
 
         $this->assertSame($simulator->id, $latest->resource->id);
         $this->assertSame($simulator->id, $spectator->resource->id);
@@ -198,6 +199,46 @@ class SimulatorSnapshotTest extends TestCase
         $this->assertEquals(18.7816, (float) $spectator->resource->latitude);
         $this->assertEquals(99.0064, (float) $spectator->resource->longitude);
         $this->assertSame('private', $spectator->resource->share_visibility);
+        $this->assertSame([], $comments->getData(true)['data']);
+    }
+
+    public function test_public_live_simulator_comments_are_available_to_a_non_friend_viewer(): void
+    {
+        [$simulator] = $this->seedSimulator();
+        $simulator->update(['share_visibility' => 'public']);
+
+        $viewer = User::query()->forceCreate([
+            'id' => 100,
+            'username' => 'public-viewer',
+            'email' => 'public-viewer@example.test',
+            'password' => 'password',
+        ]);
+        $request = Request::create('/api/simulators/'.$simulator->id.'/comments', 'GET');
+        $request->setUserResolver(fn () => $viewer);
+
+        $comments = app(SimulatorController::class)->comments($request, $simulator->fresh());
+
+        $this->assertSame([], $comments->getData(true)['data']);
+    }
+
+    public function test_private_simulator_comments_remain_hidden_from_a_non_friend_viewer(): void
+    {
+        [$simulator] = $this->seedSimulator();
+        $viewer = User::query()->forceCreate([
+            'id' => 100,
+            'username' => 'unrelated-viewer',
+            'email' => 'unrelated-viewer@example.test',
+            'password' => 'password',
+        ]);
+        $request = Request::create('/api/simulators/'.$simulator->id.'/comments', 'GET');
+        $request->setUserResolver(fn () => $viewer);
+
+        try {
+            app(SimulatorController::class)->comments($request, $simulator->fresh());
+            $this->fail('A private simulator conversation must not be visible to an unrelated viewer.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
     }
 
     public function test_item_usage_returns_a_small_pest_delta_without_reloading_the_simulator_graph(): void
@@ -358,6 +399,7 @@ class SimulatorSnapshotTest extends TestCase
     private function buildSchema(): void
     {
         foreach ([
+            'simulator_comments',
             'simulation_pests',
             'simulation_logs',
             'item_usages',
@@ -540,6 +582,16 @@ class SimulatorSnapshotTest extends TestCase
             $table->timestamp('ended_at')->nullable();
             $table->timestamp('maturity_reward_claimed_at')->nullable();
             $table->unsignedInteger('maturity_reward_amount')->default(0);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('simulator_comments', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('simulator_id');
+            $table->unsignedBigInteger('user_id');
+            $table->text('comment_text');
+            $table->string('status', 24)->default('visible');
             $table->timestamps();
             $table->softDeletes();
         });
