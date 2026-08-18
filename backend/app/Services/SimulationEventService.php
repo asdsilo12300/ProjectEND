@@ -33,7 +33,7 @@ class SimulationEventService
                     if (array_key_exists($factor, $factors)) $factors[$factor] = (float) $factors[$factor] + (float) $delta;
                 }
             }
-            $modifiers = SimulationModifier::query()->where('simulator_id', $simulator->id)
+            $modifiers = SimulationModifier::query()->with('action')->where('simulator_id', $simulator->id)
                 ->where('starts_tick', '<=', $tick)->where(fn ($q) => $q->whereNull('ends_tick')->orWhere('ends_tick', '>=', $tick))->get();
             foreach ($modifiers as $modifier) {
                 if (array_key_exists($modifier->factor_key, $factors)) {
@@ -41,13 +41,22 @@ class SimulationEventService
                 }
             }
 
-            return ['factors' => $this->clampFactors($factors), 'events' => $events, 'tick' => $tick];
+            return [
+                'factors' => $this->clampFactors($factors),
+                'events' => $events,
+                'modifiers' => $modifiers,
+                'tick' => $tick,
+            ];
         });
     }
 
     /** @param array<string, int|float|null> $factors */
     private function schedule(Simulator $simulator, int $tick, array $factors): void
     {
+        // Seasonal hazards come from the persisted weather timeline. Random
+        // events here would contradict the weather shown in the forecast HUD.
+        if ($simulator->mode === 'seasonal') return;
+
         $activeHarmful = SimulationEvent::query()->where('simulator_id', $simulator->id)
             ->whereIn('status', ['announced', 'active'])->whereHas('definition', fn ($q) => $q->where('is_harmful', true))->exists();
         if ($activeHarmful) return;
@@ -132,6 +141,12 @@ class SimulationEventService
         }
         foreach (['soil_temp', 'air_temp'] as $key) {
             if (isset($factors[$key])) $factors[$key] = round(min(80, max(-20, (float) $factors[$key])), 2);
+        }
+        foreach (['rain', 'snowfall', 'wind_speed', 'wind_gust', 'shortwave_radiation', 'evapotranspiration'] as $key) {
+            if (isset($factors[$key])) $factors[$key] = round(max(0, (float) $factors[$key]), 2);
+        }
+        if (isset($factors['cloud_cover'])) {
+            $factors['cloud_cover'] = round(min(100, max(0, (float) $factors['cloud_cover'])), 2);
         }
         return $factors;
     }

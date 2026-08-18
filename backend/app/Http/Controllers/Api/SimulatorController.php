@@ -20,6 +20,7 @@ use App\Services\MediaStorage;
 use App\Services\PlantSimulationEngine;
 use App\Services\SimulationActivityTracker;
 use App\Services\SimulationEventService;
+use App\Services\SeasonalWeatherService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -73,12 +74,13 @@ class SimulatorController extends Controller
     {
         $data = $request->validate([
             'plant_id' => ['required', Rule::exists('plants', 'id')->whereNull('deleted_at')],
-            'mode' => ['required', Rule::in(['outdoor', 'greenhouse'])],
+            'mode' => ['required', Rule::in(['outdoor', 'greenhouse', 'seasonal'])],
             'location_name' => ['nullable', 'string', 'max:191'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'latitude' => ['nullable', 'required_if:mode,seasonal', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_if:mode,seasonal', 'numeric', 'between:-180,180'],
             'location_timezone' => ['nullable', 'string', 'max:80'],
             'season' => ['nullable', Rule::in(['summer', 'rainy', 'winter'])],
+            'start_month' => ['nullable', 'required_if:mode,seasonal', 'integer', 'between:1,12'],
         ]);
 
         $plant = Plant::query()->playable()->with('stages')->find($data['plant_id']);
@@ -129,8 +131,17 @@ class SimulatorController extends Controller
             ]);
         });
 
+        if ($simulator->mode === 'seasonal') {
+            if ($simulator->latitude === null || $simulator->longitude === null) {
+                throw ValidationException::withMessages([
+                    'location' => 'Seasonal Journey requires a saved latitude and longitude.',
+                ]);
+            }
+            $simulator = app(SeasonalWeatherService::class)->ensureTimeline($simulator);
+        }
+
         if (
-            $simulator->mode === 'outdoor'
+            in_array($simulator->mode, ['outdoor', 'seasonal'], true)
             && Schema::hasColumn('simulators', 'starter_pack_granted_at')
             && ! $simulator->starter_pack_granted_at
         ) {
@@ -152,6 +163,7 @@ class SimulatorController extends Controller
         Simulator $simulator,
         PlantSimulationEngine $engine,
         SimulationEventService $events,
+        SeasonalWeatherService $seasonalWeather,
     ): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
@@ -168,6 +180,12 @@ class SimulatorController extends Controller
             'root_temperature_controlled' => ['nullable', 'boolean'],
         ]);
 
+        if ($simulator->mode === 'seasonal') {
+            // The browser may preview the timeline, but the persisted owner
+            // timeline remains authoritative for seasonal factors and friend views.
+            $factors = [...$factors, ...$seasonalWeather->factorsForCurrentDay($simulator)];
+        }
+
         // Water and nutrients are consumable plant reserves. They are owned by
         // the server so a stale browser slider/snapshot cannot refill them on
         // every cycle. Weather and scheduled events may still modify the
@@ -176,11 +194,28 @@ class SimulatorController extends Controller
         $factors['fertilizer'] = (int) $simulator->fertilizer;
 
         $eventState = $events->advance($simulator, $factors);
-        $updated = $engine->tick($simulator->fresh(), $eventState['factors']);
-        $updated->loadMissing(['user', 'simulationEvents.definition', 'modifiers']);
+        // PlantSimulationEngine acquires and reloads the locked Simulator
+        // itself, so refreshing it here only added another network round trip.
+        $updated = $engine->tick($simulator, $eventState['factors']);
+        if ($updated->mode === 'seasonal') {
+            $updated = $seasonalWeather->synchronizeWithContext($updated);
+        }
+        // Reuse relations already queried by the event scheduler instead of
+        // fetching them again while serializing the tick response.
+        $updated->setRelation('simulationEvents', $eventState['events']);
+        $updated->setRelation('modifiers', $eventState['modifiers']);
+        $updated->loadMissing(['user']);
         $updated->setAttribute('event_tick_count', $eventState['tick']);
 
         return new SimulatorResource($updated);
+    }
+
+    public function seasonalContext(Request $request, Simulator $simulator, SeasonalWeatherService $seasonalWeather): JsonResponse
+    {
+        abort_unless((int) $simulator->user_id === (int) $request->user()->id, 403);
+        abort_unless($simulator->mode === 'seasonal', 409, 'This simulation is not using Seasonal Journey mode.');
+
+        return response()->json(['data' => $seasonalWeather->context($simulator)]);
     }
 
     private function grantOutdoorStarterPack(Simulator $simulator, int $userId): void

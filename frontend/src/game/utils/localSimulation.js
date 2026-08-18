@@ -38,7 +38,8 @@ function clampChance(value) {
 
 
 export function buildSimulationFactors(climate, outdoorWeather, mode = 'greenhouse') {
-  const forecast = mode === 'outdoor' ? outdoorWeather?.forecast : null
+  const weatherDriven = ['outdoor', 'seasonal'].includes(mode)
+  const forecast = weatherDriven ? outdoorWeather?.forecast : null
   const current = forecast?.current
   const hourly = forecast?.hourly
   const first = (key) => (Array.isArray(hourly?.[key]) ? hourly[key][0] : null)
@@ -49,7 +50,7 @@ export function buildSimulationFactors(climate, outdoorWeather, mode = 'greenhou
     // Outdoor sunlight is owned by local time and weather, never by the
     // greenhouse light slider. Care items may add temporary modifiers on the
     // server, but the baseline always comes from the current day/night state.
-    light: mode === 'outdoor' ? outdoorLight : climate.light,
+    light: weatherDriven ? outdoorLight : climate.light,
     fertilizer: climate.fertilizer,
     soil_humidity: climate.soil,
     air_humidity: climate.air,

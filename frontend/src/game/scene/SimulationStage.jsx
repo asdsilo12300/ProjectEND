@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Environment, Html, OrbitControls } from '@react-three/drei'
 import { imageAssets } from '../data/gameData'
 import { AppIcon } from '../icons/FontAwesomeIcon'
-import { formatRealDays, getRealGrowthEstimate } from '../utils/realGrowth'
+import { formatRealDays, getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from '../utils/realGrowth'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { Loading, PestModel, PlantModel } from './PlantModel'
 import { PlantAttachmentProvider } from './plantAttachments'
@@ -13,6 +13,8 @@ import { useTimeOfDayLighting } from './useTimeOfDayLighting'
 import { ActionAnimation, ActiveCareEffects } from './ActionAnimation'
 import { preloadActionModels } from './actionModelAssets'
 import { PlantRecommendationBanner } from '../panels/PlantMonitorPanel'
+import { SeasonalEffects } from './SeasonalEffects'
+import { localSeasonIcon, localSeasonLabel } from '../utils/seasonalWeather'
 
 function useCurrentAppLanguage() {
   const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
@@ -277,6 +279,147 @@ function formatScaleSeconds(value) {
   return seconds < 10 ? seconds.toFixed(1).replace(/\.0$/, '') : Math.round(seconds).toLocaleString()
 }
 
+function useSeasonalSimulatedClock(context, nextCycleAt) {
+  const [clockNow, setClockNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!context) return undefined
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [context])
+
+  if (!context) return null
+  const baseDate = new Date(`${context?.current?.date ?? context.simulated_datetime?.slice?.(0, 10)}T00:00:00`)
+  if (Number.isNaN(baseDate.getTime())) return null
+  const secondsPerDay = Math.max(1, Number(context.seconds_per_day ?? 18))
+  const remainingSeconds = nextCycleAt == null
+    ? secondsPerDay
+    : Math.max(0, (Number(nextCycleAt) - clockNow) / 1000)
+  const dayProgress = Math.min(1, Math.max(0, 1 - remainingSeconds / secondsPerDay))
+  baseDate.setSeconds(dayProgress * 86400)
+  return baseDate
+}
+
+function weatherSummary(day, isThai) {
+  const rain = Number(day?.rain ?? 0)
+  const snow = Number(day?.snowfall ?? 0)
+  if (snow > 0) return isThai ? `หิมะ ${snow.toFixed(1)} ซม.` : `Snow ${snow.toFixed(1)} cm`
+  if (rain > 0) return isThai ? `ฝน ${rain.toFixed(1)} มม.` : `Rain ${rain.toFixed(1)} mm`
+  if (Number(day?.cloud_cover ?? 0) >= 70) return isThai ? 'เมฆมาก' : 'Cloudy'
+  return isThai ? 'ท้องฟ้าโปร่ง' : 'Clear'
+}
+
+function seasonalRiskLabel(day, isThai) {
+  return {
+    heavy_rain: isThai ? 'เตือนฝนหนัก · เตรียมวัสดุระบายน้ำ' : 'Heavy rain warning · prepare drainage',
+    heat_wave: isThai ? 'เตือนคลื่นความร้อน · เตรียมผ้าบังแดด' : 'Heat wave warning · prepare shade cloth',
+    strong_wind: isThai ? 'เตือนลมแรง · เตรียมแนวกันลม' : 'Strong wind warning · prepare a windbreak',
+    cold_snap: isThai ? 'เตือนอากาศหนาว · เตรียมผ้าคลุมกันหนาว' : 'Cold snap warning · prepare frost cover',
+  }[day?.risk] ?? ''
+}
+
+function seasonalActionLabel(action, isThai) {
+  return {
+    drainage: isThai ? 'ระบายน้ำ' : 'Drainage',
+    shade: isThai ? 'บังแดด' : 'Shade',
+    windbreak: isThai ? 'กันลม' : 'Windbreak',
+    'frost-cover': isThai ? 'กันหนาว' : 'Frost cover',
+  }[action] ?? action ?? ''
+}
+
+function seasonalWeatherIcon(day) {
+  const code = Number(day?.weather_code ?? 0)
+  const rain = Number(day?.rain ?? day?.precipitation ?? 0)
+  const snow = Number(day?.snowfall ?? 0)
+  const cloud = Number(day?.cloud_cover ?? 0)
+
+  if (day?.risk === 'strong_wind') return 'wind'
+  if (day?.risk === 'cold_snap' || snow > 0 || (code >= 71 && code <= 86)) return 'weatherSnow'
+  if (day?.risk === 'heavy_rain' || rain >= 15 || [65, 67, 82].includes(code)) return 'weatherHeavyRain'
+  if (code >= 95 || day?.risk === 'heat_wave') return day?.risk === 'heat_wave' ? 'lightMode' : 'weatherStorm'
+  if (rain > 0 || (code >= 51 && code <= 63) || (code >= 80 && code <= 81)) return 'weatherRain'
+  if ([45, 48].includes(code)) return 'weatherFog'
+  if (cloud >= 75 || code === 3) return 'weatherCloud'
+  if (cloud >= 25 || code === 2) return 'weatherCloudSun'
+  return 'lightMode'
+}
+
+function seasonalWeatherIconClass(day) {
+  const icon = seasonalWeatherIcon(day)
+  if (icon === 'weatherStorm' || day?.risk === 'heat_wave') return 'text-amber-300'
+  if (icon === 'weatherSnow') return 'text-sky-100'
+  if (icon === 'weatherRain' || icon === 'weatherHeavyRain') return 'text-sky-300'
+  if (icon === 'wind') return 'text-cyan-200'
+  if (icon === 'lightMode') return 'text-amber-200'
+  return 'text-slate-200'
+}
+
+function SeasonalStatusPanel({ context, plantSelected, simulatedTime, solarLighting }) {
+  const language = useCurrentAppLanguage()
+  const isThai = language === 'th'
+  const day = context?.current ?? {}
+  const forecast = Array.isArray(context?.forecast) ? context.forecast : []
+  const seasonLabel = localSeasonLabel(context?.season_key ?? day.season_key, language)
+  const seasonIcon = localSeasonIcon(context?.season_key ?? day.season_key)
+  const dateLabel = day?.date
+    ? new Intl.DateTimeFormat(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${day.date}T12:00:00`))
+    : '—'
+  const timeLabel = simulatedTime
+    ? new Intl.DateTimeFormat(isThai ? 'th-TH' : 'en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(simulatedTime)
+    : '—'
+  const nextSeason = context?.next_season
+  const nextSeasonLabel = nextSeason
+    ? `${localSeasonLabel(nextSeason.season_key, language)} · ${nextSeason.starts_in_days} ${isThai ? 'วัน' : 'days'}`
+    : isThai ? 'อยู่ในฤดูกาลสุดท้ายของ Timeline' : 'Final season in timeline'
+
+  return (
+    <section className="seasonal-status-panel pointer-events-none min-w-0 flex-[1_1_610px] overflow-hidden rounded-xl border border-emerald-100/20 bg-[#0b1510]/95 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.4)] backdrop-blur-md" aria-label={isThai ? 'ข้อมูลการปลูกตามฤดูกาล' : 'Seasonal Journey status'}>
+      <div className="grid grid-cols-[1.18fr_.72fr_1fr] divide-x divide-emerald-100/10">
+        <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-200/15 bg-emerald-300/10 text-emerald-200" aria-hidden="true">
+            <AppIcon className="h-4 w-4" name={seasonIcon} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/75">{isThai ? 'ฤดูกาลปัจจุบัน' : 'Current season'}</span>
+            <strong className="mt-0.5 block whitespace-nowrap text-base leading-tight text-lime-50">{seasonLabel}</strong>
+            <span className="block truncate text-[11px] text-slate-300">{dateLabel} · {weatherSummary(day, isThai)}</span>
+          </span>
+        </div>
+        <div className="flex min-w-0 flex-col items-center justify-center px-3 py-2 text-center">
+          <span className={`grid h-6 w-6 place-items-center rounded-full ${solarLighting.isDay ? 'bg-amber-200/10 text-amber-200' : 'bg-sky-200/10 text-sky-200'}`}>
+            <AppIcon className="h-3.5 w-3.5" name={solarLighting.isDay ? 'lightMode' : 'darkMode'} />
+          </span>
+          <strong className="mt-1 text-lg leading-none text-white">{timeLabel}</strong>
+          <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-300">{solarLighting.isDay ? (isThai ? 'กลางวัน' : 'Daytime') : (isThai ? 'กลางคืน' : 'Nighttime')}</span>
+        </div>
+        <div className="min-w-0 px-3 py-2.5 text-right">
+          <span className="text-[11px] font-black uppercase tracking-[0.12em] text-cyan-200/75">{isThai ? 'ความคืบหน้า' : 'Journey progress'}</span>
+          <strong className="mt-0.5 block truncate text-sm text-cyan-50">{plantSelected ? `${context?.calendar_day ?? 0} ${isThai ? 'วันปฏิทิน' : 'calendar days'}` : '—'}</strong>
+          <span className="block truncate text-[11px] text-slate-300">{Number(context?.biological_days ?? 0).toFixed(1)} {isThai ? 'วันเติบโตสะสม' : 'biological days'}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t border-emerald-100/10 bg-black/20 px-3 py-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-cyan-100">
+          <AppIcon className="h-3 w-3" name="clock" />
+          <span>{context?.seconds_per_day ?? 18} {isThai ? 'วินาที = 1 วันจำลอง' : 'seconds = 1 simulated day'}</span>
+        </div>
+        <div className="flex min-w-0 justify-center gap-1.5 overflow-hidden" aria-label={isThai ? 'พยากรณ์ 5 วันจำลอง' : 'Five simulated day forecast'}>
+          {forecast.slice(0, 5).map((forecastDay) => (
+            <span key={forecastDay.date} className={`grid min-w-[42px] grid-cols-[auto_auto] items-center justify-center gap-x-1 rounded-md border px-1.5 py-1 text-center text-[10px] ${forecastDay.risk ? 'border-amber-300/45 bg-amber-300/10' : 'border-white/[0.06] bg-white/[0.035]'}`} title={`${forecastDay.date} · ${weatherSummary(forecastDay, isThai)}${forecastDay.risk ? ` · ${seasonalRiskLabel(forecastDay, isThai)} · ${seasonalActionLabel(forecastDay.recommended_action, isThai)}` : ''}`}>
+              <AppIcon className={`h-4 w-4 ${seasonalWeatherIconClass(forecastDay)}`} name={seasonalWeatherIcon(forecastDay)} />
+              <b className="text-lime-50">{Math.round(Number(forecastDay.temperature_mean ?? 0))}°</b>
+            </span>
+          ))}
+        </div>
+        <div className="min-w-0 text-right text-[11px] leading-4 text-slate-300" title={context?.[isThai ? 'source_label_th' : 'source_label_en']}>
+          <span className="block max-w-[220px] truncate font-semibold text-emerald-100">{context?.[isThai ? 'source_label_th' : 'source_label_en'] ?? '—'}</span>
+          <span className="block max-w-[220px] truncate">{isThai ? 'ฤดูถัดไป: ' : 'Next: '}{nextSeasonLabel}</span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, solarLighting, weatherStatus = 'idle' }) {
   const language = getAppLanguage()
   const isThai = language === 'th'
@@ -359,22 +502,38 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
   )
 }
 
-function ControlledGrowthStatusPanel({ plantSelected, simulationVisual }) {
-  const language = getAppLanguage()
+function ControlledGrowthStatusPanel({
+  busy = false,
+  locked = false,
+  lockedReason = '',
+  onAdvanceCycle,
+  onSpeedChange,
+  plantSelected,
+  simulationSpeed = 1,
+  simulationVisual,
+}) {
+  const language = useCurrentAppLanguage()
   const isThai = language === 'th'
-  const estimate = getRealGrowthEstimate(simulationVisual)
+  const estimate = getRealGrowthEstimate(simulationVisual, SIMULATION_CYCLE_SECONDS / simulationSpeed)
   const secondsPerDay = estimate.currentSecondsPerRealDay ?? estimate.normalSecondsPerRealDay
   const progress = plantSelected ? Math.min(100, Math.max(0, estimate.progressPercent)) : 0
+  const controlsAvailable = Boolean(plantSelected && onSpeedChange)
+  const skipDisabled = !controlsAvailable || !onAdvanceCycle || busy || locked
+  const timeScaleLabel = plantSelected
+    ? isThai
+      ? `${formatScaleSeconds(secondsPerDay)}วิ = 1วัน`
+      : `${formatScaleSeconds(secondsPerDay)}s = 1d`
+    : isThai ? 'เลือกพืชก่อน' : 'Select plant'
 
   return (
     <section
-      className="controlled-growth-status-panel pointer-events-none min-w-0 flex-[0_0_218px] overflow-hidden rounded-xl border border-emerald-100/20 bg-[#0c1710]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.36)] backdrop-blur-md"
+      className="controlled-growth-status-panel min-w-0 flex-[0_0_238px] overflow-hidden rounded-xl border border-emerald-100/20 bg-[#0c1710]/94 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.36)] backdrop-blur-md"
       aria-label={isThai ? 'ข้อมูลวันเติบโตโหมดควบคุมปัจจัย' : 'Environment control growth status'}
       aria-live="polite"
     >
-      <div className="flex items-center gap-2 px-2.5 py-1.5">
+      <div className="flex items-center gap-2 px-2 py-1.5">
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-emerald-100/10 bg-emerald-300/10 text-emerald-200">
-          <AppIcon className="h-4 w-4" name="sprout" />
+          <AppIcon className="h-3.5 w-3.5" name="sprout" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
@@ -385,14 +544,9 @@ function ControlledGrowthStatusPanel({ plantSelected, simulationVisual }) {
               {isThai ? 'ควบคุมปัจจัย' : 'Controlled'}
             </span>
           </div>
-          <strong className="block truncate text-[15px] leading-tight text-lime-50">
+          <strong className="block truncate text-sm leading-tight text-lime-50">
             {plantSelected ? `${formatRealDays(estimate.equivalentDays)} / ~${formatRealDays(estimate.maturityDays)}` : '—'}
           </strong>
-          <span className="block truncate text-[9px] leading-tight text-slate-400">
-            {plantSelected
-              ? isThai ? 'วันเทียบการเติบโตในชีวิตจริง' : 'real-life growth equivalent'
-              : isThai ? 'เลือกพืชเพื่อเริ่มคำนวณ' : 'Select a plant to begin calculation'}
-          </span>
         </div>
       </div>
 
@@ -403,27 +557,51 @@ function ControlledGrowthStatusPanel({ plantSelected, simulationVisual }) {
         />
       </div>
 
-      <div className="flex items-center justify-center gap-1.5 border-t border-emerald-100/10 bg-black/20 px-2 py-1 text-[9px] leading-tight text-slate-300">
-        <AppIcon className="h-3 w-3 text-cyan-300" name="clock" />
-        <span>
-          {plantSelected
-            ? isThai
-              ? `${formatScaleSeconds(secondsPerDay)} วินาทีในเกม = 1 วันเติบโตจริง`
-              : `${formatScaleSeconds(secondsPerDay)} game seconds = 1 real-life growth day`
-            : isThai ? 'อัตราเวลาจะแสดงหลังเลือกพืช' : 'Time scale appears after selecting a plant'}
+      <div className="flex items-center gap-1 border-t border-emerald-100/10 bg-black/20 px-1.5 py-1 text-[9px] leading-tight text-slate-300">
+        <span className="mr-auto inline-flex min-w-0 items-center gap-1 whitespace-nowrap" title={lockedReason || (isThai ? 'อัตราเวลาเทียบการเติบโตจริง' : 'Real-life growth time scale')}>
+          <AppIcon className="h-2.5 w-2.5 text-cyan-300" name="clock" />
+          {timeScaleLabel}
         </span>
+        {controlsAvailable && [1, 2, 4].map((speed) => (
+          <button
+            key={speed}
+            type="button"
+            aria-label={isThai ? `ใช้ความเร็ว x${speed}` : `Use x${speed} speed`}
+            aria-pressed={simulationSpeed === speed}
+            className={`pointer-events-auto h-6 min-w-7 rounded-md border px-1 font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${simulationSpeed === speed ? 'border-lime-200/50 bg-lime-300 text-[#0b120d]' : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-lime-200/30 hover:text-lime-100'} disabled:cursor-not-allowed disabled:opacity-35`}
+            disabled={busy || (locked && speed > 1)}
+            title={locked && speed > 1 ? lockedReason : ''}
+            onClick={() => onSpeedChange(speed)}
+          >
+            x{speed}
+          </button>
+        ))}
+        {controlsAvailable && (
+          <button
+            type="button"
+            className="pointer-events-auto inline-flex h-6 items-center gap-1 rounded-md border border-cyan-200/20 bg-cyan-300/10 px-1.5 font-bold text-cyan-100 transition hover:bg-cyan-300/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-200 disabled:cursor-not-allowed disabled:opacity-35"
+            disabled={skipDisabled}
+            title={locked ? lockedReason : (isThai ? 'คำนวณรอบถัดไปทันที' : 'Calculate the next cycle now')}
+            onClick={onAdvanceCycle}
+          >
+            <AppIcon className="h-2.5 w-2.5" name="panelOpen" />
+            {busy ? '…' : isThai ? 'ข้าม' : 'Skip'}
+          </button>
+        )}
       </div>
     </section>
   )
 }
 
-export function SimulationStage({ actionState = null, awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onSceneReady, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationVisual, snapshotRef = null, toggleLiveShare, weatherStatus = 'idle' }) {
+export function SimulationStage({ actionState = null, awaitingFirstCycle = false, coinBurst = null, cycleStatus = 'idle', emptyGardenOwnerName = '', expBurst = null, location = null, mode = 'greenhouse', nextCycleAt = null, onAdvanceCycle, onSceneReady, onSimulationSpeedChange, outdoorReadings = null, plantSelected = false, sceneLoadKey = null, seasonalContext = null, selectedItemCursorUrl = null, onUseSelectedItem, readOnly = false, resetSimulation, saveSimulation, sceneAssets = {}, shareBusy = false, shareVisibility = 'private', simulationSpeed = 1, simulationVisual, snapshotRef = null, timeControlsLocked = false, timeControlsReason = '', toggleLiveShare, weatherStatus = 'idle' }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const [itemCursorPoint, setItemCursorPoint] = useState(null)
   const language = useCurrentAppLanguage()
   const isThai = language === 'th'
-  const solarLighting = useTimeOfDayLighting(location)
+  const seasonalTime = useSeasonalSimulatedClock(seasonalContext, nextCycleAt)
+  const solarLighting = useTimeOfDayLighting(location, mode === 'seasonal' ? seasonalTime : null)
+  const isWeatherDriven = mode === 'outdoor' || mode === 'seasonal'
   const pests = simulationVisual?.active_pests ?? []
   const fungusRisk = pests.reduce((highestRisk, pest) => {
     const pestName = String(
@@ -516,8 +694,8 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
           })}
         >
         <Canvas shadows camera={{ position: [0.75, 1.2, 4.8], fov: 34 }} gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={({ gl }) => { canvasRef.current = gl.domElement }}>
-          <color attach="background" args={[mode === 'outdoor' ? '#07110b' : '#173c26']} />
-          {mode !== 'outdoor' && (
+          <color attach="background" args={[isWeatherDriven ? '#07110b' : '#173c26']} />
+          {!isWeatherDriven && (
             <>
               <ambientLight intensity={0.85} />
               <directionalLight position={[3, 5, 4]} intensity={2.9} color="#d7fff0" />
@@ -526,7 +704,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
             </>
           )}
           <Suspense fallback={<Loading />}>
-            {mode === 'outdoor'
+            {isWeatherDriven
               ? (
                 <TimeOfDayEnvironment
                   plantSelected={plantSelected}
@@ -536,16 +714,18 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
               )
               : <Environment preset="city" />}
             <SceneEnvironment
-              daylight={mode === 'outdoor' ? solarLighting.daylight : 1}
+              daylight={isWeatherDriven ? solarLighting.daylight : 1}
               dirtModelUrl={sceneAssets['ground.dirt']?.url}
               mode={mode}
               plantingAreaLabel={plantingAreaLabel}
               plantSelected={plantSelected}
               onPlantingSurface={handlePlantingSurface}
               rainfall={outdoorReadings?.rain}
+              seasonKey={seasonalContext?.season_key}
               windDirection={outdoorReadings?.windDirection}
               windSpeed={outdoorReadings?.windSpeed}
             />
+            {mode === 'seasonal' && <SeasonalEffects context={seasonalContext} />}
             {plantSelected && (
               <PlantAttachmentProvider>
                 <PlantModel
@@ -638,10 +818,17 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
           </div>
         )}
         <div
-          className={`simulation-guidance-cluster simulation-guidance-cluster--${mode === 'outdoor' ? 'outdoor' : 'controlled'} ${readOnly ? 'simulation-guidance-cluster--readonly' : ''}`}
+          className={`simulation-guidance-cluster simulation-guidance-cluster--${isWeatherDriven ? 'outdoor' : 'controlled'} ${readOnly ? 'simulation-guidance-cluster--readonly' : ''}`}
           data-tour="simulation-guidance"
         >
-          {mode === 'outdoor' ? (
+          {mode === 'seasonal' ? (
+            <SeasonalStatusPanel
+              context={seasonalContext}
+              plantSelected={plantSelected}
+              simulatedTime={seasonalTime}
+              solarLighting={solarLighting}
+            />
+          ) : mode === 'outdoor' ? (
             <OutdoorStatusPanel
               outdoorReadings={outdoorReadings}
               plantSelected={plantSelected}
@@ -651,7 +838,13 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
             />
           ) : (
             <ControlledGrowthStatusPanel
+              busy={cycleStatus === 'updating' || ['animating', 'applying'].includes(actionState?.phase)}
+              locked={timeControlsLocked}
+              lockedReason={timeControlsReason}
+              onAdvanceCycle={readOnly ? null : onAdvanceCycle}
+              onSpeedChange={readOnly ? null : onSimulationSpeedChange}
               plantSelected={plantSelected}
+              simulationSpeed={simulationSpeed}
               simulationVisual={simulationVisual}
             />
           )}

@@ -119,17 +119,103 @@ function stageForPlant(plant, growthPoint) {
   return stages.filter((stage) => Number(stage.required_growth_point) <= Number(growthPoint)).at(-1) ?? stages[0] ?? null
 }
 
+const previewSeasonByMonth = (month, latitude = 13.7563) => {
+  const adjusted = latitude < 0 ? ((Number(month) + 5) % 12) + 1 : Number(month)
+  if ([6, 7, 8, 9, 10].includes(adjusted)) return 'rainy'
+  if ([3, 4, 5].includes(adjusted)) return 'hot'
+  return 'cool_dry'
+}
+
+function createDemoSeasonalContext({ calendarDay = 0, biologicalDays = 0, latitude = 13.7563, startMonth = new Date().getMonth() + 1 } = {}) {
+  const started = new Date(new Date().getFullYear(), Number(startMonth) - 1, 1, 12, 0, 0)
+  const makeDay = (offset) => {
+    const date = new Date(started.getTime() + ((Number(calendarDay) + offset) * 86_400_000))
+    const dayIndex = Number(calendarDay) + offset
+    const seasonKey = previewSeasonByMonth(date.getMonth() + 1, Number(latitude))
+    const weatherNoise = ((dayIndex * 37 + Number(startMonth) * 11) % 17) - 8
+    const rain = seasonKey === 'rainy' ? Math.max(0, 8 + weatherNoise * 1.7) : Math.max(0, weatherNoise - 5)
+    const temperature = seasonKey === 'hot' ? 34 + weatherNoise * 0.2 : seasonKey === 'cool_dry' ? 24 + weatherNoise * 0.16 : 28 + weatherNoise * 0.15
+    const gust = 16 + Math.abs(weatherNoise) * 2.2
+    const risk = rain >= 25 ? 'heavy_rain' : temperature >= 36 ? 'heat_wave' : gust >= 45 ? 'strong_wind' : null
+    return {
+      day_index: dayIndex,
+      date: date.toISOString().slice(0, 10),
+      season_key: seasonKey,
+      weather_code: rain > 12 ? 63 : rain > 0 ? 61 : 1,
+      temperature_mean: Number(temperature.toFixed(1)),
+      temperature_min: Number((temperature - 4).toFixed(1)),
+      temperature_max: Number((temperature + 5).toFixed(1)),
+      soil_temperature: Number((temperature + 0.8).toFixed(1)),
+      humidity: Math.round(Math.min(94, 54 + rain * 1.8)),
+      precipitation: Number(rain.toFixed(1)),
+      rain: Number(rain.toFixed(1)),
+      snowfall: 0,
+      wind_speed: Number((gust * 0.55).toFixed(1)),
+      wind_gust: Number(gust.toFixed(1)),
+      wind_direction: (dayIndex * 47) % 360,
+      cloud_cover: Math.round(Math.min(96, 24 + rain * 3)),
+      shortwave_radiation: Number(Math.max(3, 18 - rain * 0.22).toFixed(1)),
+      evapotranspiration: Number(Math.max(1, 2.8 + (temperature - 25) * 0.15).toFixed(1)),
+      soil_moisture: Number(Math.min(0.55, 0.2 + rain * 0.009).toFixed(2)),
+      daylight_hours: 12,
+      source: 'historical_reanalysis',
+      is_forecast: false,
+      risk,
+      recommended_action: risk === 'heavy_rain' ? 'drainage' : risk === 'heat_wave' ? 'shade' : risk === 'strong_wind' ? 'windbreak' : null,
+    }
+  }
+  const days = Array.from({ length: 6 }, (_, index) => makeDay(index))
+  return {
+    climate_zone: 'tropical',
+    season_key: days[0].season_key,
+    start_month: Number(startMonth),
+    calendar_day: Number(calendarDay),
+    biological_days: Number(biologicalDays),
+    simulated_datetime: `${days[0].date}T12:00:00+07:00`,
+    seconds_per_day: 18,
+    weather_seed: 24681357,
+    weather_profile_version: 'demo-open-meteo-v1',
+    location_timezone: 'Asia/Bangkok',
+    weather_source: 'historical_reanalysis',
+    source_label_en: 'Simulated from real historical weather',
+    source_label_th: 'จำลองจากข้อมูลอากาศจริง',
+    current: days[0],
+    forecast: days.slice(1),
+    next_season: { season_key: days[0].season_key === 'rainy' ? 'cool_dry' : 'rainy', starts_in_days: 74, date: new Date(started.getTime() + ((Number(calendarDay) + 74) * 86_400_000)).toISOString().slice(0, 10) },
+  }
+}
+
 function createSimulator(plant = fallbackPlants[0], overrides = {}) {
   const growthPoint = Number(overrides.growth_point ?? 64)
   const currentStage = stageForPlant(plant, growthPoint)
+  const mode = overrides.mode ?? 'greenhouse'
+  const seasonalContext = mode === 'seasonal'
+    ? createDemoSeasonalContext({
+        calendarDay: overrides.calendar_day ?? 0,
+        biologicalDays: overrides.biological_days ?? 0,
+        latitude: overrides.latitude ?? 13.7563,
+        startMonth: overrides.start_month ?? new Date().getMonth() + 1,
+      })
+    : null
   return {
     id: overrides.id ?? 99001,
     plant_id: plant.id,
-    mode: overrides.mode ?? 'greenhouse',
+    mode,
     location_name: overrides.location_name ?? null,
     latitude: overrides.latitude ?? null,
     longitude: overrides.longitude ?? null,
-    season: null,
+    location_timezone: overrides.location_timezone ?? (mode === 'seasonal' ? 'Asia/Bangkok' : null),
+    climate_zone: seasonalContext?.climate_zone ?? null,
+    season_key: seasonalContext?.season_key ?? null,
+    start_month: seasonalContext?.start_month ?? null,
+    simulated_datetime: seasonalContext?.simulated_datetime ?? null,
+    calendar_day: seasonalContext?.calendar_day ?? 0,
+    biological_days: seasonalContext?.biological_days ?? 0,
+    weather_seed: seasonalContext?.weather_seed ?? null,
+    weather_source: seasonalContext?.weather_source ?? null,
+    weather_profile_version: seasonalContext?.weather_profile_version ?? null,
+    seasonal_context: seasonalContext,
+    season: seasonalContext?.season_key ?? null,
     growth_point: growthPoint,
     growth_rate: Number(overrides.growth_rate ?? 8),
     health: Number(overrides.health ?? 92),
@@ -472,7 +558,11 @@ export async function handleDemoApiRequest(path, options = {}) {
   if (cleanPath === '/simulators/latest' && method === 'GET') return { handled: true, payload: { data: clone(session.simulators[0] ?? null) } }
   if (cleanPath === '/simulators' && method === 'POST') {
     const plant = session.plants.find((item) => Number(item.id) === Number(body.plant_id)) ?? session.plants[0]
-    const simulator = createSimulator(plant, { id: session.nextId++, mode: body.mode, location_name: body.location_name, latitude: body.latitude, longitude: body.longitude, growth_point: 0, growth_rate: 0, active_seconds: 0 })
+    const simulator = createSimulator(plant, {
+      id: session.nextId++, mode: body.mode, location_name: body.location_name,
+      latitude: body.latitude, longitude: body.longitude, location_timezone: body.location_timezone,
+      start_month: body.start_month, growth_point: 0, growth_rate: 0, active_seconds: 0,
+    })
     session.simulators = [simulator, ...session.simulators.filter((item) => Number(item.plant_id) !== Number(plant.id))]
     return { handled: true, payload: { data: clone(simulator) } }
   }
@@ -575,6 +665,30 @@ export async function handleDemoApiRequest(path, options = {}) {
   if (cleanPath === '/locations/weather-preview' && method === 'GET') {
     return { handled: true, payload: { data: { current: { temperature_2m: 27, precipitation: 0, rain: 0, wind_speed_10m: 8, weather_code: 1 }, timezone: 'Asia/Bangkok' } } }
   }
+  if (cleanPath === '/locations/seasonal-preview' && method === 'GET') {
+    const query = new URLSearchParams(String(path).split('?')[1] ?? '')
+    const latitude = Number(query.get('latitude') ?? 13.7563)
+    const month = Math.max(1, Math.min(12, Number(query.get('month') ?? new Date().getMonth() + 1)))
+    const plant = session.plants.find((entry) => String(entry.id) === String(query.get('plant_id'))) ?? null
+    const seasonKey = previewSeasonByMonth(month, latitude)
+    const mean = seasonKey === 'hot' ? 34 : seasonKey === 'rainy' ? 28 : 24
+    const minimum = Number(plant?.environment?.air_temp?.min ?? 18)
+    const maximum = Number(plant?.environment?.air_temp?.max ?? 34)
+    const distance = mean < minimum ? minimum - mean : mean > maximum ? mean - maximum : 0
+    const score = Math.max(0, Math.min(100, Math.round(100 - distance * 9)))
+    return { handled: true, payload: { data: {
+      climate_zone: 'tropical', season_key: seasonKey, month,
+      temperature_mean: mean, precipitation_daily_mean: seasonKey === 'rainy' ? 11.8 : 1.2,
+      suitability_score: score, suitability: score >= 80 ? 'excellent' : score >= 50 ? 'manageable' : 'high_risk',
+      source: 'historical_reanalysis', source_label_en: 'Historical weather profile',
+      source_label_th: 'ข้อมูลอากาศย้อนหลัง', location_timezone: 'Asia/Bangkok',
+    } } }
+  }
+
+  const seasonalContextMatch = cleanPath.match(/^\/simulators\/([^/]+)\/seasonal-context$/)
+  if (seasonalContextMatch && method === 'GET') {
+    return { handled: true, payload: { data: clone(simulatorById(seasonalContextMatch[1])?.seasonal_context ?? null) } }
+  }
 
   const simulatorMatch = cleanPath.match(/^\/simulators\/([^/]+)(?:\/(tick|sync|finish|uproot|share|claim-maturity-reward|use-item|prank|histories|comments))?$/)
   if (simulatorMatch) {
@@ -583,13 +697,26 @@ export async function handleDemoApiRequest(path, options = {}) {
     if (action === 'tick') {
       const next = updateSimulator(simulatorId, (current) => {
         const factors = body.factors ?? body
-        const rainRecovery = current.mode === 'outdoor' ? Math.min(12, Math.round(Number(factors.rain ?? 0) * 4)) : 0
-        const waterConsumed = Math.max(2, Math.min(8, Math.round(3 + Math.max(0, Number(factors.air_temp ?? current.air_temp) - 32) * .18)))
+        const weatherDriven = ['outdoor', 'seasonal'].includes(current.mode)
+        const seasonalDay = current.mode === 'seasonal' ? current.seasonal_context?.current : null
+        const appliedFactors = seasonalDay ? {
+          ...factors,
+          light: Math.max(0, Math.min(100, Math.round(Number(seasonalDay.shortwave_radiation ?? 15) * 4.2))),
+          soil_humidity: Math.max(0, Math.min(100, Math.round(Number(seasonalDay.soil_moisture ?? .2) * 200))),
+          air_humidity: Number(seasonalDay.humidity ?? factors.air_humidity),
+          soil_temp: Number(seasonalDay.soil_temperature ?? factors.soil_temp),
+          air_temp: Number(seasonalDay.temperature_mean ?? factors.air_temp),
+          rain: Number(seasonalDay.rain ?? 0),
+          wind_speed: Number(seasonalDay.wind_speed ?? 0),
+          wind_gust: Number(seasonalDay.wind_gust ?? 0),
+        } : factors
+        const rainRecovery = weatherDriven ? Math.min(12, Math.round(Number(appliedFactors.rain ?? 0) * 4)) : 0
+        const waterConsumed = Math.max(2, Math.min(8, Math.round(3 + Math.max(0, Number(appliedFactors.air_temp ?? current.air_temp) - 32) * .18)))
         const water = Math.max(0, Math.min(100, Number(current.water) - waterConsumed + rainRecovery))
         const fertilizerConsumed = (Number(current.event_tick_count ?? 0) + 1) % 4 === 0 ? 1 : 0
         const fertilizer = Math.max(0, Number(current.fertilizer) - fertilizerConsumed)
-        const light = Number(factors.light ?? current.light)
-        const airTemp = Number(factors.air_temp ?? current.air_temp)
+        const light = Number(appliedFactors.light ?? current.light)
+        const airTemp = Number(appliedFactors.air_temp ?? current.air_temp)
         const optimal = current.plant?.environment ?? {}
         const center = (range, fallback) => range ? (Number(range.min) + Number(range.max)) / 2 : fallback
         const resourceStress = water <= 8 ? 55 : water <= 25 ? 25 : 0
@@ -597,9 +724,17 @@ export async function handleDemoApiRequest(path, options = {}) {
         const stress = resourceStress + nutrientStress + Math.abs(light - center(optimal.light, 72)) * .35 + Math.abs(airTemp - center(optimal.air_temp, 26)) * 2.2
         const health = Math.max(0, Math.min(100, Math.round(100 - stress)))
         const growthRate = health >= 80 ? 8 : health >= 55 ? 3 : 0
-        const growthPoint = Math.min(100, Number(current.growth_point) + growthRate)
+        const biologicalIncrement = health <= 0 ? 0 : Math.max(0, Math.min(1, growthRate / 8))
+        const biologicalDays = Number(current.biological_days ?? 0) + biologicalIncrement
+        const growthPoint = current.mode === 'seasonal'
+          ? Math.min(100, Math.round((biologicalDays / Number(current.plant?.real_maturity_days ?? 100)) * 100))
+          : Math.min(100, Number(current.growth_point) + growthRate)
         const eventTick = Number(current.event_tick_count ?? 0) + 1
-        return { ...current, ...factors, water, fertilizer, plant_needs: { water, fertilizer, rates: { water_per_cycle: waterConsumed, fertilizer_per_cycle: fertilizerConsumed, rain_recovery: rainRecovery } }, air_temp: airTemp, health, growth_rate: growthRate, growth_point: growthPoint, current_stage: stageForPlant(current.plant, growthPoint), current_model_url: stageForPlant(current.plant, growthPoint)?.model_url ?? current.plant?.base_model_url, state_version: Number(current.state_version ?? 0) + 1, event_tick_count: eventTick, active_seconds: Number(current.active_seconds ?? 0) + 30, visual_state: water <= 25 ? 'underwatered' : fertilizer <= 22 ? 'nutrient_deficient' : health < 45 ? 'stunted' : 'healthy', updated_at: nowIso() }
+        const calendarDay = Number(current.calendar_day ?? 0) + (current.mode === 'seasonal' ? 1 : 0)
+        const seasonalContext = current.mode === 'seasonal'
+          ? createDemoSeasonalContext({ calendarDay, biologicalDays, latitude: current.latitude, startMonth: current.start_month })
+          : current.seasonal_context
+        return { ...current, ...appliedFactors, water, fertilizer, biological_days: biologicalDays, calendar_day: calendarDay, simulated_datetime: seasonalContext?.simulated_datetime ?? current.simulated_datetime, seasonal_context: seasonalContext, season_key: seasonalContext?.season_key ?? current.season_key, weather_source: seasonalContext?.weather_source ?? current.weather_source, plant_needs: { water, fertilizer, rates: { water_per_cycle: waterConsumed, fertilizer_per_cycle: fertilizerConsumed, rain_recovery: rainRecovery } }, air_temp: airTemp, health, growth_rate: growthRate, growth_point: growthPoint, current_stage: stageForPlant(current.plant, growthPoint), current_model_url: stageForPlant(current.plant, growthPoint)?.model_url ?? current.plant?.base_model_url, state_version: Number(current.state_version ?? 0) + 1, event_tick_count: eventTick, active_seconds: Number(current.active_seconds ?? 0) + 30, visual_state: water <= 25 ? 'underwatered' : fertilizer <= 22 ? 'nutrient_deficient' : health < 45 ? 'stunted' : 'healthy', updated_at: nowIso() }
       })
       return { handled: true, payload: { data: clone(next) } }
     }

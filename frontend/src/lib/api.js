@@ -780,6 +780,20 @@ export async function getLocationWeatherPreview(latitude, longitude) {
   return apiFetch(`/locations/weather-preview?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`)
 }
 
+export async function getSeasonalLocationPreview(latitude, longitude, month, plantId = null) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    month: String(month),
+  })
+  if (plantId != null) params.set('plant_id', String(plantId))
+  return apiFetch(`/locations/seasonal-preview?${params.toString()}`)
+}
+
+export async function getSeasonalContext(simulatorId) {
+  return apiFetch(`/simulators/${simulatorId}/seasonal-context`)
+}
+
 export async function getSimulatorEvents(simulatorId) {
   return apiFetch(`/simulators/${simulatorId}/events`)
 }

@@ -48,6 +48,15 @@ class Simulator extends Model
         'event_tick_count',
         'last_harmful_event_at',
         'starter_pack_granted_at',
+        'climate_zone',
+        'season_key',
+        'start_month',
+        'simulated_datetime',
+        'calendar_day',
+        'biological_days',
+        'weather_seed',
+        'weather_source',
+        'weather_profile_version',
     ];
 
     protected function casts(): array
@@ -70,6 +79,11 @@ class Simulator extends Model
             'last_harmful_event_at' => 'datetime',
             'starter_pack_granted_at' => 'datetime',
             'event_tick_count' => 'integer',
+            'start_month' => 'integer',
+            'simulated_datetime' => 'datetime',
+            'calendar_day' => 'integer',
+            'biological_days' => 'float',
+            'weather_seed' => 'integer',
         ];
     }
 
@@ -121,5 +135,10 @@ class Simulator extends Model
     public function modifiers(): HasMany
     {
         return $this->hasMany(SimulationModifier::class);
+    }
+
+    public function weatherDays(): HasMany
+    {
+        return $this->hasMany(SimulationWeatherDay::class)->orderBy('day_index');
     }
 }

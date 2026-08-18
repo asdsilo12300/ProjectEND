@@ -91,7 +91,7 @@ function createGrassPlacements(mode, groundObject) {
   const groundSurface = findGroundSurface(groundObject)
   if (!groundSurface) return placements
 
-  const isOutdoor = mode === 'outdoor'
+  const isOutdoor = mode === 'outdoor' || mode === 'seasonal'
   const seed = isOutdoor ? 48271 : 91357
   const random = seededRandom(seed)
   const groundBounds = new Box3().setFromObject(groundSurface)
@@ -216,7 +216,7 @@ function normalizeGrassAssets(scene, includeAllMeshes = false) {
   })
 }
 
-function GrassInstances({ asset, daylight = 1, placements, rainfall = 0 }) {
+function GrassInstances({ asset, daylight = 1, placements, rainfall = 0, seasonKey = null }) {
   const instanceRef = useRef(null)
 
   useLayoutEffect(() => {
@@ -245,17 +245,22 @@ function GrassInstances({ asset, daylight = 1, placements, rainfall = 0 }) {
       const dayGreen = tintBase + 0.08 + placement.tint * tintRange
       const dayBlue = tintBase - 0.04 + placement.tint * tintRange
       const nightVariation = placement.tint * 0.025
+      const isDrySeason = ['autumn', 'cool_dry', 'hot_dry'].includes(seasonKey)
+      const isWinter = ['winter', 'deep_winter'].includes(seasonKey)
+      const redSeason = isDrySeason ? 1.08 : (isWinter ? 0.93 : 1)
+      const greenSeason = isDrySeason ? 0.78 : (isWinter ? 0.86 : 1)
+      const blueSeason = isDrySeason ? 0.62 : (isWinter ? 0.92 : 1)
       color.setRGB(
-        (0.09 + nightVariation + ((dayRed - 0.09 - nightVariation) * daylightMix)) * (1 - wetness * 0.18),
-        (0.12 + nightVariation + ((dayGreen - 0.12 - nightVariation) * daylightMix)) * (1 - wetness * 0.1),
-        (0.085 + nightVariation + ((dayBlue - 0.085 - nightVariation) * daylightMix)) * (1 - wetness * 0.14),
+        (0.09 + nightVariation + ((dayRed * redSeason - 0.09 - nightVariation) * daylightMix)) * (1 - wetness * 0.18),
+        (0.12 + nightVariation + ((dayGreen * greenSeason - 0.12 - nightVariation) * daylightMix)) * (1 - wetness * 0.1),
+        (0.085 + nightVariation + ((dayBlue * blueSeason - 0.085 - nightVariation) * daylightMix)) * (1 - wetness * 0.14),
       )
       grass.setColorAt(index, color)
     })
 
     grass.instanceMatrix.needsUpdate = true
     if (grass.instanceColor) grass.instanceColor.needsUpdate = true
-  }, [daylight, placements, rainfall])
+  }, [daylight, placements, rainfall, seasonKey])
 
   return (
     <instancedMesh
@@ -267,7 +272,7 @@ function GrassInstances({ asset, daylight = 1, placements, rainfall = 0 }) {
   )
 }
 
-export function GrassGround({ daylight = 1, groundObject, mode = 'outdoor', rainfall = 0 }) {
+export function GrassGround({ daylight = 1, groundObject, mode = 'outdoor', rainfall = 0, seasonKey = null }) {
   const meadowGltf = useGLTF(GRASS_MODEL_URLS.meadow)
   const packGltf = useGLTF(GRASS_MODEL_URLS.pack)
   const cemeteryGltf = useGLTF(GRASS_MODEL_URLS.cemetery)
@@ -317,6 +322,7 @@ export function GrassGround({ daylight = 1, groundObject, mode = 'outdoor', rain
           daylight={daylight}
           placements={group.placements}
           rainfall={rainfall}
+          seasonKey={seasonKey}
         />
       ))}
     </group>

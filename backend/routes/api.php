@@ -89,9 +89,11 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/simulators/{simulator}/actions', [SimulationActionController::class, 'store']);
     Route::post('/simulators/{simulator}/location', [SimulatorLocationController::class, 'update']);
     Route::get('/simulators/{simulator}/events', [SimulationEventController::class, 'index']);
+    Route::get('/simulators/{simulator}/seasonal-context', [SimulatorController::class, 'seasonalContext']);
     Route::get('/locations/search', [LocationController::class, 'search'])->middleware('throttle:30,1');
     Route::get('/locations/reverse', [LocationController::class, 'reverse'])->middleware('throttle:30,1');
     Route::get('/locations/weather-preview', [LocationController::class, 'weather'])->middleware('throttle:60,1');
+    Route::get('/locations/seasonal-preview', [LocationController::class, 'seasonalPreview'])->middleware('throttle:20,1');
     Route::post('/simulators/{simulator}/prank', [SimulatorController::class, 'prank']);
 
     Route::get('/inventory', [ShopController::class, 'inventory']);

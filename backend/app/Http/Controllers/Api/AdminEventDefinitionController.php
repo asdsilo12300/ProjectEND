@@ -57,7 +57,7 @@ class AdminEventDefinitionController extends Controller
             'event_key' => ['required', 'string', 'max:120', Rule::unique('event_definitions', 'event_key')->ignore($id)],
             'name_en' => ['required', 'string', 'max:191'], 'name_th' => ['required', 'string', 'max:191'],
             'description_en' => ['nullable', 'string', 'max:4000'], 'description_th' => ['nullable', 'string', 'max:4000'],
-            'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor'])],
+            'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])],
             'severity' => ['required', Rule::in(['low', 'medium', 'high'])],
             'weight' => ['required', 'integer', 'between:1,100'], 'trigger_chance' => ['required', 'integer', 'between:0,100'],
             'warning_ticks' => ['required', 'integer', 'between:0,20'], 'duration_ticks' => ['required', 'integer', 'between:1,50'],

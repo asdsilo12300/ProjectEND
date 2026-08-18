@@ -129,6 +129,37 @@ class SimulationActionServiceTest extends TestCase
         ]);
     }
 
+    public function test_seasonal_mode_allows_normal_care_through_inventory_items(): void
+    {
+        [$simulator, $item] = $this->seedSimulation('seasonal');
+        $simulator->update(['water' => 42]);
+
+        $result = app(SimulationActionService::class)->apply($simulator->fresh(), 1, [
+            'client_action_id' => '8de26bf2-8bdc-4e32-8ca8-24f31758ca8f',
+            'action_key' => 'water',
+            'item_id' => $item->id,
+            'target_value' => null,
+            'event_id' => null,
+        ]);
+
+        $this->assertSame(62, (int) $result['simulator']->water);
+        $this->assertSame(1, (int) $result['inventory_quantity']);
+    }
+
+    public function test_seasonal_mode_rejects_direct_environment_control(): void
+    {
+        [$simulator] = $this->seedSimulation('seasonal');
+
+        $this->expectException(ValidationException::class);
+        app(SimulationActionService::class)->apply($simulator, 1, [
+            'client_action_id' => 'b674fb77-90ac-4dfb-b1c0-c3251ed76f5f',
+            'action_key' => 'light',
+            'item_id' => null,
+            'target_value' => 90,
+            'event_id' => null,
+        ]);
+    }
+
     /** @return array{Simulator, Item} */
     private function seedSimulation(string $mode): array
     {

@@ -1,106 +1,90 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { getAppLanguage } from '../../i18n/appI18n'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 
 const modeOptions = [
   {
     id: 'greenhouse',
-    title: 'Environment Control Mode',
-    subtitle: 'Full lab controls',
-    detail: 'Use care items for water and nutrients, then tune light, soil, air, and temperature inside the controlled simulator.',
+    title: { en: 'Environment Control', th: 'โหมดควบคุมสภาพแวดล้อม' },
+    subtitle: { en: 'Full laboratory controls', th: 'ควบคุมปัจจัยในห้องทดลอง' },
+    detail: { en: 'Use water and fertilizer items, then control light, soil, air, and temperature.', th: 'ใช้น้ำและปุ๋ยจากคลัง พร้อมควบคุมแสง ดิน อากาศ และอุณหภูมิ' },
     icon: 'plant',
+    tone: 'lime',
     recommended: true,
   },
   {
     id: 'outdoor',
-    title: 'Outdoor',
-    subtitle: 'Fixed local weather',
-    detail: 'Use saved-location weather from Open-Meteo and care items to replenish water or nutrients.',
+    title: { en: 'Outdoor', th: 'โหมดกลางแจ้ง' },
+    subtitle: { en: 'Live weather at a saved location', th: 'อากาศจริงจากสถานที่ที่บันทึก' },
+    detail: { en: 'Grow with current local weather and respond with care or protection items.', th: 'ปลูกตามอากาศปัจจุบัน และรับมือด้วยอุปกรณ์ดูแลหรือป้องกันพืช' },
     icon: 'wind',
+    tone: 'sky',
+  },
+  {
+    id: 'seasonal',
+    title: { en: 'Seasonal Journey', th: 'โหมดปลูกตามฤดูกาล' },
+    subtitle: { en: 'Accelerated real-climate seasons', th: 'ฤดูกาลจริงแบบเร่งเวลา' },
+    detail: { en: 'Choose a place and starting month. Calendar weather continues while you manage water, nutrients, and limited emergency protection.', th: 'เลือกสถานที่และเดือนเริ่มต้น ปฏิทินอากาศเดินต่อเนื่อง โดยดูแลน้ำ ปุ๋ย และใช้อุปกรณ์ฉุกเฉินแบบจำกัด' },
+    icon: 'history',
+    tone: 'amber',
+    badge: { en: 'New', th: 'ใหม่' },
   },
 ]
 
+function useLanguage() {
+  const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
+  useEffect(() => {
+    const update = () => setLanguage(getAppLanguage() === 'th' ? 'th' : 'en')
+    window.addEventListener('plant-settings-change', update)
+    return () => window.removeEventListener('plant-settings-change', update)
+  }, [])
+  return language
+}
+
+const toneClasses = {
+  lime: 'border-lime-200/15 bg-lime-300/[0.04] text-lime-200 group-hover:border-lime-200/45',
+  sky: 'border-sky-200/15 bg-sky-300/[0.04] text-sky-200 group-hover:border-sky-200/45',
+  amber: 'border-amber-200/20 bg-amber-300/[0.05] text-amber-200 group-hover:border-amber-200/55',
+}
+
 export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
+  const language = useLanguage()
+  const isThai = language === 'th'
   const choosingForPlant = Boolean(plantName)
 
   useEffect(() => {
     if (!onCancel) return undefined
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onCancel()
-    }
-
+    const handleKeyDown = (event) => event.key === 'Escape' && onCancel()
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onCancel])
 
   return (
-    <div
-      className="absolute inset-0 z-[80] grid place-items-center bg-black/60 px-4 backdrop-blur-[2px]"
-      onClick={(event) => {
-        if (onCancel && event.target === event.currentTarget) onCancel()
-      }}
-    >
-      <section className="relative w-full max-w-[680px] rounded-lg border border-lime-100/15 bg-[#101511] p-5 text-slate-100 shadow-[0_20px_48px_rgba(0,0,0,.46)]" data-tour="lab-mode-picker">
-        {onCancel && (
-          <button
-            aria-label="Cancel"
-            className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-md border border-lime-100/15 bg-white/[0.04] text-slate-300 transition hover:border-red-300/35 hover:bg-red-400/10 hover:text-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
-            title="Cancel"
-            type="button"
-            onClick={onCancel}
-          >
-            <AppIcon className="h-4 w-4" name="close" />
-          </button>
-        )}
-        <div className="mb-4 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9bcf82]">{choosingForPlant ? 'New planted species · Growing mode' : 'Step 1 of 3 · Growing mode'}</p>
-          <h2 className="mt-1 text-xl font-bold text-lime-50">{choosingForPlant ? `Choose a mode for ${plantName}` : 'Choose growing mode'}</h2>
-          <p className="mt-2 text-sm text-slate-300">{choosingForPlant ? `Your current plant stays saved. Choose how you want to grow ${plantName}.` : 'Choose the kind of environment you want to manage. You will select a plant next.'}</p>
-          <div className="mx-auto mt-4 grid max-w-[360px] grid-cols-3 items-center gap-2 text-xs font-semibold text-slate-400" aria-label="Plant setup progress">
-            <span className={`rounded-full px-2 py-1 ${choosingForPlant ? 'border border-lime-100/10 bg-white/[0.04] text-lime-100' : 'bg-[#9bcf82] text-[#101511]'}`}>{choosingForPlant ? `1 ${plantName}` : '1 Mode'}</span>
-            <span className={`rounded-full px-2 py-1 ${choosingForPlant ? 'bg-[#9bcf82] text-[#101511]' : 'border border-lime-100/10 bg-white/[0.04]'}`}>{choosingForPlant ? '2 Mode' : '2 Plant'}</span>
-            <span className="rounded-full border border-lime-100/10 bg-white/[0.04] px-2 py-1">3 Start</span>
-          </div>
-        </div>
+    <div className="absolute inset-0 z-[80] grid place-items-center overflow-y-auto bg-black/65 px-4 py-8 backdrop-blur-[3px]" onClick={(event) => event.target === event.currentTarget && onCancel?.()}>
+      <section className="relative w-full max-w-[780px] rounded-2xl border border-lime-100/15 bg-[#0e1510] p-5 text-slate-100 shadow-[0_24px_64px_rgba(0,0,0,.52)]" data-tour="lab-mode-picker">
+        {onCancel && <button aria-label={isThai ? 'ยกเลิก' : 'Cancel'} className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-white/12 bg-white/5 text-slate-300 hover:bg-rose-300/10 hover:text-rose-100" type="button" onClick={onCancel}><AppIcon className="h-4 w-4" name="close" /></button>}
+        <header className="mb-5 pr-10 text-center">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#9bcf82]">{choosingForPlant ? (isThai ? 'เพิ่มพืชชนิดใหม่ · เลือกโหมดปลูก' : 'New species · Choose mode') : (isThai ? 'ขั้นตอน 1 จาก 3 · เลือกโหมดปลูก' : 'Step 1 of 3 · Growing mode')}</p>
+          <h2 className="mt-1 text-2xl font-black text-white">{choosingForPlant ? (isThai ? `เลือกโหมดปลูกสำหรับ ${plantName}` : `Choose a mode for ${plantName}`) : (isThai ? 'เลือกโหมดการปลูก' : 'Choose a growing mode')}</h2>
+          <p className="mx-auto mt-2 max-w-[62ch] text-sm leading-6 text-slate-300">{choosingForPlant ? (isThai ? 'ต้นปัจจุบันยังถูกบันทึกไว้ แต่ละพืชมีโหมด สถานที่ และความคืบหน้าของตนเอง' : 'Your current plant remains saved. Each species keeps its own mode, location, and progress.') : (isThai ? 'แต่ละโหมดมีปัจจัยที่ควบคุมได้แตกต่างกัน เลือกให้ตรงกับการทดลองที่ต้องการ' : 'Each mode exposes different controls. Choose the experiment you want to run.')}</p>
+        </header>
 
-        <div className="space-y-3">
-          {modeOptions.map((option, index) => (
-            <div key={option.id}>
-              {index === 1 && <div className="py-1 text-center text-sm text-slate-400">or</div>}
-              <button
-                type="button"
-                className="group grid w-full grid-cols-[24px_72px_1fr] items-center gap-3 rounded-md border border-lime-100/12 bg-[#151b17] px-4 py-4 text-left transition hover:border-[#9bcf82]/60 hover:bg-[#192117] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 sm:grid-cols-[24px_112px_1fr] sm:gap-4 sm:px-5"
-                data-mode={option.id}
-                data-tour="lab-mode-option"
-                onClick={() => onSelect(option.id)}
-              >
-                <span className="grid h-5 w-5 place-items-center rounded-full border border-slate-400/75 transition group-hover:border-[#9bcf82]">
-                  <span className="h-2.5 w-2.5 rounded-full bg-transparent transition group-hover:bg-[#9bcf82]" />
-                </span>
-                <span className="grid h-20 place-items-center rounded-md border border-lime-100/10 bg-black/20 text-[#9bcf82]">
-                  <AppIcon name={option.icon} className="h-12 w-12" />
-                </span>
-                <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <strong className="block text-base font-bold text-lime-50 sm:text-lg">{option.title}</strong>
-                    {option.recommended && <span className="rounded-full bg-[#9bcf82]/15 px-2 py-0.5 text-xs font-black uppercase tracking-wide text-lime-100">Recommended for beginners</span>}
-                  </span>
-                  <span className="mt-0.5 block text-sm text-slate-300">{option.subtitle}</span>
-                  <span className="mt-2 block max-w-[48ch] text-xs leading-5 text-slate-400">{option.detail}</span>
-                </span>
-              </button>
-            </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {modeOptions.map((option) => (
+            <button key={option.id} type="button" className={`group flex min-h-[270px] flex-col rounded-xl border p-4 text-left transition duration-200 hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(0,0,0,.3)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${toneClasses[option.tone]}`} data-mode={option.id} data-tour="lab-mode-option" onClick={() => onSelect(option.id)}>
+              <span className="flex items-start justify-between gap-3">
+                <span className="grid h-14 w-14 place-items-center rounded-xl border border-current/20 bg-black/20"><AppIcon name={option.icon} className="h-7 w-7" /></span>
+                {option.badge && <span className="rounded-full bg-current/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em]">{option.badge[language]}</span>}
+              </span>
+              <strong className="mt-5 block text-lg font-black text-white">{option.title[language]}</strong>
+              <span className="mt-1 block text-sm font-semibold text-current">{option.subtitle[language]}</span>
+              <span className="mt-3 block flex-1 text-xs leading-5 text-slate-300">{option.detail[language]}</span>
+              <span className="mt-4 inline-flex items-center gap-2 text-xs font-black text-current">{isThai ? 'เลือกโหมดนี้' : 'Choose this mode'} <AppIcon className="h-3 w-3" name="arrowRight" /></span>
+              {option.recommended && <span className="mt-3 rounded-lg bg-lime-300/10 px-2.5 py-2 text-[10px] font-bold leading-4 text-lime-100">{isThai ? 'แนะนำสำหรับผู้เริ่มต้น' : 'Recommended for beginners'}</span>}
+            </button>
           ))}
         </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-center text-xs leading-5 text-slate-400">
-          {onCancel && (
-            <button className="rounded-md border border-lime-100/15 bg-white/[0.04] px-3 py-2 font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-lime-50" type="button" onClick={onCancel}>
-              Keep current plant
-            </button>
-          )}
-          <p>{choosingForPlant ? 'Each planted species keeps its own mode and progress.' : 'Outdoor mode reuses the location you approve on this device.'}</p>
-        </div>
+        {onCancel && <div className="mt-4 text-center"><button className="rounded-lg border border-white/12 bg-white/5 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-white/10" type="button" onClick={onCancel}>{isThai ? 'ดูแลต้นปัจจุบันต่อ' : 'Keep current plant'}</button></div>}
       </section>
     </div>
   )

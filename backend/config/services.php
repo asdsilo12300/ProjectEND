@@ -55,4 +55,14 @@ return [
         'timeout' => (int) env('SUPABASE_STORAGE_TIMEOUT', 30),
     ],
 
+    'external_http' => [
+        'verify_ssl' => env('EXTERNAL_HTTP_VERIFY_SSL', true),
+        'ca_bundle' => env('EXTERNAL_HTTP_CA_BUNDLE'),
+    ],
+
+    'nominatim' => [
+        'base_url' => rtrim((string) env('NOMINATIM_BASE_URL', 'https://nominatim.openstreetmap.org'), '/'),
+        'user_agent' => env('NOMINATIM_USER_AGENT', 'PlantGrowthAcademy/1.0'),
+    ],
+
 ];

@@ -24,8 +24,8 @@ const ITEM_GROUPS = [
   {
     id: 'manual',
     icon: 'tool',
-    label: { en: 'Manual tools', th: 'เครื่องมือกำจัดด้วยมือ' },
-    detail: { en: 'Remove aphids or snails by hand', th: 'กำจัดเพลี้ยหรือหอยโดยไม่ใช้สเปรย์' },
+    label: { en: 'Manual & condition tools', th: 'เครื่องมือใช้งานและปรับสภาพ' },
+    detail: { en: 'Hand removal and local condition protection', th: 'เก็บศัตรูพืชด้วยมือหรือปรับสภาพรอบต้น' },
     shellClass: 'border-amber-200/12 bg-amber-300/[0.035]',
     iconClass: 'bg-amber-300/10 text-amber-200',
   },
@@ -56,9 +56,14 @@ function useAppLanguage() {
 
 function itemGroupId(item) {
   const itemId = String(item?.itemKey ?? item?.id ?? '').toLowerCase()
+  const actionKey = String(item?.actionKey ?? itemId)
   if (item?.friendUsable || itemId.includes('prank')) return 'prank'
-  if (itemId === 'hand-pick' || itemId.includes('manual')) return 'manual'
-  if (['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover'].includes(String(item?.actionKey ?? itemId))) return 'care'
+  if (
+    itemId === 'hand-pick'
+    || itemId.includes('manual')
+    || ['drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)
+  ) return 'manual'
+  if (['water', 'fertilizer'].includes(actionKey)) return 'care'
   return 'treatment'
 }
 
@@ -133,7 +138,7 @@ function PlantLibraryCard({ item, itemLocked, itemName, lockLabel, onApply, onSh
   )
 }
 
-function ItemLibraryCard({ item, inventoryMap, language, mockItems, onApply, readOnly, friendHasPlant, growingMode, plantNeeds, selectedAsset, setDrawerOpen }) {
+function ItemLibraryCard({ item, inventoryMap, language, mockItems, onApply, readOnly, friendHasPlant, growingMode, plantNeeds, seasonalAvailableActions, selectedAsset, setDrawerOpen }) {
   const itemName = language === 'th' ? (item.nameTh || readableItemName(item)) : readableItemName(item)
   const itemDetail = language === 'th' ? (item.detailTh || item.detail) : item.detail
   const successText = language === 'th' ? (item.successTextTh || item.successText) : item.successText
@@ -150,11 +155,16 @@ function ItemLibraryCard({ item, inventoryMap, language, mockItems, onApply, rea
     && ['greenhouse', 'outdoor'].includes(item.modeScope)
     && Boolean(growingMode)
     && item.modeScope !== growingMode
+    && !(growingMode === 'seasonal' && item.modeScope === 'outdoor')
   const actionKey = String(item.actionKey ?? item.itemKey ?? item.id)
+  const seasonalEmergencyUnavailable = !readOnly
+    && growingMode === 'seasonal'
+    && ['drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)
+    && !seasonalAvailableActions?.has(actionKey)
   const reserveFull = !readOnly
     && ['water', 'fertilizer'].includes(actionKey)
     && Number(plantNeeds?.[actionKey] ?? -1) >= 100
-  const itemLocked = mockItems || isZeroQuantity || ownGardenPrank || friendItemUnsupported || friendGardenEmpty || wrongGrowingMode || reserveFull
+  const itemLocked = mockItems || isZeroQuantity || ownGardenPrank || friendItemUnsupported || friendGardenEmpty || wrongGrowingMode || seasonalEmergencyUnavailable || reserveFull
   const selected = selectedAsset?.id === item.id
   const lockLabel = ownGardenPrank
     ? (language === 'th' ? 'ใช้ได้เมื่อเยี่ยมชมสวนของเพื่อนเท่านั้น' : 'Available only while visiting a friend garden')
@@ -168,6 +178,10 @@ function ItemLibraryCard({ item, inventoryMap, language, mockItems, onApply, rea
           ? (language === 'th'
               ? `ใช้ได้เฉพาะ${item.modeScope === 'outdoor' ? 'โหมดกลางแจ้ง' : 'โหมดควบคุมสภาพแวดล้อม'}`
               : `${item.modeScope === 'outdoor' ? 'Outdoor' : 'Environment Control'} mode only`)
+        : seasonalEmergencyUnavailable
+          ? (language === 'th'
+              ? 'เครื่องมือนี้จะใช้ได้เมื่อมีคำเตือนฤดูกาลที่ตรงกัน'
+              : 'Available when a matching seasonal warning is active')
         : reserveFull
           ? (language === 'th'
               ? actionKey === 'water' ? 'หลอดน้ำสำรองเต็มแล้ว' : 'หลอดธาตุอาหารเต็มแล้ว'
@@ -198,6 +212,14 @@ function ItemLibraryCard({ item, inventoryMap, language, mockItems, onApply, rea
           {quantityBadge}
         </span>
       )}
+      {seasonalEmergencyUnavailable && (
+        <span
+          className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full border border-amber-200/25 bg-[#241d0d]/90 text-amber-200 shadow-[0_3px_10px_rgba(0,0,0,.35)]"
+          aria-label={lockLabel}
+        >
+          <AppIcon className="h-2.5 w-2.5" name="lock" />
+        </span>
+      )}
       <strong className="mt-1.5 block truncate text-xs text-lime-50">{itemName}</strong>
       <span className="block truncate text-xs text-slate-400">{mockItems ? (language === 'th' ? 'เร็ว ๆ นี้' : 'Coming soon') : isZeroQuantity ? (language === 'th' ? 'สินค้าหมด' : 'Out of stock') : itemDetail}</span>
       {!mockItems && (successText || failText) && (
@@ -215,9 +237,11 @@ function ItemLibraryCard({ item, inventoryMap, language, mockItems, onApply, rea
   )
 }
 
-export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true, growingMode = null, loading = false, plantNeeds = null, readOnly = false, mockItems = false, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo }) {
+export function LibrarySidebar({ activeEvents = [], busy = false, error = '', friendHasPlant = true, growingMode = null, loading = false, plantNeeds = null, readOnly = false, mockItems = false, seasonalContext = null, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [activeItemGroup, setActiveItemGroup] = useState('care')
   const language = useAppLanguage()
+  const effectiveItemGroup = readOnly ? 'prank' : activeItemGroup
 
   return (
     <>
@@ -251,12 +275,25 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
         ) : null}
         {Object.entries(sections).map(([section, items]) => {
           const expanded = openSections[section]
+          const sectionLabel = section === 'Items'
+            ? language === 'th' ? 'เครื่องมือ' : 'Tools'
+            : section === 'Plants'
+              ? language === 'th' ? 'พืช' : 'Plants'
+              : section
+          const recommendedActions = new Set([
+            seasonalContext?.current?.recommended_action,
+            seasonalContext?.forecast?.[0]?.recommended_action,
+            ...activeEvents.flatMap((event) => event.response_action_keys ?? []),
+          ].filter(Boolean))
+          // Keep seasonal emergency tools visible so players can learn what is
+          // available. Individual cards stay locked until a matching warning.
           const visibleItems = items
           const groupedItems = section === 'Items'
             ? ITEM_GROUPS
               .map((group) => ({ ...group, items: visibleItems.filter((item) => itemGroupId(item) === group.id) }))
               .filter((group) => group.items.length > 0)
             : []
+          const selectedGroup = groupedItems.find((group) => group.id === effectiveItemGroup) ?? groupedItems[0]
 
           return (
             <section className="mb-2 min-w-0 max-w-full" data-tour={section === 'Plants' ? 'lab-plants' : 'lab-items'} key={section}>
@@ -267,7 +304,7 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                 onClick={() => onToggle(section)}
               >
                 <AppIcon className="h-4 w-4 shrink-0 text-slate-400" name={section === 'Plants' ? 'plant' : 'shop'} />
-                <span className="flex-1 text-left">{section}</span>
+                <span className="flex-1 text-left">{sectionLabel}</span>
                 <AppIcon className={`h-4 w-4 transition ${expanded ? 'rotate-180' : ''}`} name="arrowDown" />
               </button>
 
@@ -284,22 +321,40 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                       <span className="mt-0.5 block text-xs leading-relaxed text-slate-400">Run the seeder or add records to enable this section.</span>
                     </div>
                   )}
-                  {!loading && section === 'Items' && groupedItems.map((group) => (
-                    <section className={`min-w-0 max-w-full overflow-hidden rounded-lg border p-1.5 ${group.shellClass}`} key={group.id} data-item-group={group.id}>
+                  {!loading && section === 'Items' && groupedItems.length > 0 && (
+                    <nav className="grid grid-cols-4 gap-1.5" aria-label={language === 'th' ? 'หมวดเครื่องมือ' : 'Tool categories'}>
+                      {groupedItems.map((group) => (
+                        <button
+                          key={group.id}
+                          type="button"
+                          aria-label={`${group.label[language]} — ${group.detail[language]} (${group.items.length})`}
+                          aria-pressed={selectedGroup?.id === group.id}
+                          className={`relative grid h-10 min-w-0 place-items-center rounded-md border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${selectedGroup?.id === group.id ? `${group.shellClass} border-lime-200/35 text-lime-50` : 'border-white/10 bg-black/15 text-slate-400 hover:border-white/20 hover:text-slate-200'}`}
+                          onClick={() => setActiveItemGroup(group.id)}
+                          title={`${group.label[language]} — ${group.detail[language]}`}
+                        >
+                          <AppIcon className={`h-4 w-4 ${selectedGroup?.id === group.id ? group.iconClass.split(' ').at(-1) : ''}`} name={group.icon} />
+                          <span className="absolute right-1 top-1 min-w-4 rounded-full bg-black/35 px-1 py-0.5 text-center text-[9px] font-black leading-none">{group.items.length}</span>
+                        </button>
+                      ))}
+                    </nav>
+                  )}
+                  {!loading && section === 'Items' && selectedGroup && (
+                    <section className={`min-w-0 max-w-full overflow-hidden rounded-lg border p-1.5 ${selectedGroup.shellClass}`} key={selectedGroup.id} data-item-group={selectedGroup.id}>
                       <header className="mb-1.5 flex min-w-0 items-center gap-2 px-1 py-1">
-                        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${group.iconClass}`}>
-                          <AppIcon className="h-3.5 w-3.5" name={group.icon} />
+                        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${selectedGroup.iconClass}`}>
+                          <AppIcon className="h-3.5 w-3.5" name={selectedGroup.icon} />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <strong className="block truncate text-[11px] font-extrabold text-lime-50">{group.label[language]}</strong>
-                          <span className="block truncate text-[10px] text-slate-400">{group.detail[language]}</span>
+                          <strong className="block text-[12px] font-extrabold leading-tight text-lime-50">{selectedGroup.label[language]}</strong>
+                          <span className="mt-0.5 block text-[11px] leading-tight text-slate-400">{selectedGroup.detail[language]}</span>
                         </span>
-                        <span className="rounded-full border border-white/10 bg-black/20 px-1.5 py-0.5 text-[10px] font-bold text-slate-300" aria-label={`${group.items.length} items`}>
-                          {group.items.length}
+                        <span className="rounded-full border border-white/10 bg-black/20 px-1.5 py-0.5 text-[10px] font-bold text-slate-300" aria-label={`${selectedGroup.items.length} items`}>
+                          {selectedGroup.items.length}
                         </span>
                       </header>
                       <div className="grid min-w-0 max-w-full grid-cols-2 gap-1.5">
-                        {group.items.map((item) => (
+                        {selectedGroup.items.map((item) => (
                           <ItemLibraryCard
                             friendHasPlant={friendHasPlant}
                             growingMode={growingMode}
@@ -311,13 +366,14 @@ export function LibrarySidebar({ busy = false, error = '', friendHasPlant = true
                             onApply={onApply}
                             plantNeeds={plantNeeds}
                             readOnly={readOnly}
+                            seasonalAvailableActions={recommendedActions}
                             selectedAsset={selectedAsset}
                             setDrawerOpen={setDrawerOpen}
                           />
                         ))}
                       </div>
                     </section>
-                  ))}
+                  )}
                   {!loading && section === 'Plants' && visibleItems.map((item) => {
                     const itemName = localizedPlantName(item, language)
                     const friendPlantUnavailable = readOnly && !item.planted

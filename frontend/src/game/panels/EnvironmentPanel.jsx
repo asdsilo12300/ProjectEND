@@ -149,9 +149,11 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
   const language = getAppLanguage()
   const isThai = language === 'th'
   const isOutdoor = mode === 'outdoor'
+  const isSeasonal = mode === 'seasonal'
+  const isWeatherMode = isOutdoor || isSeasonal
   // Water and fertilizer are consumable reserves managed through care items,
   // not arbitrary environment sliders.
-  const controlKeys = isOutdoor ? outdoorControlKeys : Object.keys(climate).filter((key) => !['water', 'fertilizer'].includes(key))
+  const controlKeys = isWeatherMode ? outdoorControlKeys : Object.keys(climate).filter((key) => !['water', 'fertilizer'].includes(key))
   const outdoorReadings = getOutdoorReadings(outdoorWeather?.forecast)
   const weatherCards = buildWeatherCards(outdoorReadings, isThai)
   const [pendingClimate, setPendingClimate] = useState({})
@@ -176,27 +178,29 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
   return (
     <Panel
       id="climate"
-      title={isOutdoor ? (isThai ? 'สภาพแวดล้อมกลางแจ้ง' : 'Outdoor environment') : (isThai ? 'สภาพแวดล้อม' : 'Environment')}
-      subtitle={isOutdoor ? (isThai ? 'ข้อมูลอากาศจริงจาก Open-Meteo' : 'weather data from Open-Meteo') : (isThai ? 'แสง ความชื้น และอุณหภูมิ' : 'light humidity and temperature')}
+      title={isSeasonal ? (isThai ? 'สภาพอากาศตามฤดูกาล' : 'Seasonal environment') : isOutdoor ? (isThai ? 'สภาพแวดล้อมกลางแจ้ง' : 'Outdoor environment') : (isThai ? 'สภาพแวดล้อม' : 'Environment')}
+      subtitle={isSeasonal ? (isThai ? 'Timeline ที่บันทึกจากข้อมูลอากาศจริง' : 'saved timeline from real weather data') : isOutdoor ? (isThai ? 'ข้อมูลอากาศจริงจาก Open-Meteo' : 'weather data from Open-Meteo') : (isThai ? 'แสง ความชื้น และอุณหภูมิ' : 'light humidity and temperature')}
       windows={windows}
       setWindows={setWindows}
-      className={isOutdoor ? 'w-[390px] max-w-[calc(100vw-32px)]' : 'w-[520px] max-w-[calc(100vw-32px)]'}
+      className={isWeatherMode ? 'w-[390px] max-w-[calc(100vw-32px)]' : 'w-[520px] max-w-[calc(100vw-32px)]'}
     >
-      <div className={isOutdoor ? 'max-h-[186px] overflow-y-auto pr-1 sm:max-h-[330px]' : ''}>
+      <div className={isWeatherMode ? 'max-h-[186px] overflow-y-auto pr-1 sm:max-h-[330px]' : ''}>
         <div className={`mb-3 rounded-md border px-3 py-2 text-xs leading-4 ${plantSelected ? 'border-lime-100/10 bg-[#9bcf82]/[0.07] text-slate-300' : 'border-amber-200/15 bg-amber-300/[0.07] text-amber-100'}`}>
           {plantSelected
-            ? (isOutdoor
-              ? (isThai ? 'ระบบใช้อากาศจริงอัตโนมัติ เลือกไอเทมจากคลังเพื่อดูแลหรือปกป้องพืช' : 'Real weather is applied automatically. Use inventory items to protect or care for the plant.')
+            ? (isWeatherMode
+              ? (isSeasonal
+                ? (isThai ? 'ฤดูกาลและวันจำลองเดินอัตโนมัติ ดูแลปกติด้วยน้ำและปุ๋ย ส่วนอุปกรณ์ฉุกเฉินจะเปิดเมื่อมีคำเตือนที่ตรงกัน' : 'The seasonal calendar advances automatically. Water and fertilize normally; emergency tools unlock only for matching warnings.')
+                : (isThai ? 'ระบบใช้อากาศจริงอัตโนมัติ เลือกไอเทมจากคลังเพื่อดูแลหรือปกป้องพืช' : 'Real weather is applied automatically. Use inventory items to protect or care for the plant.'))
               : (isThai ? 'น้ำและธาตุอาหารจะแสดงเป็นหลอดความต้องการของพืช ใช้บัวรดน้ำหรือปุ๋ยจากคลัง ส่วนปัจจัยอื่นปรับค่าแล้วกดยืนยันเพื่อเล่นแอนิเมชัน 3D' : 'Water and nutrients are plant-need reserves. Use watering and fertilizer items; adjust the other factors, then confirm to play the 3D action.'))
             : (isThai ? 'เลือกพืชก่อน ระบบควบคุมสภาพแวดล้อมจะเปิดเมื่อเริ่มการจำลอง' : 'Select a plant first. Environment controls unlock when the simulation starts.')}
         </div>
-        <div className={`grid gap-x-3 gap-y-3 ${isOutdoor ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+        <div className={`grid gap-x-3 gap-y-3 ${isWeatherMode ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
           {controlKeys.map((key) => (
-            <ClimateControl key={key} climateKey={key} value={draftClimate[key]} onChange={updateClimate} compact={isOutdoor} disabled={!plantSelected || actionBusy} language={language} />
+            <ClimateControl key={key} climateKey={key} value={draftClimate[key]} onChange={updateClimate} compact={isWeatherMode} disabled={!plantSelected || actionBusy} language={language} />
           ))}
         </div>
 
-        {!isOutdoor && plantSelected && (
+        {!isWeatherMode && plantSelected && (
           <div className={`environment-apply-bar ${hasChanges ? 'is-visible' : ''}`} aria-live="polite">
             <span>{hasChanges
               ? (isThai ? `รอยืนยัน ${Object.keys(changes).length} รายการ` : `${Object.keys(changes).length} pending ${Object.keys(changes).length === 1 ? 'change' : 'changes'}`)
@@ -213,14 +217,14 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
           </div>
         )}
 
-        {isOutdoor && plantSelected && (
+        {isWeatherMode && plantSelected && (
           <div className="mb-3 rounded-lg border border-emerald-600/20 bg-emerald-50/80 px-3 py-2.5 text-xs leading-5 text-emerald-950 shadow-sm">
-            <strong className="block">{isThai ? 'โหมดกลางแจ้งใช้ไอเทมจากคลัง' : 'Outdoor care uses inventory items'}</strong>
-            <span>{isThai ? 'เลือกน้ำ ปุ๋ย วัสดุระบายน้ำ ผ้าบังแดด แนวกันลม วัสดุป้องกันความเย็น หรือไอเทมกำจัดศัตรูพืชจากคลัง โดยไม่สามารถเปลี่ยนฝน ลม และแสงอาทิตย์จริงด้วย Slider ได้' : 'Choose water, fertilizer, drainage, shade, windbreak, frost cover, or pest treatment from Lab assets. Real rain, wind, and sunlight cannot be changed with sliders.'}</span>
+            <strong className="block">{isSeasonal ? (isThai ? 'โหมดฤดูกาลใช้การดูแลตามสถานการณ์' : 'Seasonal care follows current conditions') : (isThai ? 'โหมดกลางแจ้งใช้ไอเทมจากคลัง' : 'Outdoor care uses inventory items')}</strong>
+            <span>{isSeasonal ? (isThai ? 'ใช้น้ำและปุ๋ยได้ตามปกติ อุปกรณ์ระบายน้ำ บังแดด กันลม และกันหนาวจะใช้ได้เมื่อ Timeline แจ้งเหตุที่ตรงกันเท่านั้น' : 'Water and fertilizer remain available. Drainage, shade, windbreak and frost protection unlock only for matching timeline warnings.') : (isThai ? 'เลือกน้ำ ปุ๋ย วัสดุระบายน้ำ ผ้าบังแดด แนวกันลม วัสดุป้องกันความเย็น หรือไอเทมกำจัดศัตรูพืชจากคลัง โดยไม่สามารถเปลี่ยนฝน ลม และแสงอาทิตย์จริงด้วย Slider ได้' : 'Choose water, fertilizer, drainage, shade, windbreak, frost cover, or pest treatment from Lab assets. Real rain, wind, and sunlight cannot be changed with sliders.')}</span>
           </div>
         )}
 
-        {isOutdoor && (
+        {isWeatherMode && (
           <div className="mt-3 rounded-md border border-lime-100/10 bg-[#0b0f0c]/70 p-3">
             <div className="mb-2 flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -233,7 +237,7 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
                     {locationSourceLabel(outdoorWeather.location.source, isThai)}
                   </span>
                 )}
-                <button
+                {!isSeasonal && <button
                   className="grid h-7 w-7 place-items-center rounded-md border border-lime-100/15 bg-white/[0.035] text-slate-300 transition hover:border-lime-100/30 hover:bg-lime-100/10 hover:text-lime-100 disabled:cursor-wait disabled:opacity-50"
                   type="button"
                   onClick={onRefreshLocation}
@@ -242,8 +246,8 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
                   title={isThai ? 'รีเฟรชสภาพอากาศ' : 'Refresh weather'}
                 >
                   <AppIcon className={`h-3.5 w-3.5 ${outdoorWeather?.status === 'loading' ? 'animate-spin' : ''}`} name="restartAlt" />
-                </button>
-                {plantSelected && (
+                </button>}
+                {!isSeasonal && plantSelected && (
                   <button
                     className="inline-flex h-7 items-center gap-1.5 rounded-md border border-emerald-500/25 bg-emerald-50 px-2 text-[10px] font-black text-emerald-900 transition hover:bg-emerald-100"
                     type="button"
@@ -256,7 +260,7 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
               </div>
             </div>
 
-            {outdoorWeather?.location?.source === 'fallback' && (
+            {!isSeasonal && outdoorWeather?.location?.source === 'fallback' && (
               <p className="mb-2 rounded-md border border-amber-200/15 bg-amber-300/[0.06] px-2.5 py-2 text-[10px] leading-4 text-amber-100/85">
                 {isThai ? 'ไม่สามารถใช้สิทธิ์ตำแหน่งได้ โปรดอนุญาตการเข้าถึงตำแหน่งในเบราว์เซอร์ แล้วกดปุ่มรีเฟรช' : 'Location permission is unavailable. Allow location access in your browser, then press the refresh button.'}
               </p>

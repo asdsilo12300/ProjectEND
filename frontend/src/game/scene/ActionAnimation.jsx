@@ -323,7 +323,7 @@ function actionKind(animationKey) {
   if (/air|wind/.test(animationKey)) return 'air'
   if (/temp/.test(animationKey)) return 'temperature'
   if (/soil/.test(animationKey)) return 'drainage'
-  return 'tool'
+  return 'none'
 }
 
 const TARGET_OFFSETS = {
@@ -338,7 +338,7 @@ const TARGET_OFFSETS = {
   light: [0, 2.7, 0],
   air: [0, 1.25, 0.35],
   temperature: [0, 1.25, 0.35],
-  tool: [0.8, 1.15, 0.45],
+  none: [0.8, 1.15, 0.45],
 }
 
 const GROUNDED_KINDS = new Set(['straw', 'shade', 'windbreak', 'frost'])
@@ -378,7 +378,14 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
     group.current.position.x = THREE.MathUtils.lerp(2.45, targetX, eased)
     group.current.position.y = THREE.MathUtils.lerp(targetY + 0.18, targetY, eased) + Math.sin(elapsed * 4) * 0.018
     group.current.position.z = THREE.MathUtils.lerp(0.9, targetZ, eased)
-    group.current.rotation.y = -0.22 + Math.sin(elapsed * 2.8) * 0.025
+    if (kind === 'spray') {
+      // The procedural bottle's nozzle points along local +X. Aim that axis
+      // back at the planting centre instead of spraying away from the plant.
+      const sprayYaw = Math.atan2(group.current.position.z - centerZ, centerX - group.current.position.x)
+      group.current.rotation.y = sprayYaw + Math.sin(elapsed * 2.8) * 0.018
+    } else {
+      group.current.rotation.y = -0.22 + Math.sin(elapsed * 2.8) * 0.025
+    }
   })
 
   if (!visible) return null
@@ -409,7 +416,6 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
       {kind === 'light' && <LightEffect active={active} />}
       {kind === 'air' && <WindLines active={active} color="#a9e8f2" />}
       {kind === 'temperature' && <TemperatureEffect active={active} cold={Number(asset?.targetValue) < 18} />}
-      {kind === 'tool' && <DrainageTool active={active} />}
     </group>
   )
 }

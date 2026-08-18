@@ -6,7 +6,7 @@ import { PestKnowledgeModal } from '../components/PestKnowledgeModal'
 import { resolveAssetUrl } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { AppIcon } from '../icons/FontAwesomeIcon'
-import { formatRealDays, getGrowthStageStops, getRealGrowthEstimate } from '../utils/realGrowth'
+import { formatRealDays, getGrowthStageStops, getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from '../utils/realGrowth'
 
 const visualStateLabels = {
   healthy: 'Healthy',
@@ -627,7 +627,7 @@ function RealGrowthScale({ estimate, pace, referenceUrl }) {
   )
 }
 
-export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'idle', hasPlant = true, nextCycleAt = null, windows, setWindows, simulationVisual }) {
+export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'idle', hasPlant = true, nextCycleAt = null, simulationSpeed = 1, windows, setWindows, simulationVisual }) {
   const language = useAppLanguage()
   const visiblePestChances = buildPestChances(simulationVisual)
   const [selectedPestId, setSelectedPestId] = useState(null)
@@ -641,7 +641,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const pace = { ...targetPace, value: paceValue }
   const growthHistory = simulationVisual?.growth_history ?? [growthProgress]
   const growthStages = getGrowthStageStops(simulationVisual?.plant)
-  const realGrowth = getRealGrowthEstimate(simulationVisual)
+  const realGrowth = getRealGrowthEstimate(simulationVisual, SIMULATION_CYCLE_SECONDS / simulationSpeed)
   const stageName = simulationVisual?.current_stage?.stage_name ?? 'Seedling'
   const plantName = readablePlantName(simulationVisual?.plant, language)
   const plantImageUrl = resolveAssetUrl(simulationVisual?.plant?.base_image_url ?? simulationVisual?.plant?.image_url ?? simulationVisual?.plant?.icon_url)

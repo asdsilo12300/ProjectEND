@@ -32,6 +32,7 @@ export function SceneEnvironment({
   plantSelected = false,
   onPlantingSurface,
   rainfall = 0,
+  seasonKey = null,
   windDirection = 0,
   windSpeed = 0,
 }) {
@@ -44,7 +45,7 @@ export function SceneEnvironment({
     const root = new Group()
     const wetMaterials = []
     const materialCopies = new Map()
-    const isOutdoor = mode === 'outdoor'
+    const isOutdoor = mode === 'outdoor' || mode === 'seasonal'
 
     root.name = 'simulation-ground'
     root.position.set(0.75, -0.42, 0)
@@ -90,7 +91,8 @@ export function SceneEnvironment({
   }, [mode, scene])
   const groundObject = ground.object
   const plantingHeight = useMemo(() => findPlantingHeight(groundObject), [groundObject])
-  const targetWetness = mode === 'outdoor' ? getRainVisualIntensity(rainfall) : 0
+  const isWeatherDriven = mode === 'outdoor' || mode === 'seasonal'
+  const targetWetness = isWeatherDriven ? getRainVisualIntensity(rainfall) : 0
 
   useEffect(() => {
     onPlantingSurface?.({
@@ -100,7 +102,7 @@ export function SceneEnvironment({
   }, [onPlantingSurface, plantingHeight])
 
   useFrame((_, delta) => {
-    if (mode !== 'outdoor' && wetnessRef.current === 0) return
+    if (!isWeatherDriven && wetnessRef.current === 0) return
 
     const response = targetWetness > wetnessRef.current ? 1.9 : 0.14
     wetnessRef.current = MathUtils.damp(
@@ -136,13 +138,14 @@ export function SceneEnvironment({
     <group>
       <primitive object={groundObject} />
       <PlantingSpot groundObject={groundObject} label={plantingAreaLabel} plantSelected={plantSelected} plantingHeight={plantingHeight} />
-      {mode === 'outdoor' && (
+      {isWeatherDriven && (
         <>
           <GrassGround
             daylight={daylight}
             groundObject={groundObject}
             mode={mode}
             rainfall={rainfall}
+            seasonKey={seasonKey}
           />
           <OutdoorRain
             daylight={daylight}

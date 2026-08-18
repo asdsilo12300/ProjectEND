@@ -8,6 +8,7 @@ use App\Models\SimulationEvent;
 use App\Models\SimulationModifier;
 use App\Models\SimulationPest;
 use App\Models\Simulator;
+use App\Models\SimulationWeatherDay;
 use App\Models\UserItem;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -55,9 +56,16 @@ class SimulationActionService
             }
             if ($item) {
                 $scope = $item->mode_scope ?: 'both';
-                if (! in_array($scope, ['both', $lockedSimulator->mode], true)) {
+                $compatibleScopes = $lockedSimulator->mode === 'seasonal'
+                    ? ['both', 'seasonal', 'outdoor']
+                    : ['both', $lockedSimulator->mode];
+                if (! in_array($scope, $compatibleScopes, true)) {
                     throw ValidationException::withMessages(['item_id' => 'This item cannot be used in the selected growing mode.']);
                 }
+            }
+
+            if ($lockedSimulator->mode === 'seasonal') {
+                $this->assertSeasonalActionAllowed($lockedSimulator, $actionKey);
             }
 
             $inventory = $item ? UserItem::query()
@@ -134,6 +142,61 @@ class SimulationActionService
         };
     }
 
+    private function assertSeasonalActionAllowed(Simulator $simulator, string $actionKey): void
+    {
+        if (in_array($actionKey, ['water', 'fertilizer'], true)) return;
+
+        if (str_ends_with($actionKey, '-treatment')) {
+            // Pest care is an emergency response and remains unavailable when
+            // there is no matching active pest (the normal treatment check
+            // below still validates the exact target).
+            if ($simulator->activePests()->exists()) return;
+        }
+
+        $emergencyKeys = ['drainage', 'shade', 'windbreak', 'frost-cover'];
+        if (! in_array($actionKey, $emergencyKeys, true)) {
+            throw ValidationException::withMessages([
+                'action_key' => 'Seasonal Journey allows watering, fertilizer, and event-specific emergency care only.',
+            ]);
+        }
+
+        $eventAllowsAction = SimulationEvent::query()
+            ->where('simulator_id', $simulator->id)
+            ->whereIn('status', ['announced', 'active'])
+            ->whereHas('definition', fn ($query) => $query->whereJsonContains('response_action_keys', $actionKey))
+            ->exists();
+        $days = SimulationWeatherDay::query()
+            ->where('simulator_id', $simulator->id)
+            ->whereBetween('day_index', [(int) $simulator->calendar_day, (int) $simulator->calendar_day + 1])
+            ->get();
+        // Severe weather is announced one simulated day ahead, so protection
+        // can be installed before damage is applied rather than afterwards.
+        $weatherAllowsAction = $days->contains(fn (SimulationWeatherDay $day) => match ($actionKey) {
+            'drainage' => (float) $day->precipitation >= 25,
+            'shade' => (float) $day->temperature_max >= 36,
+            'windbreak' => (float) $day->wind_gust >= 45,
+            'frost-cover' => (float) $day->temperature_min <= 3 || (float) $day->snowfall > 0,
+            default => false,
+        });
+
+        if (! $eventAllowsAction && ! $weatherAllowsAction) {
+            throw ValidationException::withMessages([
+                'action_key' => 'This emergency item becomes available only when the matching seasonal warning is active.',
+            ]);
+        }
+
+        $cooldownActive = SimulationModifier::query()
+            ->where('simulator_id', $simulator->id)
+            ->whereHas('action', fn ($query) => $query->where('action_key', $actionKey))
+            ->where(fn ($query) => $query->whereNull('ends_tick')->orWhere('ends_tick', '>=', (int) $simulator->event_tick_count))
+            ->exists();
+        if ($cooldownActive) {
+            throw ValidationException::withMessages([
+                'action_key' => 'This emergency protection is already active. Wait for its cooldown before using another.',
+            ]);
+        }
+    }
+
     /** @return array<string, int|float> */
     private function environmentChanges(Simulator $simulator, string $actionKey, ?Item $item, mixed $targetValue): array
     {
@@ -185,7 +248,10 @@ class SimulationActionService
                 'light' => max((int) $plant->light_min, (int) $simulator->light - $strength),
                 'air_temp' => max((float) $plant->air_temp_min, (float) $simulator->air_temp - 4),
             ],
-            'windbreak' => ['air_humidity' => min((int) $plant->air_humidity_max, (int) $simulator->air_humidity + 10)],
+            // Keep an immediate, visible response on the simulator while the
+            // temporary modifier below reduces the actual wind readings used
+            // by the next seasonal calculations.
+            'windbreak' => ['air_humidity' => min((int) $plant->air_humidity_max, (int) $simulator->air_humidity + 4)],
             'frost-cover' => [
                 'air_temp' => min((float) $plant->air_temp_max, (float) $simulator->air_temp + 5),
                 'soil_temp' => min((float) $plant->soil_temp_max, (float) $simulator->soil_temp + 3),
@@ -200,7 +266,7 @@ class SimulationActionService
         $tick = (int) $simulator->event_tick_count;
         $temporary = match ($actionKey) {
             'shade' => ['light' => -10, 'air_temp' => -2],
-            'windbreak' => ['air_humidity' => 6],
+            'windbreak' => ['wind_speed' => -25, 'wind_gust' => -35, 'air_humidity' => 3],
             'frost-cover' => ['air_temp' => 4, 'soil_temp' => 2],
             'drainage' => ['soil_humidity' => -8],
             default => [],

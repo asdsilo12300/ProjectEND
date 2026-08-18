@@ -4,6 +4,7 @@ import 'sweetalert2/dist/sweetalert2.min.css'
 import './App.css'
 import { defaultClimate, imageAssets } from './game/data/gameData'
 import { GrowingModePicker } from './game/components/GrowingModePicker'
+import { SeasonalSetupModal } from './game/components/SeasonalSetupModal'
 import { LibrarySidebar } from './game/components/LibrarySidebar'
 import { CircularLoader } from './game/components/LoadingSkeleton'
 import { PlantKnowledgeModal } from './game/components/PlantKnowledgeModal'
@@ -26,6 +27,7 @@ import { LandingPage } from './landing/LandingPage'
 import { applySimulationAction, clearToken, claimMaturityReward, getFriendLatestSimulator, getMe, getModelAssets, getNotifications, getPlants, getSimulators, getToken, getInventory, getShopItems, getSpectatorSimulator, login as loginUser, loginWithGoogle, markNotificationRead, prankFriendSimulator, register as registerUser, shareSimulator, startSimulator, syncSimulatorSnapshot, tickSimulator, savePlantHistory, resolveAssetUrl, uprootSimulator, updateSimulatorLocation } from './lib/api'
 import { buildSimulationFactors, defaultSimulationVisual } from './game/utils/localSimulation'
 import { climateFromForecast, fetchLocationAddress, fetchOutdoorForecast, getFixedOutdoorLocation, getOutdoorReadings } from './game/utils/outdoorWeather'
+import { seasonalWeatherStateFromSimulator } from './game/utils/seasonalWeather'
 import { getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from './game/utils/realGrowth'
 import { defaultWindows, panelExpandedPosition, reflowWindowsForViewport } from './game/utils/windows'
 import { applySettings, loadSettings } from './game/settings/settingsPreferences'
@@ -135,6 +137,7 @@ function locationFromSimulator(simulator, source = 'simulation') {
 }
 
 async function outdoorWeatherForSimulator(simulator) {
+  if (simulator?.mode === 'seasonal') return seasonalWeatherStateFromSimulator(simulator)
   if (simulator?.mode !== 'outdoor') return initialOutdoorWeather
 
   const location = locationFromSimulator(simulator, 'spectator')
@@ -182,7 +185,6 @@ const normalGrowthPointsPerCycle = 14
 const maximumGrowthAnimationDurationMs = 6400
 const autosaveIntervalMs = 30000
 const simulationTickIntervalMs = SIMULATION_CYCLE_SECONDS * 1000
-const initialSimulationTickDelayMs = simulationTickIntervalMs
 const simulationTickMarkerPrefix = 'plant_game_last_tick:'
 const resetMarkerKey = 'plant_game_reset_marker'
 const communityNotificationTypes = new Set(['like', 'comment', 'reply', 'comment_like'])
@@ -379,7 +381,27 @@ function isCommunityNotification(notification) {
 
 function inventoryItemKey(entry) {
   const item = entry?.item ?? entry
-  return item?.action_key ?? itemNameToKey[item?.name] ?? String(item?.name ?? '').toLowerCase().replace(/\s+/g, '-')
+  return itemNameToKey[item?.name] ?? item?.action_key ?? String(item?.name ?? '').toLowerCase().replace(/\s+/g, '-')
+}
+
+function legacyItemActionKey(item, itemKey = inventoryItemKey(item)) {
+  const effect = String(item?.effect_type ?? '').toLowerCase()
+  if (effect.startsWith('manual_pest_control:')) return 'manual-pest-control'
+  if (effect.startsWith('friend_pest:aphid')) return 'aphid-prank'
+  if (effect.startsWith('friend_pest:snail')) return 'snail-prank'
+  if (effect.includes('aphid')) return 'aphid-treatment'
+  if (effect.includes('snail')) return 'snail-treatment'
+  if (effect.includes('fung')) return 'fungus-treatment'
+
+  return item?.action_key ?? itemKey
+}
+
+function legacyItemAnimationKey(item, actionKey) {
+  const effect = String(item?.effect_type ?? '').toLowerCase()
+  if (effect.startsWith('pest_control:')) return 'pest-spray'
+  if (effect.startsWith('manual_pest_control:')) return 'hand-pick'
+
+  return item?.animation_key ?? actionKey
 }
 
 function readablePlantName(plant) {
@@ -443,6 +465,7 @@ function uniqueActiveSimulatorsByPlant(simulators = []) {
 function itemAssetFromApi(entry, quantity = null) {
   const item = entry?.item ?? entry
   const itemKey = inventoryItemKey(item)
+  const actionKey = legacyItemActionKey(item, itemKey)
   const meta = itemMetaByKey[itemKey] ?? {}
   const friendUsable = String(item?.effect_type ?? '').startsWith('friend_pest:')
 
@@ -468,8 +491,8 @@ function itemAssetFromApi(entry, quantity = null) {
     help: meta.help ?? item?.description,
     helpTh: meta.helpTh ?? item?.description,
     friendUsable,
-    actionKey: item?.action_key ?? null,
-    animationKey: item?.animation_key ?? item?.action_key ?? null,
+    actionKey,
+    animationKey: legacyItemAnimationKey(item, actionKey),
     modeScope: item?.mode_scope ?? 'both',
     effectPayload: item?.effect_payload ?? null,
   }
@@ -537,7 +560,7 @@ function outdoorClimateWindow(currentWindows = {}) {
   }
 }
 function ModeLoadingOverlay({ mode }) {
-  const label = !mode ? 'saved simulation' : mode === 'outdoor' ? 'outdoor field' : 'lab'
+  const label = !mode ? 'saved simulation' : mode === 'outdoor' ? 'outdoor field' : mode === 'seasonal' ? 'seasonal journey' : 'lab'
 
   return (
     <div className="absolute inset-0 z-[90] grid place-items-center bg-black/55 px-4 backdrop-blur-md">
@@ -663,6 +686,7 @@ function App() {
   const [resetPending, setResetPending] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
   const [pendingPlant, setPendingPlant] = useState(null)
+  const [seasonalSetupAsset, setSeasonalSetupAsset] = useState(null)
   const [plantingBusy, setPlantingBusy] = useState(false)
   const [activeSimulators, setActiveSimulators] = useState([])
   const [plantCatalog, setPlantCatalog] = useState([])
@@ -674,6 +698,9 @@ function App() {
   const [nextSimulationTickAt, setNextSimulationTickAt] = useState(null)
   const [cycleStatus, setCycleStatus] = useState('idle')
   const [awaitingFirstCycle, setAwaitingFirstCycle] = useState(false)
+  const [simulationSpeed, setSimulationSpeed] = useState(1)
+  const [manualTickPending, setManualTickPending] = useState(false)
+  const manualTickPendingRef = useRef(false)
   const latestSaveLoadedRef = useRef(false)
   const autosaveStateRef = useRef({})
   const canonicalSimulationRef = useRef(defaultSimulationVisual)
@@ -1038,6 +1065,14 @@ function App() {
   }, [demoMode, growingMode, lockedOutdoorLocation, lockedOutdoorLocationName, outdoorLocationRefreshKey, visitingFriend])
 
   useEffect(() => {
+    if (growingMode !== 'seasonal' || !simulationVisual?.seasonal_context) return
+
+    const weather = seasonalWeatherStateFromSimulator(simulationVisual)
+    setOutdoorWeather(weather)
+    setClimate((current) => climateFromForecast(current, weather.forecast))
+  }, [growingMode, simulationVisual])
+
+  useEffect(() => {
     if (!growingMode) return undefined
 
     let isCancelled = false
@@ -1129,6 +1164,71 @@ function App() {
       current_model_url: simulationVisual.current_model_url ?? defaultSimulationVisual.current_model_url,
     }
   }, [growingMode, growthTrack, selectedPlant, simulationVisual])
+  const simulationTimeRisk = useMemo(() => {
+    const activePests = Array.isArray(previewSimulationVisual?.active_pests)
+      ? previewSimulationVisual.active_pests
+      : []
+    const activeEvents = Array.isArray(previewSimulationVisual?.events)
+      ? previewSimulationVisual.events
+      : []
+    const harmfulEvent = activeEvents.some((event) => (
+      event?.is_harmful !== false
+      && ['announced', 'active'].includes(String(event?.status ?? '').toLowerCase())
+    ))
+    const health = Number(previewSimulationVisual?.health ?? 100)
+
+    if (harmfulEvent) {
+      return {
+        locked: true,
+        reason: localizedText('Resolve the active event before accelerating time.', 'จัดการเหตุการณ์ที่กำลังเกิดขึ้นก่อนเร่งเวลา'),
+      }
+    }
+    if (activePests.length > 0) {
+      return {
+        locked: true,
+        reason: localizedText('Treat active pests before accelerating time.', 'กำจัดศัตรูพืชที่กำลังระบาดก่อนเร่งเวลา'),
+      }
+    }
+    if (Number.isFinite(health) && health < 70) {
+      return {
+        locked: true,
+        reason: localizedText('Plant health must recover to at least 70%.', 'ฟื้นฟูสุขภาพพืชให้ถึงอย่างน้อย 70% ก่อนเร่งเวลา'),
+      }
+    }
+
+    return { locked: false, reason: '' }
+  }, [previewSimulationVisual?.active_pests, previewSimulationVisual?.events, previewSimulationVisual?.health])
+  const simulationActionBusy = ['animating', 'applying'].includes(actionState.phase)
+
+  const changeSimulationSpeed = useCallback((nextSpeed) => {
+    const normalizedSpeed = [1, 2, 4].includes(Number(nextSpeed)) ? Number(nextSpeed) : 1
+    if (growingMode !== 'greenhouse' || visitingFriend || !selectedPlant) return
+
+    if (normalizedSpeed > 1 && simulationTimeRisk.locked) {
+      setActionMessage(simulationTimeRisk.reason)
+      return
+    }
+
+    setSimulationSpeed(normalizedSpeed)
+    setActionMessage(normalizedSpeed === 1
+      ? localizedText('Simulation speed returned to normal.', 'กลับสู่ความเร็วปกติแล้ว')
+      : localizedText(`Simulation speed set to x${normalizedSpeed}.`, `ตั้งความเร็วจำลองเป็น x${normalizedSpeed} แล้ว`))
+  }, [growingMode, selectedPlant, setActionMessage, simulationTimeRisk, visitingFriend])
+
+  useEffect(() => {
+    if (growingMode === 'greenhouse' && !visitingFriend && selectedPlant) return
+    setSimulationSpeed(1)
+    manualTickPendingRef.current = false
+  }, [growingMode, selectedPlant, visitingFriend])
+
+  useEffect(() => {
+    if (growingMode !== 'greenhouse' || simulationSpeed === 1 || !simulationTimeRisk.locked) return
+    setSimulationSpeed(1)
+    setActionMessage(localizedText(
+      'Time acceleration stopped because the plant needs attention.',
+      'หยุดการเร่งเวลาอัตโนมัติ เพราะพืชต้องได้รับการดูแล',
+    ))
+  }, [growingMode, setActionMessage, simulationSpeed, simulationTimeRisk.locked])
   useEffect(() => {
     canonicalSimulationRef.current = simulationVisual
     autosaveStateRef.current = {
@@ -1311,6 +1411,8 @@ function App() {
     setGrowingMode(restoredMode)
     if (Object.prototype.hasOwnProperty.call(options, 'outdoorWeather')) {
       setOutdoorWeather(options.outdoorWeather ?? initialOutdoorWeather)
+    } else if (restoredMode === 'seasonal') {
+      setOutdoorWeather(seasonalWeatherStateFromSimulator(simulator))
     } else if (restoredMode === 'outdoor') {
       const plantedLocation = locationFromSimulator(simulator)
       setOutdoorWeather(plantedLocation
@@ -1325,7 +1427,7 @@ function App() {
     } else {
       setOutdoorWeather(initialOutdoorWeather)
     }
-    if (restoredMode === 'outdoor') {
+    if (['outdoor', 'seasonal'].includes(restoredMode)) {
       setWindows((value) => ({
         ...value,
         climate: {
@@ -1550,6 +1652,41 @@ function App() {
     })
   }, [enqueueSimulationMutation, mergeCanonicalSimulator, stashOwnGardenSimulator])
 
+  const advanceSimulationCycle = useCallback(async () => {
+    if (
+      growingMode !== 'greenhouse'
+      || visitingFriend
+      || !selectedPlant
+      || simulationTimeRisk.locked
+      || simulationActionBusy
+      || cycleStatus === 'updating'
+      || manualTickPendingRef.current
+    ) {
+      if (simulationTimeRisk.locked) setActionMessage(simulationTimeRisk.reason)
+      return
+    }
+
+    manualTickPendingRef.current = true
+    setManualTickPending(true)
+    setCycleStatus('updating')
+    setNextSimulationTickAt(null)
+
+    try {
+      const simulator = await runSimulationTick()
+      if (simulator) {
+        setAwaitingFirstCycle(false)
+        setActionMessage(localizedText('Advanced one simulation cycle.', 'คำนวณรอบจำลองถัดไปแล้ว'))
+      }
+    } catch (error) {
+      if (error?.status !== 401) {
+        setActionMessage(error?.message || localizedText('Unable to advance the cycle.', 'ไม่สามารถข้ามไปรอบถัดไปได้'))
+      }
+    } finally {
+      manualTickPendingRef.current = false
+      setManualTickPending(false)
+    }
+  }, [cycleStatus, growingMode, runSimulationTick, selectedPlant, setActionMessage, simulationActionBusy, simulationTimeRisk, visitingFriend])
+
   useEffect(() => {
     const simulatorId = previewSimulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
     const isFullyGrown = selectedPlant && Number(previewSimulationVisual?.growth_point ?? 0) >= 100
@@ -1734,26 +1871,28 @@ function App() {
 
   useEffect(() => {
     const simulatorId = simulationVisual?.id ?? window.localStorage.getItem('plant_game_simulator_id')
-    if (activePage === 'admin' || !simulatorId || !selectedPlant || !growingMode || visitingFriend || !getToken() || simulationVisual?.status !== 'active') {
+    if (activePage === 'admin' || !simulatorId || !selectedPlant || !growingMode || visitingFriend || !getToken() || simulationVisual?.status !== 'active' || simulationActionBusy || manualTickPending) {
       return undefined
     }
 
+    const effectiveTickIntervalMs = growingMode === 'greenhouse'
+      ? Math.max(1000, Math.round(simulationTickIntervalMs / simulationSpeed))
+      : simulationTickIntervalMs
     const markerKey = `${simulationTickMarkerPrefix}${simulatorId}`
     const storedTickAt = Number(window.localStorage.getItem(markerKey))
     const hasStoredTick = Number.isFinite(storedTickAt) && storedTickAt > 0
-
     let cancelled = false
     let timer = null
     let statusTimer = null
 
     async function tickCycle() {
-      if (cancelled) return
+      if (cancelled || manualTickPendingRef.current) return
 
       if (document.hidden) {
-        const nextTickAt = Date.now() + simulationTickIntervalMs
+        const nextTickAt = Date.now() + effectiveTickIntervalMs
         setCycleStatus('waiting')
         setNextSimulationTickAt(nextTickAt)
-        timer = window.setTimeout(tickCycle, simulationTickIntervalMs)
+        timer = window.setTimeout(tickCycle, effectiveTickIntervalMs)
         return
       }
 
@@ -1768,18 +1907,18 @@ function App() {
         }
       } finally {
         if (!cancelled) {
-          const nextTickAt = Date.now() + simulationTickIntervalMs
+          const nextTickAt = Date.now() + effectiveTickIntervalMs
           setCycleStatus('waiting')
           setNextSimulationTickAt(nextTickAt)
-          timer = window.setTimeout(tickCycle, simulationTickIntervalMs)
+          timer = window.setTimeout(tickCycle, effectiveTickIntervalMs)
         }
       }
     }
 
     const elapsed = hasStoredTick ? Math.max(0, Date.now() - storedTickAt) : 0
     const initialDelay = hasStoredTick
-      ? Math.max(1000, simulationTickIntervalMs - elapsed)
-      : initialSimulationTickDelayMs
+      ? Math.max(1000, effectiveTickIntervalMs - elapsed)
+      : effectiveTickIntervalMs
     statusTimer = window.setTimeout(() => {
       if (!cancelled) {
         setCycleStatus('waiting')
@@ -1793,7 +1932,7 @@ function App() {
       if (statusTimer !== null) window.clearTimeout(statusTimer)
       if (timer !== null) window.clearTimeout(timer)
     }
-  }, [activePage, growingMode, runSimulationTick, selectedPlant, simulationVisual?.id, simulationVisual?.status, visitingFriend])
+  }, [activePage, growingMode, manualTickPending, runSimulationTick, selectedPlant, simulationActionBusy, simulationSpeed, simulationVisual?.id, simulationVisual?.status, visitingFriend])
 
   useEffect(() => {
     if (activePage !== 'lab' || !selectedPlant || !growingMode || !getToken()) return undefined
@@ -2165,8 +2304,15 @@ function App() {
     }
   }
 
-  async function startPlantInMode(asset, mode) {
+  async function startPlantInMode(asset, mode, seasonalOptions = null) {
     if (plantingBusy) return
+
+    if (mode === 'seasonal' && !seasonalOptions) {
+      setPendingPlant(null)
+      setSeasonalSetupAsset(asset)
+      setActionMessage(getAppLanguage() === 'th' ? 'เลือกสถานที่และเดือนเริ่มต้นสำหรับโหมดฤดูกาล' : 'Choose a location and starting month for Seasonal Journey')
+      return
+    }
 
     const apiPlant = plantCatalog.find((plant) => Number(plant.id) === Number(asset.backendId)) ?? null
     const fallbackModelUrl = apiPlant?.base_model_url ?? modelAssets['plant.original']?.url ?? defaultSimulationVisual.current_model_url
@@ -2184,6 +2330,7 @@ function App() {
     setPlantingBusy(true)
     setModeLoading(true)
     setPendingPlant(null)
+    setSeasonalSetupAsset(null)
     setActionMessage(`Preparing ${asset.name}...`)
 
     try {
@@ -2208,11 +2355,22 @@ function App() {
         }
       }
 
+      if (mode === 'seasonal') {
+        location = {
+          latitude: Number(seasonalOptions.latitude),
+          longitude: Number(seasonalOptions.longitude),
+          source: 'simulation',
+        }
+        locationName = seasonalOptions.location_name
+      }
+
       const accountSession = accountSessionRef.current
       const simulatorPayload = await startSimulator(apiPlant.id, mode, {
-        location_name: mode === 'outdoor' ? locationName || undefined : undefined,
+        location_name: ['outdoor', 'seasonal'].includes(mode) ? locationName || undefined : undefined,
         latitude: location?.latitude,
         longitude: location?.longitude,
+        location_timezone: mode === 'seasonal' ? seasonalOptions.location_timezone : undefined,
+        start_month: mode === 'seasonal' ? seasonalOptions.start_month : undefined,
       })
       if (accountSession !== accountSessionRef.current || !getToken()) return
 
@@ -2226,7 +2384,8 @@ function App() {
       setAwaitingFirstCycle(Number(simulator.growth_point ?? 0) <= 0)
       setResetPending(false)
       openPlantWindows()
-      setActionMessage(`${asset.name} planted in ${mode === 'outdoor' ? 'Outdoor' : 'Environment Control'} mode`)
+      const modeName = mode === 'outdoor' ? 'Outdoor' : mode === 'seasonal' ? 'Seasonal Journey' : 'Environment Control'
+      setActionMessage(`${asset.name} planted in ${modeName} mode`)
 
       const knowledgeKey = plantKnowledgeAutoOpenKey(user?.id, asset)
       let knowledgeAlreadyOpened = false
@@ -2411,7 +2570,7 @@ function App() {
 
     const guidedWindows = defaultWindows()
 
-    if (mode === 'outdoor') {
+    if (['outdoor', 'seasonal'].includes(mode)) {
       guidedWindows.climate = {
         ...guidedWindows.climate,
         ...outdoorClimateWindow(guidedWindows),
@@ -2523,7 +2682,10 @@ function App() {
         const historyVisibility = nextVisual?.share_visibility && nextVisual.share_visibility !== 'private'
           ? nextVisual.share_visibility
           : 'private'
-        const growthEstimate = getRealGrowthEstimate(nextVisual)
+        const growthEstimate = getRealGrowthEstimate(
+          nextVisual,
+          growingMode === 'greenhouse' ? SIMULATION_CYCLE_SECONDS / simulationSpeed : SIMULATION_CYCLE_SECONDS,
+        )
         const payload = await savePlantHistory(historySimulatorId, {
           visibility: historyVisibility,
           snapshot_image_data: snapshotImageData,
@@ -2654,6 +2816,7 @@ function App() {
     }
 
     setGrowingMode(null)
+    setSeasonalSetupAsset(null)
     setModeLoading(false)
     setSaveHydrated(true)
     setClimate({ ...defaultClimate })
@@ -2795,6 +2958,7 @@ function App() {
     setWindows(defaultWindows())
     setClimate({ ...defaultClimate })
     setGrowingMode(null)
+    setSeasonalSetupAsset(null)
     setModeLoading(false)
     setSaveHydrated(hydrated)
     setResetPending(false)
@@ -3676,7 +3840,7 @@ function App() {
         <>
           {labReady && (
             <>
-              <LibrarySidebar busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
+              <LibrarySidebar activeEvents={previewSimulationVisual?.events ?? []} seasonalContext={previewSimulationVisual?.seasonal_context} busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
               <SimulationStage
                 actionState={actionState}
                 coinBurst={coinBurst}
@@ -3685,11 +3849,17 @@ function App() {
                 location={outdoorWeather.location}
                 mode={growingMode}
                 outdoorReadings={getOutdoorReadings(outdoorWeather.forecast)}
+                seasonalContext={previewSimulationVisual?.seasonal_context}
                 weatherStatus={outdoorWeather.status}
                 plantSelected={Boolean(selectedPlant)}
                 awaitingFirstCycle={awaitingFirstCycle}
                 cycleStatus={cycleStatus}
                 nextCycleAt={nextSimulationTickAt}
+                simulationSpeed={simulationSpeed}
+                onSimulationSpeedChange={changeSimulationSpeed}
+                onAdvanceCycle={advanceSimulationCycle}
+                timeControlsLocked={simulationTimeRisk.locked}
+                timeControlsReason={simulationTimeRisk.reason}
                 onSceneReady={handleStageSceneReady}
                 selectedItemCursorUrl={selectedItemCursorUrl}
                 onUseSelectedItem={applySelectedItem}
@@ -3706,7 +3876,7 @@ function App() {
               />
 
               {visitingFriend && (
-                <div className={`absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)] ${growingMode === 'outdoor' ? 'top-[216px]' : 'top-20'}`} data-tour="friend-mode-banner">
+                <div className={`absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)] ${['outdoor', 'seasonal'].includes(growingMode) ? 'top-[216px]' : 'top-20'}`} data-tour="friend-mode-banner">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
                   <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved game state' : `${visitorName}'s garden`}</strong> - view only</span>
                   <button
@@ -3727,6 +3897,7 @@ function App() {
                 awaitingFirstCycle={awaitingFirstCycle}
                 cycleStatus={cycleStatus}
                 nextCycleAt={nextSimulationTickAt}
+                simulationSpeed={growingMode === 'greenhouse' ? simulationSpeed : 1}
               />
               {!visitingFriend && (
                 <EnvironmentPanel
@@ -3776,6 +3947,17 @@ function App() {
             />
           )}
           {saveHydrated && !modeLoading && !pendingPlant && !growingMode && <GrowingModePicker onSelect={chooseGrowingMode} />}
+          {saveHydrated && seasonalSetupAsset && (
+            <SeasonalSetupModal
+              busy={plantingBusy || modeLoading}
+              plant={seasonalSetupAsset}
+              onCancel={() => {
+                setSeasonalSetupAsset(null)
+                setActionMessage(selectedPlant ? `${selectedPlant.name} remains open` : '')
+              }}
+              onConfirm={(options) => startPlantInMode(seasonalSetupAsset, 'seasonal', options)}
+            />
+          )}
           {(!saveHydrated || modeLoading) && <ModeLoadingOverlay mode={growingMode} />}
         </>
       )}

@@ -6,6 +6,7 @@ use App\Models\Pest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
+use App\Services\SeasonalWeatherService;
 
 class SimulatorResource extends JsonResource
 {
@@ -25,6 +26,19 @@ class SimulatorResource extends JsonResource
             'latitude' => $this->latitude ? (float) $this->latitude : null,
             'longitude' => $this->longitude ? (float) $this->longitude : null,
             'season' => $this->season,
+            'climate_zone' => $this->climate_zone,
+            'season_key' => $this->season_key,
+            'start_month' => $this->start_month === null ? null : (int) $this->start_month,
+            'simulated_datetime' => $this->simulated_datetime,
+            'calendar_day' => (int) ($this->calendar_day ?? 0),
+            'biological_days' => round((float) ($this->biological_days ?? 0), 2),
+            'weather_seed' => $this->weather_seed === null ? null : (int) $this->weather_seed,
+            'weather_source' => $this->weather_source,
+            'weather_profile_version' => $this->weather_profile_version,
+            'seasonal_context' => $this->mode === 'seasonal'
+                ? ($this->resource->getAttribute('seasonal_context_payload')
+                    ?? app(SeasonalWeatherService::class)->context($this->resource))
+                : null,
             'growth_point' => $this->growth_point,
             'health' => $this->health,
             'visual_state' => $this->visual_state ?? 'healthy',

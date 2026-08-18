@@ -51,15 +51,21 @@ class PlantSimulationEngine
                 ->sortByDesc('severity')
                 ->values();
 
-            $healthDelta = (int) $matchedRules->sum('health_delta') + $resourceState['health_delta'];
-            if ($simulator->mode === 'outdoor') {
+            $seasonalImpact = $this->seasonalWeatherImpact($simulator, $factors);
+            $healthDelta = (int) $matchedRules->sum('health_delta')
+                + $resourceState['health_delta']
+                + $seasonalImpact['health_delta'];
+            if (in_array($simulator->mode, ['outdoor', 'seasonal'], true)) {
                 // Outdoor weather may combine several rules at once. Cap the
                 // environmental loss so the player always gets a recovery turn.
                 $healthDelta = max(-16, $healthDelta);
             }
-            $growthDelta = (int) $matchedRules->sum('growth_delta') + $resourceState['growth_delta'];
+            $growthDelta = (int) $matchedRules->sum('growth_delta')
+                + $resourceState['growth_delta']
+                + $seasonalImpact['growth_delta'];
             $stressCount = $matchedRules->filter(fn (PlantConditionRule $rule) => $rule->health_delta < 0 || $rule->growth_delta < 0)->count()
-                + $resourceState['stress_count'];
+                + $resourceState['stress_count']
+                + $seasonalImpact['stress_count'];
             $wasDepleted = (int) $simulator->health === 0;
             $naturalRecovery = $stressCount === 0 ? 3 : 0;
 
@@ -70,7 +76,7 @@ class PlantSimulationEngine
             // and deformation from the 3D plant.
             $dominantVisualState = $resourceState['critical']
                 ? $resourceState['visual_state']
-                : ($matchedRules->first()?->visual_state ?? $resourceState['visual_state']);
+                : ($matchedRules->first()?->visual_state ?? $seasonalImpact['visual_state'] ?? $resourceState['visual_state']);
             $visualState = $dominantVisualState ?? 'healthy';
 
             $pestRisks = $this->pestRiskMap($simulator, $factors);
@@ -86,7 +92,7 @@ class PlantSimulationEngine
                 : (int) $simulator->health;
             $healthAfterEnvironment = $this->clamp($startingHealth + $healthDelta + $naturalRecovery, 0, 100);
             $nextHealth = $this->clamp($healthAfterEnvironment - $pestDamage, 0, 100);
-            if ($simulator->mode === 'outdoor') {
+            if (in_array($simulator->mode, ['outdoor', 'seasonal'], true)) {
                 $nextHealth = max($nextHealth, max(0, $startingHealth - 20));
             }
 
@@ -101,9 +107,25 @@ class PlantSimulationEngine
             $currentGrowth = max(0, (int) $simulator->growth_point);
             $baseGrowth = $stressCount === 0 ? 14 : 6;
             $growthIncrement = max(0, $baseGrowth + $growthDelta);
-            $calculatedGrowth = $wasDepleted || $nextHealth === 0
-                ? $currentGrowth
-                : $currentGrowth + $growthIncrement;
+            $biologicalIncrement = $wasDepleted || $nextHealth === 0
+                ? 0.0
+                : min(1.0, max(0.0, $growthIncrement / 14));
+            $nextBiologicalDays = round(
+                (float) $simulator->biological_days + $biologicalIncrement,
+                3,
+            );
+            if ($simulator->mode === 'seasonal') {
+                // A seasonal tick is one calendar day. Plant progress follows
+                // the species' real maturity duration and only advances by the
+                // biological fraction earned under that day's weather.
+                $maturityDays = max(1.0, (float) ($plant->real_maturity_days ?: 100));
+                $seasonalGrowth = (int) round(($nextBiologicalDays / $maturityDays) * max(1, $maxGrowthPoint));
+                $calculatedGrowth = max($currentGrowth, $seasonalGrowth);
+            } else {
+                $calculatedGrowth = $wasDepleted || $nextHealth === 0
+                    ? $currentGrowth
+                    : $currentGrowth + $growthIncrement;
+            }
             $nextGrowth = $maxGrowthPoint > 0
                 ? min($maxGrowthPoint, $calculatedGrowth)
                 : $calculatedGrowth;
@@ -119,6 +141,8 @@ class PlantSimulationEngine
             $directionMessages = $matchedRules->pluck('direction')->filter()->values()->all();
             if ($resourceState['analysis']) $analysisMessages[] = $resourceState['analysis'];
             if ($resourceState['direction']) $directionMessages[] = $resourceState['direction'];
+            if ($seasonalImpact['analysis']) $analysisMessages[] = $seasonalImpact['analysis'];
+            if ($seasonalImpact['direction']) $directionMessages[] = $seasonalImpact['direction'];
             $analysis = $this->analysisText($analysisMessages, $visualState);
             $direction = $this->directionText($directionMessages, $visualState);
             if ($pestDamage > 0) {
@@ -147,6 +171,13 @@ class PlantSimulationEngine
                 'soil_temp' => (float) Arr::get($factors, 'soil_temp', $simulator->soil_temp),
                 'air_temp' => (float) Arr::get($factors, 'air_temp', $simulator->air_temp),
                 'state_version' => ((int) $simulator->state_version) + 1,
+                ...($simulator->mode === 'seasonal' ? [
+                    // Calendar time always advances. Biological time advances
+                    // only by the growth actually earned during this day.
+                    'calendar_day' => ((int) $simulator->calendar_day) + 1,
+                    'biological_days' => $nextBiologicalDays,
+                    'simulated_datetime' => ($simulator->simulated_datetime ?? now())->copy()->addDay(),
+                ] : []),
                 ...$this->activity->attributes($simulator),
             ];
 
@@ -210,7 +241,7 @@ class PlantSimulationEngine
         $airTemperature = (float) Arr::get($factors, 'air_temp', $simulator->air_temp);
         $airHumidity = (float) Arr::get($factors, 'air_humidity', $simulator->air_humidity);
         $light = (float) Arr::get($factors, 'light', $simulator->light);
-        $rain = $simulator->mode === 'outdoor' ? max(0, (float) Arr::get($factors, 'rain', 0)) : 0;
+        $rain = in_array($simulator->mode, ['outdoor', 'seasonal'], true) ? max(0, (float) Arr::get($factors, 'rain', 0)) : 0;
 
         $heatLoad = max(0, $airTemperature - (float) $plant->air_temp_max) * 0.18;
         $dryAirLoad = max(0, (float) $plant->air_humidity_min - $airHumidity) * 0.04;
@@ -277,6 +308,45 @@ class PlantSimulationEngine
             'direction' => $direction,
             'critical' => $critical,
         ];
+    }
+
+    /**
+     * Apply hazards that are not represented by the plant condition-rule
+     * table. Temperature, moisture and light continue to use species rules;
+     * gust damage is calculated here so a windbreak can reduce the real
+     * weather factor before it reaches the plant. Damage is intentionally
+     * bounded and severe weather is exposed one day ahead by the timeline.
+     *
+     * @param  array<string, int|float|null>  $factors
+     * @return array{health_delta:int,growth_delta:int,stress_count:int,visual_state:?string,analysis:?string,direction:?string}
+     */
+    private function seasonalWeatherImpact(Simulator $simulator, array $factors): array
+    {
+        $impact = [
+            'health_delta' => 0,
+            'growth_delta' => 0,
+            'stress_count' => 0,
+            'visual_state' => null,
+            'analysis' => null,
+            'direction' => null,
+        ];
+
+        if ($simulator->mode !== 'seasonal') {
+            return $impact;
+        }
+
+        $gust = max(0, (float) Arr::get($factors, 'wind_gust', Arr::get($factors, 'wind_speed', 0)));
+        if ($gust >= 45) {
+            $severity = min(1, max(0, ($gust - 40) / 35));
+            $impact['health_delta'] = -max(2, (int) round(3 + ($severity * 6)));
+            $impact['growth_delta'] = -max(3, (int) round(4 + ($severity * 5)));
+            $impact['stress_count'] = 1;
+            $impact['visual_state'] = 'wind_stress';
+            $impact['analysis'] = 'Strong seasonal wind is bending the plant and reducing biological growth today.';
+            $impact['direction'] = 'Install a windbreak while the strong-wind warning is active.';
+        }
+
+        return $impact;
     }
 
     /** @param array<string, int|float|null> $factors */
@@ -348,6 +418,7 @@ class PlantSimulationEngine
             'heat_stress' => ['leafColor' => '#c6773e', 'stemColor' => '#7a4b2f', 'scale' => 0.92, 'leafState' => 'burnt_edges', 'stemState' => 'dry'],
             'burnt' => ['leafColor' => '#b87536', 'stemColor' => '#704326', 'scale' => 0.88, 'leafState' => 'root_burn', 'stemState' => 'dry'],
             'cold_stress' => ['leafColor' => '#65816f', 'stemColor' => '#5f6f5b', 'scale' => 0.9, 'leafState' => 'darkened', 'stemState' => 'slow'],
+            'wind_stress' => ['leafColor' => '#789466', 'stemColor' => '#695635', 'scale' => 0.94, 'leafState' => 'drooping', 'stemState' => 'leaning'],
             'stunted' => ['leafColor' => '#7b6f3f', 'stemColor' => '#5c4a28', 'scale' => 0.68, 'leafState' => 'small', 'stemState' => 'short'],
         ];
 

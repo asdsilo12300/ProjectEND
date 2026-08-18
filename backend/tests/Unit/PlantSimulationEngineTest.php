@@ -113,6 +113,29 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame(40, (int) $result->growth_point);
     }
 
+    public function test_seasonal_calendar_advances_while_biological_growth_is_paused(): void
+    {
+        [$plant, $simulator] = $this->seedPlantAndSimulator();
+        $plant->update(['real_maturity_days' => 100]);
+        $simulator->update([
+            'mode' => 'seasonal',
+            'health' => 0,
+            'calendar_day' => 12,
+            'biological_days' => 0,
+            'simulated_datetime' => '2026-08-14 08:00:00',
+        ]);
+
+        $result = app(PlantSimulationEngine::class)->tick(
+            $simulator->fresh(),
+            $this->healthyFactors(),
+        );
+
+        $this->assertSame(13, (int) $result->calendar_day);
+        $this->assertEquals(0.0, (float) $result->biological_days);
+        $this->assertSame(0, (int) $result->growth_point);
+        $this->assertSame('2026-08-15', $result->simulated_datetime?->toDateString());
+    }
+
     public function test_low_fertilizer_sets_nutrient_deficient_visual_state(): void
     {
         [$plant, $simulator] = $this->seedPlantAndSimulator();
@@ -418,6 +441,7 @@ class PlantSimulationEngineTest extends TestCase
             $table->decimal('soil_temp_max', 5, 2)->default(50);
             $table->decimal('air_temp_min', 5, 2)->default(0);
             $table->decimal('air_temp_max', 5, 2)->default(50);
+            $table->decimal('real_maturity_days', 8, 2)->default(100);
             $table->timestamps();
             $table->softDeletes();
         });
@@ -522,6 +546,9 @@ class PlantSimulationEngineTest extends TestCase
             $table->string('status')->default('active');
             $table->unsignedBigInteger('state_version')->default(1);
             $table->unsignedInteger('event_tick_count')->default(0);
+            $table->unsignedInteger('calendar_day')->default(0);
+            $table->decimal('biological_days', 10, 3)->default(0);
+            $table->timestamp('simulated_datetime')->nullable();
             $table->unsignedBigInteger('active_seconds')->default(0);
             $table->timestamp('last_active_at')->nullable();
             $table->timestamp('started_at')->nullable();
