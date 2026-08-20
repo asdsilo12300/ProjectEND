@@ -68,10 +68,10 @@ export const tutorialCatalog = {
       {
         icon: 'settings',
         targets: ['[data-panel-id="climate"]', '[data-tour="mobile-panel-dock"]'],
-        title: { en: 'Preview, confirm, then watch the action', th: 'ตรวจค่า ยืนยัน แล้วดูแอนิเมชัน' },
+        title: { en: 'Preview and confirm each change', th: 'ตรวจค่าแล้วกดยืนยันการใช้งาน' },
         description: {
-          en: 'In Environment Control, slider changes are only a preview. Confirm them to play the 3D action; the server changes the real values only after the animation reaches Apply.',
-          th: 'ในโหมดควบคุมปัจจัย ค่า Slider เป็นเพียงตัวอย่าง ต้องกดยืนยันเพื่อเล่นแอนิเมชัน 3D และ Server จะเปลี่ยนค่าจริงเมื่อแอนิเมชันถึงจุดใช้งานแล้วเท่านั้น',
+          en: 'In Environment Control, slider changes are a preview. Review the values and confirm use; the simulation applies the real values only after the care action succeeds.',
+          th: 'ในโหมดควบคุมปัจจัย ค่า Slider เป็นเพียงตัวอย่าง ตรวจสอบค่าแล้วกดยืนยันการใช้งาน ระบบจะเปลี่ยนค่าจริงเมื่อการดูแลสำเร็จเท่านั้น',
         },
       },
       {
@@ -88,8 +88,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="lab-items"]', '[data-panel-id="monitor"]', '[data-tour="lab-assets"]'],
         title: { en: 'Match plant-care items to the problem', th: 'เลือกไอเทมให้ตรงกับปัญหา' },
         description: {
-          en: 'Use Insect Spray for aphids, Snail Spray for snails, Fungus Spray for fungus, or Hand Pick for supported pests. Check Pest monitoring before consuming an item.',
-          th: 'ใช้สเปรย์กำจัดแมลงกับเพลี้ย สเปรย์กำจัดหอยกับหอยทาก สเปรย์กำจัดเชื้อรากับเชื้อรา หรือเก็บด้วยมือกับศัตรูพืชที่รองรับ โดยตรวจตัวติดตามศัตรูพืชก่อนใช้ไอเทม',
+          en: 'Use Insect Spray for aphids, Snail Spray for snails, or Fungus Spray for fungus. Check Pest monitoring before consuming an item.',
+          th: 'ใช้สเปรย์กำจัดแมลงกับเพลี้ย สเปรย์กำจัดหอยกับหอยทาก หรือสเปรย์กำจัดเชื้อรากับเชื้อรา โดยตรวจตัวติดตามศัตรูพืชก่อนใช้ไอเทม',
         },
       },
       {
@@ -145,8 +145,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="lab-items"]', '.lab-library-toggle', '[data-tour="lab-stage"]'],
         title: { en: 'Select the matching treatment', th: 'เลือกไอเทมให้ตรงกับปัญหา' },
         description: {
-          en: 'Insect Spray treats aphids, Snail Spray treats snails, Fungus Spray treats fungus, and Hand Pick handles aphids or snails.',
-          th: 'Insect Spray ใช้กับเพลี้ย, Snail Spray ใช้กับหอย, Fungus Spray ใช้กับเชื้อรา และ Hand Pick ใช้กับเพลี้ยหรือหอย',
+          en: 'Insect Spray treats aphids, Snail Spray treats snails, and Fungus Spray treats fungus.',
+          th: 'สเปรย์กำจัดแมลงใช้กับเพลี้ย สเปรย์กำจัดหอยใช้กับหอยทาก และสเปรย์กำจัดเชื้อราใช้กับเชื้อรา',
         },
       },
       {
@@ -154,8 +154,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="lab-stage"]'],
         title: { en: 'Click the plant to apply the selected item', th: 'คลิกต้นพืชเพื่อใช้ไอเทมที่เลือก' },
         description: {
-          en: 'After selecting an item, click the plant once. The action moves through targeting, animation, apply, and success; the centered result and refreshed monitor appear after the server accepts it.',
-          th: 'หลังเลือกไอเทมให้คลิกต้นพืชหนึ่งครั้ง ระบบจะทำงานตามลำดับ เล็งเป้าหมาย เล่นแอนิเมชัน ใช้งาน และสำเร็จ จากนั้นจึงแสดงผลกลางจอและอัปเดต Monitor หลัง Server ยอมรับ',
+          en: 'After selecting an item, click the plant once and confirm use when prompted. A notification on the right and the refreshed monitor appear after the server accepts it.',
+          th: 'หลังเลือกไอเทมให้คลิกต้นพืชหนึ่งครั้งและกดยืนยันเมื่อระบบถาม เมื่อ Server ยอมรับแล้วจะแจ้งผลด้านขวาและอัปเดต Monitor',
         },
       },
       {

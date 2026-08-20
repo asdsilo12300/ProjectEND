@@ -43,7 +43,6 @@ const fallbackItems = [
   { id: 2, name: 'Insect Spray', type: 'pesticide', description: 'Clears aphids with 100% success.', image_url: '/game-icons/insect-spray.png', effect_type: 'pest_control:aphid' },
   { id: 3, name: 'Snail Spray', type: 'pesticide', description: 'Clears snails with 100% success.', image_url: '/game-icons/snail-spray.png', effect_type: 'pest_control:snail' },
   { id: 4, name: 'Fungus Spray', type: 'pesticide', description: 'Clears fungus with 100% success.', image_url: '/game-icons/antifungal-spray.png', effect_type: 'pest_control:fungus' },
-  { id: 5, name: 'Hand Pick', type: 'tool', description: 'Manual removal for aphids and snails.', image_url: '/game-icons/hand-pick.png', effect_type: 'pest_control:manual' },
   { id: 6, name: 'Aphid Prank', type: 'friend_prank', description: 'Send aphids to a friend garden.', image_url: '/game-icons/aphid.png', effect_type: 'friend_pest:aphid' },
   { id: 7, name: 'Snail Prank', type: 'friend_prank', description: 'Send a snail to a friend garden.', image_url: '/game-icons/snail.png', effect_type: 'friend_pest:snail' },
   { id: 8, name: 'Watering Dose', type: 'water', description: 'Restores 22% of the active plant water reserve.', effect_type: 'environment:water', effect_value: 22, action_key: 'water', animation_key: 'watering-can', mode_scope: 'both' },

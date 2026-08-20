@@ -25,6 +25,16 @@ class ShopController extends Controller
             ->get()
             ->toArray());
 
+        // Keep retired legacy records out even when a previous catalog response
+        // is still present in the browser/Redis cache during a deployment.
+        $items = array_values(array_filter($items, function (array $shopItem): bool {
+            $item = $shopItem['item'] ?? [];
+            $name = strtolower(trim((string) ($item['name'] ?? '')));
+            $actionKey = strtolower(trim((string) ($item['action_key'] ?? '')));
+
+            return $name !== 'hand pick' && $actionKey !== 'manual-pest-control';
+        }));
+
         $seconds = max(0, (int) config('catalog.browser_cache_seconds', 30));
 
         return response()
@@ -36,6 +46,7 @@ class ShopController extends Controller
     {
         $items = UserItem::query()
             ->with('item')
+            ->whereHas('item', fn ($query) => $query->whereNull('deleted_at')->where('is_active', true))
             ->where('user_id', $request->user()->id)
             ->get();
 

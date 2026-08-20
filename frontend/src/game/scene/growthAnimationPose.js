@@ -130,6 +130,23 @@ export function useGrowthAnimationPose(actions, mixer, growthProgress, configura
   }, [actions, mixer, options, targetProgress])
 
   useFrame((_, delta) => {
+    // Drei exposes animation actions lazily. On the first committed frame the
+    // ref used by useAnimations can still be empty even though the GLTF is
+    // already on screen. Retry the authoritative pose once actions become
+    // available so an uploaded morph-target plant cannot remain on frame 0
+    // (a thin stem/line) while the HUD reports later growth.
+    if (lastPoseRef.current === '') {
+      if (displayedProgressRef.current === null) displayedProgressRef.current = targetProgressRef.current
+      Object.values(actions).filter(Boolean).forEach((action) => {
+        action.enabled = true
+        action.setLoop(LoopOnce, 1)
+        action.clampWhenFinished = true
+        action.play()
+        action.paused = true
+      })
+      applyGrowthPose(actions, mixer, displayedProgressRef.current, options, lastPoseRef)
+    }
+
     if (options.transitionResponse <= 0 || displayedProgressRef.current === null) return
 
     const target = targetProgressRef.current

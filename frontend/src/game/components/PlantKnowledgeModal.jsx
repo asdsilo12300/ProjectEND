@@ -5,6 +5,7 @@ import { getPlantKnowledge } from '../data/plantKnowledge'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { MetricIcon } from '../icons/MetricIcon'
 import { getAppLanguage } from '../../i18n/appI18n'
+import { resolveAssetUrl } from '../../lib/api'
 
 const factorDefinitions = [
   { key: 'water', label: 'Water', labelTh: 'น้ำ', unit: 'ml', iconKey: 'water', convert: (value) => Number(value) * 10 },
@@ -49,6 +50,7 @@ export function PlantKnowledgeModal({ onClose, plantAsset }) {
   const language = getAppLanguage() === 'th' ? 'th' : 'en'
   const copy = (english, thai) => language === 'th' ? thai : english
   const knowledge = useMemo(() => getPlantKnowledge(plantAsset, language), [language, plantAsset])
+  const knowledgePhotoUrl = resolveAssetUrl(knowledge.photo?.url) || knowledge.photo?.url
 
   useEffect(() => {
     function closeOnEscape(event) {
@@ -97,10 +99,10 @@ export function PlantKnowledgeModal({ onClose, plantAsset }) {
           <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
             <figure className="overflow-hidden rounded-xl border border-lime-100/15 bg-[#1a251b]">
               <div className="aspect-[4/3] overflow-hidden sm:aspect-square">
-              {knowledge.photo?.url || plantAsset.imageUrl ? (
+              {knowledgePhotoUrl || plantAsset.imageUrl ? (
                 <img
                   className="h-full w-full object-cover"
-                  src={knowledge.photo?.url || plantAsset.imageUrl}
+                  src={knowledgePhotoUrl || plantAsset.imageUrl}
                   alt={knowledge.photo?.alt || knowledge.commonName}
                 />
               ) : (

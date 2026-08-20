@@ -126,9 +126,9 @@ VALUES
   (@fungus_id, NULL, 'air_humidity', 'above', NULL, 78, 42, 45, 1, NOW(), NOW()),
   (@fungus_id, NULL, 'soil_humidity', 'above', NULL, 78, 46, 50, 1, NOW(), NOW());
 
-UPDATE items SET type = 'pesticide', description = 'Manual removal. Aphid success 40%, snail success 80%. Does not consume inventory.', image_url = '/storage/icon%20picture/hand-Photoroom.png', effect_type = 'manual_pest_control:aphid,snail', effect_value = 0, rarity = 'common', is_active = 1 WHERE name = 'Hand Pick';
+UPDATE items SET type = 'pesticide', description = 'Retired manual-removal item kept for historical records.', image_url = '/storage/icon%20picture/hand-Photoroom.png', effect_type = 'manual_pest_control:aphid,snail', effect_value = 0, rarity = 'common', is_active = 0 WHERE name = 'Hand Pick';
 INSERT INTO items (name, type, description, image_url, effect_type, effect_value, rarity, is_active)
-SELECT 'Hand Pick', 'pesticide', 'Manual removal. Aphid success 40%, snail success 80%. Does not consume inventory.', '/storage/icon%20picture/hand-Photoroom.png', 'manual_pest_control:aphid,snail', 0, 'common', 1
+SELECT 'Hand Pick', 'pesticide', 'Retired manual-removal item kept for historical records.', '/storage/icon%20picture/hand-Photoroom.png', 'manual_pest_control:aphid,snail', 0, 'common', 0
 WHERE NOT EXISTS (SELECT 1 FROM items WHERE name = 'Hand Pick');
 
 UPDATE items SET type = 'pesticide', description = 'Clears aphids with 100% success.', image_url = '/storage/icon%20picture/Insecticide%20spray-Photoroom.png', effect_type = 'pest_control:aphid', effect_value = 100, rarity = 'common', is_active = 1 WHERE name = 'Insect Spray';
@@ -172,13 +172,12 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO user_items (user_id, item_id, quantity)
 SELECT u.id, i.id,
   CASE i.name
-    WHEN 'Hand Pick' THEN 10
     WHEN 'Insect Spray' THEN 7
     WHEN 'Snail Spray' THEN 7
     WHEN 'Fungus Spray' THEN 7
   END
 FROM users u
-JOIN items i ON i.name IN ('Hand Pick', 'Insect Spray', 'Snail Spray', 'Fungus Spray')
+JOIN items i ON i.name IN ('Insect Spray', 'Snail Spray', 'Fungus Spray')
 ON DUPLICATE KEY UPDATE
   quantity = GREATEST(quantity, VALUES(quantity));
 

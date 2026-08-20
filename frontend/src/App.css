@@ -1006,6 +1006,26 @@ html.settings-theme-dark .location-transfer__preview { border-color: #2c4032; ba
 html.settings-theme-dark .location-transfer__preview div { background: #162219; }
 html.settings-theme-dark .location-transfer__preview span { color: #91aa97; }
 
+.seasonal-status-panel__season {
+  position: relative;
+  background: linear-gradient(115deg, var(--season-surface), transparent 78%);
+  box-shadow: inset 3px 0 0 var(--season-accent);
+}
+.seasonal-status-panel__season-icon {
+  border-color: var(--season-border);
+  background: var(--season-surface);
+  color: var(--season-accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--season-accent) 18%, transparent);
+}
+.seasonal-status-panel__season-label { color: var(--season-accent); }
+.seasonal-status-panel__latest {
+  border-color: rgb(103 232 249 / 48%);
+  background: linear-gradient(145deg, rgb(8 145 178 / 24%), rgb(6 78 59 / 18%));
+  color: #ecfeff;
+  box-shadow: inset 0 0 0 1px rgb(165 243 252 / 7%);
+}
+.seasonal-status-panel__latest small { color: #a5f3fc; }
+
 .action-confirm {
   position: fixed;
   inset: 0;
@@ -1020,8 +1040,8 @@ html.settings-theme-dark .location-transfer__preview span { color: #91aa97; }
 .action-confirm__dialog {
   position: relative;
   display: grid;
-  grid-template-columns: 142px minmax(0, 1fr);
-  width: min(590px, 100%);
+  grid-template-columns: 128px minmax(0, 1fr);
+  width: min(540px, 100%);
   overflow: hidden;
   border: 1px solid #a8c7af;
   border-radius: 20px;
@@ -1049,7 +1069,7 @@ html.settings-theme-dark .location-transfer__preview span { color: #91aa97; }
 .action-confirm__visual {
   position: relative;
   display: grid;
-  min-height: 188px;
+  min-height: 174px;
   place-items: center;
   overflow: hidden;
   border-right: 1px solid #cfe0d2;
@@ -1085,32 +1105,25 @@ html.settings-theme-dark .location-transfer__preview span { color: #91aa97; }
 .action-confirm__visual i:nth-of-type(2) { right: 24px; top: 61px; animation-delay: -.5s; }
 .action-confirm__visual i:nth-of-type(3) { bottom: 28px; left: 42px; animation-delay: -1s; }
 
-.action-confirm__copy { min-width: 0; padding: 28px 62px 22px 24px; }
+.action-confirm__copy { min-width: 0; padding: 26px 62px 22px 22px; }
 .action-confirm__copy > span { color: #347b4d; font-size: 11px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
 .action-confirm__copy h2 { margin: 7px 0 0; font-size: 24px; line-height: 1.2; }
 .action-confirm__copy p { margin: 8px 0 0; color: #587062; font-size: 15px; line-height: 1.55; }
 .action-confirm__copy strong { display: flex; align-items: center; gap: 8px; margin-top: 13px; color: #24633a; font-size: 13px; line-height: 1.45; }
 .action-confirm__copy strong svg { flex: 0 0 auto; }
 
-.action-confirm__steps {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  margin: 0;
-  padding: 0;
-  border-block: 1px solid #d4e2d6;
-  background: #d4e2d6;
-  list-style: none;
-}
-.action-confirm__steps li { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 54px; background: #eff6ed; color: #607565; font-size: 12px; font-weight: 800; }
-.action-confirm__steps li.is-active { background: #e1f1dd; color: #24633a; }
-.action-confirm__steps b { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 999px; background: #cfe4cc; font-size: 10px; }
-
 .action-confirm__dialog footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 9px; padding: 15px 18px; background: #fff; }
-.action-confirm__dialog footer button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #bfd1c2; border-radius: 11px; padding: 0 16px; color: #315c3f; font-weight: 850; }
+.action-confirm__dialog footer button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; border: 1px solid #bfd1c2; border-radius: 11px; padding: 0 16px; color: #315c3f; font-weight: 850; cursor: pointer; transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease, color 150ms ease, box-shadow 150ms ease; }
 .action-confirm__dialog footer button:last-child { border-color: #4b9a63; background: #79c982; color: #0b2714; box-shadow: 0 8px 20px rgb(55 143 79 / 20%); }
 .action-confirm__dialog button:disabled { cursor: wait; opacity: .55; }
+
+@media (hover: hover) {
+  .action-confirm__dialog footer button:not(:disabled):hover { transform: translateY(-2px); border-color: #7ca987; background: #edf6ed; color: #173f25; box-shadow: 0 8px 18px rgb(40 94 54 / 14%); }
+  .action-confirm__dialog footer button:last-child:not(:disabled):hover { border-color: #347c4b; background: #91dc98; color: #071f0f; box-shadow: 0 11px 24px rgb(45 132 68 / 28%); }
+}
+
+.action-confirm__dialog footer button:not(:disabled):active { transform: translateY(0) scale(.98); box-shadow: 0 3px 9px rgb(40 94 54 / 14%); }
+.action-confirm__dialog footer button:focus-visible { outline: 3px solid rgb(52 140 77 / 38%); outline-offset: 3px; }
 
 html.settings-theme-dark .action-confirm__dialog { border-color: #3a5641; background: #111b14; color: #edf6e9; }
 html.settings-theme-dark .action-confirm__visual { border-color: #2d4534; background: radial-gradient(circle at 50% 42%, #26482e 0 23%, transparent 24%), linear-gradient(145deg, #16261a, #102017); }
@@ -1119,9 +1132,12 @@ html.settings-theme-dark .action-confirm__close,
 html.settings-theme-dark .action-confirm__dialog footer { border-color: #314936; background: #152119; color: #dcebd9; }
 html.settings-theme-dark .action-confirm__copy p { color: #a7bbaa; }
 html.settings-theme-dark .action-confirm__copy strong { color: #9edc9c; }
-html.settings-theme-dark .action-confirm__steps { border-color: #2d4332; background: #2d4332; }
-html.settings-theme-dark .action-confirm__steps li { background: #17231a; color: #9eb2a2; }
-html.settings-theme-dark .action-confirm__steps li.is-active { background: #1d3222; color: #b9eab2; }
+html.settings-theme-dark .action-confirm__dialog footer button:not(:disabled):hover { border-color: #668c70; background: #213328; color: #f0f8ed; }
+html.settings-theme-dark .action-confirm__dialog footer button:last-child:not(:disabled):hover { border-color: #7fc58b; background: #91dc98; color: #071f0f; }
+
+@media (prefers-reduced-motion: reduce) {
+  .action-confirm__dialog footer button { transition: none; }
+}
 
 @keyframes actionConfirmIn { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes actionConfirmParticle { 0%,100% { transform: translateY(7px) scale(.8); opacity: .2; } 50% { transform: translateY(-7px) scale(1); opacity: .55; } }
@@ -1130,8 +1146,6 @@ html.settings-theme-dark .action-confirm__steps li.is-active { background: #1d32
   .action-confirm__dialog { grid-template-columns: 1fr; max-height: calc(100vh - 28px); overflow: auto; }
   .action-confirm__visual { min-height: 112px; border-right: 0; border-bottom: 1px solid #cfe0d2; }
   .action-confirm__copy { padding: 21px 54px 18px 20px; }
-  .action-confirm__steps { grid-template-columns: 1fr; }
-  .action-confirm__steps li { min-height: 42px; justify-content: flex-start; padding: 0 18px; }
   .action-confirm__dialog footer { position: sticky; bottom: 0; }
 }
 

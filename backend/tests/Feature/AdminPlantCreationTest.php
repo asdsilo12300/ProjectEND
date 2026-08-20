@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AdminResourceController;
 use App\Models\Plant;
 use App\Models\PlantConditionRule;
 use App\Models\PlantGrowthStage;
+use App\Models\PlantKnowledge;
 use App\Models\PlantVisualVariant;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
@@ -24,6 +25,7 @@ class AdminPlantCreationTest extends TestCase
         Schema::dropIfExists('plant_visual_variants');
         Schema::dropIfExists('plant_condition_rules');
         Schema::dropIfExists('plant_growth_stages');
+        Schema::dropIfExists('plant_knowledge');
         Schema::dropIfExists('plants');
         Schema::dropIfExists('users');
 
@@ -107,6 +109,30 @@ class AdminPlantCreationTest extends TestCase
             $table->unsignedBigInteger('target_id')->nullable();
             $table->text('detail')->nullable();
             $table->timestamp('created_at')->nullable();
+        });
+        Schema::create('plant_knowledge', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('plant_id')->unique();
+            $table->string('scientific_name')->nullable();
+            $table->string('family')->nullable();
+            $table->string('category_en')->nullable();
+            $table->string('category_th')->nullable();
+            $table->text('summary_en')->nullable();
+            $table->text('summary_th')->nullable();
+            $table->json('care_en')->nullable();
+            $table->json('care_th')->nullable();
+            $table->text('caution_en')->nullable();
+            $table->text('caution_th')->nullable();
+            $table->string('photo_url')->nullable();
+            $table->string('photo_alt_en')->nullable();
+            $table->string('photo_alt_th')->nullable();
+            $table->string('photo_credit')->nullable();
+            $table->string('photo_source_url')->nullable();
+            $table->string('photo_license')->nullable();
+            $table->string('photo_license_url')->nullable();
+            $table->json('sources')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 
@@ -194,6 +220,72 @@ class AdminPlantCreationTest extends TestCase
         $this->assertCount(13, PlantConditionRule::query()->where('plant_id', $tulip->id)->get());
         $this->assertCount(11, PlantVisualVariant::query()->where('plant_id', $tulip->id)->get());
         $this->assertTrue(Plant::query()->playable()->whereKey($tulip->id)->exists());
+        $this->assertSame('Tulipa spp. / Tulipa hybrids', $tulip->knowledge->scientific_name);
+        $this->assertNotEmpty($tulip->knowledge->care_th);
+    }
+
+    public function test_new_sunflower_receives_a_realistic_environment_profile_rules_and_visuals(): void
+    {
+        $admin = User::query()->create(['username' => 'admin', 'email' => 'admin@example.test', 'role' => 'admin']);
+        $controller = app(AdminResourceController::class);
+        $request = Request::create('/api/admin/resources/plants', 'POST', $this->plantPayload('Sunflower', 'ทานตะวัน'));
+        $request->setUserResolver(fn () => $admin);
+
+        $response = $controller->store($request, 'plants');
+        $sunflower = Plant::query()->where('name_en', 'Sunflower')->firstOrFail();
+
+        $this->assertSame(201, $response->status());
+        $this->assertSame(40, $sunflower->water_min);
+        $this->assertSame(75, $sunflower->water_max);
+        $this->assertSame(65, $sunflower->light_min);
+        $this->assertSame(['Germination', 'Vegetative growth', 'Flowering'], $sunflower->stages()->pluck('stage_name')->all());
+        $this->assertCount(13, PlantConditionRule::query()->where('plant_id', $sunflower->id)->get());
+        $this->assertCount(13, PlantVisualVariant::query()->where('plant_id', $sunflower->id)->get());
+        $this->assertTrue(Plant::query()->playable()->whereKey($sunflower->id)->exists());
+        $this->assertSame('Helianthus annuus L.', $sunflower->knowledge->scientific_name);
+        $this->assertNotEmpty($sunflower->knowledge->sources);
+    }
+
+    public function test_admin_can_create_and_update_a_separate_plant_guide(): void
+    {
+        $admin = User::query()->create(['username' => 'admin', 'email' => 'admin@example.test', 'role' => 'admin']);
+        $controller = app(AdminResourceController::class);
+        $plant = $this->createPlant($controller, $admin, 'Rose', 'กุหลาบ');
+
+        $create = Request::create('/api/admin/resources/plant-knowledge', 'POST', [
+            'plant_id' => $plant->id,
+            'scientific_name' => 'Rosa spp.',
+            'family' => 'Rosaceae',
+            'category_en' => 'Flowering shrub',
+            'category_th' => 'ไม้พุ่มดอก',
+            'summary_en' => 'A guide-managed description.',
+            'summary_th' => 'คำอธิบายที่แอดมินจัดการได้',
+            'care_en' => ['Provide sun.', 'Water deeply.'],
+            'care_th' => ['ให้แสงเพียงพอ', 'รดน้ำให้ลึก'],
+            'sources' => [['label_en' => 'RHS', 'label_th' => 'RHS', 'url' => 'https://www.rhs.org.uk/']],
+        ]);
+        $create->setUserResolver(fn () => $admin);
+        $response = $controller->store($create, 'plant-knowledge');
+
+        $this->assertSame(201, $response->status());
+        $knowledge = PlantKnowledge::query()->where('plant_id', $plant->id)->firstOrFail();
+        $this->assertSame('Rosa spp.', $knowledge->scientific_name);
+
+        $update = Request::create('/api/admin/resources/plant-knowledge/'.$knowledge->id, 'PUT', [
+            'plant_id' => $plant->id,
+            'scientific_name' => 'Rosa rubiginosa L.',
+            'family' => 'Rosaceae',
+            'category_en' => 'Flowering shrub',
+            'category_th' => 'ไม้พุ่มดอก',
+            'care_en' => ['Keep the soil drained.'],
+            'care_th' => ['ดูแลให้ดินระบายน้ำดี'],
+            'sources' => [],
+        ]);
+        $update->setUserResolver(fn () => $admin);
+        $updatedResponse = $controller->update($update, 'plant-knowledge', $knowledge->id);
+
+        $this->assertSame(200, $updatedResponse->status());
+        $this->assertSame('Rosa rubiginosa L.', $knowledge->fresh()->scientific_name);
     }
 
     private function createPlant(AdminResourceController $controller, User $admin, string $englishName, string $thaiName): Plant

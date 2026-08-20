@@ -294,6 +294,53 @@
 .admin-toggle.is-active i::after { left: 16px; background: var(--admin-green); }
 .admin-status--disabled { color: #818b85; }
 
+/* Small, structured editors keep plant guides readable without asking admins to hand-write JSON. */
+.admin-resource-form-grid > .admin-resource-custom-field.is-wide { grid-column: 1 / -1; }
+.admin-resource-custom-field { display: grid; min-width: 0; gap: 11px; padding: 13px; border: 1px solid rgba(120,153,132,.2); border-radius: 9px; background: linear-gradient(135deg, rgba(103,210,154,.06), rgba(13,18,15,.74)); }
+.admin-list-editor__heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 13px; }
+.admin-list-editor__heading > div { display: grid; min-width: 0; gap: 3px; }
+.admin-list-editor__heading strong { color: #d6e1d9; font-size: 10px; font-weight: 750; }
+.admin-list-editor__heading small { color: #84928a; font-size: 8px; font-weight: 500; line-height: 1.5; }
+.admin-list-editor__count { flex: 0 0 auto; padding: 4px 7px; border: 1px solid rgba(103,210,154,.18); border-radius: 999px; background: rgba(103,210,154,.08); color: #79d7a4; font-size: 8px; font-weight: 750; white-space: nowrap; }
+.admin-list-editor__stack,.admin-reference-list__stack { display: grid; gap: 8px; min-width: 0; }
+.admin-list-editor__row { display: grid; grid-template-columns: 28px minmax(0,1fr) 32px; align-items: center; gap: 8px; min-width: 0; }
+.admin-list-editor__index { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid rgba(103,210,154,.18); border-radius: 7px; background: rgba(103,210,154,.08); color: #79d7a4; font-size: 8px; font-weight: 800; }
+.admin-list-editor__row > button,.admin-reference-list__row-head > button { display: grid; width: 32px; height: 35px; place-items: center; border: 1px solid rgba(232,115,115,.2); border-radius: 7px; background: rgba(232,115,115,.07); color: #e38d8d; cursor: pointer; font-size: 19px; line-height: 1; transition: 150ms ease; }
+.admin-list-editor__row > button:hover,.admin-reference-list__row-head > button:hover { border-color: rgba(244,139,139,.45); background: rgba(232,115,115,.14); color: #ffb0b0; transform: translateY(-1px); }
+.admin-list-editor__row > button:disabled,.admin-reference-list__row-head > button:disabled { cursor: not-allowed; opacity: .45; transform: none; }
+.admin-list-editor__empty { display: grid; min-height: 50px; place-items: center; padding: 10px; border: 1px dashed rgba(127,153,137,.3); border-radius: 8px; background: rgba(13,18,15,.55); color: #7c8b81; font-size: 9px; text-align: center; }
+.admin-list-editor__add { display: inline-flex; width: fit-content; min-height: 33px; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid rgba(103,210,154,.25); border-radius: 7px; background: rgba(103,210,154,.09); color: #7bd8a5; cursor: pointer; font-size: 9px; font-weight: 750; transition: 150ms ease; }
+.admin-list-editor__add > span { display: grid; width: 17px; height: 17px; place-items: center; border-radius: 50%; background: rgba(103,210,154,.2); font-size: 15px; line-height: 1; }
+.admin-list-editor__add:hover { border-color: rgba(103,210,154,.55); background: rgba(103,210,154,.16); transform: translateY(-1px); }
+.admin-list-editor__add:disabled { cursor: not-allowed; opacity: .5; transform: none; }
+.admin-reference-list__row { display: grid; gap: 9px; padding: 10px; border: 1px solid var(--admin-line); border-radius: 8px; background: rgba(13,18,15,.58); }
+.admin-reference-list__row-head { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.admin-reference-list__row-head strong { flex: 1; color: #cbd8cf; font-size: 9px; font-weight: 750; }
+.admin-reference-list__row-head > button { flex: 0 0 auto; }
+.admin-reference-list__grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; min-width: 0; }
+.admin-reference-list__grid input.is-url { grid-column: 1 / -1; }
+.admin-resource-custom-field input::placeholder { color: #68766d; }
+
+.admin-theme--light .admin-resource-custom-field { border-color: rgba(25,52,37,.14); background: linear-gradient(135deg, rgba(35,125,80,.055), #f7faf8); }
+.admin-theme--light .admin-list-editor__heading strong,.admin-theme--light .admin-reference-list__row-head strong { color: #26372e; }
+.admin-theme--light .admin-list-editor__heading small { color: #68776e; }
+.admin-theme--light .admin-list-editor__count { border-color: rgba(35,125,80,.2); background: rgba(35,125,80,.08); color: #26744b; }
+.admin-theme--light .admin-list-editor__index { border-color: rgba(35,125,80,.16); background: rgba(35,125,80,.08); color: #28784e; }
+.admin-theme--light .admin-list-editor__empty { border-color: rgba(25,52,37,.2); background: rgba(35,125,80,.03); color: #68776e; }
+.admin-theme--light .admin-reference-list__row { background: rgba(35,125,80,.025); }
+.admin-theme--light .admin-resource-custom-field input::placeholder { color: #829087; }
+
+.admin-shell.is-text-large .admin-list-editor__heading strong,.admin-shell.is-text-large .admin-reference-list__row-head strong { font-size: 13px; }
+.admin-shell.is-text-large .admin-list-editor__heading small,.admin-shell.is-text-large .admin-list-editor__count,.admin-shell.is-text-large .admin-list-editor__empty { font-size: 11px; }
+.admin-shell.is-text-large .admin-list-editor__add { font-size: 12px; }
+
+@media (max-width: 760px) {
+  .admin-resource-form-grid > .admin-resource-custom-field.is-wide { grid-column: auto; }
+  .admin-list-editor__heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .admin-reference-list__grid { grid-template-columns: 1fr; }
+  .admin-reference-list__grid input.is-url { grid-column: auto; }
+}
+
 .admin-theme--light {
   --admin-bg: #f2f5f3;
   --admin-panel: #ffffff;
@@ -1225,4 +1272,37 @@ html.settings-reduced-motion .admin-shell * { animation: none!important; transit
   .admin-activity-filters { grid-template-columns: 1fr; }
   .admin-list__row--activity { grid-template-columns: auto minmax(0,1fr); }
   .admin-activity-kind { display: none; }
+}
+
+/* Event catalog editors: readable controls for rules and factor effects. */
+.admin-event-condition-list__stack,.admin-event-effect-list__stack { display: grid; gap: 8px; min-width: 0; }
+.admin-event-condition-row,.admin-event-effect-row { display: grid; gap: 9px; padding: 10px; border: 1px solid var(--admin-line); border-radius: 8px; background: rgba(13,18,15,.58); }
+.admin-event-condition-row__head { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.admin-event-condition-row__head strong { flex: 1; color: #cbd8cf; font-size: 9px; font-weight: 750; }
+.admin-event-condition-row__head > button,.admin-event-effect-row > button { display: grid; width: 32px; height: 35px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(232,115,115,.2); border-radius: 7px; background: rgba(232,115,115,.07); color: #e38d8d; cursor: pointer; font-size: 19px; line-height: 1; transition: 150ms ease; }
+.admin-event-condition-row__head > button:hover,.admin-event-effect-row > button:hover { border-color: rgba(244,139,139,.45); background: rgba(232,115,115,.14); color: #ffb0b0; transform: translateY(-1px); }
+.admin-event-condition-row__head > button:disabled,.admin-event-effect-row > button:disabled { cursor: not-allowed; opacity: .45; transform: none; }
+.admin-event-condition-row__grid { display: grid; grid-template-columns: minmax(145px,1.1fr) minmax(145px,1fr) repeat(2,minmax(105px,.65fr)); align-items: end; gap: 8px; }
+.admin-event-condition-row__grid label,.admin-event-effect-row label { display: grid; min-width: 0; gap: 5px; color: var(--admin-muted); font-size: 8px; font-weight: 700; }
+.admin-event-condition-row__grid label > span,.admin-event-effect-row label > span { color: var(--admin-muted); font-size: 8px; }
+.admin-event-condition-row__grid label.is-value { grid-column: 3 / -1; }
+.admin-event-effect-row { grid-template-columns: minmax(170px,1fr) minmax(130px,.55fr) 32px; align-items: end; }
+.admin-event-effect-row > select { width: 100%; height: 39px; padding: 0 11px; border: 1px solid var(--admin-line); border-radius: 7px; background: #0d120f; color: #d6dfd9; color-scheme: dark; font-size: 10px; outline: none; }
+.admin-event-effect-row > select:focus { border-color: rgba(103,210,154,.45); box-shadow: 0 0 0 3px rgba(103,210,154,.06); }
+.admin-theme--light .admin-event-condition-row,.admin-theme--light .admin-event-effect-row { background: rgba(35,125,80,.025); }
+.admin-theme--light .admin-event-condition-row__head strong { color: #26372e; }
+.admin-theme--light .admin-event-effect-row > select { background: #fff; color: #26372e; color-scheme: light; }
+.admin-shell.is-text-large .admin-event-condition-row__head strong { font-size: 12px; }
+.admin-shell.is-text-large .admin-event-condition-row__grid label,.admin-shell.is-text-large .admin-event-effect-row label { font-size: 11px; }
+
+@media (max-width: 760px) {
+  .admin-event-condition-row__grid { grid-template-columns: 1fr 1fr; }
+  .admin-event-condition-row__grid label.is-value { grid-column: auto; }
+  .admin-event-effect-row { grid-template-columns: minmax(0,1fr) 32px; }
+  .admin-event-effect-row > label { grid-column: 1; }
+  .admin-event-effect-row > button { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+@media (max-width: 460px) {
+  .admin-event-condition-row__grid { grid-template-columns: 1fr; }
 }

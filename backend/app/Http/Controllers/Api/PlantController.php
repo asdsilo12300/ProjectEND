@@ -19,7 +19,7 @@ class PlantController extends Controller
         $plants = $this->cache->remember(
             'plants',
             fn (): array => PlantResource::collection(
-                Plant::query()->playable()->with('stages')->orderBy('name_th')->get(),
+                Plant::query()->playable()->with(['stages', 'knowledge'])->orderBy('name_th')->get(),
             )->response()->getData(true)['data'] ?? [],
         );
 
@@ -30,7 +30,7 @@ class PlantController extends Controller
 
     public function show(Plant $plant): PlantResource
     {
-        return new PlantResource($plant->load('stages'));
+        return new PlantResource($plant->load(['stages', 'knowledge']));
     }
 
     public function stages(Plant $plant): AnonymousResourceCollection

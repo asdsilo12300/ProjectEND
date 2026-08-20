@@ -1514,8 +1514,8 @@ const runtimeThaiMessages = {
 
 const appMessageCatalog = {
   'game.action.applied': {
-    en: 'The care action was applied after its animation completed.',
-    th: 'ใช้การดูแลพืชสำเร็จหลังแอนิเมชันทำงานครบแล้ว',
+    en: 'The plant-care action was applied successfully.',
+    th: 'ใช้การดูแลพืชสำเร็จแล้ว',
   },
   'game.action.pest_treated': {
     en: 'The matching pest treatment was applied successfully.',

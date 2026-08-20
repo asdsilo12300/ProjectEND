@@ -2,13 +2,15 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class GoogleAvatarService
 {
-    public function __construct(private readonly MediaStorage $media) {}
+    public function __construct(
+        private readonly MediaStorage $media,
+        private readonly ExternalHttpClient $http,
+    ) {}
 
     public function cache(string $googleId, string $pictureUrl): ?string
     {
@@ -27,7 +29,8 @@ class GoogleAvatarService
         }
 
         try {
-            $response = Http::timeout(12)
+            $response = $this->http->request()
+                ->timeout(12)
                 ->withHeaders(['User-Agent' => 'Plant-Growth-Academy/1.0'])
                 ->get($pictureUrl);
 

@@ -29,6 +29,7 @@ class PlantResource extends JsonResource
                 'air_temp' => ['min' => (float) $this->air_temp_min, 'max' => (float) $this->air_temp_max],
             ],
             'stages' => PlantStageResource::collection($this->whenLoaded('stages')),
+            'knowledge' => $this->whenLoaded('knowledge', fn () => new PlantKnowledgeResource($this->knowledge)),
         ];
     }
 

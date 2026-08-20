@@ -95,19 +95,28 @@ function WaterStream({ active, length = 0.8 }) {
 
 function WateringCan({ active }) {
   const tool = useRef(null)
+  const stream = useRef(null)
 
   useFrame(({ clock }) => {
     if (!tool.current) return
-    tool.current.rotation.z = (active ? -0.58 : -0.12) + Math.sin(clock.elapsedTime * 3.2) * 0.035
+    // The model's spout points to local -X. A positive Z rotation lowers that
+    // side toward the soil; the previous negative angle lifted it away from
+    // the planting area and made the water appear to fall from the can body.
+    const tilt = (active ? 0.5 : 0.1) + Math.sin(clock.elapsedTime * 3.2) * 0.025
+    tool.current.rotation.z = tilt
+    // The stream anchor follows the actual rose/nozzle tip, while this inverse
+    // rotation keeps the droplets falling vertically under gravity.
+    if (stream.current) stream.current.rotation.z = -tilt
   })
 
   return (
-    <group>
-      <group ref={tool}>
-        <GltfActionModel url={ACTION_MODEL_URLS.water} maxSize={0.78} rotation={[0, -Math.PI / 2, 0]} />
+    <group ref={tool}>
+      <GltfActionModel url={ACTION_MODEL_URLS.water} maxSize={0.64} rotation={[0, -Math.PI / 2, 0]} />
+      <group position={[-0.35, 0.16, -0.08]}>
+        <group ref={stream}>
+          <WaterStream active={active} length={0.56} />
+        </group>
       </group>
-      {/* Keep gravity vertical. The stream must not inherit the can's pouring rotation. */}
-      <group position={[-0.24, 0.22, 0]}><WaterStream active={active} length={0.94} /></group>
     </group>
   )
 }
@@ -125,7 +134,55 @@ function SprayBottle({ active }) {
   )
 }
 
-function FertilizerShaker({ active }) {
+function FertilizerOrbit({ active, plantCenter = [-0.62, -0.56, -0.62], plantingRadius = 0.96 }) {
+  const pellets = useRef([])
+  const ringRadius = THREE.MathUtils.clamp(Number(plantingRadius) * 0.66, 0.48, 0.78)
+  const particles = useMemo(() => Array.from({ length: 34 }, (_, index) => ({
+    angle: (index / 34) * Math.PI * 2,
+    offset: ((index * 11) % 34) / 34,
+    radius: ringRadius * (0.72 + ((index * 7) % 9) / 30),
+  })), [ringRadius])
+
+  useFrame(({ clock }) => {
+    if (!active) return
+    const cycle = clock.elapsedTime * 0.62
+    pellets.current.forEach((pellet, index) => {
+      if (!pellet) return
+      const particle = particles[index]
+      const progress = (cycle + particle.offset) % 1
+      const eased = Math.sin(progress * Math.PI * 0.5)
+      const angle = particle.angle + progress * Math.PI * 1.65
+      const targetX = plantCenter[0] + Math.cos(angle) * particle.radius
+      const targetZ = plantCenter[2] + Math.sin(angle) * particle.radius
+      pellet.position.x = THREE.MathUtils.lerp(0.22, targetX, eased)
+      pellet.position.y = THREE.MathUtils.lerp(-0.06, plantCenter[1] + 0.035, progress)
+        + Math.sin(progress * Math.PI) * 0.24
+      pellet.position.z = THREE.MathUtils.lerp(0, targetZ, eased)
+      pellet.rotation.x = progress * Math.PI * 5 + index
+      pellet.rotation.z = progress * Math.PI * 3
+    })
+  })
+
+  if (!active) return null
+
+  return (
+    <group>
+      {particles.map((particle, index) => (
+        <mesh
+          key={`${particle.angle}-${index}`}
+          ref={(node) => { pellets.current[index] = node }}
+          scale={[0.018, 0.034, 0.018]}
+          castShadow
+        >
+          <sphereGeometry args={[1, 7, 5]} />
+          <meshStandardMaterial color="#e7c653" emissive="#7c5b0a" emissiveIntensity={0.12} roughness={0.76} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function FertilizerShaker({ active, plantCenter, plantingRadius }) {
   const tool = useRef(null)
 
   useFrame(({ clock }) => {
@@ -134,9 +191,11 @@ function FertilizerShaker({ active }) {
   })
 
   return (
-    <group ref={tool}>
-      <GltfActionModel url={ACTION_MODEL_URLS.fertilizer} maxSize={0.65} rotation={[0, -0.35, 0]} />
-      <group position={[0.25, -0.12, 0]}><FallingParticles active={active} color="#d9b449" count={30} spread={0.46} size={0.022} /></group>
+    <group>
+      <group ref={tool}>
+        <GltfActionModel url={ACTION_MODEL_URLS.fertilizer} maxSize={0.65} rotation={[0, -0.35, 0]} />
+      </group>
+      <FertilizerOrbit active={active} plantCenter={plantCenter} plantingRadius={plantingRadius} />
     </group>
   )
 }
@@ -327,7 +386,7 @@ function actionKind(animationKey) {
 }
 
 const TARGET_OFFSETS = {
-  water: [0.7, 0.72, 0.9],
+  water: [0.42, 0.59, 0.34],
   spray: [0.72, 0.92, 0.7],
   fertilizer: [0.62, 0.56, 0.62],
   drainage: [0.72, 0.72, 0.58],
@@ -383,6 +442,11 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
       // back at the planting centre instead of spraying away from the plant.
       const sprayYaw = Math.atan2(group.current.position.z - centerZ, centerX - group.current.position.x)
       group.current.rotation.y = sprayYaw + Math.sin(elapsed * 2.8) * 0.018
+    } else if (kind === 'water' || kind === 'fertilizer') {
+      // These tools already have authored local orientation. Keeping the outer
+      // group neutral makes the nozzle and fertilizer ring line up exactly with
+      // the planting centre.
+      group.current.rotation.y = 0
     } else {
       group.current.rotation.y = -0.22 + Math.sin(elapsed * 2.8) * 0.025
     }
@@ -407,7 +471,13 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
     <group ref={group} position={[2.45, 1.3, 0.9]} scale={toolScale}>
       {kind === 'water' && <WateringCan active={active} />}
       {kind === 'spray' && <SprayBottle active={active} />}
-      {kind === 'fertilizer' && <FertilizerShaker active={active} />}
+      {kind === 'fertilizer' && (
+        <FertilizerShaker
+          active={active}
+          plantCenter={[-TARGET_OFFSETS.fertilizer[0], -TARGET_OFFSETS.fertilizer[1], -TARGET_OFFSETS.fertilizer[2]]}
+          plantingRadius={plantingSurface?.radius ?? 0.96}
+        />
+      )}
       {kind === 'drainage' && <DrainageTool active={active} />}
       {kind === 'straw' && <StrawMulch active={active} />}
       {kind === 'shade' && <ShadeCloth active={active} plantScale={plantScale} />}

@@ -11,6 +11,7 @@ use App\Models\PlantVisualVariant;
 use App\Models\ModelAsset;
 use App\Models\Item;
 use App\Models\ShopItem;
+use App\Services\PlantKnowledgeProfileService;
 use Illuminate\Database\Seeder;
 
 class GameSimulationSeeder extends Seeder
@@ -41,6 +42,10 @@ class GameSimulationSeeder extends Seeder
                 'air_temp_max' => 34,
             ]
         );
+
+        // Keep the educational guide separate from simulation tuning while
+        // making the bundled starter plant immediately discoverable.
+        app(PlantKnowledgeProfileService::class)->syncIfMissing($plant);
 
         $stages = [
             ['stage_no' => 1, 'stage_name' => 'Seedling', 'required_growth_point' => 0, 'description' => 'Early stage', 'model_url' => 'models/plant.gltf'],
@@ -149,7 +154,7 @@ class GameSimulationSeeder extends Seeder
                 'animation_key' => 'hand-pick',
                 'mode_scope' => 'both',
                 'rarity' => 'common',
-                'is_active' => true,
+                'is_active' => false,
                 'price_coin' => null,
             ],
             [

@@ -2,7 +2,7 @@
 import { Html, useAnimations, useGLTF } from '@react-three/drei'
 import { useLayoutEffect, useState } from 'react'
 import { createPortal, useFrame } from '@react-three/fiber'
-import { AnimationMixer, Box3, Color, DoubleSide, Vector3 } from 'three'
+import { AnimationMixer, Box3, Color, DoubleSide, Matrix4, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { resolveAssetUrl } from '../../lib/api'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
@@ -19,6 +19,11 @@ const PLANT_LOCAL_OFFSET = [0, -PLANT_BASE_LOCAL_Y, 0]
 const PLANT_ASSET_ALIGNMENT_POSITION = [-0.1, -0.026, 0.02]
 const PLANT_ASSET_ALIGNMENT_SCALE = 0.9
 const GENERIC_PLANT_TARGET_HEIGHT = 2.15
+// The sunflower asset is authored with a much smaller source bounding box
+// than the other uploaded plants. Normalising it to the generic height makes
+// the mature model tower over the planting ring, so give it a deliberate,
+// readable scale that remains comparable to Elephant Ear and Tulip.
+const SUNFLOWER_TARGET_HEIGHT = 1.72
 const GENERIC_MATURE_ANIMATION_FRACTION = 0.95
 const TULIP_SOIL_EMBED_DEPTH = 0.2
 const TULIP_GROWTH_TRANSITION_RESPONSE = 3.2
@@ -71,6 +76,17 @@ function smoothstep(value) {
 function isTulipPlant(plantName = '') {
   const normalizedName = String(plantName).trim().toLowerCase()
   return normalizedName.includes('tulip') || normalizedName.includes('ทิวลิป')
+}
+
+function isSunflowerPlant(plantName = '') {
+  const normalizedName = String(plantName).trim().toLowerCase()
+  return normalizedName.includes('sunflower') || normalizedName.includes('ทานตะวัน')
+}
+
+function genericPlantTargetHeight(plantName = '') {
+  return isSunflowerPlant(plantName)
+    ? SUNFLOWER_TARGET_HEIGHT
+    : GENERIC_PLANT_TARGET_HEIGHT
 }
 
 function tulipGrowthScale(progress) {
@@ -276,6 +292,63 @@ function plantSoilEmbedDepth(plantName = '') {
   return isTulipPlant(plantName) ? TULIP_SOIL_EMBED_DEPTH : 0
 }
 
+/**
+ * Returns a model's bounds in its immediate parent's coordinate space. This
+ * lets the generic renderer keep an animated asset's lowest visible point
+ * anchored to the planting area even when a GLTF growth clip changes the
+ * foliage silhouette between frames.
+ */
+function getDeformedBounds(object, parent = null) {
+  if (!object) return null
+
+  object.updateMatrixWorld(true)
+  const bounds = new Box3().makeEmpty()
+  const parentInverse = parent
+    ? new Matrix4().copy(parent.matrixWorld).invert()
+    : new Matrix4()
+  const position = new Vector3()
+  const transformedPosition = new Vector3()
+
+  object.traverse((child) => {
+    if (!child.isMesh || !child.geometry?.attributes?.position) return
+
+    const positionAttribute = child.geometry.attributes.position
+    const morphAttributes = child.geometry.morphAttributes?.position ?? []
+    const morphInfluences = child.morphTargetInfluences ?? []
+    const meshToTarget = new Matrix4().multiplyMatrices(parentInverse, child.matrixWorld)
+
+    for (let index = 0; index < positionAttribute.count; index += 1) {
+      position.fromBufferAttribute(positionAttribute, index)
+      for (let morphIndex = 0; morphIndex < morphAttributes.length; morphIndex += 1) {
+        const influence = Number(morphInfluences[morphIndex] ?? 0)
+        if (!influence) continue
+
+        const morphPosition = morphAttributes[morphIndex]
+        position.x += morphPosition.getX(index) * influence
+        position.y += morphPosition.getY(index) * influence
+        position.z += morphPosition.getZ(index) * influence
+      }
+
+      transformedPosition.copy(position).applyMatrix4(meshToTarget)
+      bounds.expandByPoint(transformedPosition)
+    }
+  })
+
+  return bounds
+}
+
+function getMorphSignature(object) {
+  const signature = []
+  object?.traverse?.((child) => {
+    const influences = child.morphTargetInfluences
+    if (!child.isMesh || !influences || typeof influences.length !== 'number') return
+    for (let index = 0; index < influences.length; index += 1) {
+      signature.push(Number(influences[index] ?? 0).toFixed(4))
+    }
+  })
+  return signature.join('|')
+}
+
 function applyFungusToPlant(object, fungusRisk = 0) {
   const leafMaterials = new Map()
   const fallbackMaterials = new Map()
@@ -303,7 +376,15 @@ function applyFungusToPlant(object, fungusRisk = 0) {
 
 function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
   const group = useRef(null)
+  const clonedSceneRef = useRef(null)
+  const morphSignatureRef = useRef(null)
   const isTulip = isTulipPlant(plantName)
+  const isSunflower = isSunflowerPlant(plantName)
+  const soilEmbedDepth = plantSoilEmbedDepth(plantName)
+  // Keep every uploaded model in the same pivot space as the original plant
+  // renderer.  The source bounds are normalised separately, so changing this
+  // anchor would move the whole sunflower below the scene floor.
+  const plantBaseTargetY = PLANT_BASE_LOCAL_Y - soilEmbedDepth
   const { scene, animations } = useGLTF(modelUrl)
   const clonedScene = useMemo(() => {
     const clone = cloneSkeleton(scene)
@@ -378,17 +459,23 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     }
     clone.updateMatrixWorld(true)
 
-    const box = new Box3().setFromObject(clone)
+    // Box3 already accounts for the bone transforms used by the Tulip asset.
+    // Sunflower's clip is morph-based, however, so measure its visible mature
+    // pose explicitly; otherwise its tiny authored base bounds are scaled into
+    // a giant plant at runtime.
+    const box = isSunflower
+      ? getDeformedBounds(clone)
+      : new Box3().setFromObject(clone)
     const size = new Vector3()
     const center = new Vector3()
     box.getSize(size)
     box.getCenter(center)
 
-    const scale = GENERIC_PLANT_TARGET_HEIGHT / Math.max(size.y, 0.001)
+    const scale = genericPlantTargetHeight(plantName) / Math.max(size.y, 0.001)
     clone.scale.setScalar(scale)
     clone.position.set(
       -center.x * scale,
-      PLANT_BASE_LOCAL_Y - box.min.y * scale - plantSoilEmbedDepth(plantName),
+      plantBaseTargetY - box.min.y * scale,
       -center.z * scale,
     )
     clone.updateMatrixWorld(true)
@@ -404,7 +491,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     clone.userData.pestAttachments = collectGenericPestAttachments(clone)
 
     return clone
-  }, [animations, isTulip, plantName, scene])
+  }, [animations, isSunflower, isTulip, plantBaseTargetY, plantName, scene])
   const { actions, mixer } = useAnimations(animations, group)
   const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
   const displayedGrowthProgress = isMature ? 1 : progress
@@ -415,6 +502,37 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     isTulip ? TULIP_GROWTH_ANIMATION : GENERIC_MATURE_ANIMATION_FRACTION,
   )
   usePlantStressMotion(clonedScene.userData?.plantStressPivots, visualOverrides, health, fungusRisk)
+
+  useLayoutEffect(() => {
+    clonedSceneRef.current = clonedScene
+    morphSignatureRef.current = null
+    return () => {
+      if (clonedSceneRef.current === clonedScene) clonedSceneRef.current = null
+    }
+  }, [clonedScene])
+
+  // Uploaded sunflower clips change their visible base slightly while the
+  // growth pose and stress pivots are applied. Correct only that model, after
+  // those animations have run, so the stem/root stays planted instead of
+  // visibly floating above the ring. The correction is bounded to avoid a bad
+  // asset transform ever teleporting the plant.
+  useFrame(() => {
+    const plant = clonedSceneRef.current
+    if (!isSunflower || !plant?.parent) return
+
+    // Recalculate only when the growth clip changes morph weights. This keeps
+    // the anchor correction inexpensive while still following a new pose.
+    const morphSignature = getMorphSignature(plant)
+    if (morphSignature === morphSignatureRef.current) return
+    morphSignatureRef.current = morphSignature
+
+    const bounds = getDeformedBounds(plant, plant.parent)
+    const correction = plantBaseTargetY - Number(bounds?.min?.y)
+    if (!Number.isFinite(correction) || Math.abs(correction) < 0.0005 || Math.abs(correction) > 0.5) return
+
+    plant.position.y += correction
+  })
+
   useRegisterPlantAttachments(clonedScene.userData?.pestAttachments)
 
   useEffect(() => {
@@ -430,7 +548,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
       <PlantPresentationGroup visualOverrides={visualOverrides}>
         <PlantGrowthGroup
           isTulip={isTulip}
-          pivotY={PLANT_BASE_LOCAL_Y - plantSoilEmbedDepth(plantName)}
+          pivotY={plantBaseTargetY}
           progress={displayedGrowthProgress}
         >
           <group ref={group}>

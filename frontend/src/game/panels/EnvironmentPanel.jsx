@@ -191,7 +191,7 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
               ? (isSeasonal
                 ? (isThai ? 'ฤดูกาลและวันจำลองเดินอัตโนมัติ ดูแลปกติด้วยน้ำและปุ๋ย ส่วนอุปกรณ์ฉุกเฉินจะเปิดเมื่อมีคำเตือนที่ตรงกัน' : 'The seasonal calendar advances automatically. Water and fertilize normally; emergency tools unlock only for matching warnings.')
                 : (isThai ? 'ระบบใช้อากาศจริงอัตโนมัติ เลือกไอเทมจากคลังเพื่อดูแลหรือปกป้องพืช' : 'Real weather is applied automatically. Use inventory items to protect or care for the plant.'))
-              : (isThai ? 'น้ำและธาตุอาหารจะแสดงเป็นหลอดความต้องการของพืช ใช้บัวรดน้ำหรือปุ๋ยจากคลัง ส่วนปัจจัยอื่นปรับค่าแล้วกดยืนยันเพื่อเล่นแอนิเมชัน 3D' : 'Water and nutrients are plant-need reserves. Use watering and fertilizer items; adjust the other factors, then confirm to play the 3D action.'))
+              : (isThai ? 'น้ำและธาตุอาหารจะแสดงเป็นหลอดความต้องการของพืช ใช้บัวรดน้ำหรือปุ๋ยจากคลัง ส่วนปัจจัยอื่นปรับค่าแล้วกดยืนยันการใช้งาน' : 'Water and nutrients are plant-need reserves. Use watering and fertilizer items; adjust the other factors, then confirm the changes.'))
             : (isThai ? 'เลือกพืชก่อน ระบบควบคุมสภาพแวดล้อมจะเปิดเมื่อเริ่มการจำลอง' : 'Select a plant first. Environment controls unlock when the simulation starts.')}
         </div>
         <div className={`grid gap-x-3 gap-y-3 ${isWeatherMode ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
@@ -212,7 +212,7 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
               }
             }}>
               <AppIcon name={actionBusy ? 'live' : 'save'} />
-              {actionBusy ? (isThai ? 'กำลังดำเนินการ…' : 'Applying action…') : (isThai ? 'ยืนยันและเล่นแอนิเมชัน' : 'Confirm & animate')}
+              {actionBusy ? (isThai ? 'กำลังใช้งาน…' : 'Applying…') : (isThai ? 'ยืนยันการใช้งาน' : 'Confirm changes')}
             </button>
           </div>
         )}

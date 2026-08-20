@@ -24,8 +24,8 @@ const ITEM_GROUPS = [
   {
     id: 'manual',
     icon: 'tool',
-    label: { en: 'Manual & condition tools', th: 'เครื่องมือใช้งานและปรับสภาพ' },
-    detail: { en: 'Hand removal and local condition protection', th: 'เก็บศัตรูพืชด้วยมือหรือปรับสภาพรอบต้น' },
+    label: { en: 'Condition tools', th: 'เครื่องมือปรับสภาพ' },
+    detail: { en: 'Local weather and growing-condition protection', th: 'ปรับสภาพและป้องกันสภาพอากาศรอบต้น' },
     shellClass: 'border-amber-200/12 bg-amber-300/[0.035]',
     iconClass: 'bg-amber-300/10 text-amber-200',
   },
@@ -59,8 +59,7 @@ function itemGroupId(item) {
   const actionKey = String(item?.actionKey ?? itemId)
   if (item?.friendUsable || itemId.includes('prank')) return 'prank'
   if (
-    itemId === 'hand-pick'
-    || itemId.includes('manual')
+    itemId.includes('manual')
     || ['drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)
   ) return 'manual'
   if (['water', 'fertilizer'].includes(actionKey)) return 'care'

@@ -207,6 +207,22 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertGreaterThan(1, 100 - (int) $result->water);
     }
 
+    public function test_weather_driven_modes_consume_resources_a_little_faster(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['mode' => 'outdoor', 'event_tick_count' => 3]);
+
+        $result = app(PlantSimulationEngine::class)->tick(
+            $simulator->fresh(),
+            $this->healthyFactors(['water' => 100, 'fertilizer' => 100]),
+        );
+
+        $this->assertSame(97, (int) $result->water);
+        $this->assertSame(99, (int) $result->fertilizer);
+        $this->assertSame(3, (int) $result->getAttribute('plant_need_rates')['water_per_cycle']);
+        $this->assertSame(1, (int) $result->getAttribute('plant_need_rates')['fertilizer_per_cycle']);
+    }
+
     public function test_low_health_does_not_hide_dominant_heat_stress_visuals(): void
     {
         [$plant, $simulator] = $this->seedPlantAndSimulator();

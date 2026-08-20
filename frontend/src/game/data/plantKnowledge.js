@@ -119,6 +119,7 @@ function uniqueSources(sources) {
 
 export function getPlantKnowledge(plantAsset, language = 'en') {
   const plant = plantAsset?.plantData ?? {}
+  const serverKnowledge = plant.knowledge ?? null
   const isThai = language === 'th'
   const normalizedName = normalizedPlantName(plant)
   const profile = knowledgeProfiles.find((candidate) => (
@@ -131,16 +132,45 @@ export function getPlantKnowledge(plantAsset, language = 'en') {
       }]
     : []
   const thaiName = readableThaiName(plant.name_th) || profile?.thaiCommonName || ''
+  const serverPhoto = serverKnowledge?.photo?.url
+    ? {
+        url: serverKnowledge.photo.url,
+        alt: isThai
+          ? (serverKnowledge.photo.alt_th || serverKnowledge.photo.alt || thaiName)
+          : (serverKnowledge.photo.alt || serverKnowledge.photo.alt_th || plant.name_en),
+        altTh: serverKnowledge.photo.alt_th || serverKnowledge.photo.alt || thaiName,
+        credit: serverKnowledge.photo.credit || '',
+        license: serverKnowledge.photo.license || '',
+        sourceUrl: serverKnowledge.photo.source_url || serverKnowledge.photo.sourceUrl || '',
+        licenseUrl: serverKnowledge.photo.license_url || serverKnowledge.photo.licenseUrl || '',
+      }
+    : null
+  const serverCare = isThai ? serverKnowledge?.care_th : serverKnowledge?.care
+  const serverSources = Array.isArray(serverKnowledge?.sources)
+    ? serverKnowledge.sources.map((source) => ({
+        ...source,
+        label: isThai
+          ? (source.label_th || source.label || source.label_en)
+          : (source.label || source.label_en || source.label_th),
+      }))
+    : []
 
   return {
     commonName: isThai ? (thaiName || plant.name_en || plantAsset?.name || 'พืช') : (plant.name_en || plantAsset?.name || 'Plant'),
     englishName: plant.name_en || plantAsset?.name || 'Plant',
     thaiName,
-    scientificName: profile?.scientificName || 'Scientific name not recorded',
-    family: profile?.family || 'Not recorded',
-    category: (isThai ? profile?.categoryTh : profile?.category) || (isThai ? 'พืชในระบบจำลอง' : 'Academy plant'),
-    summary: (isThai ? profile?.summaryTh : profile?.summary) || plant.description || (isThai ? 'พืชชนิดนี้พร้อมใช้งานในระบบจำลองของสถาบัน' : 'This plant is available in the academy simulation.'),
-    care: (isThai ? profile?.careTh : profile?.care) || (isThai
+    scientificName: serverKnowledge?.scientific_name || profile?.scientificName || 'Scientific name not recorded',
+    family: serverKnowledge?.family || profile?.family || 'Not recorded',
+    category: (isThai ? serverKnowledge?.category_th : serverKnowledge?.category)
+      || (isThai ? profile?.categoryTh : profile?.category)
+      || (isThai ? 'พืชในระบบจำลอง' : 'Academy plant'),
+    summary: (isThai ? serverKnowledge?.summary_th : serverKnowledge?.summary)
+      || (isThai ? profile?.summaryTh : profile?.summary)
+      || plant.description
+      || (isThai ? 'พืชชนิดนี้พร้อมใช้งานในระบบจำลองของสถาบัน' : 'This plant is available in the academy simulation.'),
+    care: (Array.isArray(serverCare) && serverCare.length ? serverCare : null)
+      || (isThai ? profile?.careTh : profile?.care)
+      || (isThai
       ? [
           'รักษาปัจจัยสภาพแวดล้อมทุกค่าให้อยู่ในช่วงเป้าหมายด้านล่าง',
           'สังเกตสุขภาพและการเติบโตหลังการอัปเดตแต่ละครั้ง แล้วปรับเฉพาะปัจจัยที่อยู่นอกช่วงเป้าหมาย',
@@ -149,16 +179,19 @@ export function getPlantKnowledge(plantAsset, language = 'en') {
           'Keep every environmental factor inside the target range shown below.',
           'Observe health and growth after each update, then adjust only the factors that are outside their target range.',
         ]),
-    caution: (isThai ? profile?.cautionTh : profile?.caution) || '',
-    photo: profile?.photo
+    caution: (isThai ? serverKnowledge?.caution_th : serverKnowledge?.caution)
+      || (isThai ? profile?.cautionTh : profile?.caution)
+      || '',
+    photo: serverPhoto || (profile?.photo
       ? {
           ...profile.photo,
           alt: isThai ? profile.photo.altTh : profile.photo.alt,
         }
-      : null,
+      : null),
     environment: plant.environment ?? {},
     maturityDays: Number(plant.real_maturity_days ?? 0),
     sources: uniqueSources([
+      ...serverSources,
       ...(profile?.sources ?? []).map((source) => ({
         ...source,
         label: isThai ? (source.labelTh || source.label) : source.label,

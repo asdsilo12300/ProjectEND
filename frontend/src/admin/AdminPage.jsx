@@ -268,6 +268,39 @@ const resourceGroups = {
       fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_id', label: 'Growth stage', type: 'lookup', lookup: 'stages' }, { key: 'state_key', label: 'State key', required: true }, { key: 'label', label: 'Display label' }, { key: 'model_url', label: 'Variant 3D model package', type: 'model-bundle', wide: true }, { key: 'leaf_color', label: 'Leaf color' }, { key: 'stem_color', label: 'Stem color' }, { key: 'leaf_state', label: 'Leaf state' }, { key: 'stem_state', label: 'Stem state' }, { key: 'scale', label: 'Scale', type: 'number', step: '0.01', required: true }, { key: 'priority', label: 'Priority', type: 'number', required: true }, commonActiveField],
       columns: [{ label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'State', render: (row) => row.label || row.state_key }, { label: 'Stage', render: (row) => row.stage?.stage_name || 'All stages' }, { label: 'Appearance', render: (row) => `${row.leaf_color || '—'} / ${row.stem_color || '—'}` }],
     },
+    {
+      id: 'plant-knowledge', label: 'Plant knowledge', createLabel: 'New plant guide', icon: 'bookmark',
+      defaults: {
+        plant_id: '', scientific_name: '', family: '', category_en: '', category_th: '',
+        summary_en: '', summary_th: '', care_en: [], care_th: [], caution_en: '', caution_th: '',
+        photo_url: '', photo_alt_en: '', photo_alt_th: '', photo_credit: '', photo_source_url: '',
+        photo_license: '', photo_license_url: '', sources: [],
+      },
+      fields: [
+        { key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true },
+        { key: 'scientific_name', label: 'Scientific name' }, { key: 'family', label: 'Family' },
+        { key: 'category_en', label: 'Category (English)' }, { key: 'category_th', label: 'Category (Thai)' },
+        { key: 'summary_en', label: 'Guide summary (English)', type: 'textarea', wide: true },
+        { key: 'summary_th', label: 'Guide summary (Thai)', type: 'textarea', wide: true },
+        { key: 'care_en', label: 'Care steps (English)', type: 'string-list', itemPlaceholder: 'Add an English care step…', addLabel: 'Add English step', emptyLabel: 'No English care steps yet.', wide: true },
+        { key: 'care_th', label: 'Care steps (Thai)', type: 'string-list', itemPlaceholder: 'เพิ่มขั้นตอนการดูแลภาษาไทย…', addLabel: 'เพิ่มขั้นตอนภาษาไทย', emptyLabel: 'ยังไม่มีขั้นตอนการดูแลภาษาไทย', wide: true },
+        { key: 'caution_en', label: 'Caution (English)', type: 'textarea', wide: true },
+        { key: 'caution_th', label: 'Caution (Thai)', type: 'textarea', wide: true },
+        { key: 'photo_url', label: 'Guide photo', type: 'image-upload', scope: 'plant-guides', wide: true },
+        { key: 'photo_alt_en', label: 'Photo alt text (English)', wide: true },
+        { key: 'photo_alt_th', label: 'Photo alt text (Thai)', wide: true },
+        { key: 'photo_credit', label: 'Photo credit' }, { key: 'photo_source_url', label: 'Photo source URL', type: 'url' },
+        { key: 'photo_license', label: 'Photo license' }, { key: 'photo_license_url', label: 'License URL', type: 'url' },
+        { key: 'sources', label: 'References', type: 'reference-list', wide: true },
+      ],
+      columns: [
+        { label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th || `#${row.plant_id}` },
+        { label: 'Scientific name', render: (row) => row.scientific_name || 'Not recorded' },
+        { label: 'Category', render: (row) => row.category_en || row.category_th || '—' },
+        { label: 'Care / references', render: (row) => `${Array.isArray(row.care_en) ? row.care_en.length : 0} steps · ${Array.isArray(row.sources) ? row.sources.length : 0} sources` },
+        { label: 'Photo', render: (row) => row.photo_url ? 'Configured' : 'Not set' },
+      ],
+    },
   ],
   pests: [
     { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', base_chance: 0, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Pest image', type: 'image-upload', scope: 'pests', wide: true }, { key: 'model_url', label: 'Pest 3D model package', type: 'model-bundle', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => row.name_en || row.name_th }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
@@ -285,14 +318,14 @@ const resourceGroups = {
         { key: 'event_key', label: 'Stable event key', required: true },
         { key: 'name_en', label: 'English name', required: true }, { key: 'name_th', label: 'Thai name', required: true },
         { key: 'description_en', label: 'English explanation', type: 'textarea', wide: true }, { key: 'description_th', label: 'Thai explanation', type: 'textarea', wide: true },
-        { key: 'mode_scope', label: 'Mode', type: 'select', options: ['both', 'greenhouse', 'outdoor'], required: true },
+        { key: 'mode_scope', label: 'Mode', type: 'select', options: ['both', 'greenhouse', 'outdoor', 'seasonal'], required: true },
         { key: 'severity', label: 'Severity', type: 'select', options: ['low', 'medium', 'high'], required: true },
         { key: 'weight', label: 'Random weight', type: 'number', required: true }, { key: 'trigger_chance', label: 'Trigger chance (%)', type: 'number', required: true },
         { key: 'warning_ticks', label: 'Warning updates', type: 'number', required: true }, { key: 'duration_ticks', label: 'Duration updates', type: 'number', required: true },
         { key: 'cooldown_ticks', label: 'Recovery updates', type: 'number', required: true },
-        { key: 'conditions', label: 'Environmental conditions (JSON)', type: 'json', wide: true },
-        { key: 'effects', label: 'Event effects (JSON)', type: 'json', wide: true },
-        { key: 'response_action_keys', label: 'Response action keys (JSON array)', type: 'json', wide: true },
+        { key: 'conditions', label: 'Environmental conditions', type: 'condition-list', wide: true },
+        { key: 'effects', label: 'Event effects', type: 'effect-map', wide: true },
+        { key: 'response_action_keys', label: 'Response actions', type: 'string-list', itemPlaceholder: 'e.g. shade', addLabel: 'Add response action', emptyLabel: 'No response actions yet.', hint: 'Use the exact action_key from an item that can respond to this event.', wide: true },
         { key: 'is_harmful', label: 'Harmful event', type: 'boolean' }, commonActiveField,
       ],
       columns: [
@@ -1308,6 +1341,246 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
   )
 }
 
+const eventFactorOptions = [
+  { value: 'water', label: 'Water' },
+  { value: 'light', label: 'Light' },
+  { value: 'fertilizer', label: 'Fertilizer' },
+  { value: 'soil_humidity', label: 'Soil moisture' },
+  { value: 'air_humidity', label: 'Air humidity' },
+  { value: 'soil_temp', label: 'Soil temperature' },
+  { value: 'air_temp', label: 'Air temperature' },
+]
+
+const eventOperatorOptions = [
+  { value: 'above', label: 'Above' },
+  { value: 'above_or_equal', label: 'At least' },
+  { value: 'below', label: 'Below' },
+  { value: 'below_or_equal', label: 'At most' },
+  { value: 'between', label: 'Between' },
+  { value: 'outside', label: 'Outside' },
+  { value: 'equals', label: 'Equals' },
+]
+
+function eventFactorLabel(value) {
+  return eventFactorOptions.find((option) => option.value === value)?.label || value.replaceAll('_', ' ')
+}
+
+function eventNumber(value, fieldLabel) {
+  if (value === '' || value === null || value === undefined) return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) throw new Error(`${fieldLabel} must be a number.`)
+  return parsed
+}
+
+function normaliseEventConditions(value) {
+  const rows = Array.isArray(value) ? value : []
+  return rows.map((condition, index) => {
+    const factor = String(condition?.factor ?? '').trim()
+    const operator = String(condition?.operator ?? '').trim()
+    const valueInput = condition?.value ?? ''
+    const minInput = condition?.min ?? ''
+    const maxInput = condition?.max ?? ''
+    const hasInput = factor || operator || valueInput !== '' || minInput !== '' || maxInput !== ''
+    if (!hasInput) return null
+    if (!factor) throw new Error(`Condition ${index + 1} needs a factor.`)
+    if (!operator) throw new Error(`Condition ${index + 1} needs an operator.`)
+    if (['between', 'outside'].includes(operator)) {
+      const min = eventNumber(minInput, `Condition ${index + 1} minimum`)
+      const max = eventNumber(maxInput, `Condition ${index + 1} maximum`)
+      if (min === null || max === null) throw new Error(`Condition ${index + 1} needs both a minimum and maximum.`)
+      return { factor, operator, min, max }
+    }
+    const parsedValue = eventNumber(valueInput, `Condition ${index + 1} value`)
+    if (parsedValue === null) throw new Error(`Condition ${index + 1} needs a value.`)
+    return { factor, operator, value: parsedValue }
+  }).filter(Boolean)
+}
+
+function normaliseEventEffects(value) {
+  const effects = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  const factorDelta = effects.factor_delta && typeof effects.factor_delta === 'object' && !Array.isArray(effects.factor_delta) ? effects.factor_delta : {}
+  const cleanedDelta = {}
+  for (const [factor, delta] of Object.entries(factorDelta)) {
+    const parsed = eventNumber(delta, `${eventFactorLabel(factor)} effect`)
+    if (parsed !== null) cleanedDelta[factor] = parsed
+  }
+  return { ...effects, factor_delta: cleanedDelta }
+}
+
+function ConditionListEditor({ label, conditions, onChange, disabled, wide }) {
+  const safeConditions = Array.isArray(conditions) ? conditions : []
+
+  function updateCondition(index, key, value) {
+    onChange(safeConditions.map((condition, conditionIndex) => conditionIndex === index ? { ...(condition || {}), [key]: value } : condition))
+  }
+
+  function removeCondition(index) {
+    onChange(safeConditions.filter((_, conditionIndex) => conditionIndex !== index))
+  }
+
+  return (
+    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={label}>
+      <div className="admin-list-editor__heading">
+        <div><strong>{label}</strong><small>Add rules only when an event should be limited to a specific environment. Empty means any environment.</small></div>
+        <span className="admin-list-editor__count">{safeConditions.length} {safeConditions.length === 1 ? 'condition' : 'conditions'}</span>
+      </div>
+      <div className="admin-event-condition-list__stack">
+        {safeConditions.length === 0 ? (
+          <div className="admin-list-editor__empty">No conditions. This event can be considered in any matching mode.</div>
+        ) : safeConditions.map((condition, index) => {
+          const isRange = ['between', 'outside'].includes(condition?.operator)
+          return (
+            <div className="admin-event-condition-row" key={index}>
+              <div className="admin-event-condition-row__head"><span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span><strong>Condition {index + 1}</strong><button aria-label={`Remove condition ${index + 1}`} disabled={disabled} title="Remove condition" type="button" onClick={() => removeCondition(index)}><span aria-hidden="true">×</span></button></div>
+              <div className="admin-event-condition-row__grid">
+                <label><span>Factor</span><select disabled={disabled} value={condition?.factor ?? ''} onChange={(event) => updateCondition(index, 'factor', event.target.value)}><option value="">Choose factor</option>{eventFactorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                <label><span>Rule</span><select disabled={disabled} value={condition?.operator ?? ''} onChange={(event) => updateCondition(index, 'operator', event.target.value)}><option value="">Choose rule</option>{eventOperatorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                {isRange ? (
+                  <>
+                    <label><span>Minimum</span><input disabled={disabled} type="number" value={condition?.min ?? ''} onChange={(event) => updateCondition(index, 'min', event.target.value)} /></label>
+                    <label><span>Maximum</span><input disabled={disabled} type="number" value={condition?.max ?? ''} onChange={(event) => updateCondition(index, 'max', event.target.value)} /></label>
+                  </>
+                ) : (
+                  <label className="is-value"><span>Value</span><input disabled={disabled} type="number" value={condition?.value ?? ''} onChange={(event) => updateCondition(index, 'value', event.target.value)} /></label>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <button className="admin-list-editor__add" disabled={disabled} type="button" onClick={() => onChange([...safeConditions, { factor: '', operator: '', value: '', min: '', max: '' }])}><span aria-hidden="true">+</span>Add condition</button>
+    </section>
+  )
+}
+
+function EffectMapEditor({ label, value, onChange, disabled, wide }) {
+  const effects = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  const factorDelta = effects.factor_delta && typeof effects.factor_delta === 'object' && !Array.isArray(effects.factor_delta) ? effects.factor_delta : {}
+  const storedFactors = Object.keys(factorDelta)
+  const factors = [...eventFactorOptions, ...storedFactors.filter((factor) => !eventFactorOptions.some((option) => option.value === factor)).map((factor) => ({ value: factor, label: eventFactorLabel(factor) }))]
+  const canAdd = eventFactorOptions.some((option) => !Object.prototype.hasOwnProperty.call(factorDelta, option.value))
+
+  function updateFactor(oldFactor, newFactor) {
+    const nextDelta = { ...factorDelta }
+    const currentValue = nextDelta[oldFactor] ?? 0
+    delete nextDelta[oldFactor]
+    nextDelta[newFactor] = currentValue
+    onChange({ ...effects, factor_delta: nextDelta })
+  }
+
+  function updateDelta(factor, valueInput) {
+    onChange({ ...effects, factor_delta: { ...factorDelta, [factor]: valueInput } })
+  }
+
+  function removeFactor(factor) {
+    const nextDelta = { ...factorDelta }
+    delete nextDelta[factor]
+    onChange({ ...effects, factor_delta: nextDelta })
+  }
+
+  function addFactor() {
+    const nextFactor = eventFactorOptions.find((option) => !Object.prototype.hasOwnProperty.call(factorDelta, option.value))?.value
+    if (nextFactor) onChange({ ...effects, factor_delta: { ...factorDelta, [nextFactor]: 0 } })
+  }
+
+  return (
+    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={label}>
+      <div className="admin-list-editor__heading">
+        <div><strong>{label}</strong><small>Choose which environmental factors change while the event is active. Negative values reduce a factor.</small></div>
+        <span className="admin-list-editor__count">{storedFactors.length} {storedFactors.length === 1 ? 'factor' : 'factors'}</span>
+      </div>
+      <div className="admin-event-effect-list__stack">
+        {storedFactors.length === 0 ? (
+          <div className="admin-list-editor__empty">No factor effects yet. Add one to make this event change the simulation.</div>
+        ) : storedFactors.map((factor) => (
+          <div className="admin-event-effect-row" key={factor}>
+            <select aria-label={`Effect factor ${factor}`} disabled={disabled} value={factor} onChange={(event) => updateFactor(factor, event.target.value)}>{factors.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+            <label><span>Change</span><input aria-label={`${eventFactorLabel(factor)} effect change`} disabled={disabled} type="number" value={factorDelta[factor] ?? ''} onChange={(event) => updateDelta(factor, event.target.value)} /></label>
+            <button aria-label={`Remove ${eventFactorLabel(factor)} effect`} disabled={disabled} title="Remove effect" type="button" onClick={() => removeFactor(factor)}><span aria-hidden="true">×</span></button>
+          </div>
+        ))}
+      </div>
+      <button className="admin-list-editor__add" disabled={disabled || !canAdd} type="button" onClick={addFactor}><span aria-hidden="true">+</span>{canAdd ? 'Add factor effect' : 'All factors added'}</button>
+    </section>
+  )
+}
+
+function StringListEditor({ label, items, onChange, placeholder, addLabel, emptyLabel, hint, disabled, wide }) {
+  const safeItems = Array.isArray(items) ? items : []
+
+  function updateItem(index, value) {
+    onChange(safeItems.map((item, itemIndex) => (itemIndex === index ? value : item)))
+  }
+
+  function removeItem(index) {
+    onChange(safeItems.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  return (
+    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={label}>
+      <div className="admin-list-editor__heading">
+        <div><strong>{label}</strong><small>{hint || 'One clear instruction per line. Empty lines are removed when saved.'}</small></div>
+        <span className="admin-list-editor__count">{safeItems.length} {safeItems.length === 1 ? 'item' : 'items'}</span>
+      </div>
+      <div className="admin-list-editor__stack">
+        {safeItems.length === 0 ? (
+          <div className="admin-list-editor__empty">{emptyLabel}</div>
+        ) : safeItems.map((item, index) => (
+          <div className="admin-list-editor__row" key={index}>
+            <span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span>
+            <input
+              aria-label={`${label} ${index + 1}`}
+              disabled={disabled}
+              placeholder={placeholder}
+              type="text"
+              value={item ?? ''}
+              onChange={(event) => updateItem(index, event.target.value)}
+            />
+            <button aria-label={`Remove ${label.toLowerCase()} ${index + 1}`} disabled={disabled} title="Remove item" type="button" onClick={() => removeItem(index)}><span aria-hidden="true">×</span></button>
+          </div>
+        ))}
+      </div>
+      <button className="admin-list-editor__add" disabled={disabled} type="button" onClick={() => onChange([...safeItems, ''])}><span aria-hidden="true">+</span>{addLabel || 'Add item'}</button>
+    </section>
+  )
+}
+
+function ReferenceListEditor({ label, items, onChange, disabled, wide }) {
+  const safeItems = Array.isArray(items) ? items : []
+
+  function updateItem(index, key, value) {
+    onChange(safeItems.map((item, itemIndex) => itemIndex === index ? { ...(item || {}), [key]: value } : item))
+  }
+
+  function removeItem(index) {
+    onChange(safeItems.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  return (
+    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={label}>
+      <div className="admin-list-editor__heading">
+        <div><strong>{label}</strong><small>Add a source name and URL. The URL is required for each non-empty reference.</small></div>
+        <span className="admin-list-editor__count">{safeItems.length} {safeItems.length === 1 ? 'source' : 'sources'}</span>
+      </div>
+      <div className="admin-reference-list__stack">
+        {safeItems.length === 0 ? (
+          <div className="admin-list-editor__empty">No references yet. Add trusted sources to support this guide.</div>
+        ) : safeItems.map((source, index) => (
+          <div className="admin-reference-list__row" key={index}>
+            <div className="admin-reference-list__row-head"><span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span><strong>Reference {index + 1}</strong><button aria-label={`Remove reference ${index + 1}`} disabled={disabled} title="Remove reference" type="button" onClick={() => removeItem(index)}><span aria-hidden="true">×</span></button></div>
+            <div className="admin-reference-list__grid">
+              <input aria-label={`Reference ${index + 1} English title`} disabled={disabled} placeholder="English source name" type="text" value={source?.label_en ?? ''} onChange={(event) => updateItem(index, 'label_en', event.target.value)} />
+              <input aria-label={`Reference ${index + 1} Thai title`} disabled={disabled} placeholder="ชื่อแหล่งอ้างอิงภาษาไทย" type="text" value={source?.label_th ?? ''} onChange={(event) => updateItem(index, 'label_th', event.target.value)} />
+              <input aria-label={`Reference ${index + 1} URL`} className="is-url" disabled={disabled} placeholder="https://trusted-source.example/..." type="url" value={source?.url ?? ''} onChange={(event) => updateItem(index, 'url', event.target.value)} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <button className="admin-list-editor__add" disabled={disabled} type="button" onClick={() => onChange([...safeItems, { label_en: '', label_th: '', url: '' }])}><span aria-hidden="true">+</span>Add reference</button>
+    </section>
+  )
+}
+
 function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
   const [initialForm] = useState(() => ({ ...config.defaults, ...record }))
   const [form, setForm] = useState(initialForm)
@@ -1371,6 +1644,23 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
         if (field.type === 'number' || field.type === 'lookup') payload[field.key] = payload[field.key] === '' ? null : Number(payload[field.key])
         if (field.type === 'boolean') payload[field.key] = Boolean(payload[field.key])
         if (field.type === 'json' && typeof payload[field.key] === 'string') payload[field.key] = payload[field.key].trim() ? JSON.parse(payload[field.key]) : null
+        if (field.type === 'string-list') {
+          const list = Array.isArray(payload[field.key]) ? payload[field.key] : typeof payload[field.key] === 'string' ? payload[field.key].split('\n') : []
+          payload[field.key] = list.map((item) => String(item ?? '').trim()).filter(Boolean)
+        }
+        if (field.type === 'condition-list') payload[field.key] = normaliseEventConditions(payload[field.key])
+        if (field.type === 'effect-map') payload[field.key] = normaliseEventEffects(payload[field.key])
+        if (field.type === 'reference-list') {
+          const references = Array.isArray(payload[field.key]) ? payload[field.key] : []
+          const cleanedReferences = references.map((source) => ({
+            label_en: String(source?.label_en ?? '').trim(),
+            label_th: String(source?.label_th ?? '').trim(),
+            url: String(source?.url ?? '').trim(),
+          })).filter((source) => source.label_en || source.label_th || source.url)
+          const incompleteIndex = cleanedReferences.findIndex((source) => !source.url)
+          if (incompleteIndex >= 0) throw new Error(`Reference ${incompleteIndex + 1} needs a URL before it can be saved.`)
+          payload[field.key] = cleanedReferences
+        }
         if (field.type === 'datetime-local' && !payload[field.key]) payload[field.key] = null
       }
       if (record?.id) {
@@ -1445,6 +1735,46 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
                   onChange={(bundle) => setModelBundles((current) => ({ ...current, [field.key]: bundle }))}
                   required={field.required && !form[field.key]}
                   value={form[field.key]}
+                />
+              ) : field.type === 'string-list' ? (
+                <StringListEditor
+                  addLabel={field.addLabel}
+                  disabled={status !== 'idle'}
+                  emptyLabel={field.emptyLabel}
+                  hint={field.hint}
+                  items={form[field.key]}
+                  key={field.key}
+                  label={field.label}
+                  onChange={(items) => updateField(field.key, items)}
+                  placeholder={field.itemPlaceholder}
+                  wide={field.wide}
+                />
+              ) : field.type === 'reference-list' ? (
+                <ReferenceListEditor
+                  disabled={status !== 'idle'}
+                  items={form[field.key]}
+                  key={field.key}
+                  label={field.label}
+                  onChange={(items) => updateField(field.key, items)}
+                  wide={field.wide}
+                />
+              ) : field.type === 'condition-list' ? (
+                <ConditionListEditor
+                  conditions={form[field.key]}
+                  disabled={status !== 'idle'}
+                  key={field.key}
+                  label={field.label}
+                  onChange={(conditions) => updateField(field.key, conditions)}
+                  wide={field.wide}
+                />
+              ) : field.type === 'effect-map' ? (
+                <EffectMapEditor
+                  disabled={status !== 'idle'}
+                  key={field.key}
+                  label={field.label}
+                  onChange={(effects) => updateField(field.key, effects)}
+                  value={form[field.key]}
+                  wide={field.wide}
                 />
               ) : <label className={field.wide ? 'is-wide' : ''} key={field.key}>
                 {field.label}{field.required && <em>*</em>}
@@ -1829,7 +2159,7 @@ export function AdminPage({ user, onLogout }) {
     dashboard: ['Academy overview', 'Monitor learning activity and system health.'],
     contents: ['Learning content', 'Create, review, and publish bilingual educational articles.'],
     users: ['Users & access', 'Manage learner status and administrator permissions.'],
-    plants: ['Plants & growth data', 'Manage plant profiles, growth stages, condition rules, and visual states.'],
+    plants: ['Plants & growth data', 'Manage plant profiles, growth stages, plant knowledge, condition rules, and visual states.'],
     pests: ['Pests & occurrence rules', 'Maintain pest definitions and the environmental rules that trigger them.'],
     store: ['Items & shop', 'Manage usable items, effects, prices, stock, and availability.'],
     events: ['Events & situations', 'Configure natural indoor and outdoor events, warning time, effects, response actions, and recovery periods.'],

@@ -37,21 +37,16 @@ export function ActionConfirmDialog({ asset, busy = false, language = 'en', onCa
           <i aria-hidden="true" />
         </div>
         <div className="action-confirm__copy">
-          <span>{isThai ? 'ยืนยันการดูแลพืช' : 'Confirm plant care'}</span>
+          <span>{isThai ? 'ยืนยันการใช้งาน' : 'Confirm use'}</span>
           <h2 id="action-confirm-title">{name}</h2>
           <p>{detail}</p>
           {outcome ? <strong><AppIcon name="check" />{outcome}</strong> : null}
         </div>
-        <ol className="action-confirm__steps" aria-label={isThai ? 'ขั้นตอนการทำงาน' : 'Action sequence'}>
-          <li className="is-active"><b>1</b>{isThai ? 'ยืนยัน' : 'Confirm'}</li>
-          <li><b>2</b>{isThai ? 'ดูแอนิเมชัน 3D' : 'Watch 3D action'}</li>
-          <li><b>3</b>{isThai ? 'บันทึกผล' : 'Apply result'}</li>
-        </ol>
         <footer>
           <button type="button" disabled={busy} onClick={onCancel}>{isThai ? 'ยกเลิก' : 'Cancel'}</button>
           <button type="button" disabled={busy} onClick={onConfirm}>
-            <AppIcon name={busy ? 'live' : 'bolt'} />
-            {busy ? (isThai ? 'กำลังดำเนินการ…' : 'Applying…') : (isThai ? 'ยืนยันและเล่นแอนิเมชัน' : 'Confirm & animate')}
+            <AppIcon name={busy ? 'live' : 'check'} />
+            {busy ? (isThai ? 'กำลังใช้งาน…' : 'Applying…') : (isThai ? 'ยืนยันการใช้งาน' : 'Confirm use')}
           </button>
         </footer>
       </section>

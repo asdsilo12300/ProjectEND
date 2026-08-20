@@ -10,7 +10,6 @@ class StarterInventoryService
 {
     /** @var array<string, int> */
     private const QUANTITIES = [
-        'Hand Pick' => 10,
         'Insect Spray' => 7,
         'Snail Spray' => 7,
         'Fungus Spray' => 7,

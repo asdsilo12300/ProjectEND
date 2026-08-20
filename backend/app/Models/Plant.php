@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Plant extends Model
@@ -59,6 +60,16 @@ class Plant extends Model
     public function conditionRules(): HasMany
     {
         return $this->hasMany(PlantConditionRule::class);
+    }
+
+    /**
+     * Curated, administrator-managed knowledge shown in the Plant Guide.
+     * Keeping this separate from simulation values lets educators update
+     * explanations and sources without changing gameplay tuning.
+     */
+    public function knowledge(): HasOne
+    {
+        return $this->hasOne(PlantKnowledge::class);
     }
 
     /**

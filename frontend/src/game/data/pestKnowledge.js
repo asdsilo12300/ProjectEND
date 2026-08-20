@@ -31,7 +31,6 @@ const knowledgeByPest = {
     },
     treatments: [
       { id: 'snail-spray', name: { en: 'Snail Spray', th: 'สเปรย์กำจัดหอยทาก' }, imageUrl: imageAssets.snailSpray, success: 100, detail: { en: 'Targets active snails in your current plant.', th: 'ใช้กำจัดหอยทากที่กำลังเกาะต้นปัจจุบัน' } },
-      { id: 'hand-pick', name: { en: 'Hand Pick', th: 'เก็บด้วยมือ' }, imageUrl: imageAssets.hand, success: 80, detail: { en: 'Manual removal; no spray is consumed.', th: 'กำจัดด้วยมือโดยไม่ใช้สเปรย์' } },
     ],
     sources: [
       { label: 'UC Statewide IPM — Snails and Slugs', url: 'https://ipm.ucanr.edu/home-and-landscape/snails-and-slugs/' },
@@ -67,7 +66,6 @@ const knowledgeByPest = {
     },
     treatments: [
       { id: 'insecticide-spray', name: { en: 'Insect Spray', th: 'สเปรย์กำจัดแมลง' }, imageUrl: imageAssets.insecticide, success: 100, detail: { en: 'Targets active aphids in your current plant.', th: 'ใช้กำจัดเพลี้ยที่กำลังเกาะต้นปัจจุบัน' } },
-      { id: 'hand-pick', name: { en: 'Hand Pick', th: 'เก็บด้วยมือ' }, imageUrl: imageAssets.hand, success: 40, detail: { en: 'Manual removal with a lower success chance.', th: 'กำจัดด้วยมือแต่มีโอกาสสำเร็จน้อยกว่า' } },
     ],
     sources: [
       { label: 'University of Minnesota Extension — Aphids', url: 'https://extension.umn.edu/yard-and-garden-insects/aphids' },

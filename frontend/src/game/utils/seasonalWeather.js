@@ -34,6 +34,21 @@ const seasonalIcons = {
   short_rain: 'drop',
 }
 
+const seasonalPalettes = {
+  hot: { accent: '#fbbf24', surface: 'rgba(245, 158, 11, .16)', border: 'rgba(251, 191, 36, .42)' },
+  summer: { accent: '#fbbf24', surface: 'rgba(245, 158, 11, .16)', border: 'rgba(251, 191, 36, .42)' },
+  short_summer: { accent: '#f59e0b', surface: 'rgba(245, 158, 11, .15)', border: 'rgba(245, 158, 11, .4)' },
+  hot_dry: { accent: '#fb923c', surface: 'rgba(234, 88, 12, .15)', border: 'rgba(251, 146, 60, .42)' },
+  rainy: { accent: '#38bdf8', surface: 'rgba(14, 165, 233, .16)', border: 'rgba(56, 189, 248, .42)' },
+  short_rain: { accent: '#60a5fa', surface: 'rgba(59, 130, 246, .15)', border: 'rgba(96, 165, 250, .42)' },
+  cool_dry: { accent: '#67e8f9', surface: 'rgba(6, 182, 212, .14)', border: 'rgba(103, 232, 249, .4)' },
+  spring: { accent: '#86efac', surface: 'rgba(34, 197, 94, .15)', border: 'rgba(134, 239, 172, .4)' },
+  thaw: { accent: '#5eead4', surface: 'rgba(20, 184, 166, .15)', border: 'rgba(94, 234, 212, .4)' },
+  autumn: { accent: '#fb923c', surface: 'rgba(234, 88, 12, .15)', border: 'rgba(251, 146, 60, .42)' },
+  winter: { accent: '#93c5fd', surface: 'rgba(59, 130, 246, .14)', border: 'rgba(147, 197, 253, .42)' },
+  deep_winter: { accent: '#c4b5fd', surface: 'rgba(99, 102, 241, .15)', border: 'rgba(196, 181, 253, .42)' },
+}
+
 export const climateZoneLabels = {
   tropical: { en: 'Tropical', th: 'เขตร้อน' },
   temperate: { en: 'Temperate', th: 'เขตอบอุ่น' },
@@ -47,6 +62,10 @@ export function localSeasonLabel(key, language = 'en') {
 
 export function localSeasonIcon(key) {
   return seasonalIcons[key] ?? 'leaf'
+}
+
+export function localSeasonPalette(key) {
+  return seasonalPalettes[key] ?? { accent: '#86efac', surface: 'rgba(34, 197, 94, .14)', border: 'rgba(134, 239, 172, .38)' }
 }
 
 export function localClimateZoneLabel(key, language = 'en') {

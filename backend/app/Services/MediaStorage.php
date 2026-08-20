@@ -4,13 +4,14 @@ namespace App\Services;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class MediaStorage
 {
+    public function __construct(private readonly ExternalHttpClient $http) {}
+
     public function storeUploadedFile(UploadedFile $file, string $directory): string
     {
         $path = trim($directory, '/').'/'.$file->hashName();
@@ -124,9 +125,9 @@ class MediaStorage
             throw new RuntimeException('Supabase Storage is selected but its URL, secret key, or bucket is missing.');
         }
 
-        return Http::timeout((int) config('services.media.timeout', 30))
+        return $this->http->request()
+            ->timeout((int) config('services.media.timeout', 30))
             ->retry(2, 250)
-            ->acceptJson()
             ->withHeaders([
                 'apikey' => $key,
                 'Authorization' => 'Bearer '.$key,

@@ -14,6 +14,7 @@ class AdminMediaController extends Controller
     /** @var array<string, string> */
     private const IMAGE_DIRECTORIES = [
         'plants' => 'admin-images/plants',
+        'plant-guides' => 'admin-images/plant-guides',
         'plant-stages' => 'admin-images/plant-stages',
         'pests' => 'admin-images/pests',
         'items' => 'admin-images/items',

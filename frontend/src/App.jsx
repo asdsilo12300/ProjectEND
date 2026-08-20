@@ -1255,6 +1255,7 @@ function App() {
         const inventoryEntry = inventoryItemsByKey.get(key)
         return itemAssetFromApi(item, inventoryEntry?.quantity ?? 0)
       })
+      .filter((item) => item.id !== 'hand-pick' && item.actionKey !== 'manual-pest-control')
       .filter((item) => !visitingFriend || item.friendUsable)
 
     return {
@@ -2125,21 +2126,17 @@ function App() {
         const isThai = language === 'th'
         const displayName = localizedItemName(selectedAsset, language)
         const resultMessage = translateAppMessage(result.message_code ?? 'game.action.applied', {}, language)
-        setCriticalAlert({
-          tone: 'success',
-          title: isThai ? 'ใช้ไอเท็มสำเร็จ' : 'Action complete',
-          message: isThai ? `${displayName}: ${resultMessage}` : resultMessage,
-        })
+        setActionMessage(isThai
+          ? `ใช้ ${displayName} สำเร็จ: ${resultMessage}`
+          : `${displayName} applied successfully: ${resultMessage}`)
         setAppliedAsset(null)
         setActionConfirmAsset(null)
-        setActionMessage(isThai ? `ใช้ ${displayName} สำเร็จ` : `${displayName} applied`)
         return result
       })
     } catch (error) {
       const isThai = getAppLanguage() === 'th'
       const errorMessage = translateAppText(error.message || 'The action could not be completed.', isThai ? 'th' : 'en')
-      setCriticalAlert({ tone: 'danger', title: isThai ? 'ใช้ไอเท็มไม่สำเร็จ' : 'Action failed', message: errorMessage })
-      setActionMessage(errorMessage || (isThai ? 'ไม่สามารถใช้ไอเท็มนี้ได้' : 'Unable to use this item'))
+      setActionMessage(isThai ? `ใช้ไอเท็มไม่สำเร็จ: ${errorMessage}` : `Action failed: ${errorMessage}`)
     } finally {
       itemUseBusyRef.current = false
     }
@@ -2244,19 +2241,11 @@ function App() {
           return result
         }, actionAsset)
       }
-      setCriticalAlert({
-        tone: 'success',
-        title: isThai ? 'ปรับสภาพแวดล้อมแล้ว' : 'Environment updated',
-        message: isThai ? 'ระบบเปลี่ยนค่าจริงหลังเล่นแอนิเมชันครบแล้ว' : 'Real factor values changed only after each 3D action completed.',
-      })
+      setActionMessage(isThai ? 'ปรับสภาพแวดล้อมสำเร็จ' : 'Environment updated successfully')
       return true
     } catch (error) {
       const errorMessage = translateAppText(error.message || 'The action could not be completed.', isThai ? 'th' : 'en')
-      setCriticalAlert({
-        tone: 'danger',
-        title: isThai ? 'ปรับสภาพแวดล้อมไม่สำเร็จ' : 'Environment action failed',
-        message: errorMessage,
-      })
+      setActionMessage(isThai ? `ปรับสภาพแวดล้อมไม่สำเร็จ: ${errorMessage}` : `Environment action failed: ${errorMessage}`)
       return false
     }
   }
@@ -2496,7 +2485,7 @@ function App() {
         setActionConfirmAsset(asset)
         setActionMessage(getAppLanguage() === 'th'
           ? `ตรวจสอบผลของ ${localizedItemName(asset)} แล้วกดยืนยัน`
-          : `Review ${asset.name}, then confirm the 3D action.`)
+          : `Review ${asset.name}, then confirm use.`)
         return
       }
 

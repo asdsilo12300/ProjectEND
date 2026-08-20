@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\ExternalHttpClient;
 use App\Services\GoogleAvatarService;
 use App\Services\JwtService;
 use App\Services\StarterInventoryService;
@@ -12,7 +13,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -27,6 +27,7 @@ class GoogleAuthController extends Controller
         private readonly JwtService $jwt,
         private readonly GoogleAvatarService $googleAvatars,
         private readonly StarterInventoryService $starterInventory,
+        private readonly ExternalHttpClient $http,
     ) {
     }
 
@@ -93,8 +94,8 @@ class GoogleAuthController extends Controller
         }
 
         try {
-            $tokenResponse = Http::asForm()
-                ->acceptJson()
+            $tokenResponse = $this->http->request()
+                ->asForm()
                 ->timeout($this->timeout())
                 ->post('https://oauth2.googleapis.com/token', [
                     'client_id' => config('services.google.client_id'),
@@ -113,8 +114,8 @@ class GoogleAuthController extends Controller
                 throw new RuntimeException('Google did not return an access token.');
             }
 
-            $profile = Http::withToken($accessToken)
-                ->acceptJson()
+            $profile = $this->http->request()
+                ->withToken($accessToken)
                 ->timeout($this->timeout())
                 ->get('https://openidconnect.googleapis.com/v1/userinfo')
                 ->throw()

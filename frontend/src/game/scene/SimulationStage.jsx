@@ -14,7 +14,7 @@ import { ActionAnimation, ActiveCareEffects } from './ActionAnimation'
 import { preloadActionModels } from './actionModelAssets'
 import { PlantRecommendationBanner } from '../panels/PlantMonitorPanel'
 import { SeasonalEffects } from './SeasonalEffects'
-import { localSeasonIcon, localSeasonLabel } from '../utils/seasonalWeather'
+import { localSeasonIcon, localSeasonLabel, localSeasonPalette } from '../utils/seasonalWeather'
 
 function useCurrentAppLanguage() {
   const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
@@ -359,8 +359,10 @@ function SeasonalStatusPanel({ context, plantSelected, simulatedTime, solarLight
   const isThai = language === 'th'
   const day = context?.current ?? {}
   const forecast = Array.isArray(context?.forecast) ? context.forecast : []
-  const seasonLabel = localSeasonLabel(context?.season_key ?? day.season_key, language)
-  const seasonIcon = localSeasonIcon(context?.season_key ?? day.season_key)
+  const seasonKey = context?.season_key ?? day.season_key
+  const seasonLabel = localSeasonLabel(seasonKey, language)
+  const seasonIcon = localSeasonIcon(seasonKey)
+  const seasonPalette = localSeasonPalette(seasonKey)
   const dateLabel = day?.date
     ? new Intl.DateTimeFormat(isThai ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${day.date}T12:00:00`))
     : '—'
@@ -375,12 +377,15 @@ function SeasonalStatusPanel({ context, plantSelected, simulatedTime, solarLight
   return (
     <section className="seasonal-status-panel pointer-events-none min-w-0 flex-[1_1_610px] overflow-hidden rounded-xl border border-emerald-100/20 bg-[#0b1510]/95 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,.4)] backdrop-blur-md" aria-label={isThai ? 'ข้อมูลการปลูกตามฤดูกาล' : 'Seasonal Journey status'}>
       <div className="grid grid-cols-[1.18fr_.72fr_1fr] divide-x divide-emerald-100/10">
-        <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-200/15 bg-emerald-300/10 text-emerald-200" aria-hidden="true">
+        <div
+          className="seasonal-status-panel__season flex min-w-0 items-center gap-2.5 px-3 py-2.5"
+          style={{ '--season-accent': seasonPalette.accent, '--season-surface': seasonPalette.surface, '--season-border': seasonPalette.border }}
+        >
+          <span className="seasonal-status-panel__season-icon grid h-9 w-9 shrink-0 place-items-center rounded-lg border" aria-hidden="true">
             <AppIcon className="h-4 w-4" name={seasonIcon} />
           </span>
           <span className="min-w-0">
-            <span className="block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/75">{isThai ? 'ฤดูกาลปัจจุบัน' : 'Current season'}</span>
+            <span className="seasonal-status-panel__season-label block text-[11px] font-black uppercase tracking-[0.12em]">{isThai ? 'ฤดูกาลปัจจุบัน' : 'Current season'}</span>
             <strong className="mt-0.5 block whitespace-nowrap text-base leading-tight text-lime-50">{seasonLabel}</strong>
             <span className="block truncate text-[11px] text-slate-300">{dateLabel} · {weatherSummary(day, isThai)}</span>
           </span>
@@ -403,7 +408,16 @@ function SeasonalStatusPanel({ context, plantSelected, simulatedTime, solarLight
           <AppIcon className="h-3 w-3" name="clock" />
           <span>{context?.seconds_per_day ?? 18} {isThai ? 'วินาที = 1 วันจำลอง' : 'seconds = 1 simulated day'}</span>
         </div>
-        <div className="flex min-w-0 justify-center gap-1.5 overflow-hidden" aria-label={isThai ? 'พยากรณ์ 5 วันจำลอง' : 'Five simulated day forecast'}>
+        <div className="flex min-w-0 items-center justify-center gap-1.5 overflow-hidden" aria-label={isThai ? 'อากาศล่าสุดและพยากรณ์ 5 วันจำลอง' : 'Latest weather and five simulated day forecast'}>
+          <span
+            className="seasonal-status-panel__latest grid min-w-[62px] grid-cols-[auto_auto] items-center justify-center gap-x-1 rounded-md border px-1.5 py-1 text-center text-[10px]"
+            title={`${isThai ? 'อากาศล่าสุด' : 'Latest weather'} · ${day.date ?? ''} · ${weatherSummary(day, isThai)}`}
+          >
+            <small className="col-span-2 mb-0.5 block text-[8px] font-black uppercase tracking-[0.1em]">{isThai ? 'ล่าสุด' : 'Latest'}</small>
+            <AppIcon className={`h-4 w-4 ${seasonalWeatherIconClass(day)}`} name={seasonalWeatherIcon(day)} />
+            <b>{Math.round(Number(day.temperature_mean ?? 0))}°</b>
+          </span>
+          <span className="shrink-0 text-[9px] font-bold text-slate-400" aria-hidden="true">{isThai ? 'ถัดไป' : 'Next'}</span>
           {forecast.slice(0, 5).map((forecastDay) => (
             <span key={forecastDay.date} className={`grid min-w-[42px] grid-cols-[auto_auto] items-center justify-center gap-x-1 rounded-md border px-1.5 py-1 text-center text-[10px] ${forecastDay.risk ? 'border-amber-300/45 bg-amber-300/10' : 'border-white/[0.06] bg-white/[0.035]'}`} title={`${forecastDay.date} · ${weatherSummary(forecastDay, isThai)}${forecastDay.risk ? ` · ${seasonalRiskLabel(forecastDay, isThai)} · ${seasonalActionLabel(forecastDay.recommended_action, isThai)}` : ''}`}>
               <AppIcon className={`h-4 w-4 ${seasonalWeatherIconClass(forecastDay)}`} name={seasonalWeatherIcon(forecastDay)} />

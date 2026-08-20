@@ -15,6 +15,7 @@ use App\Models\Plant;
 use App\Models\PlantConditionRule;
 use App\Models\PlantGrowthStage;
 use App\Models\PlantHistory;
+use App\Models\PlantKnowledge;
 use App\Models\PlantVisualVariant;
 use App\Models\Post;
 use App\Models\Quest;
@@ -23,6 +24,7 @@ use App\Models\Simulator;
 use App\Models\SimulatorComment;
 use App\Services\AdminDataCache;
 use App\Services\KnownPlantProfileService;
+use App\Services\PlantKnowledgeProfileService;
 use App\Services\PublicCatalogCache;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\QueryException;
@@ -90,12 +92,13 @@ class AdminResourceController extends Controller
                 ]);
 
                 app(KnownPlantProfileService::class)->apply($record);
+                app(PlantKnowledgeProfileService::class)->syncIfMissing($record);
             }
 
             return $record;
         });
 
-        $freshRecord = $record->fresh($resource === 'plants' ? ['stages'] : []);
+        $freshRecord = $record->fresh($resource === 'plants' ? ['stages', 'knowledge'] : []);
         AdminActivityLog::record($request->user(), 'created', $resource, $record->id, ['after' => $freshRecord->toArray()]);
         $this->catalogCache->clear();
 
@@ -109,6 +112,14 @@ class AdminResourceController extends Controller
             $model = $config['model']::query()->findOrFail($record);
             $before = $model->toArray();
             $model->fill($request->validate($this->rules($resource, $record, $request)))->save();
+
+            // A known plant may have been created before its automatic
+            // profile was added. Backfill only incomplete profiles so an
+            // intentionally tuned, complete profile is never overwritten.
+            if ($resource === 'plants' && $model instanceof Plant) {
+                app(KnownPlantProfileService::class)->applyIfMissing($model->fresh());
+            }
+
             AdminActivityLog::record($request->user(), 'updated', $resource, $model->id, ['before' => $before, 'after' => $model->fresh()->toArray()]);
             $this->catalogCache->clear();
 
@@ -166,6 +177,7 @@ class AdminResourceController extends Controller
     {
         return match ($resource) {
             'plants' => ['model' => Plant::class, 'with' => [], 'with_count' => ['stages', 'conditionRules', 'visualVariants'], 'search' => ['name_th', 'name_en']],
+            'plant-knowledge' => ['model' => PlantKnowledge::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['scientific_name', 'family', 'category_en', 'category_th', 'summary_en', 'summary_th']],
             'plant-stages' => ['model' => PlantGrowthStage::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['stage_name', 'description']],
             'plant-rules' => ['model' => PlantConditionRule::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['factor', 'visual_state', 'analysis_result']],
             'plant-variants' => ['model' => PlantVisualVariant::class, 'with' => ['plant:id,name_th,name_en', 'stage:id,stage_name'], 'with_count' => [], 'search' => ['state_key', 'label']],
@@ -207,6 +219,33 @@ class AdminResourceController extends Controller
             'plant-stages' => ['plant_id' => ['required', $activePlant], 'stage_no' => ['required', 'integer', 'between:1,99', Rule::unique('plant_growth_stages', 'stage_no')->where('plant_id', $plantId)->ignore($id)], 'stage_name' => ['required', 'string', 'max:191'], 'required_growth_point' => ['required', 'integer', 'min:0'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'description' => ['nullable', 'string', 'max:5000']],
             'plant-rules' => ['plant_id' => ['required', $activePlant], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'visual_state' => ['required', 'string', 'max:80'], 'severity' => ['required', 'integer', 'between:1,10'], 'health_delta' => ['required', 'integer', 'between:-100,100'], 'growth_delta' => ['required', 'integer', 'between:-100,100'], 'analysis_result' => ['nullable', 'string', 'max:2000'], 'direction' => ['nullable', 'string', 'max:2000'], 'is_active' => ['required', 'boolean']],
             'plant-variants' => ['plant_id' => ['required', $activePlant], 'stage_id' => ['nullable', $activeStageForPlant], 'state_key' => ['required', 'string', 'max:100'], 'label' => ['nullable', 'string', 'max:191'], 'model_url' => $nullableUrl, 'leaf_color' => ['nullable', 'string', 'max:30'], 'stem_color' => ['nullable', 'string', 'max:30'], 'leaf_state' => ['nullable', 'string', 'max:80'], 'stem_state' => ['nullable', 'string', 'max:80'], 'scale' => ['required', 'numeric', 'between:0.01,20'], 'priority' => ['required', 'integer', 'between:0,999'], 'is_active' => ['required', 'boolean']],
+            'plant-knowledge' => [
+                'plant_id' => ['required', $activePlant, Rule::unique('plant_knowledge', 'plant_id')->ignore($id)],
+                'scientific_name' => ['nullable', 'string', 'max:191'],
+                'family' => ['nullable', 'string', 'max:191'],
+                'category_en' => ['nullable', 'string', 'max:191'],
+                'category_th' => ['nullable', 'string', 'max:191'],
+                'summary_en' => ['nullable', 'string', 'max:10000'],
+                'summary_th' => ['nullable', 'string', 'max:10000'],
+                'care_en' => ['nullable', 'array'],
+                'care_en.*' => ['string', 'max:2000'],
+                'care_th' => ['nullable', 'array'],
+                'care_th.*' => ['string', 'max:2000'],
+                'caution_en' => ['nullable', 'string', 'max:5000'],
+                'caution_th' => ['nullable', 'string', 'max:5000'],
+                'photo_url' => $nullableUrl,
+                'photo_alt_en' => ['nullable', 'string', 'max:500'],
+                'photo_alt_th' => ['nullable', 'string', 'max:500'],
+                'photo_credit' => ['nullable', 'string', 'max:255'],
+                'photo_source_url' => $nullableUrl,
+                'photo_license' => ['nullable', 'string', 'max:255'],
+                'photo_license_url' => $nullableUrl,
+                'sources' => ['nullable', 'array'],
+                'sources.*' => ['array'],
+                'sources.*.label_en' => ['nullable', 'string', 'max:255'],
+                'sources.*.label_th' => ['nullable', 'string', 'max:255'],
+                'sources.*.url' => ['required', 'url', 'max:2048'],
+            ],
             'pests' => ['name_th' => ['required', 'string', 'max:191', Rule::unique('pests', 'name_th')->ignore($id)], 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'base_chance' => ['required', 'numeric', 'between:0,100'], 'damage_per_turn' => ['required', 'integer', 'between:0,100'], 'behavior' => ['nullable', 'string', 'max:5000']],
             'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
             'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])], 'effect_payload' => ['nullable', 'array'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],

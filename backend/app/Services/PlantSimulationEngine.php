@@ -241,17 +241,41 @@ class PlantSimulationEngine
         $airTemperature = (float) Arr::get($factors, 'air_temp', $simulator->air_temp);
         $airHumidity = (float) Arr::get($factors, 'air_humidity', $simulator->air_humidity);
         $light = (float) Arr::get($factors, 'light', $simulator->light);
-        $rain = in_array($simulator->mode, ['outdoor', 'seasonal'], true) ? max(0, (float) Arr::get($factors, 'rain', 0)) : 0;
+        $isWeatherDriven = in_array($simulator->mode, ['outdoor', 'seasonal'], true);
+        $rain = $isWeatherDriven ? max(0, (float) Arr::get($factors, 'rain', 0)) : 0;
+        $windSpeed = $isWeatherDriven ? max(0, (float) Arr::get($factors, 'wind_speed', 0)) : 0;
+        $evapotranspiration = $isWeatherDriven ? max(0, (float) Arr::get($factors, 'evapotranspiration', 0)) : 0;
 
         $heatLoad = max(0, $airTemperature - (float) $plant->air_temp_max) * 0.18;
         $dryAirLoad = max(0, (float) $plant->air_humidity_min - $airHumidity) * 0.04;
         $lightLoad = max(0, $light - (float) $plant->light_max) * 0.025;
-        $waterConsumed = max(1, min(8, (int) round(2.2 + ($growthRatio * 1.8) + $heatLoad + $dryAirLoad + $lightLoad)));
+        // Weather-driven modes should ask the player to care for the plant a
+        // little more often, without discarding the species/environment model.
+        // Wind and evapotranspiration raise demand; rain still restores the
+        // reserve below, so wet days naturally need less manual watering.
+        $weatherDemand = $isWeatherDriven
+            ? 0.65 + min(1.4, max(0, $windSpeed - 8) * 0.025) + min(2.0, $evapotranspiration * 0.32)
+            : 0.0;
+        $waterConsumed = max(1, min($isWeatherDriven ? 10 : 8, (int) round(
+            2.2 + ($growthRatio * 1.8) + $heatLoad + $dryAirLoad + $lightLoad + $weatherDemand,
+        )));
         $rainRecovery = min(12, (int) round($rain * 4));
         $nextWater = $this->clamp($water - $waterConsumed + $rainRecovery, 0, 100);
 
         $tick = max(1, (int) ($simulator->event_tick_count ?? 1));
-        $fertilizerConsumed = $tick % 4 === 0 ? 1 : 0;
+        $fertilizerCadence = 4;
+        if ($isWeatherDriven) {
+            // Normal outdoor nutrient use is about one third faster than the
+            // controlled mode. Heavy rain leaches nutrients and high
+            // evapotranspiration increases uptake, while deep cold slows it.
+            $fertilizerCadence = 3;
+            if ($rain >= 12 || $evapotranspiration >= 5.5) {
+                $fertilizerCadence = 2;
+            } elseif ($airTemperature < (float) $plant->air_temp_min - 4) {
+                $fertilizerCadence = 4;
+            }
+        }
+        $fertilizerConsumed = $tick % $fertilizerCadence === 0 ? 1 : 0;
         $nextFertilizer = $this->clamp($fertilizer - $fertilizerConsumed, 0, 100);
 
         $healthDelta = 0;
