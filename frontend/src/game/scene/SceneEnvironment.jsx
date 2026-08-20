@@ -5,6 +5,7 @@ import { Group, MathUtils } from 'three'
 import { resolveAssetUrl } from '../../lib/api'
 import { GrassGround, PlantingSpot } from './GrassGround'
 import { OutdoorRain } from './OutdoorRain'
+import { OutdoorWind } from './OutdoorWind'
 import { findPlantingHeight, PLANTING_CENTER } from './plantingSurface'
 import { getRainVisualIntensity } from './rainUtils'
 
@@ -154,6 +155,7 @@ export function SceneEnvironment({
             windDirection={windDirection}
             windSpeed={windSpeed}
           />
+          <OutdoorWind daylight={daylight} windDirection={windDirection} windSpeed={windSpeed} />
         </>
       )}
     </group>

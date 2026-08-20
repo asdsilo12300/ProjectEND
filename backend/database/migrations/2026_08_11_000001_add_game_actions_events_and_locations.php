@@ -150,7 +150,7 @@ return new class extends Migration
                     'effect_type' => 'environment:'.$action, 'effect_value' => $effect,
                     'rarity' => 'common', 'is_active' => true, 'action_key' => $action,
                     'mode_scope' => $scope,
-                    'effect_payload' => json_encode(['strategy' => 'toward_healthy_midpoint', 'duration_ticks' => 2], JSON_THROW_ON_ERROR),
+                    'effect_payload' => json_encode(['strategy' => 'toward_healthy_midpoint', 'duration_ticks' => 2, 'duration_seconds' => 30], JSON_THROW_ON_ERROR),
                     'animation_key' => $animation, 'created_at' => $now, 'updated_at' => $now,
                 ]);
                 $id = DB::table('items')->where('action_key', $action)->value('id');

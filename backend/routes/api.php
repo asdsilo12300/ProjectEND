@@ -26,6 +26,8 @@ use App\Http\Controllers\Api\SimulationEventController;
 use App\Http\Controllers\Api\SimulatorLocationController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\AdminEventDefinitionController;
+use App\Http\Controllers\Api\AdminIssueReportController;
+use App\Http\Controllers\Api\IssueReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::options('/{any}', fn () => response()->noContent())->where('any', '.*');
@@ -51,6 +53,10 @@ Route::middleware('jwt')->group(function (): void {
     Route::patch('/me', [AuthController::class, 'updateProfile']);
     Route::post('/me/profile', [AuthController::class, 'updateProfile']);
     Route::patch('/me/onboarding', [AuthController::class, 'updateOnboarding']);
+    Route::get('/issue-reports', [IssueReportController::class, 'index']);
+    Route::post('/issue-reports', [IssueReportController::class, 'store'])->middleware('throttle:5,10');
+    Route::get('/issue-reports/{issueReport}', [IssueReportController::class, 'show']);
+    Route::get('/issue-reports/{issueReport}/attachments/{attachment}', [IssueReportController::class, 'attachment']);
     Route::get('/friends', [FriendController::class, 'index']);
     Route::get('/users/search', [FriendController::class, 'search']);
     Route::post('/friends/invite', [FriendController::class, 'invite']);
@@ -115,6 +121,11 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/plants/{plant}/stages/{stage}/model', [PlantModelController::class, 'uploadStageModel'])->middleware('admin');
 
     Route::prefix('admin')->middleware('admin')->group(function (): void {
+        Route::get('/issue-reports', [AdminIssueReportController::class, 'index']);
+        Route::get('/issue-reports/summary', [AdminIssueReportController::class, 'summary']);
+        Route::get('/issue-reports/{issueReport}', [AdminIssueReportController::class, 'show']);
+        Route::post('/issue-reports/{issueReport}/seen', [AdminIssueReportController::class, 'seen']);
+        Route::patch('/issue-reports/{issueReport}/status', [AdminIssueReportController::class, 'status']);
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/contents', [AdminContentController::class, 'index']);
         Route::get('/contents/{content}', [AdminContentController::class, 'show']);

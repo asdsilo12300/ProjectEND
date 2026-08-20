@@ -51,6 +51,15 @@ return [
         'timeout' => (int) env('SUPABASE_STORAGE_TIMEOUT', 30),
     ],
 
+    'private_media' => [
+        'driver' => env('PRIVATE_MEDIA_DRIVER', env('MEDIA_DRIVER', 'laravel')),
+        'disk' => env('PRIVATE_MEDIA_DISK', 'local'),
+        'supabase_url' => env('SUPABASE_URL'),
+        'supabase_key' => env('SUPABASE_SECRET_KEY', env('SUPABASE_SERVICE_ROLE_KEY')),
+        'supabase_bucket' => env('SUPABASE_PRIVATE_BUCKET', 'issue-evidence'),
+        'timeout' => (int) env('SUPABASE_STORAGE_TIMEOUT', 30),
+    ],
+
     'external_http' => [
         'verify_ssl' => env('EXTERNAL_HTTP_VERIFY_SSL', true),
         'ca_bundle' => env('EXTERNAL_HTTP_CA_BUNDLE'),

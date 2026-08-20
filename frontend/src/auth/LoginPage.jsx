@@ -13,12 +13,6 @@ function GoogleIcon() {
   )
 }
 
-const accountBenefits = [
-  ['history', 'Keep every growing experiment in one account'],
-  ['shop', 'Carry coins, tools, friends, and achievements with you'],
-  ['shield', 'Google protects sign-in and verifies your email securely'],
-]
-
 export function LoginPage({ status, error, onGoogleLogin, onBack, backLabel = 'Back to home' }) {
   const isBusy = status === 'google-loading'
 
@@ -31,12 +25,7 @@ export function LoginPage({ status, error, onGoogleLogin, onBack, backLabel = 'B
           <img className="h-20 w-auto object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,.25)]" src={plantGrowthLogo} alt="Plant Growth Academy" />
         </div>
         <div className="absolute inset-x-9 bottom-9 max-w-xl text-white">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-[#153622]/70 px-3 py-1.5 text-xs font-black uppercase tracking-[.18em] backdrop-blur-md">
-            <AppIcon className="h-4 w-4 text-[#b9eb9f]" name="sprout" />
-            One account, every growing cycle
-          </span>
-          <h2 className="mt-5 max-w-lg text-4xl font-black leading-[1.08] tracking-[-.035em]">Return to your garden without another password to remember.</h2>
-          <p className="mt-4 max-w-lg text-base leading-7 text-white/78">Your plants, learning progress, community profile, and inventory stay connected through your Google account.</p>
+          <h2 className="max-w-lg text-5xl font-black leading-none tracking-[-.045em]">Sign in</h2>
         </div>
       </div>
 
@@ -62,31 +51,15 @@ export function LoginPage({ status, error, onGoogleLogin, onBack, backLabel = 'B
             <div className="p-7 sm:p-10">
               <img className="mx-auto mb-4 h-24 w-auto object-contain lg:hidden" src={plantGrowthLogo} alt="Plant Growth Academy" />
               <div className="text-center">
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#eaf5e5] px-3 py-1.5 text-xs font-black uppercase tracking-[.14em] text-[#39703f]">
-                  <AppIcon className="h-4 w-4" name="shield" />
-                  Google-only account
-                </span>
-                <h1 className="mt-5 text-4xl font-black leading-tight tracking-[-.035em] text-[#102015]">Sign in to the academy</h1>
-                <p className="mx-auto mt-3 max-w-sm text-[15px] leading-6 text-[#5b6c60]">Use Google to sign in or create your learner account automatically. There is no separate registration form or password.</p>
-              </div>
-
-              <div className="my-7 space-y-3 rounded-2xl border border-[#315c38]/10 bg-[#f4f8f1] p-4">
-                {accountBenefits.map(([icon, label]) => (
-                  <div className="flex items-center gap-3 text-sm leading-5 text-[#405347]" key={label}>
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#4b8b49] shadow-sm ring-1 ring-[#315c38]/10">
-                      <AppIcon className="h-4 w-4" name={icon} />
-                    </span>
-                    <span>{label}</span>
-                  </div>
-                ))}
+                <h1 className="text-4xl font-black leading-tight tracking-[-.035em] text-[#102015]">Sign in</h1>
               </div>
 
               {error && (
-                <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-700" role="alert">{error}</p>
+                <p className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-700" role="alert">{error}</p>
               )}
 
               <button
-                className="group flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-[#1e3d27]/18 bg-white px-5 text-[15px] font-black text-[#1b2d20] shadow-[0_12px_28px_rgba(24,58,31,.1)] transition hover:-translate-y-0.5 hover:border-[#5d9f51]/40 hover:bg-[#f9fcf7] hover:shadow-[0_16px_34px_rgba(24,58,31,.15)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#4285f4] disabled:cursor-wait disabled:opacity-65 disabled:hover:translate-y-0"
+                className="group mt-7 flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-[#1e3d27]/18 bg-white px-5 text-[15px] font-black text-[#1b2d20] shadow-[0_12px_28px_rgba(24,58,31,.1)] transition hover:-translate-y-0.5 hover:border-[#5d9f51]/40 hover:bg-[#f9fcf7] hover:shadow-[0_16px_34px_rgba(24,58,31,.15)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#4285f4] disabled:cursor-wait disabled:opacity-65 disabled:hover:translate-y-0"
                 type="button"
                 onClick={onGoogleLogin}
                 disabled={isBusy}
@@ -99,8 +72,6 @@ export function LoginPage({ status, error, onGoogleLogin, onBack, backLabel = 'B
                 <span>{isBusy ? 'Connecting to Google...' : 'Continue with Google'}</span>
                 {!isBusy && <AppIcon className="ml-auto h-4 w-4 text-[#6d7d71] transition group-hover:translate-x-1" name="arrowForward" />}
               </button>
-
-              <p className="mt-5 text-center text-xs leading-5 text-[#758278]">By continuing, you allow Plant Growth Academy to use your Google name, email, and profile picture for your academy account.</p>
             </div>
           </div>
         </div>

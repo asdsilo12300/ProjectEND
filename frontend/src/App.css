@@ -234,14 +234,21 @@
 }
 
 html.settings-theme-light .game-shell .plant-recommendation-rail {
-  background: rgba(248, 252, 247, 0.96);
-  color: #173323;
-  box-shadow: 0 14px 34px rgba(29, 71, 44, 0.18);
+  border-color: color-mix(in srgb, var(--recommendation-accent) 66%, #506757);
+  background: #e4eddf;
+  color: var(--pg-text);
+  box-shadow: 0 14px 34px rgba(29, 71, 44, 0.2);
 }
 
-html.settings-theme-light .game-shell .plant-recommendation-rail__copy strong { color: #173323; }
-html.settings-theme-light .game-shell .plant-recommendation-rail__detail { color: #587062; }
-html.settings-theme-light .game-shell .plant-recommendation-rail__badge { background: rgba(255, 255, 255, 0.72); }
+html.settings-theme-light .game-shell .plant-recommendation-rail__copy strong { color: #203429; }
+html.settings-theme-light .game-shell .plant-recommendation-rail__detail { color: #496151; }
+html.settings-theme-light .game-shell .plant-recommendation-rail__badge { background: #e4ecdf; }
+html.settings-theme-light .game-shell .plant-recommendation-rail--warning { --recommendation-accent: #b97816; }
+html.settings-theme-light .game-shell .plant-recommendation-rail--danger { --recommendation-accent: #bd5d32; }
+html.settings-theme-light .game-shell .plant-recommendation-rail--critical { --recommendation-accent: #b64743; }
+html.settings-theme-light .game-shell .plant-recommendation-rail--warning { background: #f3e5cd; }
+html.settings-theme-light .game-shell .plant-recommendation-rail--danger,
+html.settings-theme-light .game-shell .plant-recommendation-rail--critical { background: #efd8d4; }
 
 .lab-panel {
   --lab-panel-accent: var(--pg-primary);
@@ -780,43 +787,126 @@ html.settings-theme-light .game-shell .plant-recommendation-rail__badge { backgr
 
 /* User-facing 60-30-10 light theme. The 3D canvas keeps its own scene colors. */
 html.settings-theme-light .game-shell {
-  background: var(--pg-bg) !important;
+  background:
+    radial-gradient(circle at 12% 18%, rgb(50 125 75 / 8%), transparent 26%),
+    linear-gradient(180deg, #edf3e9 0%, #e6eee3 100%) !important;
   color: var(--pg-text) !important;
 }
 
 html.settings-theme-light .game-shell > .soft-grid + header,
 html.settings-theme-light .game-shell [data-tour="global-topbar"] {
-  border-color: var(--pg-border) !important;
-  background: rgb(255 255 255 / 96%) !important;
+  border-color: #9eb59f !important;
+  background: rgb(225 235 223 / 98%) !important;
   color: var(--pg-text) !important;
-  box-shadow: 0 8px 30px rgb(35 93 61 / 8%);
+  box-shadow: 0 7px 24px rgb(31 73 45 / 16%);
+}
+
+html.settings-theme-light .game-shell [data-tour="global-topbar"] nav button {
+  color: #496151 !important;
+}
+
+html.settings-theme-light .game-shell [data-tour="global-topbar"] nav button:hover {
+  border-color: #4b8c5e !important;
+  background: #e3eddf !important;
+  color: #203f2b !important;
+}
+
+html.settings-theme-light .game-shell [data-tour="global-topbar"] nav button[aria-current="page"] {
+  border-color: #28663d !important;
+  background: #dce9d8 !important;
+  color: #174d2d !important;
+  box-shadow: inset 0 -2px #28663d;
+}
+
+html.settings-theme-light .game-shell [data-tour="global-topbar"] nav button[aria-current="page"] svg {
+  color: #28663d !important;
 }
 
 html.settings-theme-light .game-shell .lab-panel,
 html.settings-theme-light .game-shell .lab-library-drawer {
-  border-color: var(--pg-border) !important;
-  background: rgb(255 255 255 / 95%) !important;
+  border-color: #9eb59f !important;
+  background: rgb(220 232 218 / 98%) !important;
   color: var(--pg-text) !important;
-  box-shadow: 0 14px 36px rgb(35 93 61 / 16%) !important;
+  box-shadow: 0 16px 38px rgb(28 65 40 / 22%) !important;
 }
 
 html.settings-theme-light .game-shell .lab-panel > header {
-  border-color: var(--pg-border) !important;
-  background: #e7f1e5 !important;
+  border-color: #9fb49f !important;
+  background: #b8ceb9 !important;
 }
 
-html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer, [data-tour="global-topbar"]) :where(.text-slate-100, .text-lime-50, .text-white) {
-  color: #163523 !important;
+html.settings-theme-light .game-shell .lab-library-drawer > div:first-child {
+  border-color: #9fb49f !important;
+  background: #b8ceb9 !important;
+}
+
+html.settings-theme-light .game-shell .lab-panel__body,
+html.settings-theme-light .game-shell .lab-library-drawer > .game-themed-scrollbar {
+  background: #d6e4d4;
+}
+
+html.settings-theme-light .game-shell .lab-library-drawer [data-tour="lab-plants"] > div,
+html.settings-theme-light .game-shell .lab-library-drawer [data-tour="lab-items"] > div {
+  border-color: #98b09b !important;
+  background: #c8d9c7 !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) [class*="bg-black/"],
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) [class*="bg-[#0b0f0c]"],
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) [class*="bg-[#101511]"],
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) [class*="bg-[#0"],
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) [class*="bg-[#1"] {
+  border-color: #9fb49f !important;
+  background-color: #edf3e9 !important;
+}
+
+html.settings-theme-light .game-shell .lab-library-drawer button:disabled {
+  opacity: 0.82 !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer, [data-tour="global-topbar"]) :where(.text-slate-100, .text-slate-200, .text-lime-50, .text-white) {
+  color: #203429 !important;
 }
 
 html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer, [data-tour="global-topbar"]) :where(.text-slate-300, .text-slate-400, .text-slate-500) {
-  color: #587062 !important;
+  color: #496151 !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer, [data-tour="global-topbar"]) :where(.text-lime-100, .text-lime-200) {
+  color: #28663d !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer, [data-tour="global-topbar"]) [class*="text-lime-100/"],
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer, [data-tour="global-topbar"]) [class*="text-lime-200/"] {
+  color: #28663d !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) :where(.text-sky-100, .text-sky-200, .text-cyan-100, .text-cyan-200) {
+  color: #1f6f8f !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) [class*="text-sky-"],
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) [class*="text-cyan-"] {
+  color: #1f6f8f !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) :where(.text-amber-50, .text-amber-100, .text-amber-200) {
+  color: #80500f !important;
+}
+
+html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) :where(.text-violet-100, .text-violet-200, .text-purple-100, .text-purple-200) {
+  color: #68438e !important;
 }
 
 html.settings-theme-light .game-shell :where(.lab-panel, .lab-library-drawer) :where(input, select, textarea) {
-  border-color: #a9c7b2 !important;
-  background: #f8fbf7 !important;
-  color: #173323 !important;
+  border-color: #91aa95 !important;
+  background: #fbfcf8 !important;
+  color: #203429 !important;
+}
+
+html.settings-theme-light .game-shell :where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #28663d !important;
+  outline-offset: 2px !important;
 }
 
 /* Shared light surfaces for every signed-in user page.  The broad selectors are
@@ -834,7 +924,7 @@ html.settings-theme-light .user-page--settings > div {
   background-color: #f4f8f2 !important;
 }
 
-html.settings-theme-light .user-page :where(article, form, [role="dialog"], [role="alertdialog"]),
+html.settings-theme-light .user-page :where(article, form),
 html.settings-theme-light .user-page--settings section,
 html.settings-theme-light .user-page--community [data-tour="community-dashboard"] > section {
   border-color: var(--pg-border) !important;
@@ -843,14 +933,89 @@ html.settings-theme-light .user-page--community [data-tour="community-dashboard"
   box-shadow: 0 12px 30px rgb(35 93 61 / 9%);
 }
 
-html.settings-theme-light .user-page :where(h1, h2, h3, h4, p, label, strong),
-html.settings-theme-light .user-page :where(span.text-white, span.text-lime-50, span.text-slate-100, span.text-slate-200, span.text-slate-300),
-html.settings-theme-light .user-page :where(.text-white, .text-lime-50, .text-slate-100, .text-slate-200) {
+html.settings-theme-light .user-page :where(h1, h2, h3, h4, p, label, strong):not(.game-preview *),
+html.settings-theme-light .user-page :where(span.text-white, span.text-lime-50, span.text-slate-100, span.text-slate-200, span.text-slate-300):not(.game-preview *),
+html.settings-theme-light .user-page :where(.text-white, .text-lime-50, .text-slate-100, .text-slate-200):not(.game-preview *) {
   color: var(--pg-text) !important;
 }
 
-html.settings-theme-light .user-page :where(.text-slate-300, .text-slate-400, .text-slate-500, .text-slate-600) {
+html.settings-theme-light .user-page :where(.text-slate-300, .text-slate-400, .text-slate-500, .text-slate-600):not(.game-preview *) {
   color: var(--pg-text-muted) !important;
+}
+
+/* Several user pages were built with fixed dark Tailwind surfaces. Convert
+   those layers to the shared light palette, while preserving simulation and
+   saved-state previews whose darkness is part of the actual media. */
+html.settings-theme-light .user-page :where(
+  [class*="bg-[#080"],
+  [class*="bg-[#081"],
+  [class*="bg-[#0a"],
+  [class*="bg-[#0b"],
+  [class*="bg-[#0c"],
+  [class*="bg-[#0d"],
+  [class*="bg-[#101"],
+  [class*="bg-[#111"],
+  [class*="bg-[#121"],
+  [class*="bg-[#141"],
+  [class*="bg-[#151"],
+  [class*="bg-[#171"],
+  [class*="bg-[#181"],
+  [class*="bg-black/"]
+):not(.game-preview):not(.game-preview *) {
+  background-color: var(--pg-surface) !important;
+  color: var(--pg-text) !important;
+}
+
+html.settings-theme-light .user-page :where([class*="bg-white/"], [class*="animate-pulse"] [class*="bg-white/"]) {
+  background-color: #d3e1d2 !important;
+}
+
+html.settings-theme-light .user-page :where(
+  [class*="border-lime-100/"],
+  [class*="border-white/"],
+  [class*="border-[#30"],
+  [class*="border-[#32"],
+  [class*="border-[#34"],
+  [class*="ring-[#30"],
+  [class*="ring-[#32"],
+  [class*="ring-[#34"]
+):not(.game-preview):not(.game-preview *) {
+  border-color: var(--pg-border) !important;
+  --tw-ring-color: var(--pg-border) !important;
+}
+
+html.settings-theme-light .user-page :where(
+  [class*="text-[#9cf3bd]"],
+  [class*="text-[#78eda8]"],
+  [class*="text-[#8eeab4]"],
+  [class*="text-lime-100/"],
+  [class*="text-lime-200/"]
+):not(.game-preview):not(.game-preview *) {
+  color: var(--pg-primary-strong) !important;
+}
+
+html.settings-theme-light .user-page--community [role="dialog"] {
+  background-color: rgb(28 54 37 / 38%) !important;
+}
+
+html.settings-theme-light .user-page--community [role="dialog"] > :where(div, form),
+html.settings-theme-light .user-page [role="alertdialog"],
+html.settings-theme-light .user-page--history [role="dialog"] {
+  border-color: var(--pg-border) !important;
+  background-color: var(--pg-surface) !important;
+  color: var(--pg-text) !important;
+  box-shadow: 0 24px 72px rgb(32 52 41 / 24%) !important;
+}
+
+html.settings-theme-light .user-page--shop [data-tour="shop-filters"] > aside {
+  border-color: #91aa95 !important;
+  background-color: #d3e1d2 !important;
+  color: var(--pg-text) !important;
+  box-shadow: 0 14px 34px rgb(32 52 41 / 14%);
+}
+
+html.settings-theme-light .user-page--shop [data-tour="shop-filters"] > aside > div {
+  border-color: var(--pg-border) !important;
 }
 
 html.settings-theme-light .user-page :where(input, select, textarea) {

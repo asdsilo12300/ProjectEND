@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Models\Item;
 use App\Models\Plant;
 use App\Models\SimulationAction;
+use App\Models\SimulationModifier;
 use App\Models\Simulator;
 use App\Models\UserItem;
 use App\Services\SimulationActionService;
@@ -160,6 +161,37 @@ class SimulationActionServiceTest extends TestCase
         ]);
     }
 
+    public function test_temporary_protection_expires_after_thirty_seconds(): void
+    {
+        [$simulator, $item] = $this->seedSimulation('outdoor');
+        $item->update([
+            'name' => 'Shade Cloth',
+            'type' => 'booster',
+            'action_key' => 'shade',
+            'effect_type' => 'environment:shade',
+            'effect_payload' => ['duration_ticks' => 2, 'duration_seconds' => 30],
+            'animation_key' => 'shade-cover',
+            'mode_scope' => 'outdoor',
+        ]);
+        $simulator->update(['light' => 100, 'air_temp' => 40]);
+
+        app(SimulationActionService::class)->apply($simulator->fresh(), 1, [
+            'client_action_id' => 'e661e2a2-f136-4c0f-a278-ed08502458aa',
+            'action_key' => 'shade',
+            'item_id' => $item->id,
+            'target_value' => null,
+            'event_id' => null,
+        ]);
+
+        $modifiers = SimulationModifier::query()->get();
+        $this->assertCount(2, $modifiers);
+        $modifiers->each(function (SimulationModifier $modifier): void {
+            $this->assertNotNull($modifier->expires_at);
+            $this->assertGreaterThanOrEqual(29, now()->diffInSeconds($modifier->expires_at, false));
+            $this->assertLessThanOrEqual(30, now()->diffInSeconds($modifier->expires_at, false));
+        });
+    }
+
     /** @return array{Simulator, Item} */
     private function seedSimulation(string $mode): array
     {
@@ -241,6 +273,7 @@ class SimulationActionServiceTest extends TestCase
             $table->unsignedBigInteger('simulation_event_id')->nullable(); $table->string('factor_key');
             $table->decimal('add_value', 8, 2)->default(0); $table->decimal('multiply_value', 8, 4)->default(1);
             $table->integer('starts_tick')->default(0); $table->integer('ends_tick')->nullable(); $table->timestamps();
+            $table->timestamp('expires_at')->nullable();
         });
     }
 }

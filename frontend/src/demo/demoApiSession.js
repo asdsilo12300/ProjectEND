@@ -591,7 +591,7 @@ export async function handleDemoApiRequest(path, options = {}) {
       if (actionKey.includes('windbreak')) updated.air_humidity = Math.min(100, Number(current.air_humidity) + 8)
       if (actionKey.includes('frost-cover')) updated.air_temp = Math.min(80, Number(current.air_temp) + 6)
       if (actionKey.includes('pest_control')) updated.active_pests = []
-      if (['shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
+      if (['drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
         const currentTick = Number(current.event_tick_count ?? 0)
         const activeModifiers = Array.isArray(current.active_modifiers) ? current.active_modifiers : []
         updated.active_modifiers = [
@@ -600,9 +600,17 @@ export async function handleDemoApiRequest(path, options = {}) {
             id: `preview-${actionKey}-${currentTick}`,
             action_key: actionKey,
             animation_key: actionKey,
-            factor_key: actionKey === 'shade' ? 'light' : actionKey === 'windbreak' ? 'air_humidity' : 'air_temp',
+            factor_key: actionKey === 'drainage'
+              ? 'soil_humidity'
+              : actionKey === 'shade'
+                ? 'light'
+                : actionKey === 'windbreak'
+                  ? 'air_humidity'
+                  : 'air_temp',
             starts_tick: currentTick,
             ends_tick: currentTick + 3,
+            expires_at: new Date(Date.now() + 30_000).toISOString(),
+            remaining_seconds: 30,
           },
         ]
       }

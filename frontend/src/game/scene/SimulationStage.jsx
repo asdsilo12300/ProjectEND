@@ -140,8 +140,6 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
   const isHarvestReady = growthValue >= 100 && healthValue > 0
   const waterValue = clampPercent(plantNeeds?.water ?? water)
   const fertilizerValue = clampPercent(plantNeeds?.fertilizer ?? fertilizer)
-  const waterRate = Number(plantNeeds?.rates?.water_per_cycle ?? 3)
-  const fertilizerRate = Number(plantNeeds?.rates?.fertilizer_per_cycle ?? 0.25)
   const statusLabel = isHarvestReady
     ? isThai ? 'พร้อมเก็บเกี่ยว' : 'HARVEST READY'
     : cycleStatus === 'updating'
@@ -155,20 +153,14 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
     { label: isThai ? 'ความเร็ว' : 'Pace', value: paceValue, color: paceValue === 0 ? '#7b8778' : '#d8f3c9', icon: 'speed', key: 'pace' },
   ]
   const needRows = [
-    { key: 'water', label: isThai ? 'น้ำ' : 'Water', value: waterValue, rate: waterRate, color: '#55c9e8', icon: 'drop' },
-    { key: 'fertilizer', label: isThai ? 'ธาตุอาหาร' : 'Nutrients', value: fertilizerValue, rate: fertilizerRate, color: '#f0c85b', icon: 'plus' },
+    { key: 'water', label: isThai ? 'น้ำ' : 'Water', value: waterValue, color: '#55c9e8', imageUrl: imageAssets.water },
+    { key: 'fertilizer', label: isThai ? 'ธาตุอาหาร' : 'Nutrients', value: fertilizerValue, color: '#f0c85b', imageUrl: imageAssets.fertilizer },
   ]
 
   function needTone(value, preferredColor) {
     if (value <= 25) return '#ef6f61'
     if (value <= 50) return '#f0c85b'
     return preferredColor
-  }
-
-  function needLabel(value) {
-    if (value <= 25) return isThai ? 'ต่ำ' : 'LOW'
-    if (value <= 50) return isThai ? 'ใกล้หมด' : 'SOON'
-    return isThai ? 'เพียงพอ' : 'SUPPLIED'
   }
 
   return (
@@ -200,9 +192,8 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
         </div>
       </div>
       <section className="rounded-lg border border-cyan-100/20 bg-[#0d1715]/96 px-3 py-2 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.4)]" aria-label={isThai ? 'ความต้องการของพืช' : 'Plant needs'}>
-        <div className="mb-2 flex items-center justify-between border-b border-cyan-100/10 pb-1.5">
+        <div className="mb-2 flex items-center border-b border-cyan-100/10 pb-1.5">
           <strong className="text-xs text-cyan-50">{isThai ? 'ความต้องการของพืช' : 'Plant needs'}</strong>
-          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{isThai ? 'ลดตามเวลา' : 'USES OVER TIME'}</span>
         </div>
         <div className="grid gap-2.5">
           {needRows.map((need) => {
@@ -211,12 +202,10 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
               <div key={need.key}>
                 <div className="mb-1 grid grid-cols-[20px_1fr_auto] items-center gap-2">
                   <span className="grid h-5 w-5 place-items-center rounded bg-white/[0.07]" style={{ color }}>
-                    <AppIcon className="h-3.5 w-3.5" name={need.icon} />
+                    <img className="h-4 w-4 object-contain" src={need.imageUrl} alt="" aria-hidden="true" draggable="false" />
                   </span>
                   <span className="text-xs font-semibold text-slate-200">{need.label}</span>
-                  <span className="flex items-center gap-1 text-[9px] font-black" style={{ color }}>
-                    {needLabel(need.value)} <strong className="text-xs text-lime-50">{Math.round(need.value)}%</strong>
-                  </span>
+                  <strong className="text-xs font-black text-lime-50">{Math.round(need.value)}%</strong>
                 </div>
                 <span className="block h-2 overflow-hidden rounded-full bg-white/[0.1]">
                   <span className="block h-full rounded-full transition-[width,background-color] duration-500" style={{ width: `${need.value}%`, backgroundColor: color }} />
@@ -225,11 +214,6 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
             )
           })}
         </div>
-        <p className="mt-2 border-t border-white/[0.06] pt-1.5 text-[9px] leading-4 text-slate-400">
-          {isThai
-            ? `น้ำลดประมาณ ${Math.max(1, Math.round(waterRate))}% ต่อรอบ · ปุ๋ยลดช้ากว่าน้ำ`
-            : `Water uses about ${Math.max(1, Math.round(waterRate))}% per cycle · nutrients drain more slowly`}
-        </p>
       </section>
       </div>
     </Html>
@@ -616,6 +600,16 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
   const seasonalTime = useSeasonalSimulatedClock(seasonalContext, nextCycleAt)
   const solarLighting = useTimeOfDayLighting(location, mode === 'seasonal' ? seasonalTime : null)
   const isWeatherDriven = mode === 'outdoor' || mode === 'seasonal'
+  const windbreakActive = (simulationVisual?.active_modifiers ?? []).some((modifier) => (
+    String(modifier?.action_key ?? modifier?.animation_key ?? modifier?.key ?? '').toLowerCase().includes('windbreak')
+  ))
+  const windMotion = isWeatherDriven ? {
+    enabled: true,
+    direction: Number(outdoorReadings?.windDirection) || 0,
+    // Keep ambient wind visible, but reduce the force that reaches a protected
+    // plant so the windbreak has an immediately readable effect.
+    speed: (Number(outdoorReadings?.windSpeed) || 0) * (windbreakActive ? 0.36 : 1),
+  } : null
   const pests = simulationVisual?.active_pests ?? []
   const fungusRisk = pests.reduce((highestRisk, pest) => {
     const pestName = String(
@@ -750,6 +744,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
                   health={health}
                   isMature={isMature}
                   growthProgress={growthProgress}
+                  windMotion={windMotion}
                 />
                 <Suspense fallback={null}>
                   <ActiveCareEffects modifiers={simulationVisual?.active_modifiers ?? []} plantingSurface={plantingSurface} plantScale={protectionScale} />

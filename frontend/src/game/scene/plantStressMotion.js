@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { Group, MathUtils } from 'three'
+import { Box3, Group, MathUtils, Vector3 } from 'three'
 
 const HEALTHY_STATES = new Set(['', 'upright', 'normal', 'healthy'])
 
@@ -242,12 +242,144 @@ export function attachElephantEarStressPivots(root) {
   return entries
 }
 
+function meshMaterialRole(mesh) {
+  const meshName = normalizeState(mesh?.name)
+  const materialNames = (Array.isArray(mesh?.material) ? mesh.material : [mesh?.material])
+    .map((material) => normalizeState(material?.name))
+    .join(' ')
+  const identity = `${meshName} ${materialNames}`
+
+  if (/petal/.test(identity)) return 'petal'
+  if (/sepal|seed|flower|bloom|head/.test(identity)) return 'flower'
+  if (/leaf|frond/.test(identity)) return 'leaf'
+  if (/stem|stalk|trunk/.test(identity)) return 'stem'
+  return null
+}
+
+function worldBoundsFor(objects) {
+  const bounds = new Box3().makeEmpty()
+  objects.forEach((object) => {
+    object?.updateWorldMatrix?.(true, false)
+    bounds.union(new Box3().setFromObject(object))
+  })
+  return bounds
+}
+
+function insertAnchoredPivot(parent, children, name, worldAnchor) {
+  if (!parent || children.length === 0 || !worldAnchor) return null
+
+  parent.updateWorldMatrix(true, false)
+  const pivot = new Group()
+  pivot.name = name
+  parent.add(pivot)
+  pivot.position.copy(parent.worldToLocal(worldAnchor.clone()))
+  pivot.updateWorldMatrix(true, false)
+
+  // Object3D.attach preserves every mesh's world transform, which is
+  // important here because the Sunflower has nested axis-conversion groups.
+  children.forEach((child) => pivot.attach(child))
+  return pivot
+}
+
+/**
+ * Creates runtime articulation for the uploaded Sunflower asset. Its GLTF has
+ * five independent morph-target meshes but no skin/bones, so ordinary bone
+ * discovery returns no stress controls. This hierarchy behaves like a small
+ * rig while keeping all original morph animation tracks intact.
+ */
+export function attachSunflowerStressPivots(root, { upAxis = 'y' } = {}) {
+  if (!root?.traverse) return []
+  if (Array.isArray(root.userData?.sunflowerStressPivots)) return root.userData.sunflowerStressPivots
+
+  const meshesByRole = { leaf: [], stem: [], flower: [], petal: [] }
+  root.traverse((object) => {
+    if (!object.isMesh || !object.parent) return
+    const role = meshMaterialRole(object)
+    if (role) meshesByRole[role].push(object)
+  })
+
+  const plantMeshes = Object.values(meshesByRole).flat()
+  const commonParent = plantMeshes[0]?.parent
+  if (!commonParent || plantMeshes.some((mesh) => mesh.parent !== commonParent)) {
+    root.userData.sunflowerStressPivots = []
+    root.userData.plantStressPivots = []
+    return []
+  }
+
+  const plantBounds = worldBoundsFor(plantMeshes)
+  const plantCenter = plantBounds.getCenter(new Vector3())
+  const baseAnchor = new Vector3(plantCenter.x, plantBounds.min.y, plantCenter.z)
+  const bodyPivot = insertAnchoredPivot(commonParent, plantMeshes, 'SunflowerStress_stem', baseAnchor)
+  if (!bodyPivot) return []
+
+  const entries = [{ object: bodyPivot, role: 'stem', index: 0, upAxis, motionScale: 1 }]
+  const leafMeshes = meshesByRole.leaf
+  if (leafMeshes.length > 0) {
+    const leafBounds = worldBoundsFor(leafMeshes)
+    const leafCenter = leafBounds.getCenter(new Vector3())
+    const leafAnchor = new Vector3(leafCenter.x, leafBounds.min.y, leafCenter.z)
+    const leafPivot = insertAnchoredPivot(bodyPivot, leafMeshes, 'SunflowerStress_leaf', leafAnchor)
+    if (leafPivot) entries.push({ object: leafPivot, role: 'leaf', index: entries.length, upAxis, motionScale: 1 })
+  }
+
+  const flowerMeshes = [...meshesByRole.flower, ...meshesByRole.petal]
+  if (flowerMeshes.length > 0) {
+    const flowerBounds = worldBoundsFor(flowerMeshes)
+    const flowerCenter = flowerBounds.getCenter(new Vector3())
+    const flowerPivot = insertAnchoredPivot(bodyPivot, flowerMeshes, 'SunflowerStress_flower', flowerCenter)
+    if (flowerPivot) {
+      entries.push({ object: flowerPivot, role: 'flower', index: entries.length, upAxis, motionScale: 1 })
+
+      if (meshesByRole.petal.length > 0) {
+        const petalPivot = insertAnchoredPivot(
+          flowerPivot,
+          meshesByRole.petal,
+          'SunflowerStress_petal',
+          flowerCenter,
+        )
+        if (petalPivot) entries.push({ object: petalPivot, role: 'petal', index: entries.length, upAxis, motionScale: 1 })
+      }
+    }
+  }
+
+  root.userData = {
+    ...root.userData,
+    sunflowerStressPivots: entries,
+    plantStressPivots: entries,
+  }
+  return entries
+}
+
 function resolvedEntries(entries) {
   const value = entries?.current ?? entries
   return Array.isArray(value) ? value.filter((entry) => entry?.object) : []
 }
 
-function targetForEntry(entry, profile, elapsed) {
+function getWindMotion(windMotion, elapsed, index, profile) {
+  if (!windMotion?.enabled) return { x: 0, z: 0, leaf: 0, stem: 0 }
+
+  const speed = Math.max(0, Number(windMotion.speed) || 0)
+  if (speed < 2) return { x: 0, z: 0, leaf: 0, stem: 0 }
+
+  const normalized = clamp01((speed - 2) / 42)
+  const direction = ((Number(windMotion.direction) || 0) + 180) * Math.PI / 180
+  const phase = elapsed * (0.82 + normalized * 1.55) + index * 0.71
+  const gust = Math.max(0.28,
+    0.68
+      + Math.sin(phase) * 0.2
+      + Math.sin(phase * 2.17 + 0.8) * 0.12)
+  const flexibility = profile.isDead ? 0.3 : 1 - profile.stiffness * 0.62
+  const force = normalized * gust * flexibility
+
+  return {
+    x: Math.cos(direction) * force,
+    z: Math.sin(direction) * force,
+    leaf: force * (0.12 + normalized * 0.18),
+    stem: force * (0.055 + normalized * 0.12),
+  }
+}
+
+function targetForEntry(entry, profile, elapsed, windMotion) {
   const index = Number(entry.index) || 0
   const direction = index % 2 === 0 ? 1 : -1
   const phase = elapsed * (0.72 + (index % 3) * 0.08) + index * 1.73
@@ -256,19 +388,21 @@ function targetForEntry(entry, profile, elapsed) {
     : (1 - profile.stiffness * 0.86) * (0.012 + (1 - profile.severity) * 0.012)
   const breeze = Math.sin(phase) * breezeStrength
   const crossBreeze = Math.cos(phase * 0.73) * breezeStrength * 0.62
+  const wind = getWindMotion(windMotion, elapsed, index, profile)
 
   if (entry.role === 'stem') {
     const deadCollapse = profile.isDead ? 1 : 0
     const heatCollapse = profile.heatCollapse ?? 0
     return {
-      x: profile.stemLean * (0.18 + deadCollapse * 0.14)
+      x: profile.stemLean * (0.18 + deadCollapse * 0.44)
         + heatCollapse * 0.34
-        + crossBreeze * 0.42,
+        + crossBreeze * 0.42
+        + wind.x * wind.stem,
       y: breeze * 0.18,
       z: direction * (
-        profile.stemLean * (0.2 + deadCollapse * 0.08)
+        profile.stemLean * (0.2 + deadCollapse * 0.22)
         + heatCollapse * 0.18
-      ) + breeze,
+      ) + breeze + wind.z * wind.stem,
       scaleY: 1
         - profile.compression * (0.095 + deadCollapse * 0.035)
         - heatCollapse * 0.045,
@@ -277,31 +411,39 @@ function targetForEntry(entry, profile, elapsed) {
 
   if (entry.role === 'flower') {
     const heatCollapse = profile.heatCollapse ?? 0
+    const deadCollapse = profile.isDead ? 1 : 0
     return {
-      x: profile.leafDroop * 0.19
+      x: profile.leafDroop * (0.19 + deadCollapse * 0.66)
         + profile.stemLean * 0.08
         + heatCollapse * 0.3
-        + crossBreeze,
+        + crossBreeze
+        + wind.x * wind.leaf * 0.86,
       y: breeze * 0.32,
       z: direction * (
-        profile.curl * 0.11
+        profile.curl * (0.11 + deadCollapse * 0.16)
         + profile.leafDroop * 0.045
         + heatCollapse * 0.12
-      ) + breeze,
-      scaleY: 1 - profile.compression * 0.06 - heatCollapse * 0.025,
+      ) + breeze + wind.z * wind.leaf * 0.86,
+      scaleX: 1 - deadCollapse * 0.12,
+      scaleY: 1 - profile.compression * 0.06 - heatCollapse * 0.025 - deadCollapse * 0.18,
+      scaleZ: 1 - deadCollapse * 0.12,
     }
   }
 
   if (entry.role === 'petal') {
     const heatCollapse = profile.heatCollapse ?? 0
+    const deadCollapse = profile.isDead ? 1 : 0
     return {
-      x: profile.leafDroop * 0.11
+      x: profile.leafDroop * (0.11 + deadCollapse * 0.26)
         + profile.curl * 0.14
         + heatCollapse * 0.18
-        + crossBreeze * 0.5,
+        + crossBreeze * 0.5
+        + wind.x * wind.leaf,
       y: direction * profile.curl * 0.055,
-      z: direction * (profile.curl * 0.13 + heatCollapse * 0.075) + breeze * 0.45,
-      scaleY: 1 - profile.compression * 0.075 - heatCollapse * 0.02,
+      z: direction * (profile.curl * 0.13 + heatCollapse * 0.075) + breeze * 0.45 + wind.z * wind.leaf,
+      scaleX: 1 - deadCollapse * 0.48,
+      scaleY: 1 - profile.compression * 0.075 - heatCollapse * 0.02 - deadCollapse * 0.34,
+      scaleZ: 1 - deadCollapse * 0.48,
     }
   }
 
@@ -312,13 +454,14 @@ function targetForEntry(entry, profile, elapsed) {
     x: profile.leafDroop * (0.55 + deadCollapse * 0.25) * variation
       + profile.curl * (0.08 + deadCollapse * 0.1)
       + heatCollapse * 0.44
-      + crossBreeze,
+      + crossBreeze
+      + wind.x * wind.leaf,
     y: direction * profile.curl * 0.045,
     z: direction * (
       profile.curl * (0.18 + deadCollapse * 0.07)
       + profile.leafDroop * (0.075 + deadCollapse * 0.035)
       + heatCollapse * 0.14
-    ) + breeze,
+    ) + breeze + wind.z * wind.leaf,
     scaleY: 1
       - profile.compression * (0.105 + deadCollapse * 0.035)
       - heatCollapse * 0.035,
@@ -385,7 +528,7 @@ function interpolateStressProfile(from, target, progress) {
  * pivots are not animation-track targets, changing factor values never fights
  * the original growth clip or causes frame-to-frame transform accumulation.
  */
-export function usePlantStressMotion(entries, visualOverrides, health = 100, fungusRisk = 0) {
+export function usePlantStressMotion(entries, visualOverrides, health = 100, fungusRisk = 0, windMotion = null) {
   const targetProfile = buildPlantStressProfile(visualOverrides, health, fungusRisk)
   const targetSignature = stressProfileSignature(targetProfile)
   const displayedProfileRef = useRef(neutralStressProfile())
@@ -423,7 +566,7 @@ export function usePlantStressMotion(entries, visualOverrides, health = 100, fun
     const blend = 1 - Math.exp(-Math.min(Math.max(delta, 0), 0.1) * 9)
 
     resolvedEntries(entries).forEach((entry) => {
-      const target = targetForEntry(entry, profile, elapsed)
+      const target = targetForEntry(entry, profile, elapsed, windMotion)
       const pivot = entry.object
       const motionScale = Math.min(1, Math.max(0, Number(entry.motionScale) || 1))
       const targetRotation = entry.upAxis === 'z'
@@ -435,9 +578,9 @@ export function usePlantStressMotion(entries, visualOverrides, health = 100, fun
       pivot.rotation.x = MathUtils.lerp(pivot.rotation.x, targetRotation.x * motionScale, blend)
       pivot.rotation.y = MathUtils.lerp(pivot.rotation.y, targetRotation.y * motionScale, blend)
       pivot.rotation.z = MathUtils.lerp(pivot.rotation.z, targetRotation.z * motionScale, blend)
-      pivot.scale.x = MathUtils.lerp(pivot.scale.x, 1, blend)
+      pivot.scale.x = MathUtils.lerp(pivot.scale.x, target.scaleX ?? 1, blend)
       pivot.scale.y = MathUtils.lerp(pivot.scale.y, 1 - (1 - target.scaleY) * motionScale, blend)
-      pivot.scale.z = MathUtils.lerp(pivot.scale.z, 1, blend)
+      pivot.scale.z = MathUtils.lerp(pivot.scale.z, target.scaleZ ?? 1, blend)
     })
   })
 }

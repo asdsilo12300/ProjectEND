@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import heroImage from '../assets/hero.png'
 import learnAboutPlantsBanner from '../assets/learn-about-plants-banner.jpg'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
@@ -9,6 +9,7 @@ import { getLearningContent, getLearningContents, resolveAssetUrl } from '../lib
 import './LandingPage.css'
 
 const LANDING_THEME_KEY = 'plant-growth-landing-theme'
+const LandingPlantPreview3D = lazy(() => import('./LandingPlantPreview3D'))
 
 const factors = [
   { icon: 'bolt', title: 'Light', value: '85%', description: 'Light supplies the energy plants need to create food through photosynthesis.' },
@@ -92,8 +93,37 @@ const gameSpaces = [
   { page: 'shop', icon: 'shop', title: 'Shop', eyebrow: 'Tools & supplies', description: 'Use earned coins to unlock practical tools for pests and plant care.', preview: 'shop', image: '/media/shop-preview.png', imageAlt: 'Shop preview interface' },
   { page: 'history', icon: 'history', title: 'History', eyebrow: 'Experiment records', description: 'Revisit completed sessions, scores, conditions, and saved evidence.', preview: 'history', image: '/media/history-preview.png', imageAlt: 'Saved experiment history preview interface' },
   { page: 'community', icon: 'groups', title: 'Community', eyebrow: 'Learn together', description: 'Share observations, view live gardens, and learn from other growers.', preview: 'community', image: '/media/community-preview.png', imageAlt: 'Community preview interface' },
-  { page: 'learn', icon: 'bookmark', title: 'Knowledge Library', eyebrow: 'Research-backed lessons', description: 'Read focused lessons about plants, environmental factors, and photosynthesis.', preview: 'learn', image: '/media/knowledge-preview.png', imageAlt: 'Knowledge Library learning page' },
   { page: 'settings', icon: 'settings', title: 'Settings', eyebrow: 'Made for you', description: 'Choose your language and adjust display, accessibility, and account preferences.', preview: 'settings', image: '/media/settings-preview.png', imageAlt: 'Settings preview interface' },
+]
+
+const growingModes = [
+  {
+    key: 'controlled',
+    icon: 'settings',
+    eyebrow: 'CONTROLLED LAB',
+    title: 'Control the variables',
+    description: 'Tune water, light, soil, air, nutrients, and temperature to see one clear cause-and-effect relationship at a time.',
+    meta: 'Best for learning the fundamentals',
+    tone: 'mint',
+  },
+  {
+    key: 'outdoor',
+    icon: 'weatherCloudSun',
+    eyebrow: 'OUTDOOR FIELD',
+    title: 'Respond to the real world',
+    description: 'Let daylight, weather, rain, and location shape the cycle while you protect your plant with the right care action.',
+    meta: 'Best for observation and decisions',
+    tone: 'sun',
+  },
+  {
+    key: 'seasonal',
+    icon: 'history',
+    eyebrow: 'SEASONAL JOURNEY',
+    title: 'Grow through a season',
+    description: 'Follow a seeded weather timeline, track biological days, and prepare for seasonal changes without losing your progress.',
+    meta: 'Best for long-term experiments',
+    tone: 'violet',
+  },
 ]
 
 function HeroParticles() {
@@ -331,6 +361,193 @@ function JourneyDetailModal({ index, onClose, onStart, step }) {
   )
 }
 
+function ModeExplorer({ user, onStart, onOpenDemo }) {
+  const [activeModeKey, setActiveModeKey] = useState(growingModes[0].key)
+  const activeMode = growingModes.find((mode) => mode.key === activeModeKey) ?? growingModes[0]
+
+  function beginMode() {
+    if (user) {
+      onStart()
+      return
+    }
+    onOpenDemo?.('lab')
+  }
+
+  return (
+    <section className="landing-section landing-mode-explorer" aria-labelledby="mode-explorer-title">
+      <div className="landing-container">
+        <div className="landing-section-heading landing-mode-explorer__heading" data-reveal="up">
+          <div>
+            <span className="landing-section-kicker"><AppIcon name="sprout" /> Choose your growing path</span>
+            <h2 id="mode-explorer-title">One plant. Three ways to understand it.</h2>
+          </div>
+          <p>Start with a guided lab, respond to outdoor conditions, or follow a full seasonal journey. Your choice changes what you observe—not the quality of the lesson.</p>
+        </div>
+
+        <div className="landing-mode-explorer__layout" data-reveal="up">
+          <div className="landing-mode-explorer__tabs" role="tablist" aria-label="Growing modes">
+            {growingModes.map((mode, index) => (
+              <button
+                className={`landing-mode-card landing-mode-card--${mode.tone} ${activeModeKey === mode.key ? 'is-active' : ''}`}
+                key={mode.key}
+                type="button"
+                role="tab"
+                aria-selected={activeModeKey === mode.key}
+                aria-controls={`mode-panel-${mode.key}`}
+                onClick={() => setActiveModeKey(mode.key)}
+              >
+                <span className="landing-mode-card__number">0{index + 1}</span>
+                <span className="landing-mode-card__icon"><AppIcon name={mode.icon} /></span>
+                <span className="landing-mode-card__copy">
+                  <small>{mode.eyebrow}</small>
+                  <strong>{mode.title}</strong>
+                  <span>{mode.meta}</span>
+                </span>
+                <AppIcon name="arrowForward" />
+              </button>
+            ))}
+          </div>
+
+          <div className={`landing-mode-explorer__panel landing-mode-explorer__panel--${activeMode.tone}`} id={`mode-panel-${activeMode.key}`} role="tabpanel" tabIndex={0}>
+            <div className="landing-mode-explorer__panel-topline">
+              <span><i /> Preview path</span>
+              <span>LOCAL DEMO · NO DATA SAVED</span>
+            </div>
+            <div className="landing-mode-explorer__panel-icon"><AppIcon name={activeMode.icon} /></div>
+            <span className="landing-mode-explorer__panel-eyebrow">{activeMode.eyebrow}</span>
+            <h3>{activeMode.title}</h3>
+            <p>{activeMode.description}</p>
+            <div className="landing-mode-explorer__panel-footer">
+              <span><AppIcon name="check" /> {activeMode.meta}</span>
+              <button className="landing-text-link" type="button" onClick={beginMode}>
+                {user ? 'Open Plant Lab' : 'Try the preview'} <AppIcon name="arrowForward" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function InteractiveLabPreview({ onStart }) {
+  const [values, setValues] = useState({ water: 72, light: 84, temperature: 26 })
+  const [sceneEnabled, setSceneEnabled] = useState(false)
+  const viewportRef = useRef(null)
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return undefined
+    if (!('IntersectionObserver' in window)) {
+      const frame = window.requestAnimationFrame(() => setSceneEnabled(true))
+      return () => window.cancelAnimationFrame(frame)
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return
+      setSceneEnabled(true)
+      observer.disconnect()
+    }, { rootMargin: '320px 0px' })
+
+    observer.observe(viewport)
+    return () => observer.disconnect()
+  }, [])
+
+  const plantState = useMemo(() => {
+    const waterFit = 1 - Math.min(1, Math.abs(values.water - 70) / 70)
+    const lightFit = 1 - Math.min(1, Math.abs(values.light - 80) / 80)
+    const temperatureFit = 1 - Math.min(1, Math.abs(values.temperature - 25) / 18)
+    const balance = Math.round(((waterFit + lightFit + temperatureFit) / 3) * 100)
+    let visualOverrides = { leafColor: '#86bd70', stemColor: '#765b34', leafState: 'upright', stemState: 'upright', scale: 0.9 }
+
+    if (values.temperature >= 34) {
+      visualOverrides = { ...visualOverrides, leafColor: '#8e653b', stemColor: '#65452f', leafState: 'burnt_edges', stemState: 'dry', scale: 0.88 }
+    } else if (values.temperature <= 16) {
+      visualOverrides = { ...visualOverrides, leafColor: '#526f67', stemColor: '#5b5947', leafState: 'drooping', stemState: 'slow', scale: 0.89 }
+    } else if (values.water <= 35) {
+      visualOverrides = { ...visualOverrides, leafColor: '#82704a', stemColor: '#68503a', leafState: 'wilted', stemState: 'soft', scale: 0.86 }
+    } else if (values.water >= 92) {
+      visualOverrides = { ...visualOverrides, leafColor: '#456d58', stemColor: '#554d39', leafState: 'darkened', stemState: 'soft', scale: 0.9 }
+    } else if (values.light <= 34) {
+      visualOverrides = { ...visualOverrides, leafColor: '#a9a85c', stemColor: '#807044', leafState: 'yellowing', stemState: 'thin', scale: 0.88 }
+    } else if (values.light >= 95) {
+      visualOverrides = { ...visualOverrides, leafColor: '#9a7345', stemColor: '#62442d', leafState: 'burnt_edges', stemState: 'dry', scale: 0.88 }
+    }
+
+    const shared = { balance, health: Math.max(18, balance), visualOverrides }
+    if (balance >= 88) return { ...shared, label: 'Stable response', labelTh: 'พืชตอบสนองได้ดี', icon: 'check', tone: 'healthy' }
+    if (balance >= 64) return { ...shared, label: 'Needs a small adjustment', labelTh: 'ควรปรับเล็กน้อย', icon: 'warning', tone: 'watch' }
+    return { ...shared, label: 'Plant under stress', labelTh: 'พืชกำลังเครียด', icon: 'warning', tone: 'danger' }
+  }, [values])
+
+  function updateValue(key, value) {
+    setValues((current) => ({ ...current, [key]: Number(value) }))
+  }
+
+  const controls = [
+    { key: 'water', icon: 'drop', label: 'Water', value: `${values.water}%`, min: 0, max: 100, step: 1 },
+    { key: 'light', icon: 'bolt', label: 'Light', value: `${values.light}%`, min: 0, max: 100, step: 1 },
+    { key: 'temperature', icon: 'temp', label: 'Temperature', value: `${values.temperature}°C`, min: 10, max: 40, step: 1 },
+  ]
+
+  return (
+    <section className="landing-section landing-live-preview" aria-labelledby="live-preview-title">
+      <div className="landing-container">
+        <div className="landing-live-preview__shell" data-reveal="up">
+          <div className="landing-live-preview__copy">
+            <h2 id="live-preview-title">Make one change. See the plant answer.</h2>
+            <p>Drag a control to preview how the lab explains cause and effect. This is a safe browser-only sample—your account and real simulations are untouched.</p>
+            <div className={`landing-live-preview__status landing-live-preview__status--${plantState.tone}`}>
+              <span><AppIcon name={plantState.icon} /></span>
+              <div><strong>{plantState.label}</strong><small>{plantState.labelTh}</small></div>
+            </div>
+            <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
+              <AppIcon name="sprout" /> Start a real growing cycle <AppIcon name="arrowForward" />
+            </button>
+          </div>
+
+          <div className="landing-live-preview__stage">
+            <div className="landing-live-preview__stage-header">
+              <span><i /><i /><i /></span>
+              <strong>PLANT LAB / LOCAL PREVIEW</strong>
+              <span aria-hidden="true" />
+            </div>
+            <div className="landing-live-preview__viewport" ref={viewportRef}>
+              {sceneEnabled && (
+                <Suspense fallback={<div className="landing-live-preview__loading"><i /><span>Loading Elephant Ear model...</span></div>}>
+                  <div className="landing-live-preview__canvas" aria-label="Interactive 3D Elephant Ear plant preview">
+                    <LandingPlantPreview3D
+                      health={plantState.health}
+                      light={values.light}
+                      visualOverrides={plantState.visualOverrides}
+                      water={values.water}
+                    />
+                  </div>
+                </Suspense>
+              )}
+              {!sceneEnabled && <div className="landing-live-preview__loading"><i /><span>3D preview loads when visible</span></div>}
+              <span className="landing-live-preview__orbit-hint"><AppIcon name="move" /> Drag to rotate · Scroll to zoom</span>
+              <div className="landing-live-preview__plant-readout">
+                <span>Plant response</span>
+                <strong>{plantState.label}</strong>
+                <div className="landing-live-preview__mini-meter"><i style={{ '--meter': `${Math.max(8, plantState.balance)}%` }} /></div>
+              </div>
+            </div>
+            <div className="landing-live-preview__controls" aria-label="Preview controls">
+              {controls.map((control) => (
+                <label className="landing-live-control" key={control.key}>
+                  <span className="landing-live-control__label"><span><AppIcon name={control.icon} />{control.label}</span><strong>{control.value}</strong></span>
+                  <input aria-label={`${control.label} preview`} type="range" min={control.min} max={control.max} step={control.step} value={values[control.key]} onChange={(event) => updateValue(control.key, event.target.value)} />
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
   const [selectedJourneyIndex, setSelectedJourneyIndex] = useState(null)
   const selectedJourney = selectedJourneyIndex === null ? null : journeySteps[selectedJourneyIndex]
@@ -402,6 +619,16 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
             </div>
           </div>
         </div>
+
+        <button
+          className="landing-scroll-cue"
+          type="button"
+          aria-label="Scroll to explore"
+          onClick={() => document.querySelector('.landing-home-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          <span>Scroll to explore</span>
+          <i aria-hidden="true" />
+        </button>
       </section>
 
       <div className="landing-home-content particle-network-surface">
@@ -415,6 +642,8 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
             <div><strong>∞</strong><span>experiments to compare</span></div>
           </div>
         </section>
+
+        <ModeExplorer user={user} onStart={onStart} onOpenDemo={onOpenDemo} />
 
       <section className="landing-section landing-game-intro" id="about">
         <div className="landing-container">
@@ -436,6 +665,8 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
       </section>
 
       <ProductTour />
+
+      <InteractiveLabPreview onStart={onStart} />
 
       <section className="landing-section landing-journey" aria-labelledby="journey-title">
         <div className="landing-container">
@@ -1057,9 +1288,10 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
   const [language, setLanguage] = useState(() => loadSettings().language === 'th' ? 'th' : 'en')
   const [theme, setTheme] = useState(() => {
     try {
-      return window.localStorage.getItem(LANDING_THEME_KEY) === 'light' ? 'light' : 'dark'
+      const storedTheme = window.localStorage.getItem(LANDING_THEME_KEY)
+      return storedTheme === 'dark' ? 'dark' : 'light'
     } catch {
-      return 'dark'
+      return 'light'
     }
   })
 

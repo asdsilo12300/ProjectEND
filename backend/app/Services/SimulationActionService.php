@@ -188,7 +188,7 @@ class SimulationActionService
         $cooldownActive = SimulationModifier::query()
             ->where('simulator_id', $simulator->id)
             ->whereHas('action', fn ($query) => $query->where('action_key', $actionKey))
-            ->where(fn ($query) => $query->whereNull('ends_tick')->orWhere('ends_tick', '>=', (int) $simulator->event_tick_count))
+            ->activeAt((int) $simulator->event_tick_count)
             ->exists();
         if ($cooldownActive) {
             throw ValidationException::withMessages([
@@ -263,6 +263,7 @@ class SimulationActionService
     private function createModifiers(Simulator $simulator, SimulationAction $action, string $actionKey, Item $item): void
     {
         $duration = max(1, (int) Arr::get($item->effect_payload ?? [], 'duration_ticks', 1));
+        $durationSeconds = max(5, min(300, (int) Arr::get($item->effect_payload ?? [], 'duration_seconds', 30)));
         $tick = (int) $simulator->event_tick_count;
         $temporary = match ($actionKey) {
             'shade' => ['light' => -10, 'air_temp' => -2],
@@ -276,6 +277,7 @@ class SimulationActionService
                 'simulator_id' => $simulator->id, 'simulation_action_id' => $action->id,
                 'factor_key' => $factor, 'add_value' => $value, 'multiply_value' => 1,
                 'starts_tick' => $tick, 'ends_tick' => $tick + $duration,
+                'expires_at' => now()->addSeconds($durationSeconds),
             ]);
         }
     }
@@ -319,7 +321,7 @@ class SimulationActionService
             'simulator' => $simulator,
             'active_modifiers' => SimulationModifier::query()->where('simulator_id', $action->simulator_id)
                 ->with('action')
-                ->where(fn ($q) => $q->whereNull('ends_tick')->orWhere('ends_tick', '>=', (int) ($simulator->event_tick_count ?? 0)))->get(),
+                ->activeAt((int) ($simulator->event_tick_count ?? 0))->get(),
             'replayed' => $replayed,
         ];
     }

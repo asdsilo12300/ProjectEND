@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --pg-bg: #f4f8f2;
-  --pg-surface: #ffffff;
-  --pg-surface-raised: #e7f1e5;
-  --pg-structure: #173d2a;
-  --pg-border: rgba(35, 93, 61, 0.2);
-  --pg-text: #173323;
-  --pg-text-muted: #587062;
-  --pg-primary: #4f9d67;
-  --pg-primary-strong: #287447;
-  --pg-shop: #e9b95f;
+  --pg-bg: #edf3e9;
+  --pg-surface: #f8faf5;
+  --pg-surface-raised: #dfe9dc;
+  --pg-structure: #294b36;
+  --pg-border: #a9bea9;
+  --pg-text: #203429;
+  --pg-text-muted: #526a5b;
+  --pg-primary: #327d4b;
+  --pg-primary-strong: #28663d;
+  --pg-shop: #b97816;
   --pg-history: #6ca7ef;
   --pg-community: #ac87eb;
   --pg-settings: #69c8b5;
-  --pg-warning: #f0b45d;
-  --pg-danger: #ef7d73;
+  --pg-warning: #a96512;
+  --pg-danger: #b64743;
   --pg-font-sans: "Inter Variable", "Noto Sans Thai Variable", Inter, "Noto Sans Thai", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
 }
 

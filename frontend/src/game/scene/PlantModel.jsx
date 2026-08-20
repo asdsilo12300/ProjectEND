@@ -10,7 +10,7 @@ import { GltfPlant } from './GltfPlant'
 import { useGrowthAnimationPose } from './growthAnimationPose'
 import { collectGenericPestAttachments, usePlantAttachments, useRegisterPlantAttachments } from './plantAttachments'
 import { updateFungusMaterial } from './fungusMaterial'
-import { attachPlantStressPivots, usePlantStressMotion } from './plantStressMotion'
+import { attachPlantStressPivots, attachSunflowerStressPivots, usePlantStressMotion } from './plantStressMotion'
 
 const BASE_PLANT_SCALE = 1.1
 const PLANT_BASE_LOCAL_Y = 1.45
@@ -172,6 +172,7 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
   const stemColor = isHeatScorched
     ? new Color('#4c2d22')
     : overrides.stemColor ? new Color(overrides.stemColor) : null
+  const deadFlowerColor = new Color('#5a3a24')
   const isStressState = (overrides.leafState && overrides.leafState !== 'upright')
     || (overrides.stemState && overrides.stemState !== 'upright')
   const isDead = overrides.leafState === 'dead' || overrides.stemState === 'dead'
@@ -219,8 +220,9 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
       const materialName = material?.name?.toLowerCase?.() ?? ''
       const isLeaf = materialName.includes('leaf') || meshName.includes('leaf')
       const isStem = materialName.includes('stem') || materialName.includes('trunk') || meshName.includes('stem') || meshName.includes('trunk')
+      const isFlower = /petal|flower|bloom|seed|sepal|head/.test(`${materialName} ${meshName}`)
 
-      if (!isLeaf && !isStem) return material
+      if (!isLeaf && !isStem && !isFlower) return material
 
       const nextMaterial = restoreOriginalMaterial(material)
       if (isStressState && nextMaterial.color && leafColor && isLeaf) {
@@ -228,6 +230,12 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
       }
       if (isStressState && nextMaterial.color && stemColor && isStem) {
         nextMaterial.color.lerp(stemColor, stressTintStrength)
+      }
+      if (isDead && nextMaterial.color && isFlower) {
+        // A dead sunflower must not keep its bright yellow, open bloom. The
+        // procedural head rig closes the silhouette while this removes the
+        // remaining healthy flower colour.
+        nextMaterial.color.lerp(deadFlowerColor, 0.92)
       }
       if (isDead) {
         nextMaterial.roughness = 1
@@ -374,7 +382,7 @@ function applyFungusToPlant(object, fungusRisk = 0) {
   })
 }
 
-function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
+function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, windMotion = null, ...props }) {
   const group = useRef(null)
   const clonedSceneRef = useRef(null)
   const morphSignatureRef = useRef(null)
@@ -480,6 +488,12 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     )
     clone.updateMatrixWorld(true)
 
+    // The uploaded Sunflower uses morph targets and has no native skeleton.
+    // Build a lightweight hierarchy at its mature pose so stress can bend the
+    // stem, drop the leaves, bow the flower head, and close the petals without
+    // replacing or fighting the authored growth animation.
+    if (isSunflower) attachSunflowerStressPivots(clone, { upAxis: sourceUpAxis })
+
     if (measurementMixer) {
       measurementMixer.setTime(0)
       measurementMixer.stopAllAction()
@@ -487,7 +501,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
       clone.updateMatrixWorld(true)
     }
 
-    attachPlantStressPivots(clone, { upAxis: sourceUpAxis })
+    if (!isSunflower) attachPlantStressPivots(clone, { upAxis: sourceUpAxis })
     clone.userData.pestAttachments = collectGenericPestAttachments(clone)
 
     return clone
@@ -501,7 +515,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     displayedGrowthProgress,
     isTulip ? TULIP_GROWTH_ANIMATION : GENERIC_MATURE_ANIMATION_FRACTION,
   )
-  usePlantStressMotion(clonedScene.userData?.plantStressPivots, visualOverrides, health, fungusRisk)
+  usePlantStressMotion(clonedScene.userData?.plantStressPivots, visualOverrides, health, fungusRisk, windMotion)
 
   useLayoutEffect(() => {
     clonedSceneRef.current = clonedScene
@@ -560,7 +574,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
   )
 }
 
-export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
+export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, windMotion = null, ...props }) {
   const effectiveVisualOverrides = useMemo(
     () => getEffectiveVisualOverrides(visualOverrides, health),
     [health, visualOverrides],
@@ -570,7 +584,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
     return (
       <group {...props}>
         <PlantPresentationGroup visualOverrides={effectiveVisualOverrides}>
-          <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} />
+          <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} windMotion={windMotion} />
         </PlantPresentationGroup>
       </group>
     )
@@ -578,7 +592,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
 
   const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
 
-  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} {...props} />
+  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} windMotion={windMotion} {...props} />
 }
 
 const pestAnchors = {

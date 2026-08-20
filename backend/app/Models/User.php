@@ -79,6 +79,11 @@ class User extends Authenticatable
         return $this->hasMany(PlantHistory::class);
     }
 
+    public function issueReports(): HasMany
+    {
+        return $this->hasMany(IssueReport::class, 'reporter_id');
+    }
+
     public function userItems(): HasMany
     {
         return $this->hasMany(UserItem::class);

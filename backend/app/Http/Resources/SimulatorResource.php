@@ -115,7 +115,7 @@ class SimulatorResource extends JsonResource
                     'ends_tick' => (int) $event->ends_tick,
                 ])->values()),
             'active_modifiers' => $this->whenLoaded('modifiers', fn () => $this->modifiers
-                ->where(fn ($modifier) => $modifier->ends_tick === null || $modifier->ends_tick >= (int) $this->event_tick_count)
+                ->filter(fn ($modifier) => $modifier->isActiveAt((int) $this->event_tick_count))
                 ->map(fn ($modifier) => [
                     'id' => $modifier->id,
                     'action_key' => $modifier->action?->action_key,
@@ -125,6 +125,10 @@ class SimulatorResource extends JsonResource
                     'multiply_value' => (float) $modifier->multiply_value,
                     'starts_tick' => (int) $modifier->starts_tick,
                     'ends_tick' => $modifier->ends_tick === null ? null : (int) $modifier->ends_tick,
+                    'expires_at' => $modifier->expires_at?->toIso8601String(),
+                    'remaining_seconds' => $modifier->expires_at === null
+                        ? null
+                        : max(0, (int) ceil(now()->diffInMilliseconds($modifier->expires_at, false) / 1000)),
                 ])->values()),
             'plant' => new PlantResource($this->whenLoaded('plant')),
             'started_at' => $this->started_at,

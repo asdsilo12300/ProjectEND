@@ -1,4 +1,4 @@
-export const TUTORIAL_VERSION = 4
+export const TUTORIAL_VERSION = 5
 
 export const tutorialCatalog = {
   lab: {
@@ -99,6 +99,24 @@ export const tutorialCatalog = {
         description: {
           en: 'Important events appear as a centered alert and recommend a matching item. New players receive a grace period; harmful events have cooldowns and never stack more than one at a time.',
           th: 'เหตุการณ์สำคัญจะแจ้งกลางจอพร้อมแนะนำไอเทมรับมือ ผู้เล่นใหม่มีช่วงปลอดภัย เหตุการณ์อันตรายมี Cooldown และจะไม่เกิดซ้อนกันเกินหนึ่งรายการ',
+        },
+      },
+      {
+        icon: 'chat',
+        targets: ['[data-panel-id="comments"]', '[data-tour="mobile-panel-dock"]'],
+        title: { en: 'Share observations in Comments', th: 'แบ่งปันข้อสังเกตในความคิดเห็น' },
+        description: {
+          en: 'Use Comments to discuss the selected plant. Each observation shows its author and updates without refreshing the page. In Demo, messages are sample interactions and are not saved to an account.',
+          th: 'ใช้หน้าต่างความคิดเห็นเพื่อพูดคุยเกี่ยวกับพืชที่เลือก แต่ละข้อความจะแสดงผู้เขียนและอัปเดตโดยไม่ต้องรีเฟรชหน้า ในโหมด Demo ข้อความเป็นเพียงการทดลองและจะไม่บันทึกลงบัญชี',
+        },
+      },
+      {
+        icon: 'groups',
+        targets: ['[data-panel-id="friends"]', '[data-tour="mobile-panel-dock"]'],
+        title: { en: 'Explore gardens from Friends', th: 'สำรวจสวนผ่านหน้าต่างเพื่อน' },
+        description: {
+          en: 'Search the friend list, review requests and online status, then open Garden to learn how visiting another simulation works. Demo friend data is interactive preview data only.',
+          th: 'ค้นหารายชื่อเพื่อน ดูคำขอและสถานะออนไลน์ แล้วกดดูสวนเพื่อเรียนรู้การเยี่ยมชมระบบจำลองของผู้อื่น ข้อมูลเพื่อนใน Demo เป็นข้อมูลตัวอย่างสำหรับทดลองเท่านั้น',
         },
       },
       {

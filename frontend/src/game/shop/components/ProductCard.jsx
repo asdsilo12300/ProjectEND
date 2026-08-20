@@ -46,6 +46,7 @@ function CoinPrice({ className = '', price }) {
 
 export function ProductCard({ copy, isBuying = false, isFavorite, item, onBuy, onToggleFavorite }) {
   const category = item.category === 'Lab Item' ? copy.labItem : item.category === 'Friend Prank' ? copy.friendPrank : item.category
+  const hideSupplyDescription = ['water', 'fertilizer'].includes(item.visual)
 
   return (
     <article className="group flex min-h-full flex-col rounded-2xl bg-[#121c17] p-3.5 ring-1 ring-[#31463a]/70 transition hover:-translate-y-0.5 hover:ring-[#5ee49c]/55 focus-within:ring-[#5ee49c]/65 motion-reduce:transform-none">
@@ -58,7 +59,7 @@ export function ProductCard({ copy, isBuying = false, isFavorite, item, onBuy, o
       <div className="mt-3 min-w-0 flex-1">
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#75dca0]">{category}</p>
         <h3 className="mt-1 truncate text-sm font-black text-slate-50">{item.name}</h3>
-        {item.description ? <p className="mt-1.5 line-clamp-2 min-h-9 text-xs leading-[1.15rem] text-slate-400">{item.description}</p> : null}
+        {!hideSupplyDescription && item.description ? <p className="mt-1.5 line-clamp-2 min-h-9 text-xs leading-[1.15rem] text-slate-400">{item.description}</p> : null}
       </div>
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
         <span className="min-w-0">

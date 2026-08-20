@@ -32,7 +32,7 @@ function getStressPalette(leafState) {
   return ['#6f4a2a', '#d1b06a', '#4f3d24']
 }
 
-export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, ...props }) {
+export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, windMotion = null, ...props }) {
   const group = useRef(null)
   const { scene, animations } = useGLTF(modelUrl)
   const clone = useMemo(() => {
@@ -55,7 +55,7 @@ export function GltfPlant({ modelUrl = '/plant.gltf', visualOverrides = {}, fung
   const targetStemColor = useMemo(() => new Color(visualOverrides?.stemColor ?? '#7a5a2f'), [visualOverrides?.stemColor])
   const stressPalette = getStressPalette(leafState)
   useGrowthAnimationPose(actions, mixer, isMature ? 1 : progress)
-  usePlantStressMotion(clone.userData?.elephantEarStressPivots, visualOverrides, health, fungusRisk)
+  usePlantStressMotion(clone.userData?.elephantEarStressPivots, visualOverrides, health, fungusRisk, windMotion)
   useRegisterPlantAttachments(clone.userData?.pestAttachments)
 
   useEffect(() => {

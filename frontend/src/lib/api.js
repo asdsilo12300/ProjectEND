@@ -117,11 +117,12 @@ export async function apiFetch(path, options = {}) {
   }
 
   const request = (async () => {
+    const isMultipart = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...fetchOptions,
       headers: {
         Accept: 'application/json',
-        'Content-Type': 'application/json',
+        ...(!isMultipart ? { 'Content-Type': 'application/json' } : {}),
         ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
         ...(fetchOptions.headers ?? {}),
       },
@@ -163,6 +164,52 @@ export async function apiFetch(path, options = {}) {
   }
 
   return request
+}
+
+export async function apiFetchBlob(path) {
+  const token = getToken()
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { Accept: 'image/*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  })
+  if (!response.ok) throw new Error('Unable to load the protected attachment.')
+  return response.blob()
+}
+
+export function createIssueReport(formData) {
+  return apiFetch('/issue-reports', { method: 'POST', body: formData })
+}
+
+export function getIssueReports(page = 1) {
+  return apiFetch(`/issue-reports?page=${page}`, { cache: 'no-store' })
+}
+
+export function getIssueReport(id) {
+  return apiFetch(`/issue-reports/${id}`, { cache: 'no-store' })
+}
+
+export function getIssueAttachment(reportId, attachmentId) {
+  return apiFetchBlob(`/issue-reports/${reportId}/attachments/${attachmentId}`)
+}
+
+export function getAdminIssueReports(filters = {}) {
+  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '' && value != null)).toString()
+  return apiFetch(`/admin/issue-reports${query ? `?${query}` : ''}`, { cache: 'no-store' })
+}
+
+export function getAdminIssueReportSummary() {
+  return apiFetch('/admin/issue-reports/summary', { cache: 'no-store' })
+}
+
+export function getAdminIssueReport(id) {
+  return apiFetch(`/admin/issue-reports/${id}`, { cache: 'no-store' })
+}
+
+export function markAdminIssueReportSeen(id) {
+  return apiFetch(`/admin/issue-reports/${id}/seen`, { method: 'POST', body: '{}' })
+}
+
+export function updateAdminIssueReportStatus(id, payload) {
+  return apiFetch(`/admin/issue-reports/${id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
 export async function getShopItems() {

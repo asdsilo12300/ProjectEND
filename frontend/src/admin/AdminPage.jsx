@@ -16,6 +16,7 @@ import {
   getAdminResource,
   getAdminResourceLookups,
   getAdminUsers,
+  getAdminIssueReportSummary,
   restoreAdminContent,
   restoreAdminResource,
   saveAdminResource,
@@ -26,6 +27,7 @@ import {
   uploadAdminImage,
   uploadAdminModelBundle,
 } from '../lib/api'
+import { IssueReportsAdminView } from './IssueReportsAdminView'
 import './AdminPage.css'
 
 const ContentRichEditor = lazy(() => import('./ContentRichEditor').then((module) => ({ default: module.ContentRichEditor })))
@@ -211,6 +213,9 @@ const navigationGroups = [
   { label: 'MODERATION', items: [
     { id: 'community', icon: 'chat', label: 'Posts & comments' },
     { id: 'simulations', icon: 'controller', label: 'Simulation records' },
+  ] },
+  { label: 'SUPPORT', items: [
+    { id: 'reports', icon: 'warning', label: 'Problem reports' },
   ] },
   { label: 'AUDIT', items: [
     { id: 'activity', icon: 'history', label: 'Admin activity' },
@@ -2146,6 +2151,7 @@ export function AdminPage({ user, onLogout }) {
   const [trendSelection, setTrendSelection] = useState(defaultTrendSelection)
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
   const [refreshState, setRefreshState] = useState('connecting')
+  const [unseenReportCount, setUnseenReportCount] = useState(0)
   const contentFiltersRef = useRef({})
   const userFiltersRef = useRef({})
   const usersPayloadRef = useRef(null)
@@ -2168,7 +2174,8 @@ export function AdminPage({ user, onLogout }) {
     community: ['Community moderation', 'Review posts and moderate comments across community and simulation sessions.'],
     simulations: ['Simulation records', 'Review simulation runs and harvested plant histories.'],
     activity: ['Administrator activity', 'Review an immutable audit trail of management actions.'],
-  }[section]), [section])
+    reports: [language === 'th' ? 'รายงานปัญหา' : 'Problem reports', language === 'th' ? 'ตรวจสอบหลักฐาน เปลี่ยนสถานะ และแจ้งความคืบหน้าแก่ผู้ใช้' : 'Review immutable evidence, update status, and publish progress to reporters.'],
+  }[section]), [language, section])
   const refreshIntervalSeconds = section === 'dashboard' ? ADMIN_DASHBOARD_REFRESH_MS / 1000 : ADMIN_TABLE_REFRESH_MS / 1000
 
   const loadDashboard = useCallback(async ({ silent = false, selection = trendSelectionRef.current } = {}) => {
@@ -2242,8 +2249,19 @@ export function AdminPage({ user, onLogout }) {
     if (nextSection === 'dashboard') loadDashboard()
     if (nextSection === 'contents') loadContents()
     if (nextSection === 'users') loadUsers()
+    if (nextSection === 'reports') { setError(''); setStatus('ready'); setRefreshState('connected'); setLastUpdatedAt(new Date()) }
     if (resourceGroups[nextSection]) { setError(''); setStatus('ready'); setRefreshState('connected'); setLastUpdatedAt(new Date()) }
   }, [loadContents, loadDashboard, loadUsers])
+
+  const loadReportSummary = useCallback(async () => {
+    try { const payload = await getAdminIssueReportSummary(); setUnseenReportCount(Number(payload.data?.unseen ?? 0)) } catch { /* Keep navigation usable if support summary is temporarily unavailable. */ }
+  }, [])
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(loadReportSummary, 0)
+    const timer = window.setInterval(() => { if (document.visibilityState !== 'hidden') loadReportSummary() }, 15000)
+    return () => { window.clearTimeout(initialTimer); window.clearInterval(timer) }
+  }, [loadReportSummary])
 
   function openSection(nextSection) {
     if (!validAdminSections.has(nextSection)) return
@@ -2334,7 +2352,7 @@ export function AdminPage({ user, onLogout }) {
           {navigationGroups.map((group) => (
             <div className="admin-nav-group" key={group.label}>
               <small>{group.label}</small>
-              {group.items.filter((item) => !hiddenAdminNavigationItems.has(item.id)).map((item) => <button className={section === item.id ? 'is-active' : ''} type="button" key={item.id} title={preferences.collapsed ? item.label : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{item.label}</b><span /></button>)}
+              {group.items.filter((item) => !hiddenAdminNavigationItems.has(item.id)).map((item) => <button className={section === item.id ? 'is-active' : ''} type="button" key={item.id} title={preferences.collapsed ? item.label : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{item.id === 'reports' && language === 'th' ? 'รายงานปัญหา' : item.label}</b>{item.id === 'reports' && unseenReportCount > 0 ? <em className="admin-nav-badge">{unseenReportCount > 99 ? '99+' : unseenReportCount}</em> : <span />}</button>)}
             </div>
           ))}
         </nav>
@@ -2359,6 +2377,7 @@ export function AdminPage({ user, onLogout }) {
           {status === 'ready' && section === 'dashboard' && <DashboardView data={dashboard} trendSelection={trendSelection} onChangeTrendSelection={changeTrendSelection} onOpenSection={openSection} theme={preferences.theme} />}
           {status === 'ready' && section === 'contents' && <ContentsView contents={contents} onRefresh={loadContents} />}
           {status === 'ready' && section === 'users' && <UsersView currentUser={user} usersPayload={users} onRefresh={loadUsers} />}
+          {status === 'ready' && section === 'reports' && <IssueReportsAdminView language={language} onSeenChange={loadReportSummary} />}
           {status === 'ready' && resourceGroups[section] && <ResourceView key={section} groupKey={section} />}
         </div>
       </section>

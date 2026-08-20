@@ -34,7 +34,7 @@ class SimulationEventService
                 }
             }
             $modifiers = SimulationModifier::query()->with('action')->where('simulator_id', $simulator->id)
-                ->where('starts_tick', '<=', $tick)->where(fn ($q) => $q->whereNull('ends_tick')->orWhere('ends_tick', '>=', $tick))->get();
+                ->activeAt($tick)->get();
             foreach ($modifiers as $modifier) {
                 if (array_key_exists($modifier->factor_key, $factors)) {
                     $factors[$modifier->factor_key] = (($factors[$modifier->factor_key] ?? 0) + $modifier->add_value) * $modifier->multiply_value;

@@ -38,6 +38,7 @@ const CommunityPage = lazy(() => import('./game/community/CommunityPage').then((
 const HistoryPage = lazy(() => import('./game/history/HistoryPage').then((module) => ({ default: module.HistoryPage })))
 const SettingsPage = lazy(() => import('./game/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const ShopPage = lazy(() => import('./game/shop/ShopPage').then((module) => ({ default: module.ShopPage })))
+const IssueReportsPage = lazy(() => import('./support/IssueReportsPage').then((module) => ({ default: module.IssueReportsPage })))
 const SimulationStage = lazy(() => import('./game/scene/SimulationStage').then((module) => ({ default: module.SimulationStage })))
 
 const plantKnowledgeAutoOpenPrefix = 'plant-growth-academy:plant-knowledge:auto-opened'
@@ -3711,11 +3712,13 @@ function App() {
           user={user}
           onBack={() => navigateToPage(settingsReturnPage)}
         />
+      ) : activePage === 'support' ? (
+        <IssueReportsPage onBack={() => navigateToPage('lab')} />
       ) : (
         <>
           {labReady && (
             <>
-              <LibrarySidebar activeEvents={previewSimulationVisual?.events ?? []} seasonalContext={previewSimulationVisual?.seasonal_context} busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
+              <LibrarySidebar activeEvents={previewSimulationVisual?.events ?? []} activeModifiers={previewSimulationVisual?.active_modifiers ?? []} seasonalContext={previewSimulationVisual?.seasonal_context} busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
               <SimulationStage
                 actionState={actionState}
                 coinBurst={coinBurst}

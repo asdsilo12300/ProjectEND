@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { ACTION_MODEL_URLS } from './actionModelAssets'
 
@@ -302,7 +302,7 @@ function WindbreakPanel({ position, rotation = [0, 0, 0] }) {
   )
 }
 
-function Windbreak({ active, plantScale = 1 }) {
+function Windbreak({ plantScale = 1 }) {
   const fittedScale = THREE.MathUtils.clamp(Number(plantScale) || 1, 0.82, 1.24)
   const heightScale = 0.92 + (fittedScale - 0.82) * 0.24
   const perimeter = 1.22
@@ -312,7 +312,6 @@ function Windbreak({ active, plantScale = 1 }) {
       <WindbreakPanel position={[0, 0, -perimeter]} />
       <WindbreakPanel position={[-perimeter, 0, 0]} rotation={[0, Math.PI / 2, 0]} />
       <WindbreakPanel position={[perimeter, 0, 0]} rotation={[0, Math.PI / 2, 0]} />
-      <group position={[-1.72, 0.55, 0.1]}><WindLines active={active} color="#d4f4ff" /></group>
     </group>
   )
 }
@@ -495,7 +494,19 @@ function modifierKey(modifier) {
 }
 
 export function ActiveCareEffects({ modifiers = [], plantingSurface, plantScale = 1 }) {
-  const keys = useMemo(() => new Set(modifiers.map(modifierKey).filter(Boolean)), [modifiers])
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const hasTimedModifier = modifiers.some((modifier) => Boolean(modifier?.expires_at))
+
+  useEffect(() => {
+    if (!hasTimedModifier) return undefined
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [hasTimedModifier])
+
+  const keys = useMemo(() => new Set(modifiers
+    .filter((modifier) => !modifier?.expires_at || Date.parse(modifier.expires_at) > currentTime)
+    .map(modifierKey)
+    .filter(Boolean)), [currentTime, modifiers])
   const surfacePosition = plantingSurface?.position ?? [0.75, -0.38, 0]
 
   return (
