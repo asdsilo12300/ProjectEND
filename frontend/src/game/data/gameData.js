@@ -15,7 +15,7 @@ export const imageAssets = {
   temp: '/game-icons/temperature.png',
   wateringCan: '/game-icons/care/watering-can.jpg',
   fertilizerCare: '/game-icons/fertilizer-photoroom.png',
-  strawMulch: '/game-icons/care/straw-mulch.jpg',
+  strawMulch: '/game-icons/care/straw-mulch-retention.png',
   shadeCloth: '/game-icons/care/shade-cloth.jpg',
   windbreak: '/game-icons/care/windbreak.jpg',
   frostCover: '/game-icons/care/frost-cover.jpg',

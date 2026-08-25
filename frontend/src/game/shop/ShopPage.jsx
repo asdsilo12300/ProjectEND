@@ -228,84 +228,29 @@ export function ShopPage({ coinBalance = 0, onInventoryItemChange, onUserUpdate 
     })
   }
 
-  async function buyItem(item) {
+  async function buyItem(item, selectedQuantity = 1) {
     if (!item.backendId) {
       setShopNotice({ type: 'error', text: copy.buyUnavailable })
       return
     }
 
     const maximumAffordableQuantity = item.price > 0
-      ? Math.min(99, Math.max(1, Math.floor(Number(coinBalance) / item.price)))
+      ? Math.min(99, Math.max(0, Math.floor(Number(coinBalance) / item.price)))
       : 99
-    const quantityLimit = Math.max(1, maximumAffordableQuantity)
-    const totalPriceId = `plantsim-shop-total-${item.backendId}`
+    const quantity = Number(selectedQuantity)
+
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+      setShopNotice({ type: 'error', text: copy.quantityError })
+      return
+    }
+
+    if (item.price > 0 && quantity > maximumAffordableQuantity) {
+      setShopNotice({ type: 'error', text: copy.notEnoughCurrency })
+      return
+    }
+
     const safeItemName = escapeHtml(item.name)
     const safeImageUrl = escapeHtml(item.imageUrl)
-    const confirmation = await Swal.fire({
-      title: copy.confirmTitle(item.name),
-      html: `
-        <div class="plantsim-shop-confirm">
-          ${item.imageUrl ? `<img class="plantsim-shop-confirm__item" src="${safeImageUrl}" alt="">` : ''}
-          <div class="plantsim-shop-confirm__price" aria-label="${copy.totalPrice}">
-            <img src="${imageAssets.coin}" alt="">
-            <span>${copy.totalPrice}</span>
-            <strong id="${totalPriceId}">${item.price}</strong>
-          </div>
-          <p>${copy.confirmDescription}</p>
-          <small class="plantsim-shop-confirm__hint">${copy.quantityHint}</small>
-        </div>
-      `,
-      input: 'number',
-      inputLabel: copy.quantity,
-      inputValue: 1,
-      inputAttributes: {
-        min: '1',
-        max: String(quantityLimit),
-        step: '1',
-        inputmode: 'numeric',
-      },
-      showCancelButton: true,
-      confirmButtonText: copy.confirmBuy,
-      cancelButtonText: copy.cancel,
-      background: '#101511',
-      color: '#eaf7df',
-      buttonsStyling: false,
-      reverseButtons: true,
-      customClass: {
-        popup: 'plantsim-shop-alert',
-        title: 'plantsim-shop-alert__title',
-        actions: 'plantsim-shop-alert__actions',
-        confirmButton: 'plantsim-shop-alert__confirm',
-        cancelButton: 'plantsim-shop-alert__cancel',
-        input: 'plantsim-shop-alert__quantity',
-      },
-      didOpen: () => {
-        const input = Swal.getInput()
-        const total = document.getElementById(totalPriceId)
-        const updateTotal = () => {
-          const quantity = Math.min(quantityLimit, Math.max(1, Number.parseInt(input?.value ?? '1', 10) || 1))
-          if (total) total.textContent = String(item.price * quantity)
-        }
-        input?.addEventListener('input', updateTotal)
-        input?.select()
-        updateTotal()
-      },
-      preConfirm: (value) => {
-        const quantity = Number(value)
-        if (!Number.isInteger(quantity) || quantity < 1 || quantity > quantityLimit) {
-          Swal.showValidationMessage(
-            quantity > maximumAffordableQuantity && item.price > 0
-              ? copy.notEnoughCurrency
-              : copy.quantityError,
-          )
-          return false
-        }
-        return quantity
-      },
-    })
-
-    if (!confirmation.isConfirmed) return
-    const quantity = Number(confirmation.value)
     const totalPrice = item.price * quantity
     const finalConfirmation = await Swal.fire({
       title: copy.finalConfirmTitle,
@@ -445,6 +390,7 @@ export function ShopPage({ coinBalance = 0, onInventoryItemChange, onUserUpdate 
             {catalogStatus === 'ready' ? <ShopToolbar copy={copy} endIndex={endIndex} sortMode={sortMode} startIndex={startIndex} totalCount={filteredItems.length} onSortChange={updateSortMode} /> : null}
             <ProductGrid
               buyingId={buyingId}
+              coinBalance={coinBalance}
               copy={copy}
               error={catalogStatus === 'error'}
               favoriteIds={favoriteIds}

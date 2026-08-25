@@ -192,6 +192,64 @@ class SimulationActionServiceTest extends TestCase
         });
     }
 
+    public function test_mulch_is_rejected_when_no_availability_condition_is_met(): void
+    {
+        [$simulator, $item] = $this->seedMulchSimulation();
+
+        try {
+            app(SimulationActionService::class)->apply($simulator, 1, [
+                'client_action_id' => '0f91a5d9-c434-4b2f-ac13-c3c777df4ac2',
+                'action_key' => 'mulch', 'item_id' => $item->id,
+                'observed_precipitation' => 8, 'target_value' => null, 'event_id' => null,
+            ]);
+            $this->fail('Mulch must remain locked in normal growing conditions.');
+        } catch (ValidationException) {
+            $this->assertSame(2, (int) UserItem::query()->firstOrFail()->quantity);
+            $this->assertSame(0, SimulationAction::query()->count());
+        }
+    }
+
+    public function test_mulch_is_allowed_for_heavy_rain_low_soil_moisture_or_hot_soil(): void
+    {
+        $conditions = [
+            ['rain' => 25, 'soil_humidity' => 50, 'soil_temp' => 24],
+            ['rain' => 0, 'soil_humidity' => 39, 'soil_temp' => 24],
+            ['rain' => 0, 'soil_humidity' => 50, 'soil_temp' => 33],
+        ];
+
+        foreach ($conditions as $index => $condition) {
+            $this->buildSchema();
+            [$simulator, $item] = $this->seedMulchSimulation();
+            $simulator->update([
+                'soil_humidity' => $condition['soil_humidity'],
+                'soil_temp' => $condition['soil_temp'],
+            ]);
+
+            $result = app(SimulationActionService::class)->apply($simulator->fresh(), 1, [
+                'client_action_id' => sprintf('10000000-0000-4000-8000-%012d', $index + 1),
+                'action_key' => 'mulch', 'item_id' => $item->id,
+                'observed_precipitation' => $condition['rain'], 'target_value' => null, 'event_id' => null,
+            ]);
+
+            $this->assertSame(1, (int) $result['inventory_quantity']);
+            $this->assertSame(['water', 'soil_humidity'], SimulationModifier::query()->pluck('factor_key')->all());
+        }
+    }
+
+    /** @return array{Simulator, Item} */
+    private function seedMulchSimulation(): array
+    {
+        [$simulator, $item] = $this->seedSimulation('outdoor');
+        $item->update([
+            'name' => 'Straw Mulch', 'type' => 'booster',
+            'action_key' => 'mulch', 'effect_type' => 'environment:mulch',
+            'effect_payload' => ['duration_ticks' => 2, 'duration_seconds' => 30],
+            'animation_key' => 'straw-mulch', 'mode_scope' => 'outdoor',
+        ]);
+
+        return [$simulator, $item];
+    }
+
     /** @return array{Simulator, Item} */
     private function seedSimulation(string $mode): array
     {
@@ -226,7 +284,7 @@ class SimulationActionServiceTest extends TestCase
 
     private function buildSchema(): void
     {
-        foreach (['simulation_modifiers', 'simulation_actions', 'user_items', 'items', 'simulators', 'plants'] as $table) {
+        foreach (['simulation_weather_days', 'simulation_modifiers', 'simulation_actions', 'user_items', 'items', 'simulators', 'plants'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -274,6 +332,10 @@ class SimulationActionServiceTest extends TestCase
             $table->decimal('add_value', 8, 2)->default(0); $table->decimal('multiply_value', 8, 4)->default(1);
             $table->integer('starts_tick')->default(0); $table->integer('ends_tick')->nullable(); $table->timestamps();
             $table->timestamp('expires_at')->nullable();
+        });
+        Schema::create('simulation_weather_days', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('simulator_id'); $table->integer('day_index');
+            $table->decimal('precipitation', 8, 2)->default(0); $table->timestamps();
         });
     }
 }

@@ -4,6 +4,14 @@ const nowIso = () => new Date().toISOString()
 const agoIso = (minutes) => new Date(Date.now() - (minutes * 60_000)).toISOString()
 const clone = (value) => value == null ? value : structuredClone(value)
 
+const simulationModeRewards = [
+  { mode: 'greenhouse', name_en: 'Controlled Environment', name_th: 'โหมดควบคุมปัจจัย', experience_reward: 20, coin_reward: 20, is_active: true },
+  { mode: 'outdoor', name_en: 'Outdoor', name_th: 'โหมดกลางแจ้ง', experience_reward: 150, coin_reward: 200, is_active: true },
+  { mode: 'seasonal', name_en: 'Seasonal Journey', name_th: 'โหมดปลูกตามฤดูกาล', experience_reward: 300, coin_reward: 500, is_active: true },
+]
+
+const rewardForMode = (mode) => simulationModeRewards.find((reward) => reward.mode === mode) ?? simulationModeRewards[0]
+
 const fallbackPlants = [
   {
     id: 1,
@@ -47,7 +55,7 @@ const fallbackItems = [
   { id: 7, name: 'Snail Prank', type: 'friend_prank', description: 'Send a snail to a friend garden.', image_url: '/game-icons/snail.png', effect_type: 'friend_pest:snail' },
   { id: 8, name: 'Watering Dose', type: 'water', description: 'Restores 22% of the active plant water reserve.', effect_type: 'environment:water', effect_value: 22, action_key: 'water', animation_key: 'watering-can', mode_scope: 'both' },
   { id: 9, name: 'Fertilizer Dose', type: 'fertilizer', description: 'Restores 18% of the active plant nutrient reserve.', effect_type: 'environment:fertilizer', effect_value: 18, action_key: 'fertilizer', animation_key: 'fertilizer-pour', mode_scope: 'both' },
-  { id: 10, name: 'Drainage Mix', type: 'booster', description: 'Reduce excessive outdoor soil moisture.', effect_type: 'environment:drainage', action_key: 'drainage', animation_key: 'soil-mix', mode_scope: 'outdoor' },
+  { id: 10, name: 'Straw Mulch', type: 'booster', description: 'Slow evaporation so water and soil moisture last longer.', effect_type: 'environment:mulch', effect_value: 20, action_key: 'mulch', animation_key: 'straw-mulch', mode_scope: 'outdoor', image_url: '/game-icons/care/straw-mulch-retention.png' },
   { id: 11, name: 'Shade Cloth', type: 'booster', description: 'Protect an outdoor plant from intense heat and light.', effect_type: 'environment:shade', action_key: 'shade', animation_key: 'shade-cover', mode_scope: 'outdoor' },
   { id: 12, name: 'Windbreak', type: 'booster', description: 'Protect an outdoor plant from strong wind.', effect_type: 'environment:windbreak', action_key: 'windbreak', animation_key: 'windbreak', mode_scope: 'outdoor' },
   { id: 13, name: 'Frost Cover', type: 'booster', description: 'Protect an outdoor plant from sudden cold.', effect_type: 'environment:frost-cover', action_key: 'frost-cover', animation_key: 'frost-cover', mode_scope: 'outdoor' },
@@ -160,7 +168,7 @@ function createDemoSeasonalContext({ calendarDay = 0, biologicalDays = 0, latitu
       source: 'historical_reanalysis',
       is_forecast: false,
       risk,
-      recommended_action: risk === 'heavy_rain' ? 'drainage' : risk === 'heat_wave' ? 'shade' : risk === 'strong_wind' ? 'windbreak' : null,
+      recommended_action: risk === 'heavy_rain' ? 'mulch' : risk === 'heat_wave' ? 'shade' : risk === 'strong_wind' ? 'windbreak' : null,
     }
   }
   const days = Array.from({ length: 6 }, (_, index) => makeDay(index))
@@ -241,7 +249,7 @@ function createSimulator(plant = fallbackPlants[0], overrides = {}) {
     active_seconds: Number(overrides.active_seconds ?? 245),
     owner: overrides.owner ?? { id: demoUserTemplate.id, username: demoUserTemplate.username, avatar_url: null, level: demoUserTemplate.level },
     maturity_reward_claimed_at: null,
-    maturity_reward_amount: 100,
+    maturity_reward_amount: rewardForMode(overrides.mode ?? 'greenhouse').coin_reward,
     current_stage: currentStage,
     current_model_url: currentStage?.model_url ?? plant.base_model_url,
     pest_risks: overrides.pest_risks ?? { Snail: 4, Aphid: 6, Fungus: 2, snail: 4, aphid: 6, fungus: 2 },
@@ -315,11 +323,11 @@ function makeFriend(plants) {
 }
 
 function initialInventory() {
-  return fallbackItems.map((item, index) => ({ id: 9600 + index, user_id: demoUserTemplate.id, item_id: item.id, quantity: [3, 2, 2, 1, 1, 1, 4, 3, 2, 2, 2, 2][index] ?? 1, item }))
+  return fallbackItems.map((item, index) => ({ id: 9600 + index, user_id: demoUserTemplate.id, item_id: item.id, quantity: [3, 2, 2, 1, 1, 1, 4, 3, 2, 2, 2, 2, 2][index] ?? 1, item }))
 }
 
 function initialShopItems() {
-  const prices = { 2: 50, 3: 25, 4: 50, 5: 50, 6: 100, 7: 100, 8: 20, 9: 25, 10: 35, 11: 40, 12: 40, 13: 40 }
+  const prices = { 2: 50, 3: 25, 4: 50, 5: 50, 6: 100, 7: 100, 8: 20, 9: 25, 10: 30, 11: 40, 12: 40, 13: 40 }
 
   return fallbackItems.map((item, index) => ({
     id: 9650 + index,
@@ -503,6 +511,7 @@ export async function handleDemoApiRequest(path, options = {}) {
   // active. This prevents the sandbox from silently falling through to the
   // production API even for endpoints that normally allow guest access.
   if (cleanPath === '/plants' && method === 'GET') return { handled: true, payload: { data: clone(session.plants) } }
+  if (cleanPath === '/simulation-mode-rewards' && method === 'GET') return { handled: true, payload: { data: clone(simulationModeRewards) } }
   if (/^\/plants\/[^/]+$/.test(cleanPath) && method === 'GET') {
     const plantId = cleanPath.split('/')[2]
     return { handled: true, payload: { data: clone(session.plants.find((plant) => String(plant.id) === String(plantId)) ?? null) } }
@@ -569,6 +578,20 @@ export async function handleDemoApiRequest(path, options = {}) {
     const item = itemEntry?.item ?? fallbackItems.find((entry) => Number(entry.id) === itemId)
     const actionKey = String(body.action_key || item?.action_key || item?.effect_type || '')
     const activeSimulator = session.simulators.find((entry) => String(entry.id) === String(simulatorId))
+    if (actionKey === 'mulch') {
+      const plant = session.plants.find((entry) => Number(entry.id) === Number(activeSimulator?.plant_id)) ?? {}
+      const rain = Math.max(0, Number(body.observed_precipitation ?? activeSimulator?.seasonal_context?.current?.precipitation ?? 0))
+      const minimumSoilMoisture = Number(plant?.environment?.soil_humidity?.min ?? 35)
+      const maximumSoilTemperature = Number(plant?.environment?.soil_temp?.max ?? 30)
+      const eligible = rain >= 25
+        || Number(activeSimulator?.soil_humidity ?? 0) < minimumSoilMoisture
+        || Number(activeSimulator?.soil_temp ?? 0) > maximumSoilTemperature
+      if (!eligible) {
+        const error = new Error('Straw Mulch requires heavy rain, low soil moisture, or excessive soil heat.')
+        error.status = 422
+        throw error
+      }
+    }
     if (itemId && ['water', 'fertilizer'].includes(actionKey) && Number(activeSimulator?.[actionKey] ?? 0) >= 100) {
       const error = new Error(actionKey === 'water'
         ? 'The plant water reserve is already full.'
@@ -585,13 +608,14 @@ export async function handleDemoApiRequest(path, options = {}) {
       const updated = { ...current, updated_at: nowIso(), state_version: Number(current.state_version ?? 0) + 1 }
       if (actionKey.includes('water')) updated.water = Math.min(100, Number(current.water) + Number(item?.effect_value ?? 22))
       if (actionKey.includes('fertilizer')) updated.fertilizer = Math.min(100, Number(current.fertilizer) + Number(item?.effect_value ?? 18))
+      if (actionKey.includes('mulch')) updated.soil_humidity = Number(current.soil_humidity)
       if (actionKey.includes('soil') && !actionKey.includes('drainage')) updated.soil_humidity = Math.min(100, Number(body.target_value ?? Number(current.soil_humidity) + 8))
       if (actionKey.includes('drainage')) updated.soil_humidity = Math.max(0, Number(current.soil_humidity) - 15)
       if (actionKey.includes('shade')) updated.light = Math.max(0, Number(current.light) - 10)
       if (actionKey.includes('windbreak')) updated.air_humidity = Math.min(100, Number(current.air_humidity) + 8)
       if (actionKey.includes('frost-cover')) updated.air_temp = Math.min(80, Number(current.air_temp) + 6)
       if (actionKey.includes('pest_control')) updated.active_pests = []
-      if (['drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
+      if (['mulch', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
         const currentTick = Number(current.event_tick_count ?? 0)
         const activeModifiers = Array.isArray(current.active_modifiers) ? current.active_modifiers : []
         updated.active_modifiers = [
@@ -600,7 +624,9 @@ export async function handleDemoApiRequest(path, options = {}) {
             id: `preview-${actionKey}-${currentTick}`,
             action_key: actionKey,
             animation_key: actionKey,
-            factor_key: actionKey === 'drainage'
+            factor_key: actionKey === 'mulch'
+              ? 'water'
+              : actionKey === 'drainage'
               ? 'soil_humidity'
               : actionKey === 'shade'
                 ? 'light'
@@ -747,9 +773,11 @@ export async function handleDemoApiRequest(path, options = {}) {
       return { handled: true, payload: { data: clone(next), message: 'Preview sharing updated.' } }
     }
     if (action === 'claim-maturity-reward') {
-      session.user.coin += 100
+      const modeReward = rewardForMode(simulatorById(simulatorId)?.mode)
+      session.user.coin += modeReward.coin_reward
+      session.user.experience = Number(session.user.experience ?? 0) + modeReward.experience_reward
       const next = updateSimulator(simulatorId, (current) => ({ ...current, maturity_reward_claimed_at: nowIso() }))
-      return { handled: true, payload: { data: clone(next), user: clone(session.user), balance: session.user.coin, reward: 100 } }
+      return { handled: true, payload: { data: clone(next), user: clone(session.user), balance: session.user.coin, reward: modeReward.coin_reward, mode_reward: clone(modeReward) } }
     }
     if (action === 'use-item' || action === 'prank') {
       const itemId = Number(body.item_id)

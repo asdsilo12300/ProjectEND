@@ -282,10 +282,14 @@ function insertAnchoredPivot(parent, children, name, worldAnchor) {
 }
 
 /**
- * Creates runtime articulation for the uploaded Sunflower asset. Its GLTF has
- * five independent morph-target meshes but no skin/bones, so ordinary bone
- * discovery returns no stress controls. This hierarchy behaves like a small
- * rig while keeping all original morph animation tracks intact.
+ * Creates a cohesive runtime stress control for the uploaded Sunflower asset.
+ *
+ * The GLTF has several independent morph-target meshes, but it does not have a
+ * skeleton or shared joints. Giving the leaves, flower and petals separate
+ * runtime pivots makes those meshes rotate away from their authored attachment
+ * points as soon as a stress pose is applied. Keep every authored mesh under a
+ * single base pivot instead: the complete plant can still lean, compress and
+ * react to wind, while its morph animation keeps every part connected.
  */
 export function attachSunflowerStressPivots(root, { upAxis = 'y' } = {}) {
   if (!root?.traverse) return []
@@ -312,35 +316,10 @@ export function attachSunflowerStressPivots(root, { upAxis = 'y' } = {}) {
   const bodyPivot = insertAnchoredPivot(commonParent, plantMeshes, 'SunflowerStress_stem', baseAnchor)
   if (!bodyPivot) return []
 
-  const entries = [{ object: bodyPivot, role: 'stem', index: 0, upAxis, motionScale: 1 }]
-  const leafMeshes = meshesByRole.leaf
-  if (leafMeshes.length > 0) {
-    const leafBounds = worldBoundsFor(leafMeshes)
-    const leafCenter = leafBounds.getCenter(new Vector3())
-    const leafAnchor = new Vector3(leafCenter.x, leafBounds.min.y, leafCenter.z)
-    const leafPivot = insertAnchoredPivot(bodyPivot, leafMeshes, 'SunflowerStress_leaf', leafAnchor)
-    if (leafPivot) entries.push({ object: leafPivot, role: 'leaf', index: entries.length, upAxis, motionScale: 1 })
-  }
-
-  const flowerMeshes = [...meshesByRole.flower, ...meshesByRole.petal]
-  if (flowerMeshes.length > 0) {
-    const flowerBounds = worldBoundsFor(flowerMeshes)
-    const flowerCenter = flowerBounds.getCenter(new Vector3())
-    const flowerPivot = insertAnchoredPivot(bodyPivot, flowerMeshes, 'SunflowerStress_flower', flowerCenter)
-    if (flowerPivot) {
-      entries.push({ object: flowerPivot, role: 'flower', index: entries.length, upAxis, motionScale: 1 })
-
-      if (meshesByRole.petal.length > 0) {
-        const petalPivot = insertAnchoredPivot(
-          flowerPivot,
-          meshesByRole.petal,
-          'SunflowerStress_petal',
-          flowerCenter,
-        )
-        if (petalPivot) entries.push({ object: petalPivot, role: 'petal', index: entries.length, upAxis, motionScale: 1 })
-      }
-    }
-  }
+  // Do not add per-part pivots here. The sunflower's five meshes are separate
+  // objects rather than skinned branches, so rotating any subset would create
+  // visible gaps between the stem, leaves and flower head.
+  const entries = [{ object: bodyPivot, role: 'stem', index: 0, upAxis, motionScale: 0.78 }]
 
   root.userData = {
     ...root.userData,

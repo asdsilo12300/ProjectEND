@@ -16,11 +16,11 @@ export function PestChance({ label, value, icon, color, imageUrl, active = false
       type="button"
     >
       <div className="flex items-start justify-between gap-1.5">
-        <span className="grid h-8 w-10 shrink-0 place-items-center overflow-hidden rounded-md border border-white/10 text-[#101511]" style={{ backgroundColor: color }}>
+        <span className="grid h-11 w-14 shrink-0 place-items-center overflow-hidden rounded-md border border-white/10 text-[#101511]" style={{ backgroundColor: color }}>
           {imageUrl ? (
             <img className="h-full w-full object-cover" src={imageUrl} alt="" draggable="false" />
           ) : (
-            <AppIcon className="h-4 w-4" name={pestIconMap[icon] ?? 'pest'} />
+            <AppIcon className="h-6 w-6" name={pestIconMap[icon] ?? 'pest'} />
           )}
         </span>
         <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/[0.045]">
@@ -28,11 +28,11 @@ export function PestChance({ label, value, icon, color, imageUrl, active = false
         </span>
       </div>
       <span className="mt-1 block truncate text-[13px] font-bold leading-4 text-lime-50" title={label}>{label}</span>
-      <div className="mt-1.5 flex min-w-0 items-center justify-between gap-1">
-        <span className={`min-w-0 text-[10px] font-black uppercase leading-none tracking-[0.03em] ${active ? 'text-amber-200' : 'text-slate-400'}`}>
+      <div className="mt-1.5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <span className={`min-w-0 truncate text-[9px] font-black uppercase leading-none ${active ? 'text-amber-200' : 'text-slate-400'}`}>
           {active ? 'ACTIVE' : 'RISK'}
         </span>
-        <strong className="shrink-0 text-right text-[13px] leading-none text-lime-50">{value}%</strong>
+        <strong className="shrink-0 text-right text-xs leading-none text-lime-50">{value}%</strong>
       </div>
       <div className="mt-1 min-w-0">
         <div

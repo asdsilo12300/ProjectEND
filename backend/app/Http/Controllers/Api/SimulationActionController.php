@@ -19,6 +19,7 @@ class SimulationActionController extends Controller
             'action_key' => ['required', 'string', 'max:100'],
             'item_id' => ['nullable', 'integer', 'exists:items,id'],
             'target_value' => ['nullable', 'numeric', 'between:-1000,1000'],
+            'observed_precipitation' => ['nullable', 'numeric', 'between:0,1000'],
             'event_id' => ['nullable', 'integer', 'exists:simulation_events,id'],
         ]);
         $result = $service->apply($simulator, (int) $request->user()->id, $data);

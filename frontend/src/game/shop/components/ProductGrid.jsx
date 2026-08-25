@@ -20,7 +20,7 @@ function ShopState({ actionLabel, description, icon, onAction, title }) {
   )
 }
 
-export function ProductGrid({ buyingId = null, copy, error = false, favoriteIds, hasFilters = false, items, loading = false, onBuy, onClearFilters, onRetry, onToggleFavorite }) {
+export function ProductGrid({ buyingId = null, coinBalance = 0, copy, error = false, favoriteIds, hasFilters = false, items, loading = false, onBuy, onClearFilters, onRetry, onToggleFavorite }) {
   if (loading) {
     return (
       <div className="grid flex-1 grid-cols-1 content-start gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" aria-label={copy.loadingTitle} aria-busy="true">
@@ -48,7 +48,7 @@ export function ProductGrid({ buyingId = null, copy, error = false, favoriteIds,
   return (
     <div className="grid flex-1 grid-cols-1 content-start gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {items.map((item) => (
-        <ProductCard copy={copy} isBuying={buyingId === item.id} isFavorite={favoriteIds.has(item.id)} item={item} key={item.id} onBuy={onBuy} onToggleFavorite={onToggleFavorite} />
+        <ProductCard coinBalance={coinBalance} copy={copy} isBuying={buyingId === item.id} isFavorite={favoriteIds.has(item.id)} item={item} key={item.id} onBuy={onBuy} onToggleFavorite={onToggleFavorite} />
       ))}
     </div>
   )

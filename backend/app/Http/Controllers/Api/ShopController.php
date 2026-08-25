@@ -32,7 +32,9 @@ class ShopController extends Controller
             $name = strtolower(trim((string) ($item['name'] ?? '')));
             $actionKey = strtolower(trim((string) ($item['action_key'] ?? '')));
 
-            return $name !== 'hand pick' && $actionKey !== 'manual-pest-control';
+            return $name !== 'hand pick'
+                && $actionKey !== 'manual-pest-control'
+                && $actionKey !== 'drainage';
         }));
 
         $seconds = max(0, (int) config('catalog.browser_cache_seconds', 30));

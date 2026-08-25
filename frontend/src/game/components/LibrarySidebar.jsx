@@ -60,7 +60,7 @@ function itemGroupId(item) {
   if (item?.friendUsable || itemId.includes('prank')) return 'prank'
   if (
     itemId.includes('manual')
-    || ['drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)
+    || ['mulch', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)
   ) return 'manual'
   if (['water', 'fertilizer'].includes(actionKey)) return 'care'
   return 'treatment'
@@ -111,14 +111,14 @@ function PlantLibraryCard({ item, itemLocked, itemName, language, lockLabel, onA
   const statusLabel = plantStatusLabel(item, language)
   return (
     <div
-      className={`group relative flex min-w-0 items-center rounded-md border transition ${selected && !itemLocked ? 'border-lime-200/45 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.16)]' : 'border-lime-100/10 bg-white/[0.045]'} ${itemLocked ? 'opacity-70' : 'hover:border-lime-200/35 hover:bg-white/[0.075]'}`}
+      className={`lab-plant-card group relative flex min-w-0 items-center rounded-md border transition ${selected && !itemLocked ? 'border-lime-200/45 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.16)]' : 'border-lime-100/10 bg-white/[0.045]'} ${itemLocked ? 'opacity-70' : 'hover:border-lime-200/35 hover:bg-white/[0.075]'}`}
       data-plant-current={item.current ? 'true' : 'false'}
       data-tour="lab-plant-card"
     >
       <button
         aria-disabled={itemLocked}
         aria-pressed={selected}
-        className={`flex min-w-0 flex-1 items-center gap-2 rounded-l-md p-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${itemLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        className={`lab-plant-card__button flex min-w-0 flex-1 items-center gap-2 rounded-l-md p-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${itemLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
         data-lab-asset={item.id}
         disabled={itemLocked}
         onClick={() => {
@@ -130,10 +130,10 @@ function PlantLibraryCard({ item, itemLocked, itemName, language, lockLabel, onA
         title={lockLabel ?? item.help}
         type="button"
       >
-        <span className="w-12 shrink-0">
+        <span className="lab-plant-card__thumb w-12 shrink-0">
           <LibraryThumb item={item} />
         </span>
-        <span className="min-w-0 flex-1">
+        <span className="lab-plant-card__copy min-w-0 flex-1">
           <strong className="block truncate text-[12px] text-lime-50" data-i18n-skip="true">{itemName}</strong>
           <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-400" aria-label={statusLabel}>
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : item.readOnly ? 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
@@ -143,7 +143,7 @@ function PlantLibraryCard({ item, itemLocked, itemName, language, lockLabel, onA
       </button>
       <button
         aria-label={language === 'th' ? `เปิดคู่มือพืช ${itemName}` : `Open ${itemName} plant guide`}
-        className="mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-lime-100/12 bg-black/20 text-slate-400 transition hover:border-emerald-200/30 hover:bg-emerald-300/10 hover:text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+        className="lab-plant-card__guide mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-lime-100/12 bg-black/20 text-slate-400 transition hover:border-emerald-200/30 hover:bg-emerald-300/10 hover:text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
         onClick={() => onShowPlantInfo?.(item)}
         data-tour="lab-plant-guide-button"
         title={language === 'th' ? `คู่มือพืช: ${itemName}` : `Plant guide: ${itemName}`}
@@ -155,7 +155,7 @@ function PlantLibraryCard({ item, itemLocked, itemName, language, lockLabel, onA
   )
 }
 
-function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, language, mockItems, onApply, readOnly, friendHasPlant, growingMode, plantNeeds, seasonalAvailableActions, selectedAsset, setDrawerOpen }) {
+function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, language, mockItems, mulchConditions, onApply, readOnly, friendHasPlant, growingMode, plantNeeds, seasonalAvailableActions, selectedAsset, setDrawerOpen }) {
   const itemName = language === 'th' ? (item.nameTh || readableItemName(item)) : readableItemName(item)
   const itemDetail = language === 'th' ? (item.detailTh || item.detail) : item.detail
   const successText = language === 'th' ? (item.successTextTh || item.successText) : item.successText
@@ -177,14 +177,15 @@ function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, lan
   const activeSeconds = activeItemSeconds(activeModifiers, actionKey, currentTime)
   const temporaryEffectActive = activeSeconds !== null
   const isBasicPlantSupply = ['water', 'fertilizer'].includes(actionKey)
+  const mulchUnavailable = !readOnly && actionKey === 'mulch' && !mulchConditions?.eligible
   const seasonalEmergencyUnavailable = !readOnly
     && growingMode === 'seasonal'
-    && ['drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)
+    && ['shade', 'windbreak', 'frost-cover'].includes(actionKey)
     && !seasonalAvailableActions?.has(actionKey)
   const reserveFull = !readOnly
     && ['water', 'fertilizer'].includes(actionKey)
     && Number(plantNeeds?.[actionKey] ?? -1) >= 100
-  const itemLocked = mockItems || isZeroQuantity || ownGardenPrank || friendItemUnsupported || friendGardenEmpty || wrongGrowingMode || seasonalEmergencyUnavailable || reserveFull || temporaryEffectActive
+  const itemLocked = mockItems || isZeroQuantity || ownGardenPrank || friendItemUnsupported || friendGardenEmpty || wrongGrowingMode || mulchUnavailable || seasonalEmergencyUnavailable || reserveFull || temporaryEffectActive
   const selected = selectedAsset?.id === item.id
   const lockLabel = ownGardenPrank
     ? (language === 'th' ? 'ใช้ได้เมื่อเยี่ยมชมสวนของเพื่อนเท่านั้น' : 'Available only while visiting a friend garden')
@@ -198,6 +199,10 @@ function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, lan
           ? (language === 'th'
               ? `ใช้ได้เฉพาะ${item.modeScope === 'outdoor' ? 'โหมดกลางแจ้ง' : 'โหมดควบคุมสภาพแวดล้อม'}`
               : `${item.modeScope === 'outdoor' ? 'Outdoor' : 'Environment Control'} mode only`)
+        : mulchUnavailable
+          ? (language === 'th'
+              ? `ใช้ได้เมื่อเกิดอย่างน้อย 1 เงื่อนไข: ฝน ≥25 มม., ความชื้นดิน < ${mulchConditions?.soilHumidityMin ?? 35}% หรืออุณหภูมิดิน > ${mulchConditions?.soilTemperatureMax ?? 30}°C`
+              : `Available when at least one condition occurs: rain ≥25 mm, soil moisture < ${mulchConditions?.soilHumidityMin ?? 35}%, or soil temperature > ${mulchConditions?.soilTemperatureMax ?? 30}°C`)
         : seasonalEmergencyUnavailable
           ? (language === 'th'
               ? 'เครื่องมือนี้จะใช้ได้เมื่อมีคำเตือนฤดูกาลที่ตรงกัน'
@@ -234,7 +239,7 @@ function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, lan
           {quantityBadge}
         </span>
       )}
-      {seasonalEmergencyUnavailable && (
+      {(seasonalEmergencyUnavailable || mulchUnavailable) && (
         <span
           className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full border border-amber-200/25 bg-[#241d0d]/90 text-amber-200 shadow-[0_3px_10px_rgba(0,0,0,.35)]"
           aria-label={lockLabel}
@@ -271,12 +276,13 @@ function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, lan
   )
 }
 
-export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy = false, error = '', friendHasPlant = true, growingMode = null, loading = false, plantNeeds = null, readOnly = false, mockItems = false, seasonalContext = null, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo }) {
+export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy = false, error = '', friendHasPlant = true, growingMode = null, loading = false, mulchConditions = null, plantNeeds = null, readOnly = false, mockItems = false, seasonalContext = null, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo, presentation = 'floating', view = 'all' }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [activeItemGroup, setActiveItemGroup] = useState('care')
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   const language = useAppLanguage()
   const effectiveItemGroup = readOnly ? 'prank' : activeItemGroup
+  const isDocked = presentation === 'docked'
 
   useEffect(() => {
     if (!(activeModifiers ?? []).some((modifier) => Boolean(modifier?.expires_at))) return undefined
@@ -290,7 +296,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
 
   return (
     <>
-      <button
+      {!isDocked && <button
         type="button"
         className="lab-library-toggle"
         aria-controls="lab-asset-library"
@@ -299,9 +305,9 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
       >
         <AppIcon className="h-4 w-4" name="plant" />
         {language === 'th' ? 'อุปกรณ์ห้องทดลอง' : 'Lab assets'}
-      </button>
-      <aside id="lab-asset-library" className="lab-library-drawer absolute bottom-0 left-0 top-16 z-40 flex w-[244px] flex-col overflow-hidden border-r border-lime-100/15 bg-[#101511]/95 text-slate-100" data-open={drawerOpen ? 'true' : 'false'} data-tour="lab-assets" aria-label={language === 'th' ? 'คลังพืชและไอเทม' : 'Plant and item library'}>
-        <div className="flex shrink-0 items-center gap-3 border-b border-lime-100/10 px-3 py-3">
+      </button>}
+      <aside id="lab-asset-library" className={`lab-library-drawer flex min-h-0 flex-col overflow-hidden bg-[#101511]/95 text-slate-100 ${isDocked ? 'lab-library-drawer--docked relative h-full w-full' : 'absolute bottom-0 left-0 top-16 z-40 w-[244px] border-r border-lime-100/15'}`} data-open={isDocked || drawerOpen ? 'true' : 'false'} data-presentation={presentation} data-tour="lab-assets" aria-label={language === 'th' ? 'คลังพืชและไอเทม' : 'Plant and item library'}>
+        {!isDocked && <div className="flex shrink-0 items-center gap-3 border-b border-lime-100/10 px-3 py-3">
           <span className="min-w-0 flex-1">
             <strong className="block text-sm text-lime-50">{language === 'th' ? 'อุปกรณ์ห้องทดลอง' : 'Lab assets'}</strong>
             <span className="text-xs text-slate-400">{readOnly
@@ -311,7 +317,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
           <button type="button" className="lab-library-close" aria-label={language === 'th' ? 'ปิดอุปกรณ์ห้องทดลอง' : 'Close Lab assets'} onClick={() => setDrawerOpen(false)}>
             <AppIcon className="h-4 w-4" name="panelClose" />
           </button>
-        </div>
+        </div>}
 
       <div className="game-themed-scrollbar min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-2">
         {error ? (
@@ -320,7 +326,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
             <span>{error}</span>
           </div>
         ) : null}
-        {Object.entries(sections).map(([section, items]) => {
+        {Object.entries(sections).filter(([section]) => view === 'all' || (view === 'plants' ? section === 'Plants' : section === 'Items')).map(([section, items]) => {
           const expanded = openSections[section]
           const sectionLabel = section === 'Items'
             ? language === 'th' ? 'เครื่องมือ' : 'Tools'
@@ -343,9 +349,9 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
           const selectedGroup = groupedItems.find((group) => group.id === effectiveItemGroup) ?? groupedItems[0]
 
           return (
-            <section className="mb-2 min-w-0 max-w-full" data-tour={section === 'Plants' ? 'lab-plants' : 'lab-items'} key={section}>
+            <section className="lab-library-section mb-2 min-w-0 max-w-full" data-section={section.toLowerCase()} data-tour={section === 'Plants' ? 'lab-plants' : 'lab-items'} key={section}>
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+                className="lab-library-section__toggle flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                 type="button"
                 aria-expanded={expanded}
                 onClick={() => onToggle(section)}
@@ -356,7 +362,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
               </button>
 
               {expanded && (
-                <div className={`mt-2 min-w-0 max-w-full overflow-hidden rounded-md border border-lime-100/10 bg-black/20 p-2 ${section === 'Plants' ? 'grid gap-1.5' : 'grid gap-2'}`}>
+                <div className={`lab-library-section__content mt-2 min-w-0 max-w-full overflow-hidden rounded-md border border-lime-100/10 bg-black/20 p-2 ${section === 'Plants' ? 'grid gap-1.5' : 'grid gap-2'}`}>
                   {loading && (
                     <div className={section === 'Items' ? 'col-span-2' : ''}>
                       <LoadingSkeleton count={section === 'Plants' ? 2 : 4} label={language === 'th' ? `กำลังโหลด${section === 'Plants' ? 'พืช' : 'เครื่องมือ'}` : `Loading ${section.toLowerCase()}`} variant="list" />
@@ -412,6 +418,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                             key={item.id}
                             language={language}
                             mockItems={mockItems}
+                            mulchConditions={mulchConditions}
                             onApply={onApply}
                             plantNeeds={plantNeeds}
                             readOnly={readOnly}

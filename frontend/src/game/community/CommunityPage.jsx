@@ -4,6 +4,7 @@ import { createPostComment, createPostCommentReply, getCommunityInsights, getCom
 import { getAppLanguage } from '../../i18n/appI18n'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { ParticleNetworkBackground } from '../components/ParticleNetworkBackground'
+import { LevelAvatar } from '../components/LevelAvatar'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { formatPlantDuration } from '../../utils/plantDuration'
 
@@ -61,12 +62,7 @@ function avatarLabel(value) {
 function UserAvatar({ user, fallback, className = '', imageClassName = '', showRing = true }) {
   const label = fallback ?? avatarLabel(displayName(user))
 
-  return (
-    <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#263022] font-black text-lime-100 ${showRing ? 'ring-1 ring-lime-100/10' : ''} ${className}`}>
-      {label}
-      {user?.avatar_url && <img className={`absolute inset-0 h-full w-full object-cover object-center ${imageClassName}`} src={resolveAssetUrl(user.avatar_url)} alt="" onError={(event) => { event.currentTarget.hidden = true }} />}
-    </span>
-  )
+  return <LevelAvatar className={`font-black ${className}`} fallback={label} imageClassName={imageClassName} showBaseRing={showRing} user={user} />
 }
 
 function CoverImage({ user, preview = '' }) {
@@ -522,7 +518,7 @@ function FeedPost({ hidden = false, onHide, onOpenGame, onOpenPost, onRestore, o
       <div className="flex gap-4">
         <div className="group/profile relative h-fit shrink-0" data-tour="community-profile-preview" onClick={(event) => event.stopPropagation()}>
           <button
-            className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-[#263022] text-sm font-black text-lime-100 ring-1 ring-lime-100/10 transition hover:ring-[#8fbf78]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+            className="grid h-10 w-10 place-items-center overflow-visible rounded-full bg-transparent text-sm font-black text-lime-100 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
             onClick={() => onSelectUser?.(postUser)}
             type="button"
             aria-label={'Open ' + post.author + ' profile'}

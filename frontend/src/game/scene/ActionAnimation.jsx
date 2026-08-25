@@ -200,8 +200,17 @@ function FertilizerShaker({ active, plantCenter, plantingRadius }) {
   )
 }
 
-function StrawMulch({ active }) {
+function StrawMulch({ active, plantingRadius = 0.96 }) {
   const mulch = useRef(null)
+  const ringRadius = THREE.MathUtils.clamp(Number(plantingRadius) * 0.58, 0.48, 0.68)
+  const patches = useMemo(() => Array.from({ length: 8 }, (_, index) => {
+    const angle = (index / 8) * Math.PI * 2
+    return {
+      position: [Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius],
+      rotation: [0, -angle + (index % 2 ? 0.24 : -0.18), 0],
+      scale: index % 2 ? 0.94 : 1,
+    }
+  }), [ringRadius])
 
   useFrame(({ clock }) => {
     if (!mulch.current) return
@@ -211,8 +220,12 @@ function StrawMulch({ active }) {
 
   return (
     <group ref={mulch}>
-      <GltfActionModel url={ACTION_MODEL_URLS.straw} maxSize={1.45} rotation={[0, 0, 0]} />
-      <pointLight position={[0, 0.24, 0]} color="#e8b84e" intensity={active ? 0.7 : 0.25} distance={2.2} />
+      {patches.map((patch, index) => (
+        <group key={index} position={patch.position} rotation={patch.rotation} scale={patch.scale}>
+          <GltfActionModel url={ACTION_MODEL_URLS.straw} maxSize={0.62} />
+        </group>
+      ))}
+      <pointLight position={[0, 0.18, 0]} color="#e8b84e" intensity={active ? 0.3 : 0.12} distance={2.2} />
     </group>
   )
 }
@@ -389,7 +402,7 @@ const TARGET_OFFSETS = {
   spray: [0.72, 0.92, 0.7],
   fertilizer: [0.62, 0.56, 0.62],
   drainage: [0.72, 0.72, 0.58],
-  straw: [0, 0.06, 0],
+  straw: [0, 0.015, 0],
   shade: [0, 0, 0],
   windbreak: [0, 0, 0],
   frost: [0, 0, 0],
@@ -478,7 +491,7 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
         />
       )}
       {kind === 'drainage' && <DrainageTool active={active} />}
-      {kind === 'straw' && <StrawMulch active={active} />}
+      {kind === 'straw' && <StrawMulch active={active} plantingRadius={plantingSurface?.radius ?? 0.96} />}
       {kind === 'shade' && <ShadeCloth active={active} plantScale={plantScale} />}
       {kind === 'windbreak' && <Windbreak active={active} plantScale={plantScale} />}
       {kind === 'frost' && <FrostCover active={active} plantScale={plantScale} />}
@@ -511,6 +524,7 @@ export function ActiveCareEffects({ modifiers = [], plantingSurface, plantScale 
 
   return (
     <group position={surfacePosition}>
+      {keys.has('mulch') && <StrawMulch active plantingRadius={plantingSurface?.radius ?? 0.96} />}
       {keys.has('windbreak') && <Windbreak active plantScale={plantScale} />}
       {keys.has('shade') && <ShadeCloth active plantScale={plantScale} />}
       {keys.has('frost-cover') && <FrostCover active plantScale={plantScale} />}

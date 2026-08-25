@@ -8,34 +8,6 @@ import { getAppLanguage } from '../../i18n/appI18n'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { formatRealDays, getGrowthStageStops, getRealGrowthEstimate, SIMULATION_CYCLE_SECONDS } from '../utils/realGrowth'
 
-const visualStateLabels = {
-  healthy: 'Healthy',
-  underwatered: 'Dry stress',
-  overwatered: 'Water stress',
-  nutrient_deficient: 'Low nutrient',
-  heat_stress: 'Heat stress',
-  burnt: 'Root burn',
-  cold_stress: 'Cold stress',
-  low_light: 'Low-light stress',
-  dry_air: 'Dry-air stress',
-  botrytis: 'Fungal risk',
-  stunted: 'Stunted',
-}
-
-const visualStateLabelsTh = {
-  healthy: 'สมบูรณ์',
-  underwatered: 'เครียดจากขาดน้ำ',
-  overwatered: 'เครียดจากน้ำมาก',
-  nutrient_deficient: 'ขาดธาตุอาหาร',
-  heat_stress: 'เครียดจากความร้อน',
-  burnt: 'รากไหม้',
-  cold_stress: 'เครียดจากความเย็น',
-  low_light: 'แสงไม่เพียงพอ',
-  dry_air: 'อากาศแห้ง',
-  botrytis: 'เสี่ยงเชื้อรา',
-  stunted: 'แคระแกร็น',
-}
-
 const stageLabelsTh = {
   Seedling: 'ระยะต้นกล้า',
   Sprout: 'ระยะแตกหน่อ',
@@ -654,7 +626,7 @@ function RealGrowthScale({ estimate, language, pace, referenceUrl }) {
   )
 }
 
-export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'idle', hasPlant = true, nextCycleAt = null, simulationSpeed = 1, windows, setWindows, simulationVisual }) {
+export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'idle', hasPlant = true, nextCycleAt = null, simulationSpeed = 1, windows, setWindows, simulationVisual, presentation = 'floating', hideHeader = false }) {
   const language = useAppLanguage()
   const visiblePestChances = buildPestChances(simulationVisual)
   const [selectedPestId, setSelectedPestId] = useState(null)
@@ -673,15 +645,11 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
   const stageName = language === 'th' ? stageLabelsTh[rawStageName] ?? rawStageName : rawStageName
   const plantName = readablePlantName(simulationVisual?.plant, language)
   const plantImageUrl = resolveAssetUrl(simulationVisual?.plant?.base_image_url ?? simulationVisual?.plant?.image_url ?? simulationVisual?.plant?.icon_url)
-  const visualState = simulationVisual?.visual_state ?? 'healthy'
-  const statusLabel = language === 'th'
-    ? visualStateLabelsTh[visualState] ?? 'กำลังติดตาม'
-    : visualStateLabels[visualState] ?? 'Monitoring'
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
 
   return (
     <>
-    <Panel id="monitor" title={language === 'th' ? 'ติดตามพืช' : 'Plant monitor'} subtitle={hasPlant ? (language === 'th' ? 'การเติบโตและสิ่งที่ควรทำต่อ' : 'growth and next action') : (language === 'th' ? 'ขั้นตอนที่ 2 · เลือกพืช' : 'Step 2 · choose a plant')} windows={windows} setWindows={setWindows} className="w-[360px] max-w-[calc(100vw-32px)]">
+    <Panel id="monitor" title={language === 'th' ? 'ติดตามพืช' : 'Plant monitor'} subtitle={hasPlant ? (language === 'th' ? 'การเติบโตและสิ่งที่ควรทำต่อ' : 'growth and next action') : (language === 'th' ? 'ขั้นตอนที่ 2 · เลือกพืช' : 'Step 2 · choose a plant')} windows={windows} setWindows={setWindows} presentation={presentation} hideHeader={hideHeader} className={presentation === 'docked' ? '' : 'w-[360px] max-w-[calc(100vw-32px)]'}>
       <div className="max-h-[348px] overflow-y-auto pr-1 sm:max-h-none sm:overflow-visible sm:pr-0">
         {!hasPlant ? (
           <div className="rounded-lg border border-lime-100/15 bg-[#0b0f0c]/65 p-4 text-center">
@@ -705,7 +673,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
             <div className="min-w-0">
               <strong className="block text-[15px] font-black leading-5 text-lime-50" data-i18n-skip="true">{plantName}</strong>
               <span className="text-xs leading-5 text-slate-300">
-                {stageName} · {statusLabel} · {growthProgress.toFixed(1)}% {language === 'th' ? 'เติบโต' : 'grown'}
+                {stageName} · {growthProgress.toFixed(1)}% {language === 'th' ? 'เติบโต' : 'grown'}
               </span>
             </div>
           </div>
@@ -719,7 +687,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
             <strong className="text-xs text-lime-50">{language === 'th' ? 'ติดตามศัตรูพืช' : 'Pest monitoring'}</strong>
             <span className="text-xs text-slate-400">{language === 'th' ? 'ความเสี่ยง' : 'risk'} · {cycleSeconds != null ? (language === 'th' ? `อัปเดตใน ${cycleSeconds} วินาที` : `updates in ${cycleSeconds}s`) : (language === 'th' ? 'รอบถัดไป' : 'next update')}</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {visiblePestChances.map((pest) => (
               <PestChance key={pest.label} {...pest} onOpen={() => setSelectedPestId(pest.icon)} />
             ))}
@@ -736,6 +704,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
 
 export function PlantRecommendationBanner({ awaitingFirstCycle = false, nextCycleAt = null, simulationVisual }) {
   const language = useAppLanguage()
+  const [collapsed, setCollapsed] = useState(true)
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
   const growthProgress = getGrowthProgress(simulationVisual)
   const health = getHealth(simulationVisual)
@@ -749,6 +718,26 @@ export function PlantRecommendationBanner({ awaitingFirstCycle = false, nextCycl
   })
   const tone = recommendationTones[recommendation.level] ?? recommendationTones.info
   const isUrgent = ['critical', 'danger'].includes(recommendation.level)
+  const statusLabel = language === 'th' ? tone.badgeTh : tone.badge
+  const expandLabel = language === 'th'
+    ? `เปิดคำแนะนำ: ${statusLabel}`
+    : `Open recommendation: ${statusLabel}`
+
+  if (collapsed) {
+    return (
+      <button
+        className={`plant-recommendation-indicator plant-recommendation-indicator--${recommendation.level}`}
+        data-tour="plant-recommendation"
+        type="button"
+        aria-label={expandLabel}
+        title={expandLabel}
+        onClick={() => setCollapsed(false)}
+      >
+        <AppIcon name={tone.icon} />
+        <span className="plant-recommendation-indicator__dot" aria-hidden="true" />
+      </button>
+    )
+  }
 
   return (
     <aside
@@ -769,8 +758,17 @@ export function PlantRecommendationBanner({ awaitingFirstCycle = false, nextCycl
         <span className="plant-recommendation-rail__detail">{recommendation.detail}</span>
       </span>
       <span className={`plant-recommendation-rail__badge ${tone.label}`}>
-        {language === 'th' ? tone.badgeTh : tone.badge}
+        {statusLabel}
       </span>
+      <button
+        className="plant-recommendation-rail__collapse"
+        type="button"
+        aria-label={language === 'th' ? 'ย่อคำแนะนำ' : 'Minimize recommendation'}
+        title={language === 'th' ? 'ย่อเป็นไอคอน' : 'Minimize to icon'}
+        onClick={() => setCollapsed(true)}
+      >
+        <AppIcon name="arrowForward" />
+      </button>
     </aside>
   )
 }

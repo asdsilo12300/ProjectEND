@@ -59,7 +59,7 @@ function exactPostedLabel(value) {
   }).format(date)
 }
 
-export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, simulatorId, windows, setWindows, title = 'Comments' }) {
+export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, simulatorId, windows, setWindows, title = 'Comments', presentation = 'floating', hideHeader = false }) {
   const [comments, setComments] = useState([])
   const [draft, setDraft] = useState('')
   const [status, setStatus] = useState('idle')
@@ -180,7 +180,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
   }
 
   return (
-      <Panel id="comments" title={title} windows={windows} setWindows={setWindows} className="comments-panel w-[370px]">
+      <Panel id="comments" title={title} windows={windows} setWindows={setWindows} presentation={presentation} hideHeader={hideHeader} className={presentation === 'docked' ? 'comments-panel' : 'comments-panel w-[370px]'}>
         <div
           className="grid max-h-56 gap-2.5 overflow-y-auto pr-1"
           ref={commentsViewportRef}

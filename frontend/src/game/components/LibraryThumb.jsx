@@ -13,6 +13,7 @@ const libraryIconMap = {
 const actionIconMap = {
   water: 'drop',
   fertilizer: 'fertilizer',
+  mulch: 'soil',
   drainage: 'soil',
   shade: 'shade',
   windbreak: 'wind',

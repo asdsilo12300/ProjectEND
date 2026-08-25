@@ -3,6 +3,7 @@ import { AppIcon } from '../icons/FontAwesomeIcon'
 const ACTION_ICONS = {
   water: 'drop',
   fertilizer: 'fertilizer',
+  mulch: 'soil',
   drainage: 'soil',
   shade: 'shade',
   windbreak: 'wind',

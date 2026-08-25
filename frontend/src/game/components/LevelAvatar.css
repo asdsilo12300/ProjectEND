@@ -1,0 +1,90 @@
+.level-avatar {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  isolation: isolate;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 999px;
+  background: transparent !important;
+  line-height: 1;
+}
+
+.level-avatar__portrait {
+  position: absolute;
+  inset: 7%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #263022;
+  color: #ecfccb;
+  font: inherit;
+  box-shadow: inset 0 0 0 1px rgb(217 249 157 / 12%);
+}
+
+.level-avatar--plain .level-avatar__portrait {
+  inset: 0;
+}
+
+.level-avatar__portrait--ringed {
+  box-shadow:
+    inset 0 0 0 1px rgb(217 249 157 / 18%),
+    0 0 0 1px rgb(10 20 13 / 62%);
+}
+
+.level-avatar__fallback {
+  position: relative;
+  z-index: 0;
+  display: grid;
+  height: 100%;
+  width: 100%;
+  place-items: center;
+}
+
+.level-avatar__photo {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.level-avatar__frame {
+  pointer-events: none;
+  position: absolute;
+  inset: -17%;
+  z-index: 3;
+  height: 134%;
+  width: 134%;
+  max-width: none;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 42%));
+  transform: translateZ(0);
+}
+
+.level-avatar--royal .level-avatar__frame,
+.level-avatar--mythic .level-avatar__frame {
+  inset: -21%;
+  height: 142%;
+  width: 142%;
+}
+
+.level-avatar:hover .level-avatar__frame {
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 42%)) drop-shadow(0 0 5px rgb(178 240 156 / 24%));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .level-avatar__frame {
+    transition: filter 180ms ease, transform 180ms ease;
+  }
+
+  .level-avatar:hover .level-avatar__frame {
+    transform: translateZ(0) scale(1.035);
+  }
+}
+

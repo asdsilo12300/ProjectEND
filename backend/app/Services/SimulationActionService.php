@@ -64,6 +64,10 @@ class SimulationActionService
                 }
             }
 
+            if ($actionKey === 'mulch') {
+                $this->assertMulchConditions($lockedSimulator, $payload['observed_precipitation'] ?? null);
+            }
+
             if ($lockedSimulator->mode === 'seasonal') {
                 $this->assertSeasonalActionAllowed($lockedSimulator, $actionKey);
             }
@@ -144,7 +148,7 @@ class SimulationActionService
 
     private function assertSeasonalActionAllowed(Simulator $simulator, string $actionKey): void
     {
-        if (in_array($actionKey, ['water', 'fertilizer'], true)) return;
+        if (in_array($actionKey, ['water', 'fertilizer', 'mulch'], true)) return;
 
         if (str_ends_with($actionKey, '-treatment')) {
             // Pest care is an emergency response and remains unavailable when
@@ -197,6 +201,36 @@ class SimulationActionService
         }
     }
 
+    private function assertMulchConditions(Simulator $simulator, mixed $observedPrecipitation): void
+    {
+        $plant = $simulator->plant()->firstOrFail();
+        $recordedRain = (float) (SimulationWeatherDay::query()
+            ->where('simulator_id', $simulator->id)
+            ->where('day_index', (int) $simulator->calendar_day)
+            ->value('precipitation') ?? 0);
+        $observedRain = is_numeric($observedPrecipitation) ? (float) $observedPrecipitation : 0;
+        $heavyRain = max($recordedRain, $observedRain) >= 25;
+        $lowSoilMoisture = (float) $simulator->soil_humidity < (float) $plant->soil_humidity_min;
+        $hotSoil = (float) $simulator->soil_temp > (float) $plant->soil_temp_max;
+
+        if (! $heavyRain && ! $lowSoilMoisture && ! $hotSoil) {
+            throw ValidationException::withMessages([
+                'action_key' => 'Straw Mulch is available only during heavy rain (25 mm or more), when soil moisture is below the plant minimum, or when soil temperature exceeds the plant maximum.',
+            ]);
+        }
+
+        $alreadyActive = SimulationModifier::query()
+            ->where('simulator_id', $simulator->id)
+            ->whereHas('action', fn ($query) => $query->where('action_key', 'mulch'))
+            ->activeAt((int) $simulator->event_tick_count)
+            ->exists();
+        if ($alreadyActive) {
+            throw ValidationException::withMessages([
+                'action_key' => 'Straw Mulch is already active. Wait for its effect to end before using another.',
+            ]);
+        }
+    }
+
     /** @return array<string, int|float> */
     private function environmentChanges(Simulator $simulator, string $actionKey, ?Item $item, mixed $targetValue): array
     {
@@ -241,6 +275,9 @@ class SimulationActionService
         }
 
         return match ($actionKey) {
+            // Mulch does not create water. Its benefit is applied by the timed
+            // modifiers below, which offset evaporation and moisture loss.
+            'mulch' => ['soil_humidity' => (int) $simulator->soil_humidity],
             'drainage' => [
                 'soil_humidity' => max((int) $plant->soil_humidity_min, (int) $simulator->soil_humidity - $strength),
             ],
@@ -266,6 +303,7 @@ class SimulationActionService
         $durationSeconds = max(5, min(300, (int) Arr::get($item->effect_payload ?? [], 'duration_seconds', 30)));
         $tick = (int) $simulator->event_tick_count;
         $temporary = match ($actionKey) {
+            'mulch' => ['water' => 2, 'soil_humidity' => 3],
             'shade' => ['light' => -10, 'air_temp' => -2],
             'windbreak' => ['wind_speed' => -25, 'wind_gust' => -35, 'air_humidity' => 3],
             'frost-cover' => ['air_temp' => 4, 'soil_temp' => 2],

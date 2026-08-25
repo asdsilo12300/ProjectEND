@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\SimulatorController;
 use App\Http\Controllers\Api\SimulationActionController;
 use App\Http\Controllers\Api\SimulationEventController;
+use App\Http\Controllers\Api\SimulationModeRewardController;
 use App\Http\Controllers\Api\SimulatorLocationController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\AdminEventDefinitionController;
@@ -47,6 +48,7 @@ Route::get('/posts', [PostController::class, 'index']);
 Route::get('/model-assets', [ModelAssetController::class, 'index']);
 Route::get('/model-assets/{key}', [ModelAssetController::class, 'show']);
 Route::get('/media/{path}', PublicMediaController::class)->where('path', '.*');
+Route::get('/simulation-mode-rewards', SimulationModeRewardController::class);
 
 Route::middleware('jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);

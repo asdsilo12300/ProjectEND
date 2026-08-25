@@ -535,7 +535,7 @@ class SeasonalWeatherService
             'is_forecast' => (bool) $day->is_forecast,
             'risk' => $risk,
             'recommended_action' => match ($risk) {
-                'heavy_rain' => 'drainage', 'heat_wave' => 'shade', 'strong_wind' => 'windbreak',
+                'heavy_rain' => 'mulch', 'heat_wave' => 'shade', 'strong_wind' => 'windbreak',
                 'cold_snap' => 'frost-cover', default => null,
             },
         ];

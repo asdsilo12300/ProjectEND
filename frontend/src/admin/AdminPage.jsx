@@ -207,6 +207,7 @@ const navigationGroups = [
     { id: 'pests', icon: 'pest', label: 'Pests & rules' },
     { id: 'store', icon: 'shop', label: 'Items & store' },
     { id: 'events', icon: 'live', label: 'Events & situations' },
+    { id: 'modeRewards', icon: 'coin', label: 'Mode rewards' },
     { id: 'progression', icon: 'trophy', label: 'Progression' },
     { id: 'models', icon: 'hardware', label: 'Model assets' },
   ] },
@@ -339,6 +340,23 @@ const resourceGroups = {
         { label: 'Chance / weight', render: (row) => `${row.trigger_chance}% · ${row.weight}` },
         { label: 'Timing', render: (row) => `${row.warning_ticks} warning · ${row.duration_ticks} active · ${row.cooldown_ticks} recovery` },
         { label: 'Runs', render: (row) => row.simulation_events_count ?? 0 },
+      ],
+    },
+  ],
+  modeRewards: [
+    {
+      id: 'simulation-mode-rewards', label: 'Simulation mode rewards', createLabel: '', icon: 'coin', noCreate: true, noDelete: true, noTrashFilter: true,
+      defaults: {},
+      fields: [
+        { key: 'mode', label: 'Mode key', type: 'select', options: ['greenhouse', 'outdoor', 'seasonal'], required: true },
+        { key: 'name_en', label: 'English name', required: true }, { key: 'name_th', label: 'Thai name', required: true },
+        { key: 'experience_reward', label: 'EXP on maturity', type: 'number', required: true },
+        { key: 'coin_reward', label: 'Coins on maturity', type: 'number', required: true }, commonActiveField,
+      ],
+      columns: [
+        { label: 'Mode', render: (row) => row.name_en || row.mode },
+        { label: 'Mode key', render: (row) => row.mode },
+        { label: 'Completion reward', render: (row) => `${row.experience_reward} EXP · ${row.coin_reward} coins` },
       ],
     },
   ],
@@ -1914,7 +1932,7 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRe
 
         <footer className="admin-details-drawer__footer">
           {!record.deleted_at && !config.moderation && !config.readOnly && <button type="button" onClick={onEdit}><AppIcon name="settings" />Edit record</button>}
-          {!record.deleted_at && !config.readOnly && <button className="is-danger" type="button" onClick={onDelete}><AppIcon name="trash" />Move to trash</button>}
+          {!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" onClick={onDelete}><AppIcon name="trash" />Move to trash</button>}
           {record.deleted_at && !config.readOnly && <button type="button" onClick={onRestore}><AppIcon name="history" />Restore record</button>}
           <button className="is-primary" type="button" onClick={onClose}>Done</button>
         </footer>
@@ -2093,10 +2111,10 @@ function ResourceView({ groupKey }) {
         <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed, page: 1 }) }}>
           <input aria-label={`Search ${config.label}`} placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />
           {config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => { const value = event.target.value; setFilter(value); setAppliedSearch(search); setAppliedFilter(value); load(config.id, { search, status: value, trashed, page: 1 }) }}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}
-          {!config.readOnly && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}
+          {!config.readOnly && !config.noTrashFilter && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}
           <button className="admin-search-submit" type="submit" aria-label={`Search ${config.label}`} title="Search"><AppIcon name="search" /></button>
         </form>
-        {!config.moderation && !config.readOnly && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
+        {!config.moderation && !config.readOnly && !config.noCreate && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
         {config.readOnly && <span className="admin-readonly-label"><AppIcon name="shield" />Read-only audit evidence</span>}
         <span className={`admin-refresh-state is-${refreshState}`}><i />{refreshState === 'stale' ? 'Update delayed' : 'Live data'}<small>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Connecting…'}</small></span>
       </div>
@@ -2111,7 +2129,7 @@ function ResourceView({ groupKey }) {
                 <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
                 {config.columns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
                 {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-                <td><div className="admin-row-actions"><button type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</div></td>
+                <td><div className="admin-row-actions"><button type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -2169,6 +2187,7 @@ export function AdminPage({ user, onLogout }) {
     pests: ['Pests & occurrence rules', 'Maintain pest definitions and the environmental rules that trigger them.'],
     store: ['Items & shop', 'Manage usable items, effects, prices, stock, and availability.'],
     events: ['Events & situations', 'Configure natural indoor and outdoor events, warning time, effects, response actions, and recovery periods.'],
+    modeRewards: ['Simulation mode rewards', 'Set the EXP and coin reward granted when each growing mode reaches maturity.'],
     progression: ['Quests & achievements', 'Configure player goals, rewards, and achievement milestones.'],
     models: ['3D model assets', 'Maintain reusable model files and structured asset metadata.'],
     community: ['Community moderation', 'Review posts and moderate comments across community and simulation sessions.'],

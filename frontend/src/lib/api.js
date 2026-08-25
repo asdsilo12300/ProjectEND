@@ -719,6 +719,12 @@ export async function claimMaturityReward(simulatorId) {
   })
 }
 
+export async function getSimulationModeRewards() {
+  // Availability is controlled live from Admin; never reuse a browser HTTP
+  // cache entry after an administrator enables or disables a mode.
+  return apiFetch('/simulation-mode-rewards', { auth: false, cache: 'no-store' })
+}
+
 export async function applySimulatorItem(simulatorId, itemKey, quantity = 1, itemId = null) {
   return apiFetch(`/simulators/${simulatorId}/use-item`, {
     method: 'POST',

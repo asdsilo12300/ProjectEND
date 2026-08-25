@@ -20,6 +20,7 @@ use App\Services\MediaStorage;
 use App\Services\PlantSimulationEngine;
 use App\Services\SimulationActivityTracker;
 use App\Services\SimulationEventService;
+use App\Services\SimulationModeRewardService;
 use App\Services\SeasonalWeatherService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -82,6 +83,12 @@ class SimulatorController extends Controller
             'season' => ['nullable', Rule::in(['summer', 'rainy', 'winter'])],
             'start_month' => ['nullable', 'required_if:mode,seasonal', 'integer', 'between:1,12'],
         ]);
+
+        if (! app(SimulationModeRewardService::class)->isModeActive($data['mode'])) {
+            throw ValidationException::withMessages([
+                'mode' => 'This simulation mode is currently disabled by an administrator.',
+            ]);
+        }
 
         $plant = Plant::query()->playable()->with('stages')->find($data['plant_id']);
         if (! $plant) {
@@ -238,7 +245,7 @@ class SimulatorController extends Controller
             $quantities = [
                 'water' => 4,
                 'fertilizer' => 3,
-                'drainage' => 1,
+                'mulch' => 1,
                 'shade' => 1,
                 'windbreak' => 1,
                 'frost-cover' => 1,
@@ -355,8 +362,9 @@ class SimulatorController extends Controller
                 ];
             }
 
-            $amount = 100;
-            $experienceAmount = 50;
+            $modeReward = app(\App\Services\SimulationModeRewardService::class)->forMode($lockedSimulator->mode);
+            $amount = $modeReward['coin_reward'];
+            $experienceAmount = $modeReward['experience_reward'];
             $user->forceFill(['coin' => $currentCoin + $amount])->save();
             $experienceReward = $user->addExperience($experienceAmount);
             $user->refresh();
@@ -370,6 +378,7 @@ class SimulatorController extends Controller
                 'amount' => $amount,
                 'experience_amount' => $experienceAmount,
                 'experience_reward' => $experienceReward,
+                'mode_reward' => $modeReward,
                 'balance' => (int) $user->coin,
                 'user' => $this->userRewardPayload($user),
                 'simulator' => (new SimulatorResource($lockedSimulator->fresh(['plant.stages', 'currentStage', 'visualVariant', 'activePests.pest.conditionRules'])))->resolve($request),

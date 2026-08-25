@@ -73,7 +73,7 @@ function SearchField({ id, label, onChange, placeholder, value }) {
   )
 }
 
-export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onViewFriend }) {
+export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onViewFriend, presentation = 'floating', hideHeader = false }) {
   const [mode, setMode] = useState('list')
   const [friends, setFriends] = useState([])
   const [query, setQuery] = useState('')
@@ -302,8 +302,10 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
       subtitle={mode === 'invite' ? 'invite friends' : 'friend list'}
       windows={windows}
       setWindows={setWindows}
-      className="w-[360px]"
+      className={presentation === 'docked' ? '' : 'w-[360px]'}
       headerActions={requestButton}
+      presentation={presentation}
+      hideHeader={hideHeader}
     >
       <div className="mb-3 flex items-center gap-2 rounded-lg border border-lime-100/10 bg-white/[0.045] p-2">
         <div className="grid min-w-0 flex-1 grid-cols-2 divide-x divide-lime-100/10">

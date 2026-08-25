@@ -18,6 +18,8 @@ import { CommentsPanel } from './game/panels/CommentsPanel'
 import { EnvironmentPanel } from './game/panels/EnvironmentPanel'
 import { FriendsPanel } from './game/panels/FriendsPanel'
 import { PlantMonitorPanel } from './game/panels/PlantMonitorPanel'
+import { GameWorkspaceShell } from './game/layout/GameWorkspaceShell'
+import { AppIcon } from './game/icons/FontAwesomeIcon'
 import { OnboardingExperience } from './game/onboarding/OnboardingExperience'
 import { useSimulationAction } from './game/actions/useSimulationAction'
 import { LoginPage } from './auth/LoginPage'
@@ -42,6 +44,23 @@ const IssueReportsPage = lazy(() => import('./support/IssueReportsPage').then((m
 const SimulationStage = lazy(() => import('./game/scene/SimulationStage').then((module) => ({ default: module.SimulationStage })))
 
 const plantKnowledgeAutoOpenPrefix = 'plant-growth-academy:plant-knowledge:auto-opened'
+const workspaceLayoutStorageKey = 'plant-growth-academy:simulation-command-center:v1'
+
+function loadWorkspaceLayout() {
+  const fallback = {
+    leftTab: 'plants',
+    rightTab: 'overview',
+    leftCollapsed: false,
+    rightCollapsed: false,
+  }
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(workspaceLayoutStorageKey) || 'null')
+    return saved && typeof saved === 'object' ? { ...fallback, ...saved } : fallback
+  } catch {
+    return fallback
+  }
+}
 
 function createClientActionId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -198,6 +217,7 @@ const itemNameToKey = {
   'Snail Prank': 'snail-prank',
   'Watering Dose': 'water',
   'Fertilizer Dose': 'fertilizer',
+  'Straw Mulch': 'mulch',
   'Drainage Mix': 'drainage',
   'Shade Cloth': 'shade',
   Windbreak: 'windbreak',
@@ -213,6 +233,7 @@ const thaiItemNames = {
   'Snail Prank': 'ไอเทมหอยทากแกล้งเพื่อน',
   'Watering Dose': 'น้ำสำหรับรดพืช',
   'Fertilizer Dose': 'ปุ๋ยสำหรับพืช',
+  'Straw Mulch': 'ฟางคลุมดินรักษาความชื้น',
   'Drainage Mix': 'วัสดุช่วยระบายน้ำ',
   'Shade Cloth': 'ผ้าบังแดด',
   Windbreak: 'แนวกันลม',
@@ -243,6 +264,7 @@ const itemImageByKey = {
   'snail-prank': imageAssets.snail,
   water: imageAssets.wateringCan,
   fertilizer: imageAssets.fertilizerCare,
+  mulch: imageAssets.strawMulch,
   drainage: imageAssets.soil,
   shade: imageAssets.shadeCloth,
   windbreak: imageAssets.windbreak,
@@ -318,6 +340,17 @@ const itemMetaByKey = {
     help: 'Add fertilizer when the nutrient meter gets low. Nutrients drain more slowly than water.',
     helpTh: 'เติมปุ๋ยเมื่อหลอดธาตุอาหารลดลง โดยธาตุอาหารจะลดช้ากว่าน้ำ',
     icon: 'fertilizer',
+  },
+  mulch: {
+    detail: 'keeps soil moisture longer',
+    detailTh: 'ชะลอการสูญเสียความชื้นในดิน',
+    successText: 'Temporary moisture retention',
+    successTextTh: 'ช่วยให้น้ำและความชื้นอยู่ได้นานขึ้นชั่วคราว',
+    failText: 'Requires heavy rain, dry soil, or excessive soil heat',
+    failTextTh: 'ใช้เมื่อฝนมาก ดินแห้ง หรืออุณหภูมิดินสูงเกินไป',
+    help: 'Spread straw around the root zone when rain is heavy, soil moisture is below the plant minimum, or soil temperature exceeds its healthy maximum.',
+    helpTh: 'คลุมฟางรอบโคนเมื่อฝนมาก ความชื้นดินต่ำกว่าค่าที่พืชต้องการ หรืออุณหภูมิดินสูงเกินช่วงเหมาะสม',
+    icon: 'soil',
   },
   drainage: {
     detail: 'reduces excess soil moisture',
@@ -641,6 +674,7 @@ function GamePageLoading({ label = 'Loading academy workspace' }) {
 
 function App() {
   const [windows, setWindows] = useState(defaultWindows)
+  const [workspaceLayout, setWorkspaceLayout] = useState(loadWorkspaceLayout)
   const [activeMobileLabPanel, setActiveMobileLabPanel] = useState('monitor')
   const [climate, setClimate] = useState(defaultClimate)
   const [openSections, setOpenSections] = useState({ Plants: true, Items: true })
@@ -669,6 +703,7 @@ function App() {
   const [saveHydrated, setSaveHydrated] = useState(() => !getToken())
   const [resetPending, setResetPending] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
+  const previousWorkspacePlantRef = useRef(null)
   const [pendingPlant, setPendingPlant] = useState(null)
   const [seasonalSetupAsset, setSeasonalSetupAsset] = useState(null)
   const [plantingBusy, setPlantingBusy] = useState(false)
@@ -784,6 +819,41 @@ function App() {
       window.removeEventListener('resize', reflowLabWindows)
     }
   }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(workspaceLayoutStorageKey, JSON.stringify(workspaceLayout))
+  }, [workspaceLayout])
+
+  useEffect(() => {
+    const compactWorkspace = window.matchMedia('(max-width: 1179px)')
+    function syncCompactWorkspace(event) {
+      if (!event.matches) return
+      setWorkspaceLayout((current) => current.leftCollapsed && current.rightCollapsed
+        ? current
+        : { ...current, leftCollapsed: true, rightCollapsed: true })
+    }
+    syncCompactWorkspace(compactWorkspace)
+    compactWorkspace.addEventListener?.('change', syncCompactWorkspace)
+    return () => compactWorkspace.removeEventListener?.('change', syncCompactWorkspace)
+  }, [])
+
+  useEffect(() => {
+    const currentPlantId = selectedPlant?.backendId ?? selectedPlant?.id ?? null
+    const previousPlantId = previousWorkspacePlantRef.current
+
+    if (!currentPlantId) {
+      setWorkspaceLayout((current) => current.leftTab === 'plants' ? current : { ...current, leftTab: 'plants' })
+    } else if (currentPlantId !== previousPlantId) {
+      setWorkspaceLayout((current) => ({ ...current, leftTab: 'monitor' }))
+    }
+
+    previousWorkspacePlantRef.current = currentPlantId
+  }, [selectedPlant])
+
+  useEffect(() => {
+    if (!visitingFriend) return
+    setWorkspaceLayout((current) => ({ ...current, rightTab: 'comments', rightCollapsed: false }))
+  }, [visitingFriend])
 
   const dismissActionToast = useCallback((toastId) => {
     const timer = actionToastTimersRef.current.get(toastId)
@@ -1233,6 +1303,41 @@ function App() {
     }, {})
   }, [inventoryItems])
 
+  const mulchConditions = useMemo(() => {
+    const plant = selectedPlant?.plantData ?? previewSimulationVisual?.plant ?? selectedPlant ?? {}
+    const currentSeasonalDay = previewSimulationVisual?.seasonal_context?.current ?? {}
+    const currentOutdoor = outdoorWeather?.forecast?.current ?? {}
+    const dailyOutdoor = outdoorWeather?.forecast?.daily ?? {}
+    const rainCandidates = (growingMode === 'seasonal'
+      ? [currentSeasonalDay.precipitation, currentSeasonalDay.rain]
+      : [
+          currentOutdoor.precipitation,
+          currentOutdoor.rain,
+          dailyOutdoor.precipitation_sum?.[0],
+          dailyOutdoor.rain_sum?.[0],
+        ]).map(Number).filter(Number.isFinite)
+    const rain = rainCandidates.length ? Math.max(...rainCandidates) : 0
+    const soilHumidity = Number(previewSimulationVisual?.soil_humidity ?? 0)
+    const soilTemperature = Number(previewSimulationVisual?.soil_temp ?? 0)
+    const soilHumidityMin = Number(plant?.soil_humidity_min ?? plant?.environment?.soil_humidity?.min ?? 35)
+    const soilTemperatureMax = Number(plant?.soil_temp_max ?? plant?.environment?.soil_temp?.max ?? 30)
+    const heavyRain = rain >= 25
+    const lowSoilMoisture = soilHumidity < soilHumidityMin
+    const hotSoil = soilTemperature > soilTemperatureMax
+
+    return {
+      eligible: heavyRain || lowSoilMoisture || hotSoil,
+      heavyRain,
+      hotSoil,
+      lowSoilMoisture,
+      rain,
+      soilHumidity,
+      soilHumidityMin,
+      soilTemperature,
+      soilTemperatureMax,
+    }
+  }, [growingMode, outdoorWeather?.forecast, previewSimulationVisual, selectedPlant])
+
   const labSections = useMemo(() => {
     const currentPlantId = Number(selectedPlant?.backendId ?? simulationVisual?.plant?.id ?? 0)
     const plantedSimulators = visitingFriend
@@ -1256,7 +1361,7 @@ function App() {
         const inventoryEntry = inventoryItemsByKey.get(key)
         return itemAssetFromApi(item, inventoryEntry?.quantity ?? 0)
       })
-      .filter((item) => item.id !== 'hand-pick' && item.actionKey !== 'manual-pest-control')
+      .filter((item) => item.id !== 'hand-pick' && !['manual-pest-control', 'drainage'].includes(item.actionKey))
       .filter((item) => !visitingFriend || item.friendUsable)
 
     return {
@@ -1943,6 +2048,19 @@ function App() {
     }
   }, [persistCurrentSimulation])
   function openWindow(id) {
+    if (id === 'monitor') {
+      setWorkspaceLayout((current) => ({ ...current, leftTab: 'monitor', leftCollapsed: false }))
+    } else if (id === 'comments' || id === 'friends') {
+      setWorkspaceLayout((current) => ({ ...current, rightTab: id, rightCollapsed: false }))
+    } else if (id === 'climate') {
+      setWorkspaceLayout((current) => ({
+        ...current,
+        rightTab: 'overview',
+        rightCollapsed: false,
+        ...(window.matchMedia('(max-width: 1179px)').matches ? { leftCollapsed: true } : {}),
+      }))
+    }
+
     const isCompactLab = window.matchMedia('(max-width: 767px)').matches
     if (isCompactLab) setActiveMobileLabPanel(id)
 
@@ -2102,6 +2220,7 @@ function App() {
           action_key: actionKey,
           item_id: selectedAsset.backendId,
           event_id: relatedEvent?.id ?? undefined,
+          observed_precipitation: actionKey === 'mulch' ? mulchConditions.rain : undefined,
         })
         if (
           !payload
@@ -2482,7 +2601,7 @@ function App() {
       }
 
       const actionKey = asset.actionKey ?? asset.itemKey ?? asset.id
-      if (['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
+      if (['water', 'fertilizer', 'mulch', 'drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
         setActionConfirmAsset(asset)
         setActionMessage(getAppLanguage() === 'th'
           ? `ตรวจสอบผลของ ${localizedItemName(asset)} แล้วกดยืนยัน`
@@ -3717,9 +3836,40 @@ function App() {
       ) : (
         <>
           {labReady && (
-            <>
-              <LibrarySidebar activeEvents={previewSimulationVisual?.events ?? []} activeModifiers={previewSimulationVisual?.active_modifiers ?? []} seasonalContext={previewSimulationVisual?.seasonal_context} busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} />
-              <SimulationStage
+            <GameWorkspaceShell
+              language={getAppLanguage()}
+              mode={growingMode}
+              plant={selectedPlant}
+              readOnly={Boolean(visitingFriend)}
+              simulationVisual={previewSimulationVisual}
+              leftTab={workspaceLayout.leftTab}
+              rightTab={workspaceLayout.rightTab}
+              leftCollapsed={workspaceLayout.leftCollapsed}
+              rightCollapsed={workspaceLayout.rightCollapsed}
+              onLeftTabChange={(leftTab) => setWorkspaceLayout((current) => ({ ...current, leftTab, leftCollapsed: false }))}
+              onRightTabChange={(rightTab) => setWorkspaceLayout((current) => ({ ...current, rightTab, rightCollapsed: false }))}
+              onLeftCollapsedChange={(leftCollapsed) => setWorkspaceLayout((current) => ({ ...current, leftCollapsed, ...(!leftCollapsed && window.matchMedia('(max-width: 1179px)').matches ? { rightCollapsed: true } : {}) }))}
+              onRightCollapsedChange={(rightCollapsed) => setWorkspaceLayout((current) => ({ ...current, rightCollapsed, ...(!rightCollapsed && window.matchMedia('(max-width: 1179px)').matches ? { leftCollapsed: true } : {}) }))}
+              leftLibrary={(
+                <LibrarySidebar activeEvents={previewSimulationVisual?.events ?? []} activeModifiers={previewSimulationVisual?.active_modifiers ?? []} seasonalContext={previewSimulationVisual?.seasonal_context} busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} mulchConditions={mulchConditions} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} presentation="docked" view={workspaceLayout.leftTab === 'tools' ? 'tools' : 'plants'} />
+              )}
+              leftMonitor={(
+                <PlantMonitorPanel
+                  windows={windows}
+                  setWindows={setWindows}
+                  simulationVisual={previewSimulationVisual}
+                  hasPlant={Boolean(selectedPlant)}
+                  awaitingFirstCycle={awaitingFirstCycle}
+                  cycleStatus={cycleStatus}
+                  nextCycleAt={nextSimulationTickAt}
+                  simulationSpeed={growingMode === 'greenhouse' ? simulationSpeed : 1}
+                  presentation="docked"
+                  hideHeader
+                />
+              )}
+              centerContent={<>
+                <SimulationStage
+                commandCenter
                 actionState={actionState}
                 coinBurst={coinBurst}
                 emptyGardenOwnerName={visitingFriend ? visitorName : ''}
@@ -3755,7 +3905,7 @@ function App() {
               />
 
               {visitingFriend && (
-                <div className={`absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)] ${['outdoor', 'seasonal'].includes(growingMode) ? 'top-[216px]' : 'top-20'}`} data-tour="friend-mode-banner">
+                <div className="command-friend-banner absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-lime-100/15 bg-[#101511]/90 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,.35)]" data-tour="friend-mode-banner">
                   <span className="rounded-md bg-[#9bcf82] px-2 py-1 font-black text-[#101511]">{visitorName.slice(0, 1).toUpperCase()}</span>
                   <span><strong className="text-lime-50">{visitingFriend.historyReplay ? 'Saved simulation state' : `${visitorName}'s garden`}</strong> - view only</span>
                   <button
@@ -3767,18 +3917,9 @@ function App() {
                   </button>
                 </div>
               )}
-
-              <PlantMonitorPanel
-                windows={windows}
-                setWindows={setWindows}
-                simulationVisual={previewSimulationVisual}
-                hasPlant={Boolean(selectedPlant)}
-                awaitingFirstCycle={awaitingFirstCycle}
-                cycleStatus={cycleStatus}
-                nextCycleAt={nextSimulationTickAt}
-                simulationSpeed={growingMode === 'greenhouse' ? simulationSpeed : 1}
-              />
-              {!visitingFriend && (
+              </>}
+              rightOverview={(
+                <div className="command-overview-environment" data-tour="environment-controls">
                 <EnvironmentPanel
                   climate={climate}
                   windows={windows}
@@ -3790,29 +3931,18 @@ function App() {
                   onTransferLocation={() => setLocationTransferOpen(true)}
                   outdoorWeather={outdoorWeather}
                   plantSelected={Boolean(selectedPlant)}
+                  presentation="docked"
+                  hideHeader
+                  contextual
+                  readOnly={Boolean(visitingFriend)}
                 />
+                </div>
               )}
-              {!visitingFriend && <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} />}
-              <CommentsPanel currentUser={user} onAuthRequired={openAuth} onLoadStateChange={handleFriendCommentsLoadState} simulatorId={visitingFriend?.historyReplay ? null : previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} />
-              <nav className="lab-mobile-panel-dock" data-tour="mobile-panel-dock" aria-label="Lab panels">
-                {[
-                  ['monitor', 'Plant'],
-                  ['climate', 'Environment'],
-                  ['comments', 'Comments'],
-                  ['friends', 'Friends'],
-                ].filter(([id]) => !(visitingFriend && (id === 'climate' || id === 'friends'))).map(([id, label]) => (
-                  <button
-                    type="button"
-                    key={id}
-                    data-panel-target={id}
-                    aria-pressed={Boolean(activeMobileLabPanel === id && windows[id]?.visible && !windows[id]?.collapsed)}
-                    onClick={() => openWindow(id)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            </>
+              rightComments={<CommentsPanel currentUser={user} onAuthRequired={openAuth} onLoadStateChange={handleFriendCommentsLoadState} simulatorId={visitingFriend?.historyReplay ? null : previewSimulationVisual?.id} windows={windows} setWindows={setWindows} title={visitingFriend ? 'Friend comments' : 'Comments'} presentation="docked" hideHeader />}
+              rightFriends={!visitingFriend
+                ? <FriendsPanel windows={windows} setWindows={setWindows} user={user} onAuthRequired={openAuth} onViewFriend={viewFriendGarden} presentation="docked" hideHeader />
+                : <div className="command-readonly-note"><AppIcon name="eye" /><strong>{getAppLanguage() === 'th' ? 'กำลังดูสวนของเพื่อน' : 'Viewing a friend garden'}</strong><span>{getAppLanguage() === 'th' ? 'กลับสวนของคุณเพื่อจัดการรายชื่อเพื่อน' : 'Return to your garden to manage friends.'}</span></div>}
+            />
           )}
 
           {saveHydrated && !modeLoading && pendingPlant && (

@@ -18,6 +18,7 @@ const PLANT_PIVOT = [0.75, -0.105, 0]
 const PLANT_LOCAL_OFFSET = [0, -PLANT_BASE_LOCAL_Y, 0]
 const PLANT_ASSET_ALIGNMENT_POSITION = [-0.1, -0.026, 0.02]
 const PLANT_ASSET_ALIGNMENT_SCALE = 0.9
+const SNAIL_CONTACT_LIFT = 0.006
 const GENERIC_PLANT_TARGET_HEIGHT = 2.15
 // The sunflower asset is authored with a much smaller source bounding box
 // than the other uploaded plants. Normalising it to the generic height makes
@@ -232,9 +233,9 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
         nextMaterial.color.lerp(stemColor, stressTintStrength)
       }
       if (isDead && nextMaterial.color && isFlower) {
-        // A dead sunflower must not keep its bright yellow, open bloom. The
-        // procedural head rig closes the silhouette while this removes the
-        // remaining healthy flower colour.
+        // A dead sunflower must not keep its bright, healthy flower colour.
+        // Keep the authored mesh connected and communicate death through the
+        // dry material treatment plus the cohesive whole-plant collapse.
         nextMaterial.color.lerp(deadFlowerColor, 0.92)
       }
       if (isDead) {
@@ -489,9 +490,8 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     clone.updateMatrixWorld(true)
 
     // The uploaded Sunflower uses morph targets and has no native skeleton.
-    // Build a lightweight hierarchy at its mature pose so stress can bend the
-    // stem, drop the leaves, bow the flower head, and close the petals without
-    // replacing or fighting the authored growth animation.
+    // Keep its independent meshes under one stress pivot so wind/wilt motion
+    // cannot pull the leaves or flower head away from the stem.
     if (isSunflower) attachSunflowerStressPivots(clone, { upAxis: sourceUpAxis })
 
     if (measurementMixer) {
@@ -691,7 +691,7 @@ function pestModelUrl(name, pest) {
   return null
 }
 
-export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgress = 0 }) {
+export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgress = 0, groundY = null }) {
   const name = normalizePestName(pest)
   const modelUrl = pestModelUrl(name, pest)
   const useSurfaceFungus = name === 'fungus' || !modelUrl
@@ -703,11 +703,24 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
 
   const anchors = getVisiblePestAnchors(name, risk, stableSeed)
     .map((anchor) => getGrowthAdjustedAnchor(anchor, growthProgress, name))
+  const presentation = getPlantPresentation(visualOverrides)
+  const resolvedGroundY = Number(groundY)
+  const groundedSnailAnchors = name === 'snail' && Number.isFinite(resolvedGroundY)
+    ? anchors.map((anchor) => ({
+        ...anchor,
+        position: [
+          PLANT_PIVOT[0] + anchor.position[0] * presentation.scale,
+          resolvedGroundY + SNAIL_CONTACT_LIFT,
+          anchor.position[2] * presentation.scale,
+        ],
+        size: anchor.size * presentation.scale,
+      }))
+    : anchors
   const attachmentStart = plantAttachments.length > 0
     ? stableIndex(`surface-${stableSeed}`, plantAttachments.length)
     : 0
   const pestVisuals = useProceduralSnail
-    ? anchors.map((anchor, anchorIndex) => (
+    ? groundedSnailAnchors.map((anchor, anchorIndex) => (
         <SnailSurfaceModel key={`${stableSeed}-${anchorIndex}`} anchor={anchor} />
       ))
     : anchors.map((anchor, anchorIndex) => (
@@ -722,15 +735,13 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
         />
       ))
 
+  if (name === 'snail') return <>{pestVisuals}</>
+
   return (
     <PlantPresentationGroup visualOverrides={visualOverrides}>
-      {name === 'snail'
-        ? pestVisuals
-        : (
-            <group position={PLANT_ASSET_ALIGNMENT_POSITION} scale={PLANT_ASSET_ALIGNMENT_SCALE}>
-              {pestVisuals}
-            </group>
-          )}
+      <group position={PLANT_ASSET_ALIGNMENT_POSITION} scale={PLANT_ASSET_ALIGNMENT_SCALE}>
+        {pestVisuals}
+      </group>
     </PlantPresentationGroup>
   )
 }

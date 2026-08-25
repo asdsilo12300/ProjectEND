@@ -1,12 +1,24 @@
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { panelDockPosition, panelExpandedPosition } from '../utils/windows'
 
-export function Panel({ id, title, subtitle, windows, setWindows, children, className = '', headerActions = null }) {
+export function Panel({
+  id,
+  title,
+  subtitle,
+  windows,
+  setWindows,
+  children,
+  className = '',
+  headerActions = null,
+  presentation = 'floating',
+  hideHeader = false,
+}) {
   const current = windows[id]
+  const isDocked = presentation === 'docked'
 
   if (!current.visible) return null
 
-  const canDrag = id === 'climate' && !current.collapsed
+  const canDrag = !isDocked && id === 'climate' && !current.collapsed
   const panelWidths = { monitor: 360, climate: 520, friends: 360, comments: 370 }
   const currentWidth = panelWidths[id] ?? 320
   const lowerPanelTop = Object.entries(windows)
@@ -120,15 +132,16 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
 
   return (
     <section
-      className={`lab-panel absolute left-0 top-0 z-30 w-[320px] overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511]/92 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.36)] ${className}`}
+      className={`lab-panel ${isDocked ? 'lab-panel--docked relative flex h-full min-h-0 w-full flex-col' : 'absolute left-0 top-0 z-30 w-[320px]'} overflow-hidden rounded-lg border border-lime-100/15 bg-[#101511]/92 text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,.36)] ${className}`}
       data-panel-id={id}
-      data-panel-collapsed={current.collapsed ? 'true' : 'false'}
-      style={{
-        transform: `translate(${current.x}px, ${current.y}px)`,
-        maxHeight: current.collapsed ? 44 : availableHeight,
-      }}
+      data-panel-collapsed={!isDocked && current.collapsed ? 'true' : 'false'}
+      data-panel-presentation={presentation}
+      style={isDocked ? undefined : {
+          transform: `translate(${current.x}px, ${current.y}px)`,
+          maxHeight: current.collapsed ? 44 : availableHeight,
+        }}
     >
-      <header className={`group flex h-11 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3 ${canDrag ? 'cursor-grab select-none active:cursor-grabbing' : ''}`} onPointerDown={startDrag}>
+      {!hideHeader && <header className={`group flex h-11 shrink-0 items-center gap-3 border-b border-lime-100/10 bg-lime-100/[0.045] px-3 ${canDrag ? 'cursor-grab select-none active:cursor-grabbing' : ''}`} onPointerDown={startDrag}>
         <span className="lab-panel__accent h-6 w-1.5 rounded-full" />
         <span className="min-w-0 flex-1 leading-none">
           <strong className="block truncate text-sm font-bold text-lime-50">{title}</strong>
@@ -144,7 +157,7 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
             <AppIcon className="h-3.5 w-3.5" name="move" />
           </span>
         )}
-        <button
+        {!isDocked && <button
           type="button"
           className="grid h-6 w-6 place-items-center rounded-md border border-lime-100/15 bg-white/5 text-slate-200 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200"
           aria-label={`${current.collapsed ? 'Expand' : 'Collapse'} ${title}`}
@@ -152,9 +165,16 @@ export function Panel({ id, title, subtitle, windows, setWindows, children, clas
           onClick={toggleCollapse}
         >
           <AppIcon className={`h-4 w-4 transition ${current.collapsed ? 'rotate-180' : ''}`} name="arrowUp" />
-        </button>
-      </header>
-      {!current.collapsed && <div className="lab-panel__body relative overflow-y-auto p-4" style={{ maxHeight: Math.max(52, availableHeight - 44) }}>{children}</div>}
+        </button>}
+      </header>}
+      {(isDocked || !current.collapsed) && (
+        <div
+          className={`lab-panel__body relative min-h-0 ${isDocked ? 'flex-1 overflow-y-auto' : 'overflow-y-auto'} p-4`}
+          style={isDocked ? undefined : { maxHeight: Math.max(52, availableHeight - 44) }}
+        >
+          {children}
+        </div>
+      )}
     </section>
   )
 }

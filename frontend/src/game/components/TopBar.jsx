@@ -1,29 +1,33 @@
 import { imageAssets, navItems, navTargets } from '../data/gameData'
 import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '../icons/FontAwesomeIcon'
-import { NavIcon } from '../icons/NavIcon'
 import { LoadingSkeleton } from './LoadingSkeleton'
+import { LevelAvatar } from './LevelAvatar'
 import plantGrowthLogo from '../../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
-import { resolveAssetUrl } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
+
+const navigationPixelSprites = {
+  Home: 'home',
+  Learn: 'learn',
+  'Plant Lab': 'lab',
+  Shop: 'shop',
+  History: 'history',
+  Community: 'community',
+}
+
+function PixelNavigationIcon({ name, className = '' }) {
+  return <span aria-hidden="true" className={`pixel-navigation-icon ${className}`} data-pixel-icon={name} />
+}
 
 function ProfileAvatar({ user, initial, size = 'sm' }) {
   const sizeClass = size === 'md' ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-sm'
 
   return (
-    <span className={`${sizeClass} relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-[#9bcf82] font-black text-[#101511]`}>
-      {user ? initial : (
-        <AppIcon className="h-4 w-4" name="profile" />
-      )}
-      {user?.avatar_url && (
-        <img
-          className="absolute inset-0 h-full w-full object-cover object-center"
-          src={resolveAssetUrl(user.avatar_url)}
-          alt=""
-          onError={(event) => { event.currentTarget.hidden = true }}
-        />
-      )}
-    </span>
+    <LevelAvatar
+      className={`${sizeClass} font-black`}
+      fallback={user ? initial : <PixelNavigationIcon className="pixel-navigation-icon--avatar" name="profile" />}
+      user={user}
+    />
   )
 }
 
@@ -215,7 +219,10 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             aria-current={active ? 'page' : undefined}
             onClick={() => navigate(item)}
           >
-            <NavIcon className={`${mobile ? 'h-5 w-5' : 'me-2 h-4 w-4'} ${active ? 'text-[#9bcf82]' : 'text-slate-400 group-hover:text-[#9bcf82]'}`} type={item} />
+            <PixelNavigationIcon
+              className={`${mobile ? 'pixel-navigation-icon--mobile' : 'me-2'} ${active ? 'pixel-navigation-icon--active' : ''}`}
+              name={navigationPixelSprites[item] ?? 'lab'}
+            />
             {item}
             {item === 'Community' && communityUnreadNotificationCount > 0 ? (
               <span className={`${mobile ? 'ms-auto' : 'ms-2'} inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-black leading-none text-white shadow-[0_0_0_2px_#101511]`} aria-label={`${communityUnreadNotificationCount} unread Community notifications`}>
@@ -318,7 +325,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
               onHelpOpen?.()
             }}
           >
-            <AppIcon className="h-5 w-5" name="help" />
+            <PixelNavigationIcon name="help" />
           </button>
         )}
 
@@ -338,7 +345,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 if (!notificationsOpen && notificationStatus !== 'loading') onNotificationsRefresh?.({ silent: true })
               }}
             >
-              <AppIcon className="h-5 w-5" name="notifications" />
+              <PixelNavigationIcon name="notifications" />
               {unreadNotificationCount > 0 ? (
                 <span className="absolute -right-1.5 -top-1.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#101511] bg-red-500 px-1 text-xs font-black leading-none text-white shadow-[0_5px_12px_rgba(0,0,0,.35)]">
                   {notificationBadge}
@@ -445,7 +452,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                 setCoinDetailsOpen((value) => !value)
               }}
             >
-              <img className="h-6 w-6 shrink-0 object-contain drop-shadow-[0_2px_6px_rgba(251,191,36,.25)] sm:h-7 sm:w-7" src={imageAssets.coin} alt="" />
+              <PixelNavigationIcon className="pixel-navigation-icon--coin" name="coin" />
               <span className="min-w-6 text-right text-xs font-black tabular-nums text-lime-50 sm:min-w-10 sm:text-sm">{shownCoins}</span>
             </button>
             {coinDelta ? (

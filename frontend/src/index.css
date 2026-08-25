@@ -1,15 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --pg-bg: #edf3e9;
-  --pg-surface: #f8faf5;
-  --pg-surface-raised: #dfe9dc;
+  --pg-bg: #f3f6ef;
+  --pg-canvas: #e8f0e7;
+  --pg-surface: #fbfcf8;
+  --pg-surface-raised: #e1ece0;
+  --pg-panel: #d3e1d2;
   --pg-structure: #294b36;
-  --pg-border: #a9bea9;
+  --pg-border: #b7cbb8;
   --pg-text: #203429;
   --pg-text-muted: #526a5b;
   --pg-primary: #327d4b;
   --pg-primary-strong: #28663d;
+  --pg-focus: #327d4b;
+  --pg-water: #1f7fa8;
+  --pg-sun: #b97816;
+  --pg-soil: #7b5b43;
+  --pg-healthy: #2e8054;
   --pg-shop: #b97816;
   --pg-history: #6ca7ef;
   --pg-community: #ac87eb;
@@ -20,15 +27,24 @@
 }
 
 html.settings-theme-dark {
-  --pg-bg: #0b0f0c;
-  --pg-surface: #121914;
-  --pg-surface-raised: #18221b;
+  --pg-bg: #0c1811;
+  --pg-canvas: #10231a;
+  --pg-surface: #172d21;
+  --pg-surface-raised: #1d3a28;
+  --pg-panel: #284a35;
   --pg-structure: #d8f3c9;
-  --pg-border: rgba(216, 243, 201, 0.13);
-  --pg-text: #f2f7ee;
-  --pg-text-muted: #aebbb1;
-  --pg-primary: #9bcf82;
-  --pg-primary-strong: #bdeba7;
+  --pg-border: #345943;
+  --pg-text: #e8f2e4;
+  --pg-text-muted: #abc3b1;
+  --pg-primary: #8fd878;
+  --pg-primary-strong: #b2f09c;
+  --pg-focus: #b2f09c;
+  --pg-water: #62d5f3;
+  --pg-sun: #ffd36a;
+  --pg-soil: #a97b55;
+  --pg-healthy: #7cdd9a;
+  --pg-warning: #ffca68;
+  --pg-danger: #ff827a;
 }
 
 html,

@@ -22,6 +22,7 @@ use App\Models\Quest;
 use App\Models\ShopItem;
 use App\Models\Simulator;
 use App\Models\SimulatorComment;
+use App\Models\SimulationModeReward;
 use App\Services\AdminDataCache;
 use App\Services\KnownPlantProfileService;
 use App\Services\PlantKnowledgeProfileService;
@@ -77,6 +78,7 @@ class AdminResourceController extends Controller
 
     public function store(Request $request, string $resource): JsonResponse
     {
+        abort_if($resource === 'simulation-mode-rewards', 405, 'Simulation mode rows are fixed and cannot be added.');
         $config = $this->catalogConfig($resource);
         abort_if($config === null, 404, 'This resource cannot be created here.');
 
@@ -131,6 +133,7 @@ class AdminResourceController extends Controller
 
     public function destroy(Request $request, string $resource, int $record): JsonResponse
     {
+        abort_if($resource === 'simulation-mode-rewards', 405, 'Simulation mode rewards cannot be deleted.');
         if ($resource === 'activity-logs') {
             abort(405, 'Audit logs cannot be deleted.');
         }
@@ -188,6 +191,7 @@ class AdminResourceController extends Controller
             'model-assets' => ['model' => ModelAsset::class, 'with' => [], 'with_count' => [], 'search' => ['asset_key', 'label', 'type', 'url']],
             'quests' => ['model' => Quest::class, 'with' => [], 'with_count' => [], 'search' => ['title', 'description', 'quest_type']],
             'achievements' => ['model' => Achievement::class, 'with' => [], 'with_count' => [], 'search' => ['title', 'description', 'condition_type']],
+            'simulation-mode-rewards' => ['model' => SimulationModeReward::class, 'with' => [], 'with_count' => [], 'search' => ['mode', 'name_en', 'name_th']],
             'event-definitions' => ['model' => EventDefinition::class, 'with' => [], 'with_count' => ['simulationEvents'], 'search' => ['event_key', 'name_en', 'name_th', 'description_en', 'description_th']],
             default => null,
         };
@@ -253,6 +257,14 @@ class AdminResourceController extends Controller
             'model-assets' => ['asset_key' => ['required', 'string', 'max:191', Rule::unique('model_assets', 'asset_key')->ignore($id)], 'label' => ['nullable', 'string', 'max:191'], 'type' => ['required', 'string', 'max:80'], 'url' => ['required', 'string', 'max:2048'], 'metadata' => ['nullable', 'array']],
             'quests' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'quest_type' => ['required', Rule::in(['daily', 'weekly', 'story', 'event'])], 'target_type' => ['required', 'string', 'max:100'], 'target_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'reward_gem' => ['required', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],
             'achievements' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'condition_type' => ['required', 'string', 'max:100'], 'condition_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'badge_image_url' => $nullableUrl, 'is_active' => ['required', 'boolean']],
+            'simulation-mode-rewards' => [
+                'mode' => ['required', Rule::in(['greenhouse', 'outdoor', 'seasonal']), Rule::unique('simulation_mode_rewards', 'mode')->ignore($id)],
+                'name_en' => ['required', 'string', 'max:120'],
+                'name_th' => ['required', 'string', 'max:120'],
+                'experience_reward' => ['required', 'integer', 'between:0,1000000'],
+                'coin_reward' => ['required', 'integer', 'between:0,1000000'],
+                'is_active' => ['required', 'boolean'],
+            ],
             'event-definitions' => [
                 'event_key' => ['required', 'string', 'max:120', Rule::unique('event_definitions', 'event_key')->ignore($id)],
                 'name_en' => ['required', 'string', 'max:191'], 'name_th' => ['required', 'string', 'max:191'],
