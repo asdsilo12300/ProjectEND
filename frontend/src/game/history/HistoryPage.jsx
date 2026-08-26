@@ -147,7 +147,17 @@ const historyMessages = {
     pageNumber: (page) => `หน้าประวัติที่ ${page}`,
     previousPage: 'หน้าประวัติก่อนหน้า',
     nextPage: 'หน้าประวัติถัดไป',
-    stages: { Seedling: 'ต้นกล้า', Sprout: 'ต้นอ่อน', Young: 'ระยะเติบโต', Mature: 'โตเต็มวัย', 'Fully grown': 'โตเต็มที่' },
+    stages: {
+      Seedling: 'ต้นกล้า',
+      Sprout: 'ต้นอ่อน',
+      Young: 'ระยะเติบโต',
+      'Young Plant': 'ต้นอ่อน',
+      Mature: 'โตเต็มวัย',
+      'Fully grown': 'โตเต็มที่',
+      'Bulb establishment': 'ระยะตั้งตัวของหัว',
+      'Leaf emergence': 'ระยะแตกใบ',
+      Flowering: 'ระยะออกดอก',
+    },
   },
 }
 

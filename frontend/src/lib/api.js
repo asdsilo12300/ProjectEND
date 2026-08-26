@@ -227,7 +227,7 @@ export async function buyShopItem(shopItemId, quantity = 1) {
   })
 }
 export async function getPlants() {
-  return apiFetch('/plants', { auth: false, cacheTtl: 15000 })
+  return apiFetch('/plants', { auth: false, cacheTtl: 0, cache: 'no-store' })
 }
 
 export async function getLearningContents() {
@@ -367,6 +367,10 @@ export async function saveAdminResource(resource, record) {
     method: hasId ? 'PUT' : 'POST',
     body: JSON.stringify(record),
   })
+}
+
+export async function generateAdminPlantSetup(plantId) {
+  return apiFetch(`/admin/resources/plants/${plantId}/generate-setup`, { method: 'POST' })
 }
 
 export async function deleteAdminResource(resource, recordId) {

@@ -1,8 +1,17 @@
+import { COMMENT_CHARACTER_LIMIT, isCommentWithinLimit } from '../game/socialLimits.js'
+
 const DEMO_TOKEN = 'plant-growth-academy-demo-session'
 
 const nowIso = () => new Date().toISOString()
 const agoIso = (minutes) => new Date(Date.now() - (minutes * 60_000)).toISOString()
 const clone = (value) => value == null ? value : structuredClone(value)
+
+function validatedDemoComment(value) {
+  const text = String(value ?? '').trim()
+  if (!text) throw new Error('Please enter a comment.')
+  if (!isCommentWithinLimit(text)) throw new Error(`Comments can contain up to ${COMMENT_CHARACTER_LIMIT} characters.`)
+  return demoComment(text)
+}
 
 const simulationModeRewards = [
   { mode: 'greenhouse', name_en: 'Controlled Environment', name_th: 'โหมดควบคุมปัจจัย', experience_reward: 20, coin_reward: 20, is_active: true },
@@ -283,7 +292,9 @@ function historyFromSimulator(simulator, id, overrides = {}) {
     game_state: { simulator: clone(simulator), captured_at: nowIso(), schema_version: 2, growth_calculation: growthCalculation },
     growth_calculation: growthCalculation,
     analysis_result: overrides.analysis_result ?? 'The plant maintained stable growth under balanced environmental conditions.',
+    analysis_result_th: overrides.analysis_result_th ?? 'พืชเติบโตอย่างคงที่ภายใต้สภาพแวดล้อมที่สมดุล',
     direction: overrides.direction ?? 'Compare one factor at a time in the next growing cycle.',
+    direction_th: overrides.direction_th ?? 'รอบการปลูกถัดไป ลองปรับเปลี่ยนทีละหนึ่งปัจจัยเพื่อเปรียบเทียบผลลัพธ์',
     created_at: overrides.created_at ?? agoIso(id * 120),
   }
 }
@@ -793,7 +804,7 @@ export async function handleDemoApiRequest(path, options = {}) {
     }
     if (action === 'comments' && method === 'GET') return { handled: true, payload: { data: clone(session.simulatorComments.get(String(simulatorId)) ?? []) } }
     if (action === 'comments' && method === 'POST') {
-      const comment = demoComment(body.comment_text)
+      const comment = validatedDemoComment(body.comment_text)
       session.simulatorComments.set(String(simulatorId), [...(session.simulatorComments.get(String(simulatorId)) ?? []), comment])
       return { handled: true, payload: { data: clone(comment) } }
     }
@@ -860,12 +871,12 @@ export async function handleDemoApiRequest(path, options = {}) {
     const comments = session.postComments.get(String(postId)) ?? [demoComment('This comparison makes the result easy to understand.', 9401)]
     if (method === 'GET') return { handled: true, payload: { data: clone(comments) } }
     if (!commentId && method === 'POST') {
-      const comment = demoComment(body.comment_text)
+      const comment = validatedDemoComment(body.comment_text)
       session.postComments.set(String(postId), [...comments, comment])
       return { handled: true, payload: { data: clone(comment), comments_count: comments.length + 1 } }
     }
     if (action === 'replies') {
-      const reply = demoComment(body.comment_text)
+      const reply = validatedDemoComment(body.comment_text)
       session.postComments.set(String(postId), comments.map((comment) => String(comment.id) === String(commentId) ? { ...comment, replies: [...(comment.replies ?? []), reply] } : comment))
       return { handled: true, payload: { data: clone(reply), comments_count: comments.length + 1 } }
     }

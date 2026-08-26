@@ -71,6 +71,7 @@ function notificationAction(type, language) {
   if (type === 'like') return topBarCopy(language, 'liked your post', 'ถูกใจโพสต์ของคุณ')
   if (type === 'comment_like') return topBarCopy(language, 'liked your comment', 'ถูกใจความคิดเห็นของคุณ')
   if (type === 'reply') return topBarCopy(language, 'replied to your comment', 'ตอบกลับความคิดเห็นของคุณ')
+  if (type === 'garden_comment') return topBarCopy(language, 'commented in your garden', 'แสดงความคิดเห็นในสวนของคุณ')
   if (type === 'garden_prank') return topBarCopy(language, 'sent a prank to your garden', 'ส่งของแกล้งมายังสวนของคุณ')
   return topBarCopy(language, 'commented on your post', 'แสดงความคิดเห็นในโพสต์ของคุณ')
 }
@@ -201,6 +202,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
       openCommunityNotifications()
     } else {
       onNavigate?.('lab')
+      if (notification.type === 'garden_comment') openWindow?.('comments')
     }
   }
 
@@ -219,11 +221,13 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
             aria-current={active ? 'page' : undefined}
             onClick={() => navigate(item)}
           >
-            <PixelNavigationIcon
-              className={`${mobile ? 'pixel-navigation-icon--mobile' : 'me-2'} ${active ? 'pixel-navigation-icon--active' : ''}`}
-              name={navigationPixelSprites[item] ?? 'lab'}
-            />
-            {item}
+            <span className="topbar-nav-content">
+              <PixelNavigationIcon
+                className={`${mobile ? 'pixel-navigation-icon--mobile me-3' : 'me-2'} ${active ? 'pixel-navigation-icon--active' : ''}`}
+                name={navigationPixelSprites[item] ?? 'lab'}
+              />
+              <span>{item}</span>
+            </span>
             {item === 'Community' && communityUnreadNotificationCount > 0 ? (
               <span className={`${mobile ? 'ms-auto' : 'ms-2'} inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-black leading-none text-white shadow-[0_0_0_2px_#101511]`} aria-label={`${communityUnreadNotificationCount} unread Community notifications`}>
                 {communityNotificationBadge}
@@ -380,7 +384,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
                     </div>
                   ) : null}
                   {notifications.map((notification) => {
-                    const actorName = notification.actor?.username ?? topBarCopy(language, 'Learner', 'ผู้เรียน')
+                    const actorName = notification.actor?.username ?? topBarCopy(language, 'User', 'ผู้ใช้')
                     const isPlantDanger = notification.type === 'garden_prank'
                     const excerpt = notificationExcerpt(notification, language)
                     return (
@@ -625,7 +629,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
               Settings
             </button>
             <button
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-red-200"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-500 transition hover:bg-red-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-red-200"
               type="button"
               role="menuitem"
               onClick={onLogout}

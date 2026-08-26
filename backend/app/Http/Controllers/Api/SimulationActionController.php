@@ -14,6 +14,7 @@ class SimulationActionController extends Controller
     public function store(Request $request, Simulator $simulator, SimulationActionService $service): JsonResponse
     {
         abort_unless((int) $simulator->user_id === (int) $request->user()->id, 403);
+        abort_unless($simulator->hasAvailablePlant(), 423, 'This plant species is currently under maintenance.');
         $data = $request->validate([
             'client_action_id' => ['required', 'uuid'],
             'action_key' => ['required', 'string', 'max:100'],

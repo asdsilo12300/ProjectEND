@@ -47,6 +47,29 @@ function attachmentFor(object, index, surface = 'leaf') {
   }
 }
 
+function meshLeafAttachment(object, index) {
+  const positions = object?.geometry?.attributes?.position
+  if (!positions?.count) return attachmentFor(object, index, 'leaf')
+
+  // Use an actual mesh vertex rather than its object origin. Static GLTF
+  // exports frequently place every leaf mesh origin at the plant base.
+  const vertexIndex = Math.min(
+    positions.count - 1,
+    Math.floor((((index + 1) * 0.61803398875) % 1) * positions.count),
+  )
+  const normals = object.geometry.attributes?.normal
+  const normalLift = 0.012
+
+  return {
+    ...attachmentFor(object, index, 'leaf'),
+    position: [
+      positions.getX(vertexIndex) + (normals?.getX(vertexIndex) ?? 0) * normalLift,
+      positions.getY(vertexIndex) + (normals?.getY(vertexIndex) ?? 1) * normalLift,
+      positions.getZ(vertexIndex) + (normals?.getZ(vertexIndex) ?? 0) * normalLift,
+    ],
+  }
+}
+
 /**
  * Chooses one midrib bone from every Elephant Ear leaf. A portal rendered
  * into these bones inherits growth, wilt, wind and death deformation.
@@ -104,7 +127,21 @@ export function collectGenericPestAttachments(root) {
     else if (/stem|stalk/.test(name)) preferredBones.push({ object, surface: 'stem' })
   })
 
-  if (preferredBones.length === 0) return []
+  if (preferredBones.length === 0) {
+    const leafMeshes = []
+    root.traverse((object) => {
+      if (!object.isMesh || !object.geometry?.attributes?.position) return
+      const meshName = normalizedName(object.name)
+      const materialNames = (Array.isArray(object.material) ? object.material : [object.material])
+        .map((material) => normalizedName(material?.name))
+      if (/leaf|petal|flower|bloom|foliage/.test(meshName)
+        || materialNames.some((name) => /leaf|petal|flower|bloom|foliage/.test(name))) {
+        leafMeshes.push(object)
+      }
+    })
+
+    return leafMeshes.slice(0, 6).map((mesh, index) => meshLeafAttachment(mesh, index))
+  }
 
   const step = Math.max(1, Math.floor(preferredBones.length / 6))
   return preferredBones

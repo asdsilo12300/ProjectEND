@@ -607,33 +607,49 @@ function ModeLoadingOverlay({ mode }) {
 }
 
 function FriendGardenLoadingScreen({ loading, onCancel }) {
+  const [language, setLanguage] = useState(() => getAppLanguage())
+  const isThai = language === 'th'
   const steps = [
-    { label: 'Garden data', ready: loading.dataReady },
-    { label: '3D scene and models', ready: loading.sceneReady },
-    { label: 'Comments', ready: loading.commentsReady },
+    { label: isThai ? 'ข้อมูลสวน' : 'Garden data', ready: loading.dataReady },
+    { label: isThai ? 'ฉากสามมิติและโมเดล' : '3D scene and models', ready: loading.sceneReady },
+    { label: isThai ? 'ความคิดเห็น' : 'Comments', ready: loading.commentsReady },
   ]
+
+  useEffect(() => {
+    const handleSettingsChange = (event) => {
+      setLanguage(event?.detail?.language === 'th' ? 'th' : 'en')
+    }
+
+    window.addEventListener('plant-settings-change', handleSettingsChange)
+    return () => window.removeEventListener('plant-settings-change', handleSettingsChange)
+  }, [])
 
   return (
     <div
       className="fixed inset-0 z-[160] grid place-items-center overflow-hidden bg-[#08100b] px-5 text-slate-100"
+      data-i18n-skip="true"
       role="status"
       aria-live="polite"
-      aria-label={`Loading ${loading.ownerName}'s garden`}
+      aria-label={isThai ? `กำลังโหลดสวนของ ${loading.ownerName}` : `Loading ${loading.ownerName}'s garden`}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(127,176,105,.18),transparent_27%),linear-gradient(135deg,#071009_0%,#101a12_52%,#071009_100%)]" />
       <div className="soft-grid absolute inset-0 opacity-45" />
       <div className="relative w-full max-w-md rounded-2xl border border-lime-100/15 bg-[#101511]/96 px-6 py-7 shadow-[0_28px_90px_rgba(0,0,0,.55)]">
         <CircularLoader
           className="min-h-32"
-          description={loading.error || 'Loading the owner location, current weather, models, and discussion before showing the garden.'}
-          label={`Preparing ${loading.ownerName}'s garden`}
+          description={loading.error
+            ? translateAppText(loading.error, language)
+            : isThai
+              ? 'กำลังโหลดตำแหน่งของเจ้าของ สภาพอากาศปัจจุบัน โมเดล และความคิดเห็นก่อนแสดงสวน'
+              : 'Loading the owner location, current weather, models, and discussion before showing the garden.'}
+          label={isThai ? `กำลังเตรียมสวนของ ${loading.ownerName}` : `Preparing ${loading.ownerName}'s garden`}
         />
         <div className="mt-5 grid gap-2 border-t border-lime-100/10 pt-4">
           {steps.map((step) => (
             <div className="flex items-center justify-between gap-4 text-xs" key={step.label}>
               <span className={step.ready ? 'text-lime-100' : 'text-slate-400'}>{step.label}</span>
               <span className={`rounded-full px-2 py-0.5 font-bold ${step.ready ? 'bg-[#9bcf82]/15 text-lime-100' : 'bg-white/[0.055] text-slate-400'}`}>
-                {step.ready ? 'Ready' : 'Loading'}
+                {step.ready ? (isThai ? 'พร้อม' : 'Ready') : (isThai ? 'กำลังโหลด' : 'Loading')}
               </span>
             </div>
           ))}
@@ -643,7 +659,7 @@ function FriendGardenLoadingScreen({ loading, onCancel }) {
           type="button"
           onClick={onCancel}
         >
-          Cancel and go back
+          {isThai ? 'ยกเลิกและย้อนกลับ' : 'Cancel and go back'}
         </button>
       </div>
     </div>
@@ -668,6 +684,27 @@ function GamePageLoading({ label = 'Loading academy workspace' }) {
         description="Preparing this section without reloading the whole academy."
         label={label}
       />
+    </div>
+  )
+}
+
+function PlantMaintenanceOverlay({ busy = false, hasPreviousPlant = false, plant, onChooseAnother }) {
+  const isThai = getAppLanguage() === 'th'
+  const plantName = isThai
+    ? plant?.name_th || plant?.name_en || 'พืชชนิดนี้'
+    : plant?.name_en || plant?.name_th || 'This plant'
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 top-16 z-[90] grid place-items-center overflow-hidden bg-[#07100b]/94 px-5 backdrop-blur-md">
+      <div className="soft-grid absolute inset-0 opacity-35" />
+      <section className="relative w-full max-w-[470px] overflow-hidden rounded-2xl border border-amber-100/20 bg-[#101711]/98 p-6 text-center text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.58),0_0_55px_rgba(205,151,55,.08)]" role="alert" aria-live="assertive">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-amber-200/20 bg-amber-200/10 text-amber-200 shadow-[0_0_28px_rgba(245,188,77,.12)]"><AppIcon className="h-6 w-6" name="tool" /></div>
+        <small className="mt-5 block text-[10px] font-black uppercase tracking-[.2em] text-amber-200/75">{isThai ? 'สถานะพืช' : 'Plant status'}</small>
+        <h2 className="mt-2 text-xl font-black text-lime-50">{isThai ? 'พืชชนิดนี้ปิดปรับปรุงอยู่' : 'This plant is under maintenance'}</h2>
+        <p className="mx-auto mt-3 max-w-[360px] text-sm leading-6 text-slate-300">{isThai ? `“${plantName}” ถูกนำออกจากรายการปลูกชั่วคราว จึงไม่สามารถเปิดการจำลองนี้ต่อได้` : `“${plantName}” has been temporarily removed from the planting catalog, so this simulation cannot continue.`}</p>
+        <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 text-xs leading-5 text-slate-400">{isThai ? 'พืชชนิดนี้จะไม่แสดงในรายการเลือกปลูกจนกว่าผู้ดูแลระบบจะเปิดใช้งานอีกครั้ง' : 'This species will stay hidden from plant choices until an administrator makes it available again.'}</div>
+        <button className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#9bcf82] px-5 text-sm font-black text-[#0b160e] transition hover:bg-[#b0e29a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 disabled:cursor-wait disabled:opacity-55" disabled={busy} type="button" onClick={onChooseAnother}><AppIcon className="h-4 w-4" name="plant" />{busy ? (isThai ? 'กำลังเปิดพืชล่าสุด…' : 'Opening the latest plant…') : hasPreviousPlant ? (isThai ? 'กลับไปพืชล่าสุด' : 'Return to latest plant') : (isThai ? 'เลือกพืชชนิดใหม่' : 'Choose a new plant')}</button>
+      </section>
     </div>
   )
 }
@@ -701,6 +738,7 @@ function App() {
   const [growingMode, setGrowingMode] = useState(null)
   const [modeLoading, setModeLoading] = useState(false)
   const [saveHydrated, setSaveHydrated] = useState(() => !getToken())
+  const [plantMaintenance, setPlantMaintenance] = useState(null)
   const [resetPending, setResetPending] = useState(false)
   const [selectedPlant, setSelectedPlant] = useState(null)
   const previousWorkspacePlantRef = useRef(null)
@@ -1218,6 +1256,29 @@ function App() {
       current_model_url: simulationVisual.current_model_url ?? defaultSimulationVisual.current_model_url,
     }
   }, [growingMode, growthTrack, selectedPlant, simulationVisual])
+
+  const activeGardenCommentNotifications = useMemo(() => {
+    if (visitingFriend || !previewSimulationVisual?.id) return []
+
+    return notifications.filter((notification) => (
+      notification.type === 'garden_comment'
+      && !notification.is_read
+      && String(notification.simulator_id) === String(previewSimulationVisual.id)
+    ))
+  }, [notifications, previewSimulationVisual?.id, visitingFriend])
+
+  useEffect(() => {
+    if (
+      activePage !== 'lab'
+      || workspaceLayout.rightTab !== 'comments'
+      || workspaceLayout.rightCollapsed
+      || document.hidden
+      || activeGardenCommentNotifications.length === 0
+    ) return
+
+    activeGardenCommentNotifications.forEach((notification) => readNotification(notification))
+  }, [activeGardenCommentNotifications, activePage, readNotification, workspaceLayout.rightCollapsed, workspaceLayout.rightTab])
+
   const simulationTimeRisk = useMemo(() => {
     const activePests = Array.isArray(previewSimulationVisual?.active_pests)
       ? previewSimulationVisual.active_pests
@@ -1452,6 +1513,39 @@ function App() {
   }, [activePage, user])
 
   useEffect(() => {
+    if (
+      activePage !== 'lab'
+      || demoMode
+      || visitingFriend
+      || plantMaintenance
+      || plantCatalogStatus !== 'ready'
+      || simulationVisual?.status !== 'active'
+      || !simulationVisual?.id
+    ) return
+
+    const currentPlantId = Number(simulationVisual.plant_id ?? simulationVisual.plant?.id ?? selectedPlant?.backendId ?? 0)
+    if (!currentPlantId || plantCatalog.some((plant) => Number(plant.id) === currentPlantId)) return
+
+    const maintenanceTimer = window.setTimeout(() => {
+      setPlantMaintenance({
+        simulatorId: simulationVisual.id,
+        plantId: currentPlantId,
+        name_th: simulationVisual.plant?.name_th ?? selectedPlant?.plantData?.name_th,
+        name_en: simulationVisual.plant?.name_en ?? selectedPlant?.plantData?.name_en ?? selectedPlant?.name,
+      })
+      setActiveSimulators((current) => current.filter((simulator) => Number(simulator.plant_id) !== currentPlantId))
+      setAppliedAsset(null)
+      setSelectedPlant(null)
+      setGrowingMode(null)
+      canonicalSimulationRef.current = defaultSimulationVisual
+      setSimulationVisual(defaultSimulationVisual)
+      setGrowthTrack(initialGrowthTrack)
+    }, 0)
+
+    return () => window.clearTimeout(maintenanceTimer)
+  }, [activePage, demoMode, plantCatalog, plantCatalogStatus, plantMaintenance, selectedPlant, simulationVisual, visitingFriend])
+
+  useEffect(() => {
     function handleExpiredSession() {
       const simulatorId = window.localStorage.getItem('plant_game_simulator_id')
       accountSessionRef.current += 1
@@ -1462,6 +1556,7 @@ function App() {
       window.localStorage.removeItem('plant_game_simulator_id')
       window.localStorage.removeItem(resetMarkerKey)
       setActiveSimulators([])
+      setPlantMaintenance(null)
       setPendingPlant(null)
       setPlantingBusy(false)
       setUser(null)
@@ -1485,6 +1580,26 @@ function App() {
     : null
   const applySimulatorSnapshot = useCallback((simulator, options = {}) => {
     if (!simulator) return
+
+    if (simulator.plant_available === false) {
+      if (options.persistLocalId !== false) window.localStorage.setItem('plant_game_simulator_id', String(simulator.id))
+      setPlantMaintenance({
+        simulatorId: simulator.id,
+        plantId: simulator.plant_id,
+        name_th: simulator.plant?.name_th,
+        name_en: simulator.plant?.name_en,
+      })
+      setModeLoading(false)
+      setGrowingMode(null)
+      setAppliedAsset(null)
+      setSelectedPlant(null)
+      canonicalSimulationRef.current = defaultSimulationVisual
+      setSimulationVisual(defaultSimulationVisual)
+      setGrowthTrack(initialGrowthTrack)
+      return
+    }
+
+    setPlantMaintenance(null)
 
     const restoredProgress = clampSimulationProgress(simulator.growth_point ?? 0)
     const restoredMode = simulator.mode ?? 'greenhouse'
@@ -1527,7 +1642,7 @@ function App() {
     }
     setModeLoading(false)
     if (!options.preserveAppliedAsset) setAppliedAsset(restoredPlant)
-    if (simulator.plant) {
+    if (simulator.plant && simulator.plant_available !== false) {
       setPlantCatalog((current) => current.some((plant) => plant.id === simulator.plant.id) ? current : [simulator.plant, ...current])
     }
     setSelectedPlant(options.selectPlant === false ? null : restoredPlant)
@@ -1885,10 +2000,11 @@ function App() {
         const simulators = uniqueActiveSimulatorsByPlant(payload.data ?? [])
         const storedSimulatorId = window.localStorage.getItem('plant_game_simulator_id')
         const resetSimulatorId = window.localStorage.getItem(resetMarkerKey)
-        const simulator = simulators.find((entry) => String(entry.id) === String(storedSimulatorId)) ?? simulators[0] ?? null
+        const availableSimulators = simulators.filter((entry) => entry.plant_available !== false)
+        const simulator = simulators.find((entry) => String(entry.id) === String(storedSimulatorId)) ?? availableSimulators[0] ?? simulators[0] ?? null
         const resetMarked = Boolean(resetSimulatorId)
 
-        if (!isCancelled) setActiveSimulators(simulators)
+        if (!isCancelled) setActiveSimulators(availableSimulators)
 
         if (!isCancelled && resetMarked) {
           try {
@@ -3068,6 +3184,7 @@ function App() {
     window.localStorage.removeItem(resetMarkerKey)
 
     setVisitingFriend(null)
+    setPlantMaintenance(null)
     setWindows(defaultWindows())
     setClimate({ ...defaultClimate })
     setGrowingMode(null)
@@ -3093,6 +3210,52 @@ function App() {
     setShareBusy(false)
     setSimulationOperation(null)
     setActionMessage('')
+  }
+
+  async function chooseAnotherPlantAfterMaintenance() {
+    const unavailableSimulator = plantMaintenance
+    if (!unavailableSimulator || plantingBusy) return
+    const previousSimulator = activeSimulators.find((simulator) => (
+      String(simulator.id) !== String(unavailableSimulator.simulatorId)
+      && simulator.plant_available !== false
+    )) ?? null
+
+    setPlantingBusy(true)
+    try {
+      if (unavailableSimulator.simulatorId && getToken()) {
+        await uprootSimulator(unavailableSimulator.simulatorId)
+      }
+
+      const storedSimulatorId = window.localStorage.getItem('plant_game_simulator_id')
+      if (String(storedSimulatorId) === String(unavailableSimulator.simulatorId)) {
+        window.localStorage.removeItem(`${simulationTickMarkerPrefix}${unavailableSimulator.simulatorId}`)
+        window.localStorage.removeItem('plant_game_simulator_id')
+      }
+
+      setActiveSimulators((current) => current.filter((simulator) => String(simulator.id) !== String(unavailableSimulator.simulatorId)))
+      setSaveHydrated(true)
+
+      if (previousSimulator) {
+        applySimulatorSnapshot(previousSimulator)
+        const previousPlantName = getAppLanguage() === 'th'
+          ? previousSimulator.plant?.name_th || previousSimulator.plant?.name_en || 'พืชก่อนหน้า'
+          : previousSimulator.plant?.name_en || previousSimulator.plant?.name_th || 'the previous plant'
+        setActionMessage(getAppLanguage() === 'th' ? `กลับไปยัง ${previousPlantName}` : `Returned to ${previousPlantName}`)
+      } else {
+        setPlantMaintenance(null)
+        setGrowingMode(null)
+        setSelectedPlant(null)
+        setAppliedAsset(null)
+        canonicalSimulationRef.current = defaultSimulationVisual
+        setSimulationVisual(defaultSimulationVisual)
+        setGrowthTrack(initialGrowthTrack)
+        setActionMessage(getAppLanguage() === 'th' ? 'ไม่มีพืชที่ปลูกไว้ก่อนหน้า กรุณาเลือกโหมดเพื่อเริ่มปลูกใหม่' : 'No previous plant remains. Choose a mode to start again.')
+      }
+    } catch (error) {
+      setActionMessage(error.message || (getAppLanguage() === 'th' ? 'ยังปิดการจำลองเดิมไม่ได้ กรุณาลองอีกครั้ง' : 'Unable to close the old simulation. Please try again.'))
+    } finally {
+      setPlantingBusy(false)
+    }
   }
 
   async function submitGoogleAuth() {
@@ -3763,6 +3926,14 @@ function App() {
           onCancel={() => leaveFriendGarden()}
         />
       )}
+      {activePage === 'lab' && plantMaintenance && (
+        <PlantMaintenanceOverlay
+          busy={plantingBusy}
+          hasPreviousPlant={activeSimulators.length > 0}
+          plant={plantMaintenance}
+          onChooseAnother={chooseAnotherPlantAfterMaintenance}
+        />
+      )}
       {plantKnowledgeAsset && (
         <PlantKnowledgeModal
           onClose={closePlantKnowledge}
@@ -3837,6 +4008,7 @@ function App() {
         <>
           {labReady && (
             <GameWorkspaceShell
+              commentUnreadCount={activeGardenCommentNotifications.length}
               language={getAppLanguage()}
               mode={growingMode}
               plant={selectedPlant}

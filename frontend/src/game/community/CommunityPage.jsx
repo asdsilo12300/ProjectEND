@@ -7,6 +7,7 @@ import { ParticleNetworkBackground } from '../components/ParticleNetworkBackgrou
 import { LevelAvatar } from '../components/LevelAvatar'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { formatPlantDuration } from '../../utils/plantDuration'
+import { COMMENT_CHARACTER_LIMIT, commentCharacterCount, isCommentWithinLimit } from '../socialLimits.js'
 
 const CommunityLanguageContext = createContext('en')
 const communityReturnStateKey = 'plant_game_community_return_state'
@@ -49,6 +50,22 @@ function useCommunityLanguage() {
 
 function copy(language, english, thai) {
   return language === 'th' ? thai : english
+}
+
+function CommentCharacterCounter({ value }) {
+  const language = useCommunityLanguage()
+  const count = commentCharacterCount(value)
+  const nearLimit = count >= COMMENT_CHARACTER_LIMIT * 0.9
+
+  return (
+    <small
+      className={`justify-self-end text-[11px] font-bold tabular-nums ${nearLimit ? 'text-amber-300' : 'text-slate-500'}`}
+      aria-label={copy(language, `${count} of ${COMMENT_CHARACTER_LIMIT} characters`, `${count} จาก ${COMMENT_CHARACTER_LIMIT} ตัวอักษร`)}
+      aria-live="polite"
+    >
+      {count}/{COMMENT_CHARACTER_LIMIT}
+    </small>
+  )
 }
 
 function displayName(user) {
@@ -629,15 +646,17 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
 
           {isReplying ? (
             <form className="mt-3 flex items-end gap-2" onSubmit={(event) => onSubmitReply(event, comment.id)}>
-              <label className="min-w-0 flex-1">
+              <label className="grid min-w-0 flex-1 gap-1">
                 <span className="sr-only">Write a reply</span>
                 <textarea
                   className="max-h-24 min-h-10 w-full resize-none rounded-2xl border border-lime-100/10 bg-[#101312] px-3 py-2 text-sm leading-5 text-lime-50 outline-none transition placeholder:text-slate-500 focus:border-[#8fbf78]"
+                  maxLength={COMMENT_CHARACTER_LIMIT}
                   onChange={(event) => onReplyDraftChange(comment.id, event.target.value)}
                   placeholder={`Reply to ${author}...`}
                   rows={1}
                   value={draft}
                 />
+                <CommentCharacterCounter value={draft} />
               </label>
               <button
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#8fbf78] text-[#101511] transition hover:bg-[#a6d892] disabled:cursor-not-allowed disabled:opacity-50"
@@ -782,15 +801,17 @@ function PostModal({ actionError = '', commentBurstKeys, commentDraft, comments,
           ) : null}
           <div className="flex items-end gap-3">
             <UserAvatar className="h-9 w-9 bg-[#8fbf78] text-xs text-[#101511]" fallback={avatarLabel(displayName(currentUser))} user={currentUser} />
-            <label className="min-w-0 flex-1">
+            <label className="grid min-w-0 flex-1 gap-1">
               <span className="sr-only">Write a comment</span>
               <textarea
                 className="max-h-28 min-h-12 w-full resize-none rounded-2xl border border-lime-100/10 bg-[#101312] px-4 py-3 text-sm leading-5 text-lime-50 outline-none transition placeholder:text-slate-500 focus:border-[#8fbf78]"
+                maxLength={COMMENT_CHARACTER_LIMIT}
                 onChange={(event) => onCommentDraftChange(event.target.value)}
-                placeholder="Write a public comment..."
+                placeholder="comment..."
                 rows={1}
                 value={commentDraft}
               />
+              <CommentCharacterCounter value={commentDraft} />
             </label>
             <button
               className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#8fbf78] text-[#101511] transition hover:bg-[#a6d892] disabled:cursor-not-allowed disabled:opacity-50"
@@ -2038,6 +2059,10 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
     const text = (replyDrafts[parentId] ?? '').trim()
 
     if (!selectedPost?.id || !text) return
+    if (!isCommentWithinLimit(text)) {
+      setPostActionError(copy(language, `Replies can contain up to ${COMMENT_CHARACTER_LIMIT} characters.`, `ข้อความตอบกลับมีได้สูงสุด ${COMMENT_CHARACTER_LIMIT} ตัวอักษร`))
+      return
+    }
 
     setSubmittingReply(true)
     setPostActionError('')
@@ -2061,6 +2086,10 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
     const text = commentDraft.trim()
 
     if (!selectedPost?.id || !text) return
+    if (!isCommentWithinLimit(text)) {
+      setPostActionError(copy(language, `Comments can contain up to ${COMMENT_CHARACTER_LIMIT} characters.`, `ความคิดเห็นมีได้สูงสุด ${COMMENT_CHARACTER_LIMIT} ตัวอักษร`))
+      return
+    }
 
     setSubmittingComment(true)
     setPostActionError('')

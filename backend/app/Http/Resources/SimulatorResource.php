@@ -19,6 +19,7 @@ class SimulatorResource extends JsonResource
         return [
             'id' => $this->id,
             'plant_id' => $this->plant_id,
+            'plant_available' => $this->plant !== null && $this->plant->deleted_at === null,
             'mode' => $this->mode,
             'location_name' => $this->location_name,
             'location_timezone' => $this->location_timezone,
@@ -93,6 +94,7 @@ class SimulatorResource extends JsonResource
                     'id' => $simulationPest->pest->id,
                     'name_th' => $simulationPest->pest->name_th,
                     'name_en' => $simulationPest->pest->name_en,
+                    'placement_mode' => $simulationPest->pest->placement_mode ?? 'ground_random',
                     'model_url' => $this->publicUrl($simulationPest->pest->model_url),
                     'image_url' => $this->publicUrl($simulationPest->pest->image_url),
                     'damage_per_turn' => $simulationPest->pest->damage_per_turn,

@@ -358,6 +358,450 @@
   padding-block: 90px 80px;
 }
 
+/* --------------------------------------------------------------------------
+   PLANT ACADEMY FIELD QUEST UI
+   A shared pixel-game language for Home, Learn, and the learning codex.
+   -------------------------------------------------------------------------- */
+
+.landing-shell {
+  --quest-ink: #050a07;
+  --quest-panel: #0b1510;
+  --quest-panel-raised: #122019;
+  --quest-line: #58704a;
+  --quest-green: #83c65f;
+  --quest-mint: #c8f3aa;
+  --quest-gold: #d6ad43;
+  --quest-danger: #e56c5b;
+  background:
+    linear-gradient(rgb(96 142 75 / 3%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(96 142 75 / 3%) 1px, transparent 1px),
+    #060b08;
+  background-size: 24px 24px;
+}
+
+.landing-pixel-icon {
+  --pixel-step: calc(var(--pixel-index) * 20%);
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  background-position: var(--pixel-step) center;
+  background-repeat: no-repeat;
+  background-size: 600% 100%;
+  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 72%));
+  image-rendering: pixelated;
+}
+
+.landing-pixel-icon--nav { background-image: url('/media/landing-game-ui/navigation-pixel-sprites-v1.png'); }
+.landing-pixel-icon--factor { background-image: url('/media/landing-game-ui/factor-pixel-sprites-v1.png'); }
+
+.landing-game-button,
+.landing-button {
+  position: relative;
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 19px 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px), 0 7px);
+  transition: transform 140ms steps(2, end), filter 140ms ease, background-color 140ms ease;
+}
+
+.landing-game-button::after,
+.landing-button::after {
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  content: '';
+  clip-path: inherit;
+  pointer-events: none;
+}
+
+.landing-game-button--primary,
+.landing-button--primary {
+  border: 1px solid #d7ef87;
+  background: linear-gradient(180deg, #9bdc6e, #579b42);
+  color: #071009;
+  box-shadow: 0 4px 0 #284c29, 0 11px 24px rgb(41 107 51 / 24%);
+}
+
+.landing-game-button--secondary,
+.landing-button--secondary {
+  border: 1px solid #607455;
+  background: linear-gradient(180deg, #1b2c21, #0b1510);
+  color: #dcebd4;
+  box-shadow: 0 4px 0 #020604;
+}
+
+.landing-game-button:hover,
+.landing-button:hover { transform: translateY(-2px); filter: brightness(1.12); }
+.landing-game-button:active,
+.landing-button:active { transform: translateY(2px); box-shadow: 0 1px 0 #172918; }
+.landing-game-button:focus-visible,
+.landing-button:focus-visible { outline: 3px solid #d8f799; outline-offset: 4px; }
+.landing-game-button .landing-pixel-icon,
+.landing-button .landing-pixel-icon { width: 31px; height: 31px; margin-block: -3px; }
+
+.landing-game-panel {
+  position: relative;
+  isolation: isolate;
+}
+
+.landing-game-panel::after {
+  position: absolute;
+  z-index: 5;
+  inset: -2px;
+  border: 12px solid transparent;
+  border-image: url('/media/game-ui/simulation-vine-frame-pixel-v1.png') 132 fill / 12px / 0 stretch;
+  content: '';
+  opacity: .31;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+.landing-game-badge {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 13px 5px 7px;
+  border: 1px solid #788a4d;
+  background: linear-gradient(180deg, rgb(24 43 29 / 96%), rgb(7 15 10 / 96%));
+  color: #d5eca3;
+  box-shadow: inset 0 0 0 2px #07100a, 0 3px 0 rgb(0 0 0 / 52%);
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.landing-game-badge .landing-pixel-icon { width: 29px; height: 29px; }
+
+.landing-header {
+  border-bottom: 1px solid #4d6344;
+  background:
+    linear-gradient(90deg, rgb(119 161 81 / 6%), transparent 28% 72%, rgb(119 161 81 / 6%)),
+    rgb(5 11 7 / 96%);
+  box-shadow: inset 0 -3px 0 #020503, 0 10px 28px rgb(0 0 0 / 36%);
+  backdrop-filter: blur(14px);
+}
+
+.landing-header::after {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #759553 0 8px, #1c2e20 8px 16px);
+  content: '';
+  opacity: .62;
+}
+
+.landing-nav { gap: 4px; }
+.landing-nav > button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+  font-size: 14px;
+}
+
+.landing-nav > button .landing-pixel-icon { width: 38px; height: 38px; transition: transform 150ms steps(2, end); }
+.landing-nav > button:hover .landing-pixel-icon,
+.landing-nav > button.is-active .landing-pixel-icon { transform: translateY(-2px) scale(1.06); }
+.landing-nav > button:hover,
+.landing-nav > button.is-active {
+  border-color: #596e45;
+  background: linear-gradient(180deg, #1b2c20, #0c1710);
+  box-shadow: inset 0 0 0 2px #07100a, 0 3px 0 #020503;
+}
+
+.landing-nav > button.is-active { color: #e8f7c3; }
+.landing-nav > button.is-active::after {
+  position: absolute;
+  right: 8px;
+  bottom: 2px;
+  left: 8px;
+  height: 2px;
+  background: #b8e65e;
+  box-shadow: 0 0 8px #8dcc59;
+  content: '';
+}
+
+.landing-nav > .landing-nav__cta {
+  border-color: #c4e780;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #8dcc59, #487d39);
+  box-shadow: inset 0 0 0 2px #172c18, 0 3px 0 #1e4021;
+}
+
+.landing-theme-toggle,
+.landing-language-circle,
+.landing-menu {
+  border-radius: 4px;
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+  box-shadow: inset 0 0 0 2px #07100a, 0 3px 0 #020503;
+}
+
+.landing-hero::after,
+.landing-learn-hero::before {
+  position: absolute;
+  z-index: 3;
+  inset: 13px;
+  border: 20px solid transparent;
+  border-image: url('/media/game-ui/simulation-vine-frame-pixel-v1.png') 132 fill / 20px / 0 stretch;
+  content: '';
+  opacity: .54;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+.landing-hero__copy .landing-game-badge { margin-bottom: 20px; }
+.landing-hero-product,
+.product-tour-player,
+.landing-live-preview__stage {
+  border-radius: 6px;
+  border-color: #61794c;
+  box-shadow: inset 0 0 0 3px #07100a, 0 18px 0 -12px rgb(2 7 4 / 72%), 0 28px 60px rgb(0 0 0 / 42%);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+}
+
+.landing-game-summary {
+  border-block: 3px double #536a43;
+  background: linear-gradient(180deg, #101d15, #070e0a);
+  box-shadow: inset 0 1px 0 rgb(226 246 188 / 7%), inset 0 -1px 0 #020503;
+}
+
+.landing-game-summary__grid > div { position: relative; }
+.landing-game-summary__grid > div::before {
+  width: 8px;
+  height: 8px;
+  margin-right: 10px;
+  border: 1px solid #d0b550;
+  background: #45613b;
+  content: '';
+  transform: rotate(45deg);
+}
+
+.landing-section-heading h2::after,
+.learning-library__heading h2::after {
+  display: block;
+  width: min(310px, 65%);
+  height: 12px;
+  margin-top: 17px;
+  background: linear-gradient(90deg, #759c49, #d0ad45 48%, transparent 48%) 0 50% / 18px 2px repeat-x;
+  content: '';
+  image-rendering: pixelated;
+}
+
+.landing-game-intro__pillars > article,
+.landing-journey__grid > article,
+.landing-space-card,
+.learning-content-card,
+.landing-factor-card,
+.learning-article-aside__card {
+  border-radius: 6px;
+  border-color: #455c3d;
+  background:
+    linear-gradient(135deg, rgb(136 183 91 / 6%) 0 12%, transparent 12% 88%, rgb(136 183 91 / 5%) 88%),
+    linear-gradient(180deg, #132019, #09120d);
+  box-shadow: inset 0 0 0 2px #07100a, 0 8px 0 -5px #020503;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+
+.landing-icon-box {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #5f7848;
+  border-radius: 4px;
+  background: radial-gradient(circle, #203a24, #09120c 72%);
+  box-shadow: inset 0 0 0 2px #050a07, 0 3px 0 #020503;
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+}
+
+.landing-icon-box .landing-pixel-icon { width: 55px; height: 55px; }
+.landing-factor-card:hover .landing-pixel-icon,
+.landing-game-intro__pillars > article:hover .landing-pixel-icon { transform: translateY(-3px) scale(1.06); }
+
+.landing-learn-hero { min-height: 480px; display: grid; align-items: center; }
+.landing-learn-hero > .landing-container { padding-left: clamp(10px, 5vw, 64px); }
+.landing-learn-hero .landing-game-badge { margin: 24px 0 18px; }
+.landing-learn-hero h1 { text-shadow: 0 4px 0 #030704, 0 0 30px rgb(113 181 75 / 24%); }
+
+.learning-content-card__number {
+  border-radius: 3px;
+  background: #d0ac43;
+  color: #11160d;
+  box-shadow: 0 3px 0 #664c15;
+  font-variant-numeric: tabular-nums;
+}
+
+.learning-content-card__link {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #587346;
+  background: #101d15;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+}
+
+.landing-process-card {
+  border-radius: 6px;
+  border-color: #5c7447;
+  background: linear-gradient(180deg, #14231a, #08110c);
+  box-shadow: inset 0 0 0 3px #07100a, 0 7px 0 -4px #020503;
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
+}
+
+.landing-process-card > div {
+  border-radius: 4px;
+  border-color: #46613e;
+  background: #0b1710;
+  box-shadow: inset 0 0 0 2px #050a07;
+}
+
+.landing-process-card > div .landing-pixel-icon { width: 52px; height: 52px; }
+.landing-equation {
+  border-radius: 4px;
+  border: 1px solid #7d8c48;
+  background: repeating-linear-gradient(90deg, rgb(218 181 72 / 5%) 0 2px, transparent 2px 6px), #0a130d;
+  box-shadow: inset 0 0 0 2px #050a07, 0 3px 0 #020503;
+  color: #e8d889;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-factor-card { min-height: 258px; }
+.landing-factor-card__title strong {
+  padding: 4px 7px;
+  border: 1px solid #6e7241;
+  background: #171b0c;
+  color: #edd16b;
+  clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px);
+}
+
+.learning-article-hero {
+  border-bottom: 3px double #4f6741;
+  background:
+    linear-gradient(90deg, rgb(7 14 10 / 97%) 0 44%, rgb(7 14 10 / 62%)),
+    url('/media/knowledge-preview.png') center / cover;
+}
+
+.learning-article-hero__copy .landing-game-badge { margin: 18px 0; }
+.learning-article-body {
+  border: 1px solid #455b3e;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #101b15, #09110d);
+  box-shadow: inset 0 0 0 3px #060b08, 0 7px 0 -4px #020503;
+}
+
+.learning-article-body h2,
+.learning-article-body h3 { padding-bottom: 10px; border-bottom: 2px dashed #445a3c; }
+.learning-article-aside__icon { width: 64px; height: 64px; border-radius: 4px; }
+.learning-article-aside__icon .landing-pixel-icon { width: 58px; height: 58px; }
+
+.landing-scroll-cue {
+  border: 1px solid #6e8648;
+  background: #08110c;
+  box-shadow: inset 0 0 0 2px #020503, 0 3px 0 #020503;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+}
+
+.landing-footer {
+  border-top: 3px double #4b603e;
+  background: #030704;
+}
+
+/* Light theme becomes a field-guide parchment while retaining the game kit. */
+.landing-shell[data-theme='light'] {
+  --quest-ink: #273025;
+  --quest-panel: #f2f0dc;
+  --quest-panel-raised: #fffced;
+  --quest-line: #6f8256;
+  --quest-green: #4f8a3f;
+  --quest-mint: #234e29;
+  background:
+    linear-gradient(rgb(63 86 53 / 5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(63 86 53 / 5%) 1px, transparent 1px),
+    #e8ead8;
+  background-size: 24px 24px;
+}
+
+.landing-shell[data-theme='light'] .landing-header {
+  border-bottom-color: #6f8057;
+  background: rgb(235 239 220 / 96%);
+  box-shadow: inset 0 -3px 0 #c9d0b7, 0 10px 26px rgb(48 63 42 / 16%);
+}
+
+.landing-shell[data-theme='light'] .landing-nav > button:hover,
+.landing-shell[data-theme='light'] .landing-nav > button.is-active {
+  border-color: #72885b;
+  background: linear-gradient(180deg, #f8f7e8, #dce4ca);
+  box-shadow: inset 0 0 0 2px #eef1df, 0 3px 0 #9aa989;
+}
+
+.landing-shell[data-theme='light'] .landing-game-intro__pillars > article,
+.landing-shell[data-theme='light'] .landing-journey__grid > article,
+.landing-shell[data-theme='light'] .landing-space-card,
+.landing-shell[data-theme='light'] .learning-content-card,
+.landing-shell[data-theme='light'] .landing-factor-card,
+.landing-shell[data-theme='light'] .learning-article-aside__card,
+.landing-shell[data-theme='light'] .learning-article-body {
+  border-color: #82906a;
+  background: linear-gradient(180deg, #fffdf0, #e8ead6);
+  box-shadow: inset 0 0 0 2px #f7f5e5, 0 7px 0 -4px #a8b093;
+}
+
+.landing-shell[data-theme='light'] .landing-process-card,
+.landing-shell[data-theme='light'] .landing-process-card > div,
+.landing-shell[data-theme='light'] .landing-equation,
+.landing-shell[data-theme='light'] .learning-content-card__link {
+  border-color: #7b8d61;
+  background: #f4f2df;
+  box-shadow: inset 0 0 0 2px #fffef2, 0 3px 0 #a8b093;
+  color: #263527;
+}
+
+.landing-shell[data-theme='light'] .landing-game-badge {
+  border-color: #738354;
+  background: linear-gradient(180deg, #fffce9, #dfe5ca);
+  color: #294f2b;
+  box-shadow: inset 0 0 0 2px #f6f5e5, 0 3px 0 #9da989;
+}
+
+@media (max-width: 900px) {
+  .landing-nav { gap: 7px; padding: 12px; border: 1px solid #4d6344; border-radius: 4px; background: #07100a; box-shadow: 0 6px 0 #020503; }
+  .landing-nav > button { width: 100%; justify-content: flex-start; }
+  .landing-nav > button .landing-pixel-icon { width: 42px; height: 42px; }
+  .landing-shell[data-theme='light'] .landing-nav { background: #e9edd9; }
+  .landing-hero::after, .landing-learn-hero::before { inset: 8px; border-width: 12px; }
+}
+
+@media (max-width: 620px) {
+  .landing-game-badge { max-width: calc(100vw - 52px); font-size: 9px; letter-spacing: .08em; }
+  .landing-game-button, .landing-button { width: 100%; min-height: 50px; font-size: 14px; }
+  .landing-hero__copy .landing-game-badge { margin-top: 38px; }
+  .landing-icon-box { width: 58px; height: 58px; }
+  .landing-icon-box .landing-pixel-icon { width: 50px; height: 50px; }
+  .landing-factor-card { min-height: 0; }
+  .landing-game-panel::after { opacity: .2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-pixel-icon,
+  .landing-game-button,
+  .landing-nav > button .landing-pixel-icon { transition: none; }
+}
+
 .landing-scroll-cue {
   position: absolute;
   z-index: 5;
@@ -2500,6 +2944,180 @@ html.settings-reduced-motion .landing-shell .landing-journey__grid > article[dat
   }
 }
 
+/* Field Quest cascade lock: these rules intentionally live last so legacy
+   landing selectors cannot soften the game treatment above. */
+.landing-header {
+  border-bottom: 1px solid #4d6344;
+  background: linear-gradient(90deg, rgb(119 161 81 / 6%), transparent 28% 72%, rgb(119 161 81 / 6%)), rgb(5 11 7 / 96%);
+  box-shadow: inset 0 -3px 0 #020503, 0 10px 28px rgb(0 0 0 / 36%);
+}
+
+.landing-nav > button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+  font-size: 14px;
+}
+
+.landing-nav > button:hover,
+.landing-nav > button.is-active {
+  border-color: #596e45;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #1b2c20, #0c1710);
+  box-shadow: inset 0 0 0 2px #07100a, 0 3px 0 #020503;
+}
+
+.landing-nav > .landing-nav__cta {
+  border: 1px solid #c4e780;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #8dcc59, #487d39);
+  box-shadow: inset 0 0 0 2px #172c18, 0 3px 0 #1e4021;
+}
+
+.landing-game-summary {
+  border-block: 3px double #536a43;
+  background: linear-gradient(180deg, #101d15, #070e0a);
+  box-shadow: inset 0 1px 0 rgb(226 246 188 / 7%), inset 0 -1px 0 #020503;
+}
+
+.landing-game-intro__pillars > article,
+.landing-journey__grid > article,
+.landing-space-card,
+.learning-content-card,
+.landing-factor-card,
+.learning-article-aside__card {
+  border-radius: 6px;
+  border-color: #455c3d;
+  background: linear-gradient(135deg, rgb(136 183 91 / 6%) 0 12%, transparent 12% 88%, rgb(136 183 91 / 5%) 88%), linear-gradient(180deg, #132019, #09120d);
+  box-shadow: inset 0 0 0 2px #07100a, 0 8px 0 -5px #020503;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+
+.landing-icon-box {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #5f7848;
+  border-radius: 4px;
+  background: radial-gradient(circle, #203a24, #09120c 72%);
+  box-shadow: inset 0 0 0 2px #050a07, 0 3px 0 #020503;
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+}
+
+.landing-process-card {
+  border-radius: 6px;
+  border-color: #5c7447;
+  background: linear-gradient(180deg, #14231a, #08110c);
+  box-shadow: inset 0 0 0 3px #07100a, 0 7px 0 -4px #020503;
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
+}
+
+.landing-process-card > div {
+  border-radius: 4px;
+  border-color: #46613e;
+  background: #0b1710;
+  box-shadow: inset 0 0 0 2px #050a07;
+}
+
+.landing-equation {
+  border: 1px solid #7d8c48;
+  border-radius: 4px;
+  background: repeating-linear-gradient(90deg, rgb(218 181 72 / 5%) 0 2px, transparent 2px 6px), #0a130d;
+  box-shadow: inset 0 0 0 2px #050a07, 0 3px 0 #020503;
+  color: #e8d889;
+}
+
+.learning-article-body {
+  border: 1px solid #455b3e;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #101b15, #09110d);
+  box-shadow: inset 0 0 0 3px #060b08, 0 7px 0 -4px #020503;
+}
+
+.landing-shell[data-theme='light'] .landing-header {
+  border-bottom-color: #6f8057;
+  background: rgb(235 239 220 / 96%);
+  box-shadow: inset 0 -3px 0 #c9d0b7, 0 10px 26px rgb(48 63 42 / 16%);
+}
+
+.landing-shell[data-theme='light'] .landing-nav > button:hover,
+.landing-shell[data-theme='light'] .landing-nav > button.is-active {
+  border-color: #72885b;
+  background: linear-gradient(180deg, #f8f7e8, #dce4ca);
+  box-shadow: inset 0 0 0 2px #eef1df, 0 3px 0 #9aa989;
+}
+
+.landing-shell[data-theme='light'] .landing-game-intro__pillars > article,
+.landing-shell[data-theme='light'] .landing-journey__grid > article,
+.landing-shell[data-theme='light'] .landing-space-card,
+.landing-shell[data-theme='light'] .learning-content-card,
+.landing-shell[data-theme='light'] .landing-factor-card,
+.landing-shell[data-theme='light'] .learning-article-aside__card,
+.landing-shell[data-theme='light'] .learning-article-body {
+  border-color: #82906a;
+  background: linear-gradient(180deg, #fffdf0, #e8ead6);
+  box-shadow: inset 0 0 0 2px #f7f5e5, 0 7px 0 -4px #a8b093;
+}
+
+.landing-shell[data-theme='light'] .landing-process-card,
+.landing-shell[data-theme='light'] .landing-process-card > div,
+.landing-shell[data-theme='light'] .landing-equation,
+.landing-shell[data-theme='light'] .learning-content-card__link {
+  border-color: #7b8d61;
+  background: #f4f2df;
+  box-shadow: inset 0 0 0 2px #fffef2, 0 3px 0 #a8b093;
+  color: #263527;
+}
+
+@media (max-width: 900px) {
+  .landing-nav,
+  .landing-shell[data-theme='light'] .landing-nav {
+    gap: 7px;
+    padding: 12px;
+    border: 1px solid #4d6344;
+    border-radius: 4px;
+    background: #07100a;
+    box-shadow: 0 6px 0 #020503;
+  }
+  .landing-shell[data-theme='light'] .landing-nav { background: #e9edd9; }
+  .landing-nav > button { width: 100%; justify-content: flex-start; }
+}
+
+/* Requested cleanup: quieter heroes, borderless cues, correctly proportioned sprites. */
+.landing-pixel-icon {
+  background-size: 600% 200%;
+}
+
+.landing-hero::after,
+.landing-learn-hero::before {
+  display: none;
+  content: none;
+}
+
+.landing-scroll-cue,
+.landing-shell[data-theme='light'] .landing-scroll-cue {
+  min-width: 0;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.learning-content-card__link,
+.landing-shell[data-theme='light'] .learning-content-card__link {
+  min-height: 0;
+  padding: 23px 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+
 .landing-shell button:focus-visible {
   outline: 2px solid #d7f2c9;
   outline-offset: 3px;
@@ -3668,4 +4286,127 @@ html[lang='th'] .landing-shell .landing-final-cta__inner {
     top: 84px;
     right: 16px;
   }
+}
+
+/* Final Field Quest theme overrides. */
+.landing-header {
+  border-bottom: 1px solid #4d6344;
+  background: linear-gradient(90deg, rgb(119 161 81 / 6%), transparent 28% 72%, rgb(119 161 81 / 6%)), rgb(5 11 7 / 96%);
+  box-shadow: inset 0 -3px 0 #020503, 0 10px 28px rgb(0 0 0 / 36%);
+}
+
+.landing-nav > button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 14px;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+}
+
+.landing-nav > button:hover,
+.landing-nav > button.is-active {
+  border-color: #596e45;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #1b2c20, #0c1710);
+  box-shadow: inset 0 0 0 2px #07100a, 0 3px 0 #020503;
+}
+
+.landing-nav > .landing-nav__cta {
+  border: 1px solid #c4e780;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #8dcc59, #487d39);
+  box-shadow: inset 0 0 0 2px #172c18, 0 3px 0 #1e4021;
+}
+
+.landing-game-intro__pillars > article,
+.landing-journey__grid > article,
+.landing-space-card,
+.learning-content-card,
+.landing-factor-card,
+.learning-article-aside__card {
+  border-radius: 6px;
+  border-color: #455c3d;
+  background: linear-gradient(135deg, rgb(136 183 91 / 6%) 0 12%, transparent 12% 88%, rgb(136 183 91 / 5%) 88%), linear-gradient(180deg, #132019, #09120d);
+  box-shadow: inset 0 0 0 2px #07100a, 0 8px 0 -5px #020503;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+
+.landing-icon-box {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #5f7848;
+  border-radius: 4px;
+  background: radial-gradient(circle, #203a24, #09120c 72%);
+  box-shadow: inset 0 0 0 2px #050a07, 0 3px 0 #020503;
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+}
+
+.landing-process-card,
+.learning-article-body {
+  border-radius: 6px;
+  border-color: #5c7447;
+  background: linear-gradient(180deg, #14231a, #08110c);
+  box-shadow: inset 0 0 0 3px #07100a, 0 7px 0 -4px #020503;
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
+}
+
+.landing-process-card > div,
+.landing-equation {
+  border-radius: 4px;
+  border-color: #647646;
+  background: #0b1710;
+  box-shadow: inset 0 0 0 2px #050a07, 0 3px 0 #020503;
+}
+
+.landing-shell[data-theme='light'] .landing-header {
+  border-bottom-color: #6f8057;
+  background: rgb(235 239 220 / 96%);
+  box-shadow: inset 0 -3px 0 #c9d0b7, 0 10px 26px rgb(48 63 42 / 16%);
+}
+
+.landing-shell[data-theme='light'] .landing-nav > button:hover,
+.landing-shell[data-theme='light'] .landing-nav > button.is-active {
+  border-color: #72885b;
+  background: linear-gradient(180deg, #f8f7e8, #dce4ca);
+  box-shadow: inset 0 0 0 2px #eef1df, 0 3px 0 #9aa989;
+}
+
+.landing-shell[data-theme='light'] .landing-game-intro__pillars > article,
+.landing-shell[data-theme='light'] .landing-journey__grid > article,
+.landing-shell[data-theme='light'] .landing-space-card,
+.landing-shell[data-theme='light'] .learning-content-card,
+.landing-shell[data-theme='light'] .landing-factor-card,
+.landing-shell[data-theme='light'] .learning-article-aside__card,
+.landing-shell[data-theme='light'] .learning-article-body {
+  border-color: #82906a;
+  background: linear-gradient(180deg, #fffdf0, #e8ead6);
+  box-shadow: inset 0 0 0 2px #f7f5e5, 0 7px 0 -4px #a8b093;
+}
+
+.landing-shell[data-theme='light'] .landing-process-card,
+.landing-shell[data-theme='light'] .landing-process-card > div,
+.landing-shell[data-theme='light'] .landing-equation,
+.landing-shell[data-theme='light'] .learning-content-card__link {
+  border-color: #7b8d61;
+  background: #f4f2df;
+  box-shadow: inset 0 0 0 2px #fffef2, 0 3px 0 #a8b093;
+  color: #263527;
+}
+
+@media (max-width: 900px) {
+  .landing-nav,
+  .landing-shell[data-theme='light'] .landing-nav {
+    gap: 7px;
+    padding: 12px;
+    border: 1px solid #4d6344;
+    border-radius: 4px;
+    background: #07100a;
+    box-shadow: 0 6px 0 #020503;
+  }
+  .landing-shell[data-theme='light'] .landing-nav { background: #e9edd9; }
+  .landing-nav > button { width: 100%; justify-content: flex-start; }
 }

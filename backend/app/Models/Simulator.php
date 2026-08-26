@@ -141,4 +141,13 @@ class Simulator extends Model
     {
         return $this->hasMany(SimulationWeatherDay::class)->orderBy('day_index');
     }
+
+    public function hasAvailablePlant(): bool
+    {
+        if ($this->relationLoaded('plant')) {
+            return $this->plant !== null && $this->plant->deleted_at === null;
+        }
+
+        return Plant::query()->whereKey($this->plant_id)->exists();
+    }
 }

@@ -679,11 +679,12 @@
 }
 
 .guided-tour__card--sheet {
-  right: 16px;
+  right: auto;
   bottom: 16px;
-  left: 16px;
-  width: auto;
-  margin: auto;
+  left: 50%;
+  width: min(520px, calc(100vw - 32px));
+  margin: 0;
+  translate: -50% 0;
 }
 
 .guided-tour__header {

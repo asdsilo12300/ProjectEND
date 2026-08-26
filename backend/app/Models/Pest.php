@@ -16,6 +16,7 @@ class Pest extends Model
         'description',
         'image_url',
         'model_url',
+        'placement_mode',
         'base_chance',
         'damage_per_turn',
         'behavior',

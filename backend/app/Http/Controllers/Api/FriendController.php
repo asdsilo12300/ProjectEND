@@ -42,6 +42,7 @@ class FriendController extends Controller
                 ->whereIn('user_id', $friendUserIds)
                 ->whereNull('deleted_at')
                 ->where('status', 'active')
+                ->whereHas('plant', fn ($query) => $query->whereNull('plants.deleted_at'))
                 ->latest('updated_at')
                 ->latest('id')
                 ->get();
@@ -222,6 +223,7 @@ class FriendController extends Controller
             ->where('user_id', $userId)
             ->whereNull('deleted_at')
             ->where('status', 'active')
+            ->whereHas('plant', fn ($query) => $query->whereNull('plants.deleted_at'))
             ->latest('updated_at')
             ->latest('id')
             ->first();

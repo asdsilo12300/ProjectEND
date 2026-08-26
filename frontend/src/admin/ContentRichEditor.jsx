@@ -108,7 +108,7 @@ function ContentImageUploadPlugin(editor) {
   editor.plugins.get('FileRepository').createUploadAdapter = (loader) => new ContentImageUploadAdapter(loader)
 }
 
-export function ContentRichEditor({ data, language, onChange }) {
+export function ContentRichEditor({ data, language, interfaceLanguage = 'en', onChange }) {
   const [stats, setStats] = useState({ words: 0, characters: 0 })
   const [editorError, setEditorError] = useState('')
   const editorConfig = useMemo(() => ({
@@ -133,11 +133,11 @@ export function ContentRichEditor({ data, language, onChange }) {
     balloonToolbar: ['bold', 'italic', 'link', '|', 'bulletedList', 'numberedList'],
     heading: {
       options: [
-        { model: 'paragraph', title: 'Paragraph', class: 'ck-heading_paragraph' },
-        { model: 'heading1', view: 'h1', title: 'Heading 1', class: 'ck-heading_heading1' },
-        { model: 'heading2', view: 'h2', title: 'Heading 2', class: 'ck-heading_heading2' },
-        { model: 'heading3', view: 'h3', title: 'Heading 3', class: 'ck-heading_heading3' },
-        { model: 'heading4', view: 'h4', title: 'Heading 4', class: 'ck-heading_heading4' },
+        { model: 'paragraph', title: interfaceLanguage === 'th' ? 'ย่อหน้าปกติ' : 'Paragraph', class: 'ck-heading_paragraph' },
+        { model: 'heading1', view: 'h1', title: interfaceLanguage === 'th' ? 'หัวเรื่อง 1' : 'Heading 1', class: 'ck-heading_heading1' },
+        { model: 'heading2', view: 'h2', title: interfaceLanguage === 'th' ? 'หัวเรื่อง 2' : 'Heading 2', class: 'ck-heading_heading2' },
+        { model: 'heading3', view: 'h3', title: interfaceLanguage === 'th' ? 'หัวเรื่อง 3' : 'Heading 3', class: 'ck-heading_heading3' },
+        { model: 'heading4', view: 'h4', title: interfaceLanguage === 'th' ? 'หัวเรื่อง 4' : 'Heading 4', class: 'ck-heading_heading4' },
       ],
     },
     fontFamily: { supportAllValues: true },
@@ -154,14 +154,14 @@ export function ContentRichEditor({ data, language, onChange }) {
       addTargetToExternalLinks: true,
       defaultProtocol: 'https://',
       decorators: {
-        downloadable: { mode: 'manual', label: 'Downloadable', attributes: { download: 'download' } },
+        downloadable: { mode: 'manual', label: interfaceLanguage === 'th' ? 'ดาวน์โหลดได้' : 'Downloadable', attributes: { download: 'download' } },
       },
     },
     style: {
       definitions: [
-        { name: 'Lead paragraph', element: 'p', classes: ['article-lead'] },
-        { name: 'Information callout', element: 'div', classes: ['article-callout'] },
-        { name: 'Scientific note', element: 'div', classes: ['article-science-note'] },
+        { name: interfaceLanguage === 'th' ? 'ย่อหน้าเกริ่นนำ' : 'Lead paragraph', element: 'p', classes: ['article-lead'] },
+        { name: interfaceLanguage === 'th' ? 'กล่องข้อมูล' : 'Information callout', element: 'div', classes: ['article-callout'] },
+        { name: interfaceLanguage === 'th' ? 'หมายเหตุเพิ่มเติม' : 'Additional note', element: 'div', classes: ['article-science-note'] },
       ],
     },
     htmlSupport: {
@@ -179,8 +179,8 @@ export function ContentRichEditor({ data, language, onChange }) {
     htmlEmbed: { showPreviews: false },
     wordCount: { onUpdate: ({ words, characters }) => setStats({ words, characters }) },
     language: { content: language === 'th' ? 'th' : 'en', ui: 'en' },
-    placeholder: language === 'th' ? 'เริ่มเขียนเนื้อหาความรู้ที่นี่…' : 'Start writing the learning content here…',
-  }), [language])
+    placeholder: interfaceLanguage === 'th' ? 'เริ่มเขียนบทความพืชที่นี่…' : 'Start writing the plant article here…',
+  }), [interfaceLanguage, language])
 
   return (
     <div className="admin-rich-editor">
@@ -197,7 +197,7 @@ export function ContentRichEditor({ data, language, onChange }) {
           if (!details?.willEditorRestart) setEditorError(error?.message || 'The visual editor could not continue.')
         }}
       />
-      <footer className="admin-rich-editor__status"><span>CKEditor 5 · HTML output</span><span>{stats.words.toLocaleString()} words · {stats.characters.toLocaleString()} characters</span></footer>
+      <footer className="admin-rich-editor__status"><span>CKEditor 5 · {interfaceLanguage === 'th' ? 'ผลลัพธ์ HTML' : 'HTML output'}</span><span>{stats.words.toLocaleString()} {interfaceLanguage === 'th' ? 'คำ' : 'words'} · {stats.characters.toLocaleString()} {interfaceLanguage === 'th' ? 'ตัวอักษร' : 'characters'}</span></footer>
     </div>
   )
 }

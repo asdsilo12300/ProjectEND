@@ -15,6 +15,7 @@ import { preloadActionModels } from './actionModelAssets'
 import { PlantRecommendationBanner } from '../panels/PlantMonitorPanel'
 import { SeasonalEffects } from './SeasonalEffects'
 import { localSeasonIcon, localSeasonLabel, localSeasonPalette } from '../utils/seasonalWeather'
+import { PEST_PLACEMENT_MODES, pestPlacementMode } from './pestPlacement'
 
 function useCurrentAppLanguage() {
   const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
@@ -683,7 +684,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
     speed: (Number(outdoorReadings?.windSpeed) || 0) * (windbreakActive ? 0.36 : 1),
   } : null
   const pests = simulationVisual?.active_pests ?? []
-  const fungusRisk = pests.reduce((highestRisk, pest) => {
+  const surfacePestRisk = pests.reduce((highestRisk, pest) => {
     const pestName = String(
       pest?.pest?.name_en
         ?? pest?.name_en
@@ -693,8 +694,8 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
         ?? '',
     ).toLowerCase()
 
-    return pestName.includes('fungus')
-      ? Math.max(highestRisk, Number(pest?.risk_chance) || 0)
+    return pestPlacementMode(pest, pestName) === PEST_PLACEMENT_MODES.PLANT_SURFACE
+      ? Math.max(highestRisk, Math.max(35, Number(pest?.risk_chance) || 0))
       : highestRisk
   }, 0)
   const currentStageNo = Number(simulationVisual?.current_stage?.stage_no ?? 1)
@@ -812,7 +813,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
                   modelUrl={simulationVisual?.current_model_url}
                   plantName={simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th}
                   visualOverrides={simulationVisual?.visual_overrides}
-                  fungusRisk={fungusRisk}
+                  fungusRisk={surfacePestRisk}
                   health={health}
                   isMature={isMature}
                   growthProgress={growthProgress}

@@ -40,6 +40,7 @@ function NeedGauge({ color, icon, label, value }) {
 
 export function GameWorkspaceShell({
   centerContent,
+  commentUnreadCount = 0,
   language = 'en',
   leftCollapsed,
   leftLibrary,
@@ -72,6 +73,17 @@ export function GameWorkspaceShell({
       : (isThai ? 'ควบคุมปัจจัย' : 'Controlled')
   const plantName = plant?.name ?? simulationVisual?.plant?.plant_name ?? simulationVisual?.plant?.name ?? (isThai ? 'ยังไม่เลือกพืช' : 'No plant selected')
   const condition = health <= 0 ? 'critical' : health < 40 ? 'danger' : health < 70 ? 'warning' : 'stable'
+  const unreadCommentLabel = commentUnreadCount > 99 ? '99+' : String(commentUnreadCount)
+
+  const tabLabel = (tab) => {
+    const label = isThai ? tab.th : tab.en
+    if (tab.id !== 'comments' || commentUnreadCount <= 0) return label
+    return isThai ? `${label} มี ${commentUnreadCount} รายการที่ยังไม่ได้อ่าน` : `${label}, ${commentUnreadCount} unread`
+  }
+
+  const tabBadge = (tab, compact = false) => tab.id === 'comments' && commentUnreadCount > 0 ? (
+    <span className="command-tab__unread" data-compact={compact ? 'true' : 'false'} aria-hidden="true">{unreadCommentLabel}</span>
+  ) : null
 
   return (
     <section
@@ -80,20 +92,31 @@ export function GameWorkspaceShell({
       data-right-collapsed={rightCollapsed ? 'true' : 'false'}
       data-read-only={readOnly ? 'true' : 'false'}
     >
-      <aside className="command-rail command-rail--left command-rail--game-library" data-mode={mode} aria-label={isThai ? 'พื้นที่ทำงานห้องทดลอง' : 'Lab workspace'}>
+      <aside className="command-rail command-rail--left command-rail--game-library" data-mode={mode} data-tour="lab-workspace" aria-label={isThai ? 'พื้นที่ทำงานห้องทดลอง' : 'Lab workspace'}>
         <header className="command-rail__header">
           {!leftCollapsed && <>
             <span className="command-library-signal" aria-hidden="true"><i /><i /><i /></span>
             <span className="command-rail__identity-icon"><AppIcon name="plant" /></span>
             <span className="command-rail__identity"><small>{modeLabel}</small><strong title={plantName}>{plantName}</strong></span>
           </>}
-          <button className="command-icon-button" type="button" aria-label={leftCollapsed ? (isThai ? 'เปิดแถบซ้าย' : 'Open left rail') : (isThai ? 'พับแถบซ้าย' : 'Collapse left rail')} aria-expanded={!leftCollapsed} onClick={() => onLeftCollapsedChange(!leftCollapsed)}>
+          <button className="command-icon-button" data-tour="lab-left-toggle" type="button" aria-label={leftCollapsed ? (isThai ? 'เปิดแถบซ้าย' : 'Open left rail') : (isThai ? 'พับแถบซ้าย' : 'Collapse left rail')} aria-expanded={!leftCollapsed} onClick={() => onLeftCollapsedChange(!leftCollapsed)}>
             <AppIcon name={leftCollapsed ? 'panelOpen' : 'panelClose'} />
           </button>
         </header>
+        {leftCollapsed && (
+          <nav className="command-collapsed-rail command-collapsed-rail--left" aria-label={isThai ? 'เมนูลัดพื้นที่ทำงาน' : 'Workspace shortcuts'}>
+            <span className="command-collapsed-rail__asset command-collapsed-rail__asset--lab" aria-hidden="true" />
+            {leftTabs.map((tab) => (
+              <button key={`collapsed-${tab.id}`} type="button" title={isThai ? tab.th : tab.en} aria-label={isThai ? `เปิด${tab.th}` : `Open ${tab.en}`} onClick={() => { onLeftTabChange(tab.id); onLeftCollapsedChange(false) }}>
+                <AppIcon name={tab.icon} />
+              </button>
+            ))}
+            <span className="command-collapsed-rail__spine" aria-hidden="true"><i /><b>LAB</b><i /></span>
+          </nav>
+        )}
         <nav className="command-tabs command-tabs--left" role="tablist" aria-label={isThai ? 'ข้อมูลห้องทดลอง' : 'Lab information'}>
           {leftTabs.map((tab) => (
-            <button key={tab.id} className="command-tab" data-active={leftTab === tab.id ? 'true' : 'false'} type="button" role="tab" aria-selected={leftTab === tab.id} title={isThai ? tab.th : tab.en} onClick={() => onLeftTabChange(tab.id)}>
+            <button key={tab.id} className="command-tab" data-active={leftTab === tab.id ? 'true' : 'false'} data-tour={`lab-tab-${tab.id}`} type="button" role="tab" aria-selected={leftTab === tab.id} title={isThai ? tab.th : tab.en} onClick={() => onLeftTabChange(tab.id)}>
               <AppIcon name={tab.icon} /><span>{isThai ? tab.th : tab.en}</span>
             </button>
           ))}
@@ -119,16 +142,27 @@ export function GameWorkspaceShell({
         <div className="command-center-viewport">{centerContent}</div>
       </main>
 
-      <aside className="command-rail command-rail--right command-rail--game-console" data-condition={condition} data-mode={mode} aria-label={isThai ? 'ข้อมูลตามบริบท' : 'Contextual information'}>
+      <aside className="command-rail command-rail--right command-rail--game-console" data-condition={condition} data-mode={mode} data-tour="lab-console" aria-label={isThai ? 'ข้อมูลตามบริบท' : 'Contextual information'}>
         <header className="command-rail__header command-rail__header--right">
           {!rightCollapsed && <>
             <span className="command-console-signal" aria-hidden="true"><i /><i /><i /></span>
-            <span className="command-rail__identity"><small>{isThai ? 'สถานะปัจจุบัน' : 'Current status'}</small><strong>{readOnly ? (isThai ? 'ดูอย่างเดียว' : 'View only') : (isThai ? 'การจำลองแบบสด' : 'Live simulation')}</strong></span>
+            <span className="command-rail__identity"><small>{isThai ? 'สถานะปัจจุบัน' : 'Current status'}</small><strong>{readOnly ? (isThai ? 'ดูอย่างเดียว' : 'View only') : (isThai ? 'การจำลอง' : 'Live simulation')}</strong></span>
           </>}
-          <button className="command-icon-button" type="button" aria-label={rightCollapsed ? (isThai ? 'เปิดแถบขวา' : 'Open right rail') : (isThai ? 'พับแถบขวา' : 'Collapse right rail')} aria-expanded={!rightCollapsed} onClick={() => onRightCollapsedChange(!rightCollapsed)}><AppIcon name={rightCollapsed ? 'panelClose' : 'panelOpen'} /></button>
+          <button className="command-icon-button" data-tour="lab-right-toggle" type="button" aria-label={rightCollapsed ? (isThai ? 'เปิดแถบขวา' : 'Open right rail') : (isThai ? 'พับแถบขวา' : 'Collapse right rail')} aria-expanded={!rightCollapsed} onClick={() => onRightCollapsedChange(!rightCollapsed)}><AppIcon name={rightCollapsed ? 'panelClose' : 'panelOpen'} /></button>
         </header>
+        {rightCollapsed && (
+          <nav className="command-collapsed-rail command-collapsed-rail--right" aria-label={isThai ? 'เมนูลัดข้อมูลพืช' : 'Plant information shortcuts'}>
+            <span className="command-collapsed-rail__asset command-collapsed-rail__asset--status" aria-hidden="true" />
+            {rightTabs.map((tab) => (
+              <button key={`collapsed-${tab.id}`} type="button" title={tabLabel(tab)} aria-label={isThai ? `เปิด${tabLabel(tab)}` : `Open ${tabLabel(tab)}`} onClick={() => { onRightTabChange(tab.id); onRightCollapsedChange(false) }}>
+                <AppIcon name={tab.icon} />{tabBadge(tab, true)}
+              </button>
+            ))}
+            <span className="command-collapsed-rail__spine" aria-hidden="true"><i /><b>DATA</b><i /></span>
+          </nav>
+        )}
         {!rightCollapsed && <>
-          <section className="command-summary command-summary--game-console" aria-label={isThai ? 'สรุปสถานะพืช' : 'Plant summary'}>
+          <section className="command-summary command-summary--game-console" data-tour="lab-status-summary" aria-label={isThai ? 'สรุปสถานะพืช' : 'Plant summary'}>
             <div className="command-summary__heading"><span><small>{isThai ? 'สรุปพืช' : 'Plant summary'}</small><strong>{plantName}</strong></span><span className="command-summary__status">{health <= 0 ? (isThai ? 'ตาย' : 'Dead') : growth >= 100 ? (isThai ? 'พร้อมเก็บเกี่ยว' : 'Harvest ready') : (isThai ? 'กำลังเติบโต' : 'Growing')}</span></div>
             <Metric color="#ff827a" icon="heart" label={isThai ? 'สุขภาพ' : 'Health'} value={health} />
             <Metric color="#8fd878" icon="plant" label={isThai ? 'การเติบโต' : 'Growth'} value={growth} />
@@ -139,7 +173,7 @@ export function GameWorkspaceShell({
             </div>
           </section>
           <nav className="command-tabs command-tabs--right" role="tablist" aria-label={isThai ? 'รายละเอียด' : 'Details'}>
-            {rightTabs.map((tab) => <button key={tab.id} className="command-tab" data-active={rightTab === tab.id ? 'true' : 'false'} type="button" role="tab" aria-selected={rightTab === tab.id} onClick={() => onRightTabChange(tab.id)}><AppIcon name={tab.icon} /><span>{isThai ? tab.th : tab.en}</span></button>)}
+            {rightTabs.map((tab) => <button key={tab.id} className="command-tab" data-active={rightTab === tab.id ? 'true' : 'false'} data-tour={`lab-tab-${tab.id}`} type="button" role="tab" aria-label={tabLabel(tab)} aria-selected={rightTab === tab.id} onClick={() => onRightTabChange(tab.id)}><AppIcon name={tab.icon} /><span>{isThai ? tab.th : tab.en}</span>{tabBadge(tab)}</button>)}
           </nav>
           <div className="command-rail__body command-rail__body--right">
             <div className="command-tab-panel" data-visible={rightTab === 'overview' ? 'true' : 'false'} role="tabpanel">{rightOverview}</div>
@@ -167,8 +201,8 @@ export function GameWorkspaceShell({
           </button>
         ))}
         {rightTabs.slice(1).map((tab) => (
-          <button key={`mobile-${tab.id}`} type="button" data-active={!rightCollapsed && rightTab === tab.id ? 'true' : 'false'} onClick={() => { onRightTabChange(tab.id); onRightCollapsedChange(false); onLeftCollapsedChange(true) }}>
-            <AppIcon name={tab.icon} /><span>{isThai ? tab.th : tab.en}</span>
+          <button key={`mobile-${tab.id}`} type="button" data-active={!rightCollapsed && rightTab === tab.id ? 'true' : 'false'} aria-label={tabLabel(tab)} onClick={() => { onRightTabChange(tab.id); onRightCollapsedChange(false); onLeftCollapsedChange(true) }}>
+            <AppIcon name={tab.icon} /><span>{isThai ? tab.th : tab.en}</span>{tabBadge(tab)}
           </button>
         ))}
       </nav>

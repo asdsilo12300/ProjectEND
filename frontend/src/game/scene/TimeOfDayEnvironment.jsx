@@ -5,18 +5,23 @@ import { getRainVisualIntensity } from './rainUtils'
 const DAY_HDRI = '/hdri/symmetrical_garden_02_4k.hdr'
 const NIGHT_HDRI = '/hdri/satara_night_no_lamps_4k.hdr'
 
-// Increase or decrease this value to tune only the focused outdoor night lamp.
+// A warm street-lamp style pool: a bright focused beam plus softer spill.
 // The HDRI and the rest of the night scene keep their original exposure.
-export const OUTDOOR_NIGHT_PLANT_LIGHT_INTENSITY = 30
+export const OUTDOOR_NIGHT_PLANT_LIGHT_INTENSITY = 105
+const OUTDOOR_NIGHT_LAMP_SPILL_INTENSITY = 15
 
 function NightPlantLight() {
   const lightRef = useRef(null)
+  const spillLightRef = useRef(null)
   const targetRef = useRef(null)
 
   useLayoutEffect(() => {
-    if (!lightRef.current || !targetRef.current) return
-    lightRef.current.target = targetRef.current
-    lightRef.current.target.updateMatrixWorld()
+    if (!targetRef.current) return
+    ;[lightRef.current, spillLightRef.current].forEach((light) => {
+      if (!light) return
+      light.target = targetRef.current
+      light.target.updateMatrixWorld()
+    })
   }, [])
 
   return (
@@ -25,17 +30,34 @@ function NightPlantLight() {
       <spotLight
         ref={lightRef}
         castShadow
-        angle={0.4}
-        color="#ffd7a3"
+        angle={0.29}
+        color="#ffd08a"
         decay={2}
-        distance={7}
+        distance={7.5}
         intensity={OUTDOOR_NIGHT_PLANT_LIGHT_INTENSITY}
-        penumbra={0.86}
-        position={[0.75, 4.1, 0.9]}
+        penumbra={0.5}
+        position={[-0.85, 4.65, 1.05]}
         shadow-bias={-0.00025}
         shadow-normalBias={0.025}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
+      />
+      <spotLight
+        ref={spillLightRef}
+        angle={0.35}
+        color="#ffc878"
+        decay={2}
+        distance={7.5}
+        intensity={OUTDOOR_NIGHT_LAMP_SPILL_INTENSITY}
+        penumbra={1}
+        position={[-0.85, 4.65, 1.05]}
+      />
+      <pointLight
+        color="#ffd9a6"
+        decay={2}
+        distance={2.35}
+        intensity={9}
+        position={[-0.85, 4.45, 1.05]}
       />
     </>
   )

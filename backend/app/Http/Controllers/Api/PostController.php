@@ -97,7 +97,7 @@ class PostController extends Controller
     public function comment(Request $request, Post $post): JsonResponse
     {
         $data = $request->validate([
-            'comment_text' => ['required', 'string'],
+            'comment_text' => ['required', 'string', 'max:280'],
         ]);
 
         $comment = Comment::query()->create([
@@ -127,7 +127,7 @@ class PostController extends Controller
         abort_unless((int) $comment->post_id === (int) $post->id, 404);
 
         $data = $request->validate([
-            'comment_text' => ['required', 'string'],
+            'comment_text' => ['required', 'string', 'max:280'],
         ]);
 
         $reply = Comment::query()->create([

@@ -4,6 +4,9 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { createSimulatorComment, getSimulatorComments, resolveAssetUrl } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
+import { COMMENT_CHARACTER_LIMIT, commentCharacterCount, isCommentWithinLimit } from '../socialLimits.js'
+
+const COMMENT_INPUT_MAX_HEIGHT = 176
 
 function displayName(user) {
   return user?.username ?? user?.email?.split('@')[0] ?? 'Learner'
@@ -65,6 +68,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const commentsViewportRef = useRef(null)
+  const commentInputRef = useRef(null)
   const followLatestCommentRef = useRef(true)
   const avatarUser = useMemo(() => currentUser ?? { username: 'Learner' }, [currentUser])
   const visibleComments = simulatorId ? comments : []
@@ -79,6 +83,15 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
 
     return () => window.cancelAnimationFrame(frame)
   }, [comments.length])
+
+  useEffect(() => {
+    const input = commentInputRef.current
+    if (!input) return
+
+    input.style.height = '36px'
+    if (draft) input.style.height = `${Math.min(input.scrollHeight, COMMENT_INPUT_MAX_HEIGHT)}px`
+    input.style.overflowY = input.scrollHeight > COMMENT_INPUT_MAX_HEIGHT ? 'auto' : 'hidden'
+  }, [draft])
 
   useEffect(() => {
     if (!simulatorId) {
@@ -161,6 +174,10 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
     }
 
     if (!simulatorId || !text) return
+    if (!isCommentWithinLimit(text)) {
+      setError(`Comments can contain up to ${COMMENT_CHARACTER_LIMIT} characters.`)
+      return
+    }
 
     setStatus('posting')
     setError('')
@@ -182,7 +199,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
   return (
       <Panel id="comments" title={title} windows={windows} setWindows={setWindows} presentation={presentation} hideHeader={hideHeader} className={presentation === 'docked' ? 'comments-panel' : 'comments-panel w-[370px]'}>
         <div
-          className="grid max-h-56 gap-2.5 overflow-y-auto pr-1"
+          className="comments-panel__viewport grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto pr-1"
           ref={commentsViewportRef}
           onScroll={(event) => {
             const viewport = event.currentTarget
@@ -232,22 +249,28 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
           })}
         </div>
 
-        {error && <p className="mt-2 rounded-md border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100">{error}</p>}
+        {error && <p className="comments-panel__error mt-2 shrink-0 rounded-md border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs text-red-100">{error}</p>}
 
-        <form className="mt-3 flex items-end gap-2.5 rounded-lg border border-sky-200/15 bg-[#122026]/86 p-2.5" onSubmit={submitComment}>
-          <CommentAvatar className="mb-1 h-8 w-8" user={avatarUser} />
-          <label className="min-w-0 flex-1">
+        <form className="comments-panel__composer mt-3 flex shrink-0 items-end gap-2 rounded-lg border border-sky-200/15 bg-[#122026]/86 p-1.5" onSubmit={submitComment}>
+          <CommentAvatar className="mb-0.5 h-8 w-8" user={avatarUser} />
+          <label className="relative min-w-0 flex-1">
             <span className="sr-only">Comment</span>
             <textarea
-              className="min-h-10 w-full resize-none rounded-lg border border-sky-200/15 bg-[#071013]/75 px-3 py-2 text-xs leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-55"
+              className="block h-9 min-h-9 max-h-44 w-full resize-none overflow-y-hidden rounded-lg border border-sky-200/15 bg-[#071013]/75 px-3 py-2 pr-12 text-xs leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-55"
               disabled={!simulatorId || status === 'posting'}
+              maxLength={COMMENT_CHARACTER_LIMIT}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder={simulatorId ? 'Write a public observation...' : 'Select a planted simulation first'}
+              placeholder={simulatorId ? 'Comment...' : 'Select a planted simulation first'}
+              ref={commentInputRef}
+              rows={1}
               value={draft}
             />
+            <small className={`pointer-events-none absolute bottom-1.5 right-2 text-[9px] font-semibold tabular-nums ${commentCharacterCount(draft) >= COMMENT_CHARACTER_LIMIT * 0.9 ? 'text-amber-300' : 'text-slate-500'}`} aria-live="polite">
+              {commentCharacterCount(draft)}/{COMMENT_CHARACTER_LIMIT}
+            </small>
           </label>
           <button
-            className="mb-1 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#8fc7d9] text-[#071013] transition hover:bg-[#a8d5e3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mb-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#8fc7d9] text-[#071013] transition hover:bg-[#a8d5e3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
             type="submit"
             disabled={!simulatorId || !draft.trim() || status === 'posting'}
             aria-label="Send comment"

@@ -47,7 +47,7 @@ class AdminResourceController extends Controller
             'plants' => Plant::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en'])->toArray(),
             'stages' => PlantGrowthStage::query()->orderBy('plant_id')->orderBy('stage_no')->get(['id', 'plant_id', 'stage_no', 'stage_name'])->toArray(),
             'pests' => Pest::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en'])->toArray(),
-            'items' => Item::query()->orderBy('name')->get(['id', 'name', 'type'])->toArray(),
+            'items' => Item::query()->orderBy('name')->get(['id', 'name', 'type', 'action_key'])->toArray(),
         ]);
 
         return response()->json(['data' => $lookups]);
@@ -176,10 +176,82 @@ class AdminResourceController extends Controller
         return response()->json(['message' => 'Record restored.', 'data' => $model->fresh()]);
     }
 
+    public function generatePlantSetup(Request $request, Plant $plant): JsonResponse
+    {
+        $before = [
+            'rules' => $plant->conditionRules()->count(),
+            'visuals' => $plant->visualVariants()->count(),
+        ];
+
+        $factorProfiles = [
+            'water' => ['underwatered', 'overwatered', 'water_min', 'water_max'],
+            'light' => ['low_light', 'light_stress', 'light_min', 'light_max'],
+            'fertilizer' => ['nutrient_deficient', 'fertilizer_burn', 'fertilizer_min', 'fertilizer_max'],
+            'soil_humidity' => ['dry_soil', 'waterlogged', 'soil_humidity_min', 'soil_humidity_max'],
+            'air_humidity' => ['dry_air', 'fungal_risk', 'air_humidity_min', 'air_humidity_max'],
+            'soil_temp' => ['cold_stress', 'heat_stress', 'soil_temp_min', 'soil_temp_max'],
+            'air_temp' => ['cold_stress', 'heat_stress', 'air_temp_min', 'air_temp_max'],
+        ];
+
+        $visualProfiles = [
+            'healthy' => ['Healthy', '#5f9d45', '#6d8e43', 'upright', 'upright', 1.00, 10],
+            'underwatered' => ['Low water', '#948744', '#71613b', 'wilted', 'leaning', .92, 70],
+            'overwatered' => ['Excess water', '#80965d', '#617b58', 'drooping', 'soft', .94, 76],
+            'low_light' => ['Low light', '#a2ae68', '#82905d', 'pale', 'thin', .90, 60],
+            'light_stress' => ['Strong light', '#9a7240', '#72503a', 'burnt_edges', 'dry', .91, 72],
+            'nutrient_deficient' => ['Low nutrients', '#b0aa56', '#898646', 'yellowing', 'thin', .91, 58],
+            'fertilizer_burn' => ['Excess fertilizer', '#98633e', '#704b35', 'burnt_edges', 'dry', .88, 80],
+            'dry_soil' => ['Dry soil', '#9d8240', '#735e35', 'wilted', 'leaning', .91, 66],
+            'waterlogged' => ['Wet soil', '#78905a', '#5c7354', 'yellowing', 'soft', .91, 84],
+            'dry_air' => ['Dry air', '#9c8252', '#756143', 'wilted', 'dry', .92, 52],
+            'fungal_risk' => ['High humidity', '#6f795b', '#606b51', 'spotted', 'soft', .90, 86],
+            'cold_stress' => ['Cold stress', '#647d70', '#5e7060', 'darkened', 'slow', .91, 68],
+            'heat_stress' => ['Heat stress', '#a4773d', '#775336', 'wilted', 'leaning', .90, 78],
+        ];
+
+        DB::transaction(function () use ($factorProfiles, $plant, $visualProfiles): void {
+            foreach ($factorProfiles as $factor => [$lowState, $highState, $minimumKey, $maximumKey]) {
+                $minimum = $plant->{$minimumKey};
+                $maximum = $plant->{$maximumKey};
+                $lowRule = PlantConditionRule::withTrashed()->firstOrCreate(
+                    ['plant_id' => $plant->id, 'factor' => $factor, 'operator' => 'below'],
+                    ['visual_state' => $lowState, 'min_value' => $minimum, 'max_value' => null, 'severity' => 6, 'health_delta' => -7, 'growth_delta' => -5, 'analysis_result' => "{$factor} is below the suitable range.", 'direction' => "Raise {$factor} gradually toward the suitable range.", 'is_active' => true],
+                );
+                if ($lowRule->trashed()) $lowRule->restore();
+                $highRule = PlantConditionRule::withTrashed()->firstOrCreate(
+                    ['plant_id' => $plant->id, 'factor' => $factor, 'operator' => 'above'],
+                    ['visual_state' => $highState, 'min_value' => null, 'max_value' => $maximum, 'severity' => 7, 'health_delta' => -8, 'growth_delta' => -5, 'analysis_result' => "{$factor} is above the suitable range.", 'direction' => "Lower {$factor} gradually toward the suitable range.", 'is_active' => true],
+                );
+                if ($highRule->trashed()) $highRule->restore();
+            }
+
+            foreach ($visualProfiles as $state => [$label, $leafColor, $stemColor, $leafState, $stemState, $scale, $priority]) {
+                $variant = PlantVisualVariant::withTrashed()->firstOrCreate(
+                    ['plant_id' => $plant->id, 'stage_id' => null, 'state_key' => $state],
+                    ['label' => $label, 'model_url' => null, 'leaf_color' => $leafColor, 'stem_color' => $stemColor, 'leaf_state' => $leafState, 'stem_state' => $stemState, 'scale' => $scale, 'priority' => $priority, 'is_active' => true],
+                );
+                if ($variant->trashed()) $variant->restore();
+            }
+        });
+
+        $plant->refresh()->loadCount(['conditionRules', 'visualVariants']);
+        AdminActivityLog::record($request->user(), 'generated_plant_setup', 'plants', $plant->id, [
+            'before' => $before,
+            'after' => ['rules' => $plant->condition_rules_count, 'visuals' => $plant->visual_variants_count],
+        ]);
+        $this->cache->clear();
+        $this->catalogCache->clear();
+
+        return response()->json([
+            'message' => 'Recommended plant rules and visual states were generated.',
+            'data' => $plant,
+        ]);
+    }
+
     private function catalogConfig(string $resource): ?array
     {
         return match ($resource) {
-            'plants' => ['model' => Plant::class, 'with' => [], 'with_count' => ['stages', 'conditionRules', 'visualVariants'], 'search' => ['name_th', 'name_en']],
+            'plants' => ['model' => Plant::class, 'with' => [], 'with_count' => ['stages', 'conditionRules', 'visualVariants', 'knowledge'], 'search' => ['name_th', 'name_en']],
             'plant-knowledge' => ['model' => PlantKnowledge::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['scientific_name', 'family', 'category_en', 'category_th', 'summary_en', 'summary_th']],
             'plant-stages' => ['model' => PlantGrowthStage::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['stage_name', 'description']],
             'plant-rules' => ['model' => PlantConditionRule::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['factor', 'visual_state', 'analysis_result']],
@@ -206,6 +278,10 @@ class AdminResourceController extends Controller
         $activeStageForPlant = Rule::exists('plant_growth_stages', 'id')->whereNull('deleted_at')->where('plant_id', $plantId);
         $activePest = Rule::exists('pests', 'id')->whereNull('deleted_at');
         $activeItem = Rule::exists('items', 'id')->whereNull('deleted_at');
+        $environmentFactors = ['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'];
+        $visualStates = ['healthy', 'underwatered', 'overwatered', 'dry_soil', 'waterlogged', 'low_light', 'nutrient_deficient', 'fertilizer_burn', 'burnt', 'heat_stress', 'cold_stress', 'dry_air', 'fungal_risk', 'botrytis', 'wind_stress', 'stunted'];
+        $leafStates = ['normal', 'upright', 'wilted', 'drooping', 'yellowing', 'pale', 'spotted', 'burnt_edges', 'root_burn', 'darkened', 'small'];
+        $stemStates = ['normal', 'upright', 'leaning', 'soft', 'thin', 'dry', 'slow', 'short'];
 
         return match ($resource) {
             'plants' => [
@@ -221,8 +297,8 @@ class AdminResourceController extends Controller
                 'air_temp_min' => ['required', 'numeric', 'between:-50,100'], 'air_temp_max' => ['required', 'numeric', 'between:-50,100'],
             ],
             'plant-stages' => ['plant_id' => ['required', $activePlant], 'stage_no' => ['required', 'integer', 'between:1,99', Rule::unique('plant_growth_stages', 'stage_no')->where('plant_id', $plantId)->ignore($id)], 'stage_name' => ['required', 'string', 'max:191'], 'required_growth_point' => ['required', 'integer', 'min:0'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'description' => ['nullable', 'string', 'max:5000']],
-            'plant-rules' => ['plant_id' => ['required', $activePlant], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'visual_state' => ['required', 'string', 'max:80'], 'severity' => ['required', 'integer', 'between:1,10'], 'health_delta' => ['required', 'integer', 'between:-100,100'], 'growth_delta' => ['required', 'integer', 'between:-100,100'], 'analysis_result' => ['nullable', 'string', 'max:2000'], 'direction' => ['nullable', 'string', 'max:2000'], 'is_active' => ['required', 'boolean']],
-            'plant-variants' => ['plant_id' => ['required', $activePlant], 'stage_id' => ['nullable', $activeStageForPlant], 'state_key' => ['required', 'string', 'max:100'], 'label' => ['nullable', 'string', 'max:191'], 'model_url' => $nullableUrl, 'leaf_color' => ['nullable', 'string', 'max:30'], 'stem_color' => ['nullable', 'string', 'max:30'], 'leaf_state' => ['nullable', 'string', 'max:80'], 'stem_state' => ['nullable', 'string', 'max:80'], 'scale' => ['required', 'numeric', 'between:0.01,20'], 'priority' => ['required', 'integer', 'between:0,999'], 'is_active' => ['required', 'boolean']],
+            'plant-rules' => ['plant_id' => ['required', $activePlant], 'factor' => ['required', Rule::in($environmentFactors)], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'visual_state' => ['required', Rule::in($visualStates)], 'severity' => ['required', 'integer', 'between:1,10'], 'health_delta' => ['required', 'integer', 'between:-100,100'], 'growth_delta' => ['required', 'integer', 'between:-100,100'], 'analysis_result' => ['nullable', 'string', 'max:2000'], 'direction' => ['nullable', 'string', 'max:2000'], 'is_active' => ['required', 'boolean']],
+            'plant-variants' => ['plant_id' => ['required', $activePlant], 'stage_id' => ['nullable', $activeStageForPlant], 'state_key' => ['required', Rule::in($visualStates)], 'label' => ['nullable', 'string', 'max:191'], 'model_url' => $nullableUrl, 'leaf_color' => ['nullable', 'string', 'max:30'], 'stem_color' => ['nullable', 'string', 'max:30'], 'leaf_state' => ['nullable', Rule::in($leafStates)], 'stem_state' => ['nullable', Rule::in($stemStates)], 'scale' => ['required', 'numeric', 'between:0.01,20'], 'priority' => ['required', 'integer', 'between:0,999'], 'is_active' => ['required', 'boolean']],
             'plant-knowledge' => [
                 'plant_id' => ['required', $activePlant, Rule::unique('plant_knowledge', 'plant_id')->ignore($id)],
                 'scientific_name' => ['nullable', 'string', 'max:191'],
@@ -250,9 +326,9 @@ class AdminResourceController extends Controller
                 'sources.*.label_th' => ['nullable', 'string', 'max:255'],
                 'sources.*.url' => ['required', 'url', 'max:2048'],
             ],
-            'pests' => ['name_th' => ['required', 'string', 'max:191', Rule::unique('pests', 'name_th')->ignore($id)], 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'base_chance' => ['required', 'numeric', 'between:0,100'], 'damage_per_turn' => ['required', 'integer', 'between:0,100'], 'behavior' => ['nullable', 'string', 'max:5000']],
-            'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', 'string', 'max:80'], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
-            'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])], 'effect_payload' => ['nullable', 'array'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
+            'pests' => ['name_th' => ['required', 'string', 'max:191', Rule::unique('pests', 'name_th')->ignore($id)], 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'model_url' => ['nullable', 'string', 'max:2048', 'required_unless:placement_mode,plant_surface'], 'placement_mode' => ['required', Rule::in(['ground_random', 'leaf', 'plant_surface'])], 'base_chance' => ['required', 'numeric', 'between:0,100'], 'damage_per_turn' => ['required', 'integer', 'between:0,100'], 'behavior' => ['nullable', 'string', 'max:5000']],
+            'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', Rule::in($environmentFactors)], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
+            'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])], 'effect_payload' => ['nullable', 'array'], 'effect_payload.strategy' => ['nullable', Rule::in(['refill_reserve', 'toward_healthy_midpoint', 'drainage', 'moisture_retention'])], 'effect_payload.resource' => ['nullable', Rule::in($environmentFactors)], 'effect_payload.duration_ticks' => ['nullable', 'integer', 'between:1,100'], 'effect_payload.duration_seconds' => ['nullable', 'integer', 'between:5,300'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
             'shop-items' => ['item_id' => ['required', $activeItem, Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at']],
             'model-assets' => ['asset_key' => ['required', 'string', 'max:191', Rule::unique('model_assets', 'asset_key')->ignore($id)], 'label' => ['nullable', 'string', 'max:191'], 'type' => ['required', 'string', 'max:80'], 'url' => ['required', 'string', 'max:2048'], 'metadata' => ['nullable', 'array']],
             'quests' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'quest_type' => ['required', Rule::in(['daily', 'weekly', 'story', 'event'])], 'target_type' => ['required', 'string', 'max:100'], 'target_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'reward_gem' => ['required', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],

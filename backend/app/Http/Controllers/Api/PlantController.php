@@ -25,7 +25,10 @@ class PlantController extends Controller
 
         return response()
             ->json(['data' => $plants])
-            ->header('Cache-Control', $this->publicCacheControl());
+            // Plant availability controls whether a user may start or resume a
+            // simulation. Do not let a browser reuse a catalog captured before
+            // an administrator moved a species to trash.
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function show(Plant $plant): PlantResource
@@ -38,10 +41,4 @@ class PlantController extends Controller
         return PlantStageResource::collection($plant->stages()->get());
     }
 
-    private function publicCacheControl(): string
-    {
-        $seconds = max(0, (int) config('catalog.browser_cache_seconds', 30));
-
-        return "public, max-age={$seconds}, stale-while-revalidate=300";
-    }
 }

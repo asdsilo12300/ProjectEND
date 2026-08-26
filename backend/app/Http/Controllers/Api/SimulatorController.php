@@ -174,6 +174,7 @@ class SimulatorController extends Controller
     ): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        $this->ensurePlantAvailable($simulator);
 
         $factors = $request->validate([
             'water' => ['required', 'integer', 'min:0', 'max:100'],
@@ -282,6 +283,7 @@ class SimulatorController extends Controller
     public function sync(Request $request, Simulator $simulator): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        $this->ensurePlantAvailable($simulator);
 
         $data = $request->validate([
             'growth_point' => ['required', 'numeric', 'min:0'],
@@ -328,6 +330,7 @@ class SimulatorController extends Controller
     public function claimMaturityReward(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        $this->ensurePlantAvailable($simulator);
 
         $result = DB::transaction(function () use ($request, $simulator): array {
             $lockedSimulator = Simulator::query()
@@ -391,6 +394,7 @@ class SimulatorController extends Controller
     public function finish(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        $this->ensurePlantAvailable($simulator);
         abort_unless($simulator->status === 'active', 409, 'Only an active plant can be completed.');
 
         $simulator->update([
@@ -425,6 +429,7 @@ class SimulatorController extends Controller
     public function share(Request $request, Simulator $simulator): JsonResponse
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        $this->ensurePlantAvailable($simulator);
         abort_unless($simulator->status === 'active', 409, 'Only an active plant can be shared live.');
 
         $data = $request->validate([
@@ -472,6 +477,7 @@ class SimulatorController extends Controller
 
     public function spectate(Request $request, Simulator $simulator): SimulatorResource
     {
+        $this->ensurePlantAvailable($simulator);
         if ($simulator->status !== 'active' || $simulator->ended_at) {
             abort(410, 'This live garden is no longer available.');
         }
@@ -519,6 +525,7 @@ class SimulatorController extends Controller
     public function storeLog(Request $request, Simulator $simulator): SimulatorResource
     {
         abort_unless($simulator->user_id === $request->user()->id, 403);
+        $this->ensurePlantAvailable($simulator);
 
         $data = $request->validate([
             'day_no' => ['required', 'integer', 'min:1'],
@@ -574,6 +581,7 @@ class SimulatorController extends Controller
     {
         $userId = (int) $request->user()->id;
         abort_unless((int) $simulator->user_id === $userId, 403);
+        $this->ensurePlantAvailable($simulator);
 
         $data = $request->validate([
             'item_id' => ['nullable', 'integer', 'exists:items,id'],
@@ -761,6 +769,7 @@ class SimulatorController extends Controller
     {
         $userId = (int) $request->user()->id;
         abort_if((int) $simulator->user_id === $userId, 422, 'Prank items can only be used in a friend garden.');
+        $this->ensurePlantAvailable($simulator);
         abort_unless($simulator->status === 'active', 422, 'This friend plant is not available.');
 
         $this->authorizeSimulatorConversation($request, $simulator);
@@ -878,7 +887,7 @@ class SimulatorController extends Controller
         $this->authorizeSimulatorConversation($request, $simulator);
 
         $data = $request->validate([
-            'comment_text' => ['required', 'string', 'max:1000'],
+            'comment_text' => ['required', 'string', 'max:280'],
         ]);
 
         $comment = SimulatorComment::query()->create([
@@ -887,6 +896,19 @@ class SimulatorController extends Controller
             'comment_text' => trim($data['comment_text']),
             'status' => 'visible',
         ]);
+
+        if ((int) $simulator->user_id !== (int) $request->user()->id) {
+            SocialNotification::query()->create([
+                'recipient_id' => $simulator->user_id,
+                'actor_id' => $request->user()->id,
+                'post_id' => null,
+                'comment_id' => null,
+                'simulator_id' => $simulator->id,
+                'simulator_comment_id' => $comment->id,
+                'type' => 'garden_comment',
+                'excerpt' => Str::limit($comment->comment_text, 220),
+            ]);
+        }
 
         return response()->json(['data' => $this->commentPayload($comment->load('user'))], 201);
     }
@@ -947,6 +969,11 @@ class SimulatorController extends Controller
             'gem' => $user->gem,
             'status' => $user->status,
         ];
+    }
+
+    private function ensurePlantAvailable(Simulator $simulator): void
+    {
+        abort_unless($simulator->hasAvailablePlant(), 423, 'This plant species is currently under maintenance.');
     }
 
     /**

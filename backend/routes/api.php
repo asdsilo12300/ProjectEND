@@ -139,6 +139,7 @@ Route::middleware('jwt')->group(function (): void {
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::patch('/users/{user}', [AdminUserController::class, 'update']);
         Route::get('/resources/lookups', [AdminResourceController::class, 'lookups']);
+        Route::post('/resources/plants/{plant}/generate-setup', [AdminResourceController::class, 'generatePlantSetup']);
         Route::post('/media/images', [AdminMediaController::class, 'uploadImage']);
         Route::post('/model-bundles', [AdminModelBundleController::class, 'store']);
         Route::get('/resources/{resource}', [AdminResourceController::class, 'index']);

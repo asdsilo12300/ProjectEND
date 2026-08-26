@@ -13,6 +13,7 @@ import {
   getAdminContent,
   getAdminContents,
   getAdminDashboard,
+  generateAdminPlantSetup,
   getAdminResource,
   getAdminResourceLookups,
   getAdminUsers,
@@ -28,6 +29,7 @@ import {
   uploadAdminModelBundle,
 } from '../lib/api'
 import { IssueReportsAdminView } from './IssueReportsAdminView'
+import { adminText, useAdminLanguage } from './adminI18n'
 import './AdminPage.css'
 
 const ContentRichEditor = lazy(() => import('./ContentRichEditor').then((module) => ({ default: module.ContentRichEditor })))
@@ -68,32 +70,73 @@ function adminAlertTheme() {
 }
 
 async function confirmAdminAction({ title, text, confirmButtonText, icon = 'warning' }) {
+  const language = document.documentElement.lang === 'th' ? 'th' : 'en'
   const result = await Swal.fire({
     ...adminAlertTheme(),
-    title,
-    text,
+    title: adminText(language, title),
+    text: adminText(language, text),
     icon,
     showCancelButton: true,
     reverseButtons: true,
     focusCancel: true,
     buttonsStyling: false,
-    confirmButtonText,
-    cancelButtonText: 'Cancel',
+    confirmButtonText: adminText(language, confirmButtonText),
+    cancelButtonText: adminText(language, 'Cancel'),
   })
 
   return result.isConfirmed
 }
 
 function showAdminSuccess(title, text = '') {
+  const language = document.documentElement.lang === 'th' ? 'th' : 'en'
   return Swal.fire({
     ...adminAlertTheme(),
-    title,
-    text,
+    title: adminText(language, title),
+    text: adminText(language, text),
     icon: 'success',
     timer: 1400,
     timerProgressBar: true,
     showConfirmButton: false,
   })
+}
+
+function AdminSelectionCheckbox({ checked = false, disabled = false, indeterminate = false, label, onChange }) {
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.indeterminate = indeterminate
+  }, [indeterminate])
+
+  return (
+    <label className="admin-selection-checkbox">
+      <input
+        aria-label={label}
+        checked={checked}
+        disabled={disabled}
+        ref={inputRef}
+        type="checkbox"
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span aria-hidden="true"><AppIcon name="check" /></span>
+    </label>
+  )
+}
+
+function AdminBulkDeleteBar({ busy = false, count = 0, language = 'en', onClear, onDelete }) {
+  const isThai = language === 'th'
+
+  return (
+    <div className="admin-bulk-bar" role="toolbar" aria-label={isThai ? 'คำสั่งสำหรับรายการที่เลือก' : 'Selected row actions'}>
+      <div>
+        <span className="admin-bulk-bar__count">{count}</span>
+        <span><strong>{isThai ? `เลือกแล้ว ${count} รายการ` : `${count} selected`}</strong><small>{isThai ? 'คำสั่งสำหรับรายการที่เลือก: ลบเท่านั้น' : 'Available action: delete only'}</small></span>
+      </div>
+      <div>
+        <button disabled={busy} type="button" onClick={onClear}>{isThai ? 'ยกเลิกการเลือก' : 'Clear selection'}</button>
+        <button className="is-danger" disabled={busy} type="button" onClick={onDelete}><AppIcon name="trash" />{busy ? (isThai ? 'กำลังลบ…' : 'Deleting…') : (isThai ? `ลบ ${count} รายการ` : `Delete ${count}`)}</button>
+      </div>
+    </div>
+  )
 }
 
 function loadAdminPreferences() {
@@ -199,7 +242,7 @@ function toDateTimeLocal(value) {
 const navigationGroups = [
   { label: 'CORE', items: [
     { id: 'dashboard', icon: 'home', label: 'Overview' },
-    { id: 'contents', icon: 'bookmark', label: 'Learning content' },
+    { id: 'contents', icon: 'bookmark', label: 'Content library' },
     { id: 'users', icon: 'groups', label: 'Users & access' },
   ] },
   { label: 'SIMULATION DATA', items: [
@@ -227,10 +270,75 @@ const navigationGroups = [
 const hiddenAdminNavigationItems = new Set(['progression', 'models'])
 
 const lookupLabel = {
-  plants: (row) => row.name_en || row.name_th,
+  plants: (row) => document.documentElement.lang === 'th' ? row.name_th || row.name_en : row.name_en || row.name_th,
   stages: (row) => `${row.stage_no}. ${row.stage_name}`,
-  pests: (row) => row.name_en || row.name_th,
+  pests: (row) => document.documentElement.lang === 'th' ? row.name_th || row.name_en : row.name_en || row.name_th,
   items: (row) => row.name,
+}
+
+function localizedAdminName(row) {
+  if (!row) return ''
+  return document.documentElement.lang === 'th'
+    ? row.name_th || row.name_en
+    : row.name_en || row.name_th
+}
+
+const environmentFactorOptions = [
+  { value: 'water', label: 'Water' },
+  { value: 'light', label: 'Light' },
+  { value: 'fertilizer', label: 'Fertilizer' },
+  { value: 'soil_humidity', label: 'Soil moisture' },
+  { value: 'air_humidity', label: 'Air humidity' },
+  { value: 'soil_temp', label: 'Soil temperature' },
+  { value: 'air_temp', label: 'Air temperature' },
+]
+const visualStateOptions = [
+  'healthy', 'underwatered', 'overwatered', 'dry_soil', 'waterlogged', 'low_light',
+  'nutrient_deficient', 'fertilizer_burn', 'burnt', 'heat_stress', 'cold_stress',
+  'dry_air', 'fungal_risk', 'botrytis', 'wind_stress', 'stunted',
+]
+const leafStateOptions = ['normal', 'upright', 'wilted', 'drooping', 'yellowing', 'pale', 'spotted', 'burnt_edges', 'root_burn', 'darkened', 'small']
+const stemStateOptions = ['normal', 'upright', 'leaning', 'soft', 'thin', 'dry', 'slow', 'short']
+const severityOptions = Array.from({ length: 10 }, (_, index) => ({ value: index + 1, label: `${index + 1} / 10` }))
+const itemEffectTypeOptions = [
+  { value: '', label: 'No legacy effect' },
+  ...['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover', 'mulch'].map((key) => ({ value: `environment:${key}`, label: `Environment · ${key.replaceAll('-', ' ')}` })),
+  { value: 'manual_pest_control:aphid,snail', label: 'Manual pest control · aphid and snail' },
+  { value: 'pest_control:aphid', label: 'Pest control · aphid' },
+  { value: 'pest_control:snail', label: 'Pest control · snail' },
+  { value: 'pest_control:fungus', label: 'Pest control · fungus' },
+  { value: 'friend_pest:aphid', label: 'Friend prank · aphid' },
+  { value: 'friend_pest:snail', label: 'Friend prank · snail' },
+]
+const itemActionOptions = [
+  { value: '', label: 'No simulation action' },
+  ...['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover', 'mulch', 'manual-pest-control', 'aphid-treatment', 'snail-treatment', 'fungus-treatment'].map((value) => ({ value, label: value.replaceAll('-', ' ') })),
+]
+const itemAnimationOptions = [
+  { value: '', label: 'No 3D animation' },
+  ...['watering-can', 'fertilizer-pour', 'soil-mix', 'shade-cover', 'windbreak', 'frost-cover', 'straw-mulch', 'hand-pick', 'pest-spray'].map((value) => ({ value, label: value.replaceAll('-', ' ') })),
+]
+const itemEffectPresets = {
+  'environment:water': { action_key: 'water', animation_key: 'watering-can', effect_payload: { strategy: 'refill_reserve', resource: 'water', duration_ticks: 1, duration_seconds: 30 } },
+  'environment:fertilizer': { action_key: 'fertilizer', animation_key: 'fertilizer-pour', effect_payload: { strategy: 'refill_reserve', resource: 'fertilizer', duration_ticks: 1, duration_seconds: 30 } },
+  'environment:drainage': { action_key: 'drainage', animation_key: 'soil-mix', effect_payload: { strategy: 'drainage', resource: 'soil_humidity', duration_ticks: 2, duration_seconds: 30 } },
+  'environment:shade': { action_key: 'shade', animation_key: 'shade-cover', effect_payload: { strategy: 'toward_healthy_midpoint', resource: 'light', duration_ticks: 2, duration_seconds: 30 } },
+  'environment:windbreak': { action_key: 'windbreak', animation_key: 'windbreak', effect_payload: { strategy: 'toward_healthy_midpoint', resource: 'air_humidity', duration_ticks: 2, duration_seconds: 30 } },
+  'environment:frost-cover': { action_key: 'frost-cover', animation_key: 'frost-cover', effect_payload: { strategy: 'toward_healthy_midpoint', resource: 'air_temp', duration_ticks: 2, duration_seconds: 30 } },
+  'environment:mulch': { action_key: 'mulch', animation_key: 'straw-mulch', effect_payload: { strategy: 'moisture_retention', resource: 'soil_humidity', duration_ticks: 2, duration_seconds: 30 } },
+  'manual_pest_control:aphid,snail': { action_key: 'manual-pest-control', animation_key: 'hand-pick', effect_payload: {} },
+  'pest_control:aphid': { action_key: 'aphid-treatment', animation_key: 'pest-spray', effect_payload: {} },
+  'pest_control:snail': { action_key: 'snail-treatment', animation_key: 'pest-spray', effect_payload: {} },
+  'pest_control:fungus': { action_key: 'fungus-treatment', animation_key: 'pest-spray', effect_payload: {} },
+}
+
+function ColorCodePreview({ value }) {
+  if (!value) return <span className="admin-color-code is-empty">—</span>
+  return <span className="admin-color-code"><i style={{ backgroundColor: value }} /><code>{value}</code></span>
+}
+
+function ColorPairPreview({ first, second }) {
+  return <span className="admin-color-pair"><ColorCodePreview value={first} /><b>/</b><ColorCodePreview value={second} /></span>
 }
 
 const commonActiveField = { key: 'is_active', label: 'Active', type: 'boolean' }
@@ -249,7 +357,7 @@ const resourceGroups = {
         ]),
       ],
       columns: [
-        { label: 'Plant', render: (row) => row.name_en || row.name_th },
+        { label: 'Plant', render: (row) => localizedAdminName(row) },
         { label: 'Thai name', render: (row) => row.name_th },
         { label: 'Water / light', render: (row) => `${row.water_min}–${row.water_max} / ${row.light_min}–${row.light_max}` },
         { label: 'Real maturity', render: (row) => `~${row.real_maturity_days ?? 90} days` },
@@ -260,19 +368,19 @@ const resourceGroups = {
       id: 'plant-stages', label: 'Growth stages', createLabel: 'New stage', icon: 'sprout',
       defaults: { plant_id: '', stage_no: 1, stage_name: '', required_growth_point: 0, image_url: '', model_url: '', description: '' },
       fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_no', label: 'Stage number', type: 'number', required: true }, { key: 'stage_name', label: 'Stage name', required: true }, { key: 'required_growth_point', label: 'Required growth points', type: 'number', required: true }, { key: 'image_url', label: 'Stage image', type: 'image-upload', scope: 'plant-stages', wide: true }, { key: 'model_url', label: 'Stage 3D model package', type: 'model-bundle', wide: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }],
-      columns: [{ label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'Stage', render: (row) => `${row.stage_no}. ${row.stage_name}` }, { label: 'Growth points', render: (row) => row.required_growth_point }, { label: 'Model', render: (row) => row.model_url ? 'Configured' : 'Not set' }],
+      columns: [{ label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Stage', render: (row) => `${row.stage_no}. ${row.stage_name}` }, { label: 'Growth points', render: (row) => row.required_growth_point }, { label: 'Model', render: (row) => row.model_url ? 'Configured' : 'Not set' }],
     },
     {
       id: 'plant-rules', label: 'Condition rules', createLabel: 'New rule', icon: 'settings',
       defaults: { plant_id: '', factor: 'water', operator: 'between', min_value: 0, max_value: 100, visual_state: 'healthy', severity: 1, health_delta: 0, growth_delta: 0, analysis_result: '', direction: '', is_active: true },
-      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'factor', label: 'Factor', required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'visual_state', label: 'Visual state', required: true }, { key: 'severity', label: 'Severity', type: 'number', required: true }, { key: 'health_delta', label: 'Health change', type: 'number', required: true }, { key: 'growth_delta', label: 'Growth change', type: 'number', required: true }, { key: 'analysis_result', label: 'Analysis result', type: 'textarea', wide: true }, { key: 'direction', label: 'Player guidance', type: 'textarea', wide: true }, commonActiveField],
-      columns: [{ label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Effect', render: (row) => `${row.health_delta} health / ${row.growth_delta} growth` }, { label: 'State', render: (row) => row.visual_state }],
+      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'factor', label: 'Factor', type: 'select', options: environmentFactorOptions, required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'visual_state', label: 'Visual state', type: 'select', options: visualStateOptions, required: true }, { key: 'severity', label: 'Severity', type: 'select', options: severityOptions, required: true }, { key: 'health_delta', label: 'Health change', type: 'number', required: true }, { key: 'growth_delta', label: 'Growth change', type: 'number', required: true }, { key: 'analysis_result', label: 'Analysis result', type: 'textarea', wide: true }, { key: 'direction', label: 'Player guidance', type: 'textarea', wide: true }, commonActiveField],
+      columns: [{ label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Effect', render: (row) => `${row.health_delta} health / ${row.growth_delta} growth` }, { label: 'State', render: (row) => row.visual_state }],
     },
     {
       id: 'plant-variants', label: 'Visual variants', createLabel: 'New visual', icon: 'eye',
       defaults: { plant_id: '', stage_id: '', state_key: 'healthy', label: '', model_url: '', leaf_color: '#6fa84f', stem_color: '#5c8f42', leaf_state: 'normal', stem_state: 'normal', scale: 1, priority: 0, is_active: true },
-      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_id', label: 'Growth stage', type: 'lookup', lookup: 'stages' }, { key: 'state_key', label: 'State key', required: true }, { key: 'label', label: 'Display label' }, { key: 'model_url', label: 'Variant 3D model package', type: 'model-bundle', wide: true }, { key: 'leaf_color', label: 'Leaf color' }, { key: 'stem_color', label: 'Stem color' }, { key: 'leaf_state', label: 'Leaf state' }, { key: 'stem_state', label: 'Stem state' }, { key: 'scale', label: 'Scale', type: 'number', step: '0.01', required: true }, { key: 'priority', label: 'Priority', type: 'number', required: true }, commonActiveField],
-      columns: [{ label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'State', render: (row) => row.label || row.state_key }, { label: 'Stage', render: (row) => row.stage?.stage_name || 'All stages' }, { label: 'Appearance', render: (row) => `${row.leaf_color || '—'} / ${row.stem_color || '—'}` }],
+      fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_id', label: 'Growth stage', type: 'lookup', lookup: 'stages' }, { key: 'state_key', label: 'State key', type: 'select', options: visualStateOptions, required: true }, { key: 'label', label: 'Display label' }, { key: 'model_url', label: 'Variant 3D model package', type: 'model-bundle', wide: true }, { key: 'leaf_color', label: 'Leaf color', type: 'color-rgb' }, { key: 'stem_color', label: 'Stem color', type: 'color-rgb' }, { key: 'leaf_state', label: 'Leaf state', type: 'select', options: leafStateOptions }, { key: 'stem_state', label: 'Stem state', type: 'select', options: stemStateOptions }, { key: 'scale', label: 'Scale', type: 'number', step: '0.01', required: true }, { key: 'priority', label: 'Priority', type: 'number', required: true }, commonActiveField],
+      columns: [{ label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'State', render: (row) => row.label || row.state_key }, { label: 'Stage', render: (row) => row.stage?.stage_name || 'All stages' }, { label: 'Appearance', render: (row) => <ColorPairPreview first={row.leaf_color} second={row.stem_color} /> }],
     },
     {
       id: 'plant-knowledge', label: 'Plant knowledge', createLabel: 'New plant guide', icon: 'bookmark',
@@ -296,24 +404,24 @@ const resourceGroups = {
         { key: 'photo_alt_en', label: 'Photo alt text (English)', wide: true },
         { key: 'photo_alt_th', label: 'Photo alt text (Thai)', wide: true },
         { key: 'photo_credit', label: 'Photo credit' }, { key: 'photo_source_url', label: 'Photo source URL', type: 'url' },
-        { key: 'photo_license', label: 'Photo license' }, { key: 'photo_license_url', label: 'License URL', type: 'url' },
+        { key: 'photo_license', label: 'Photo license', type: 'select', options: [{ value: '', label: 'Not specified' }, 'Public domain', 'CC0', 'CC BY 4.0', 'CC BY-SA 4.0', 'Unsplash License', 'Pexels License'] }, { key: 'photo_license_url', label: 'License URL', type: 'url' },
         { key: 'sources', label: 'References', type: 'reference-list', wide: true },
       ],
       columns: [
-        { label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th || `#${row.plant_id}` },
+        { label: 'Plant', render: (row) => localizedAdminName(row.plant) || `#${row.plant_id}` },
         { label: 'Scientific name', render: (row) => row.scientific_name || 'Not recorded' },
-        { label: 'Category', render: (row) => row.category_en || row.category_th || '—' },
+        { label: 'Category', render: (row) => document.documentElement.lang === 'th' ? row.category_th || row.category_en || '—' : row.category_en || row.category_th || '—' },
         { label: 'Care / references', render: (row) => `${Array.isArray(row.care_en) ? row.care_en.length : 0} steps · ${Array.isArray(row.sources) ? row.sources.length : 0} sources` },
         { label: 'Photo', render: (row) => row.photo_url ? 'Configured' : 'Not set' },
       ],
     },
   ],
   pests: [
-    { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', base_chance: 0, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Pest image', type: 'image-upload', scope: 'pests', wide: true }, { key: 'model_url', label: 'Pest 3D model package', type: 'model-bundle', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => row.name_en || row.name_th }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
-    { id: 'pest-rules', label: 'Occurrence rules', createLabel: 'New pest rule', icon: 'bug', defaults: { pest_id: '', plant_id: '', factor: 'air_humidity', operator: 'above', min_value: 0, max_value: 100, chance_delta: 0, severity: 1, is_active: true }, fields: [{ key: 'pest_id', label: 'Pest', type: 'lookup', lookup: 'pests', required: true }, { key: 'plant_id', label: 'Specific plant (optional)', type: 'lookup', lookup: 'plants' }, { key: 'factor', label: 'Factor', required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'chance_delta', label: 'Chance change', type: 'number', step: '0.01', required: true }, { key: 'severity', label: 'Severity', type: 'number', required: true }, commonActiveField], columns: [{ label: 'Pest', render: (row) => row.pest?.name_en || row.pest?.name_th }, { label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th || 'All plants' }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Chance / severity', render: (row) => `${row.chance_delta} / ${row.severity}` }] },
+    { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', placement_mode: 'ground_random', base_chance: 3, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'placement_mode', label: '3D placement', type: 'select', required: true, options: [{ value: 'ground_random', label: 'Random on soil' }, { value: 'leaf', label: 'Attached to leaves' }, { value: 'plant_surface', label: 'Plant surface effect' }] }, { key: 'image_url', label: 'Pest image', type: 'image-upload', scope: 'pests', wide: true }, { key: 'model_url', label: 'Pest 3D model package', type: 'model-bundle', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => localizedAdminName(row) }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Placement', render: (row) => ({ ground_random: 'Soil', leaf: 'Leaf', plant_surface: 'Surface' })[row.placement_mode] ?? 'Soil' }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
+    { id: 'pest-rules', label: 'Occurrence rules', createLabel: 'New pest rule', icon: 'bug', defaults: { pest_id: '', plant_id: '', factor: 'air_humidity', operator: 'above', min_value: 0, max_value: 100, chance_delta: 0, severity: 1, is_active: true }, fields: [{ key: 'pest_id', label: 'Pest', type: 'lookup', lookup: 'pests', required: true }, { key: 'plant_id', label: 'Specific plant (optional)', type: 'lookup', lookup: 'plants' }, { key: 'factor', label: 'Factor', type: 'select', options: environmentFactorOptions, required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'chance_delta', label: 'Chance change', type: 'number', step: '0.01', required: true }, { key: 'severity', label: 'Severity', type: 'select', options: severityOptions, required: true }, commonActiveField], columns: [{ label: 'Pest', render: (row) => localizedAdminName(row.pest) }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) || 'All plants' }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Chance / severity', render: (row) => `${row.chance_delta} / ${row.severity}` }] },
   ],
   store: [
-    { id: 'items', label: 'Item catalog', createLabel: 'New item', icon: 'shop', defaults: { name: '', type: 'pesticide', description: '', image_url: '', effect_type: '', effect_value: 0, action_key: '', animation_key: '', mode_scope: 'both', effect_payload: {}, rarity: 'common', is_active: true }, fields: [{ key: 'name', label: 'Item name', required: true }, { key: 'type', label: 'Type', type: 'select', options: ['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Item image', type: 'image-upload', scope: 'items', wide: true }, { key: 'effect_type', label: 'Legacy effect type' }, { key: 'effect_value', label: 'Legacy effect value', type: 'number', required: true }, { key: 'action_key', label: 'Action key' }, { key: 'animation_key', label: '3D animation key' }, { key: 'mode_scope', label: 'Available mode', type: 'select', options: ['both', 'greenhouse', 'outdoor'], required: true }, { key: 'effect_payload', label: 'Action effects (JSON)', type: 'json', wide: true }, { key: 'rarity', label: 'Rarity', type: 'select', options: ['common', 'rare', 'epic', 'legendary'], required: true }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.name }, { label: 'Type / mode', render: (row) => `${row.type} · ${row.mode_scope || 'both'}` }, { label: 'Action', render: (row) => row.action_key || row.effect_type || '—' }, { label: 'Animation', render: (row) => row.animation_key || '—' }] },
+    { id: 'items', label: 'Item catalog', createLabel: 'New item', icon: 'shop', defaults: { name: '', type: 'pesticide', description: '', image_url: '', effect_type: '', effect_value: 0, action_key: '', animation_key: '', mode_scope: 'both', effect_payload: { strategy: '', resource: '', duration_ticks: 1, duration_seconds: 30 }, rarity: 'common', is_active: true }, fields: [{ key: 'name', label: 'Item name', required: true }, { key: 'type', label: 'Type', type: 'select', options: ['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Item image', type: 'image-upload', scope: 'items', wide: true }, { key: 'effect_type', label: 'Effect type', type: 'select', options: itemEffectTypeOptions }, { key: 'effect_value', label: 'Effect strength', type: 'number', required: true }, { key: 'action_key', label: 'Simulation action', type: 'select', options: itemActionOptions }, { key: 'animation_key', label: '3D animation', type: 'select', options: itemAnimationOptions }, { key: 'mode_scope', label: 'Available mode', type: 'select', options: ['both', 'greenhouse', 'outdoor', 'seasonal'], required: true }, { key: 'effect_payload', label: 'How this item works', type: 'item-effect', wide: true }, { key: 'rarity', label: 'Rarity', type: 'select', options: ['common', 'rare', 'epic', 'legendary'], required: true }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.name }, { label: 'Type / mode', render: (row) => `${row.type} · ${row.mode_scope || 'both'}` }, { label: 'Action', render: (row) => row.action_key || row.effect_type || '—' }, { label: 'Animation', render: (row) => row.animation_key || '—' }] },
     { id: 'shop-items', label: 'Shop listings', createLabel: 'New listing', icon: 'shoppingCart', defaults: { item_id: '', price_coin: 0, price_gem: 0, stock_limit: '', is_active: true, starts_at: '', ends_at: '' }, fields: [{ key: 'item_id', label: 'Item', type: 'lookup', lookup: 'items', required: true }, { key: 'price_coin', label: 'Coin price', type: 'number', required: true }, { key: 'price_gem', label: 'Gem price', type: 'number', required: true }, { key: 'stock_limit', label: 'Stock limit', type: 'number' }, { key: 'starts_at', label: 'Starts at', type: 'datetime-local' }, { key: 'ends_at', label: 'Ends at', type: 'datetime-local' }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.item?.name }, { label: 'Type', render: (row) => row.item?.type }, { label: 'Price', render: (row) => `${row.price_coin} coins / ${row.price_gem} gems` }, { label: 'Stock', render: (row) => row.stock_limit ?? 'Unlimited' }] },
   ],
   events: [
@@ -331,11 +439,11 @@ const resourceGroups = {
         { key: 'cooldown_ticks', label: 'Recovery updates', type: 'number', required: true },
         { key: 'conditions', label: 'Environmental conditions', type: 'condition-list', wide: true },
         { key: 'effects', label: 'Event effects', type: 'effect-map', wide: true },
-        { key: 'response_action_keys', label: 'Response actions', type: 'string-list', itemPlaceholder: 'e.g. shade', addLabel: 'Add response action', emptyLabel: 'No response actions yet.', hint: 'Use the exact action_key from an item that can respond to this event.', wide: true },
+        { key: 'response_action_keys', label: 'Response actions', type: 'string-list', optionLookup: 'item-actions', addLabel: 'Add response action', emptyLabel: 'No response actions yet.', hint: 'Choose an item action that can resolve this event.', wide: true },
         { key: 'is_harmful', label: 'Harmful event', type: 'boolean' }, commonActiveField,
       ],
       columns: [
-        { label: 'Event', render: (row) => row.name_en || row.name_th },
+        { label: 'Event', render: (row) => localizedAdminName(row) },
         { label: 'Mode / severity', render: (row) => `${row.mode_scope} · ${row.severity}` },
         { label: 'Chance / weight', render: (row) => `${row.trigger_chance}% · ${row.weight}` },
         { label: 'Timing', render: (row) => `${row.warning_ticks} warning · ${row.duration_ticks} active · ${row.cooldown_ticks} recovery` },
@@ -354,27 +462,27 @@ const resourceGroups = {
         { key: 'coin_reward', label: 'Coins on maturity', type: 'number', required: true }, commonActiveField,
       ],
       columns: [
-        { label: 'Mode', render: (row) => row.name_en || row.mode },
+        { label: 'Mode', render: (row) => localizedAdminName(row) || row.mode },
         { label: 'Mode key', render: (row) => row.mode },
         { label: 'Completion reward', render: (row) => `${row.experience_reward} EXP · ${row.coin_reward} coins` },
       ],
     },
   ],
   progression: [
-    { id: 'quests', label: 'Quests', createLabel: 'New quest', icon: 'trophy', defaults: { title: '', description: '', quest_type: 'daily', target_type: '', target_value: 1, reward_exp: 0, reward_coin: 0, reward_gem: 0, is_active: true }, fields: [{ key: 'title', label: 'Quest title', required: true }, { key: 'quest_type', label: 'Quest type', type: 'select', options: ['daily', 'weekly', 'story', 'event'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'target_type', label: 'Target type', required: true }, { key: 'target_value', label: 'Target value', type: 'number', required: true }, { key: 'reward_exp', label: 'EXP reward', type: 'number', required: true }, { key: 'reward_coin', label: 'Coin reward', type: 'number', required: true }, { key: 'reward_gem', label: 'Gem reward', type: 'number', required: true }, commonActiveField], columns: [{ label: 'Quest', render: (row) => row.title }, { label: 'Type', render: (row) => row.quest_type }, { label: 'Target', render: (row) => `${row.target_type} × ${row.target_value}` }, { label: 'Rewards', render: (row) => `${row.reward_exp} EXP · ${row.reward_coin} coins` }] },
-    { id: 'achievements', label: 'Achievements', createLabel: 'New achievement', icon: 'crown', defaults: { title: '', description: '', condition_type: '', condition_value: 1, reward_exp: 0, reward_coin: 0, badge_image_url: '', is_active: true }, fields: [{ key: 'title', label: 'Achievement title', required: true }, { key: 'condition_type', label: 'Condition type', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'condition_value', label: 'Condition value', type: 'number', required: true }, { key: 'reward_exp', label: 'EXP reward', type: 'number', required: true }, { key: 'reward_coin', label: 'Coin reward', type: 'number', required: true }, { key: 'badge_image_url', label: 'Badge image', type: 'image-upload', scope: 'achievements', wide: true }, commonActiveField], columns: [{ label: 'Achievement', render: (row) => row.title }, { label: 'Condition', render: (row) => `${row.condition_type} × ${row.condition_value}` }, { label: 'Rewards', render: (row) => `${row.reward_exp} EXP · ${row.reward_coin} coins` }, { label: 'Badge', render: (row) => row.badge_image_url ? 'Configured' : 'Not set' }] },
+    { id: 'quests', label: 'Quests', createLabel: 'New quest', icon: 'trophy', defaults: { title: '', description: '', quest_type: 'daily', target_type: 'simulation_started', target_value: 1, reward_exp: 0, reward_coin: 0, reward_gem: 0, is_active: true }, fields: [{ key: 'title', label: 'Quest title', required: true }, { key: 'quest_type', label: 'Quest type', type: 'select', options: ['daily', 'weekly', 'story', 'event'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'target_type', label: 'Target type', type: 'select', options: ['simulation_started', 'simulation_completed', 'plant_harvested', 'item_used', 'item_purchased', 'post_created', 'comment_created', 'friend_added'], required: true }, { key: 'target_value', label: 'Target value', type: 'number', required: true }, { key: 'reward_exp', label: 'EXP reward', type: 'number', required: true }, { key: 'reward_coin', label: 'Coin reward', type: 'number', required: true }, { key: 'reward_gem', label: 'Gem reward', type: 'number', required: true }, commonActiveField], columns: [{ label: 'Quest', render: (row) => row.title }, { label: 'Type', render: (row) => row.quest_type }, { label: 'Target', render: (row) => `${row.target_type} × ${row.target_value}` }, { label: 'Rewards', render: (row) => `${row.reward_exp} EXP · ${row.reward_coin} coins` }] },
+    { id: 'achievements', label: 'Achievements', createLabel: 'New achievement', icon: 'crown', defaults: { title: '', description: '', condition_type: 'simulation_completed', condition_value: 1, reward_exp: 0, reward_coin: 0, badge_image_url: '', is_active: true }, fields: [{ key: 'title', label: 'Achievement title', required: true }, { key: 'condition_type', label: 'Condition type', type: 'select', options: ['simulation_started', 'simulation_completed', 'plant_harvested', 'perfect_health_harvest', 'item_used', 'item_purchased', 'post_created', 'friend_added', 'level_reached'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'condition_value', label: 'Condition value', type: 'number', required: true }, { key: 'reward_exp', label: 'EXP reward', type: 'number', required: true }, { key: 'reward_coin', label: 'Coin reward', type: 'number', required: true }, { key: 'badge_image_url', label: 'Badge image', type: 'image-upload', scope: 'achievements', wide: true }, commonActiveField], columns: [{ label: 'Achievement', render: (row) => row.title }, { label: 'Condition', render: (row) => `${row.condition_type} × ${row.condition_value}` }, { label: 'Rewards', render: (row) => `${row.reward_exp} EXP · ${row.reward_coin} coins` }, { label: 'Badge', render: (row) => row.badge_image_url ? 'Configured' : 'Not set' }] },
   ],
   models: [
-    { id: 'model-assets', label: 'Model assets', createLabel: 'New model asset', icon: 'hardware', defaults: { asset_key: '', label: '', type: 'model', url: '', metadata: {} }, fields: [{ key: 'asset_key', label: 'Asset key', required: true }, { key: 'label', label: 'Display label' }, { key: 'type', label: 'Asset type', required: true }, { key: 'url', label: 'GLTF model package', type: 'model-bundle', required: true, wide: true }, { key: 'metadata', label: 'Metadata (JSON)', type: 'json', wide: true }], columns: [{ label: 'Asset', render: (row) => row.label || row.asset_key }, { label: 'Key', render: (row) => row.asset_key }, { label: 'Type', render: (row) => row.type }, { label: 'Model file', render: (row) => row.url ? decodeURIComponent(String(row.url).split(/[?#]/, 1)[0].split('/').pop()) : 'Not set' }] },
+    { id: 'model-assets', label: 'Model assets', createLabel: 'New model asset', icon: 'hardware', defaults: { asset_key: '', label: '', type: 'model', url: '', metadata: {} }, fields: [{ key: 'asset_key', label: 'Asset key', required: true }, { key: 'label', label: 'Display label' }, { key: 'type', label: 'Asset type', type: 'select', options: ['model', 'plant', 'scene', 'pest', 'item', 'action', 'effect'], required: true }, { key: 'url', label: 'GLTF model package', type: 'model-bundle', required: true, wide: true }, { key: 'metadata', label: 'Metadata (JSON)', type: 'json', wide: true }], columns: [{ label: 'Asset', render: (row) => row.label || row.asset_key }, { label: 'Key', render: (row) => row.asset_key }, { label: 'Type', render: (row) => row.type }, { label: 'Model file', render: (row) => row.url ? decodeURIComponent(String(row.url).split(/[?#]/, 1)[0].split('/').pop()) : 'Not set' }] },
   ],
   community: [
-    { id: 'posts', label: 'Posts', icon: 'chat', moderation: true, statusField: 'visibility', statusOptions: ['public', 'friends', 'private'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Caption', render: (row) => row.caption || 'No caption' }, { label: 'Engagement', render: (row) => `${row.comments_count} comments · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
-    { id: 'comments', label: 'Post comments', icon: 'chat', moderation: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Thread', render: (row) => `${row.replies_count} replies · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
-    { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'posts', label: 'Posts', icon: 'chat', moderation: true, noDelete: true, statusField: 'visibility', statusOptions: ['public', 'friends', 'private'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Caption', render: (row) => row.caption || 'No caption' }, { label: 'Engagement', render: (row) => `${row.comments_count} comments · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'comments', label: 'Post comments', icon: 'chat', moderation: true, noDelete: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Thread', render: (row) => `${row.replies_count} replies · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, noDelete: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   simulations: [
-    { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${row.plant?.name_en || row.plant?.name_th || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
-    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => row.plant?.name_en || row.plant?.name_th }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Grow time', render: (row) => formatPlantDuration(row, 'en', { compact: true }) }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${localizedAdminName(row.plant) || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
+    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Grow time', render: (row) => formatPlantDuration(row, document.documentElement.lang === 'th' ? 'th' : 'en', { compact: true }) }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   activity: [
     { id: 'activity-logs', label: 'Admin activity log', icon: 'history', readOnly: true, columns: [{ label: 'Administrator', render: (row) => row.admin?.username }, { label: 'Action', render: (row) => row.action }, { label: 'Target', render: (row) => `${row.target_type || 'system'} #${row.target_id || '—'}` }, { label: 'Time', render: (row) => formatDate(row.created_at, true) }] },
@@ -561,7 +669,7 @@ const overviewColors = {
 }
 
 const userActivityMeta = {
-  user_registered: { label: 'Joined the academy', filterLabel: 'New accounts', badge: 'Account', icon: 'person', tone: 'account' },
+  user_registered: { label: 'Joined the platform', filterLabel: 'New accounts', badge: 'Account', icon: 'person', tone: 'account' },
   simulation_started: { label: 'Started a plant simulation', filterLabel: 'Simulation started', badge: 'Simulation', icon: 'controller', tone: 'simulation' },
   plant_saved: { label: 'Saved a plant result', filterLabel: 'Plant results saved', badge: 'Result', icon: 'plant', tone: 'simulation' },
   post_created: { label: 'Published a community post', filterLabel: 'Posts created', badge: 'Post', icon: 'chat', tone: 'community' },
@@ -578,19 +686,19 @@ const attentionItemMeta = {
   draft_contents: { label: 'Draft content', detail: 'Articles waiting to be published', icon: 'bookmark' },
   suspended_users: { label: 'Suspended accounts', detail: 'Accounts with restricted access', icon: 'groups' },
   failed_simulations: { label: 'Failed simulations', detail: 'Runs that may need investigation', icon: 'controller' },
-  cancelled_simulations: { label: 'Cancelled simulations', detail: 'Interrupted learner sessions', icon: 'history' },
+  cancelled_simulations: { label: 'Cancelled simulations', detail: 'Interrupted user sessions', icon: 'history' },
   stale_active_simulations: { label: 'Long-running simulations', detail: 'Active for more than seven days', icon: 'live' },
   missing_model_assets: { label: 'Missing model files', detail: 'Asset records without a configured URL', icon: 'hardware' },
 }
 
-function AttentionCenter({ attention, onOpenSection }) {
+function AttentionCenter({ attention, onOpenSection, language = 'en' }) {
   const items = attention?.items ?? []
 
   return (
     <section className="admin-panel admin-attention-panel">
       <header className="admin-panel__header">
-        <div><small>ACTION CENTER</small><h2>Items that need attention</h2></div>
-        <span className={attention?.total ? 'has-items' : 'is-clear'}>{attention?.total ? `${Number(attention.total).toLocaleString()} open` : 'All clear'}</span>
+        <div><small>{adminText(language, 'ACTION CENTER')}</small><h2>{adminText(language, 'Items that need attention')}</h2></div>
+        <span className={attention?.total ? 'has-items' : 'is-clear'}>{adminText(language, attention?.total ? `${Number(attention.total).toLocaleString()} open` : 'All clear')}</span>
       </header>
       <div className="admin-attention-grid">
         {items.map((item) => {
@@ -598,7 +706,7 @@ function AttentionCenter({ attention, onOpenSection }) {
           return (
             <button className={`admin-attention-item is-${item.severity} ${item.value ? 'has-items' : 'is-clear'}`} type="button" key={item.key} onClick={() => onOpenSection(item.section)}>
               <span><AppIcon name={meta.icon} /></span>
-              <span><strong>{meta.label}</strong><small>{meta.detail}</small></span>
+              <span><strong>{adminText(language, meta.label)}</strong><small>{adminText(language, meta.detail)}</small></span>
               <b>{Number(item.value ?? 0).toLocaleString()}</b>
               <AppIcon name="arrowForward" />
             </button>
@@ -609,12 +717,12 @@ function AttentionCenter({ attention, onOpenSection }) {
   )
 }
 
-function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = '', theme = 'dark' }) {
+function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = '', theme = 'dark', language = 'en' }) {
   const selectedSeries = useMemo(
-    () => trendSeriesConfig.filter((series) => activeSeries.includes(series.key)),
-    [activeSeries],
+    () => trendSeriesConfig.filter((series) => activeSeries.includes(series.key)).map((series) => ({ ...series, displayLabel: adminText(language, series.label) })),
+    [activeSeries, language],
   )
-  const seriesLabel = selectedSeries.map((series) => series.label).join(', ')
+  const seriesLabel = selectedSeries.map((series) => series.displayLabel).join(', ')
   const isLight = theme === 'light'
   const parseTimestamp = (value, index) => {
     const normalized = typeof value === 'string' ? value.replace(' ', 'T') : value
@@ -622,7 +730,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
     return Number.isFinite(timestamp) ? timestamp : Date.UTC(2000, 0, index + 1)
   }
   const chartSeries = useMemo(() => selectedSeries.map((series) => ({
-    name: series.label,
+    name: series.displayLabel,
     data: trend.map((entry, index) => ({
       x: parseTimestamp(entry.date, index),
       y: Number(entry[series.key] ?? 0),
@@ -637,12 +745,13 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
     return Math.min(100, Math.ceil(highestValue / 10) * 10)
   }, [selectedSeries, trend])
   const options = useMemo(() => {
-    const axisDate = new Intl.DateTimeFormat('en-US', period === 'day'
+    const locale = language === 'th' ? 'th-TH' : 'en-US'
+    const axisDate = new Intl.DateTimeFormat(locale, period === 'day'
       ? { hour: '2-digit', minute: '2-digit' }
       : period === 'year'
         ? { month: 'short' }
         : { day: 'numeric', month: 'short' })
-    const tooltipDate = new Intl.DateTimeFormat('en-US', period === 'day'
+    const tooltipDate = new Intl.DateTimeFormat(locale, period === 'day'
       ? { dateStyle: 'medium', timeStyle: 'short' }
       : period === 'year'
         ? { month: 'long', year: 'numeric' }
@@ -650,7 +759,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
 
     return {
       chart: {
-        id: 'admin-academy-growth-chart',
+        id: 'admin-system-activity-chart',
         type: 'line',
         height: '100%',
         background: 'transparent',
@@ -724,7 +833,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
           formatter: (value) => tooltipDate.format(new Date(Number(value))),
         },
         y: {
-          formatter: (value) => `${Number(value ?? 0).toLocaleString()} records`,
+          formatter: (value) => language === 'th' ? `${Number(value ?? 0).toLocaleString('th-TH')} รายการ` : `${Number(value ?? 0).toLocaleString()} records`,
         },
         marker: { show: true },
       },
@@ -763,7 +872,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
         forceNiceScale: false,
         decimalsInFloat: 0,
         title: {
-          text: 'Records',
+          text: adminText(language, 'Records'),
           style: {
             color: isLight ? '#526259' : '#718078',
             fontSize: '11px',
@@ -781,7 +890,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
         },
       },
       noData: {
-        text: 'No activity data for this period',
+        text: adminText(language, 'No activity data for this period'),
         align: 'center',
         verticalAlign: 'middle',
         style: {
@@ -790,10 +899,10 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
         },
       },
     }
-  }, [chartSeries, isLight, period, selectedSeries, trend.length, visibleMaximum])
+  }, [chartSeries, isLight, language, period, selectedSeries, trend.length, visibleMaximum])
 
   return (
-    <div className="admin-trend" role="group" aria-label={`${periodLabel || 'Selected period'} line chart showing ${seriesLabel}`}>
+    <div className="admin-trend" role="group" aria-label={`${adminText(language, periodLabel || 'Selected period')} ${adminText(language, 'line chart showing')} ${seriesLabel}`}>
       <Suspense fallback={<div className="admin-trend__loading"><span aria-hidden="true" />Loading chart…</div>}>
         <ReactApexChart className="admin-trend__chart" options={options} series={chartSeries} type="line" height="100%" />
       </Suspense>
@@ -801,7 +910,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
   )
 }
 
-function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSection, theme = 'dark' }) {
+function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSection, theme = 'dark', language = 'en' }) {
   const metrics = data?.metrics ?? {}
   const totalContent = (metrics.published_contents ?? 0) + (metrics.draft_contents ?? 0)
   const totalComments = (metrics.post_comments ?? 0) + (metrics.simulator_comments ?? 0)
@@ -834,7 +943,10 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
   const overviewBackground = overview.total && overviewSegments.length
     ? `conic-gradient(${overviewSegments.join(',')})`
     : 'conic-gradient(#29312c 0deg 360deg)'
-  const selectedYear = Number(trendSelection.value) || new Date().getFullYear()
+  const selectedDateParts = String(trendSelection.value).split('-').map(Number)
+  const selectedYear = selectedDateParts[0] || new Date().getFullYear()
+  const selectedMonth = selectedDateParts[1] || (new Date().getMonth() + 1)
+  const selectedDay = selectedDateParts[2] || 1
   const currentYear = new Date().getFullYear()
   const firstYear = Math.min(currentYear - 9, selectedYear)
   const lastYear = Math.max(currentYear, selectedYear)
@@ -852,61 +964,70 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
     onChangeTrendSelection({ period, value: currentTrendValue(period) })
   }
 
+  function changeTrendDatePart(part, value) {
+    const nextYear = part === 'year' ? Number(value) : selectedYear
+    const nextMonth = part === 'month' ? Number(value) : selectedMonth
+    const maximumDay = new Date(nextYear, nextMonth, 0).getDate()
+    const nextDay = Math.min(part === 'day' ? Number(value) : selectedDay, maximumDay)
+    const monthValue = String(nextMonth).padStart(2, '0')
+    const dayValue = String(nextDay).padStart(2, '0')
+    onChangeTrendSelection({ period: trendSelection.period, value: trendSelection.period === 'day' ? `${nextYear}-${monthValue}-${dayValue}` : `${nextYear}-${monthValue}` })
+  }
+
   return (
     <div className="admin-view admin-dashboard-view">
       <div className="admin-metric-grid">
-        <MetricCard icon="groups" label="Total Users" value={metrics.users} detail={`${metrics.active_users ?? 0} active accounts`} />
-        <MetricCard icon="controller" label="Simulations" value={metrics.simulations} detail={`${metrics.active_simulations ?? 0} currently active`} tone="blue" />
-        <MetricCard icon="history" label="Harvested plants" value={metrics.harvests} detail="Completed learning results" tone="cyan" />
-        <MetricCard icon="bookmark" label="Learning content" value={totalContent} detail={`${metrics.published_contents ?? 0} published · ${metrics.draft_contents ?? 0} draft`} tone="gold" />
-        <MetricCard icon="chat" label="Community posts" value={metrics.community_posts} detail="Shared learning activity" tone="violet" />
-        <MetricCard icon="live" label="All comments" value={totalComments} detail={`${metrics.hidden_comments ?? 0} require moderation`} tone="coral" />
-        <MetricCard icon="plant" label="Plants & pests" value={totalSpecies} detail={`${metrics.plants ?? 0} plants · ${metrics.pests ?? 0} pests`} tone="green" />
-        <MetricCard icon="shop" label="Simulation catalog" value={totalGameCatalog} detail={`${metrics.items ?? 0} items · ${metrics.quests ?? 0} quests`} tone="blue" />
+        <MetricCard icon="groups" label={adminText(language, 'Total Users')} value={metrics.users} detail={adminText(language, `${metrics.active_users ?? 0} active accounts`)} />
+        <MetricCard icon="controller" label={adminText(language, 'Simulations')} value={metrics.simulations} detail={adminText(language, `${metrics.active_simulations ?? 0} currently active`)} tone="blue" />
+        <MetricCard icon="history" label={adminText(language, 'Harvested plants')} value={metrics.harvests} detail={adminText(language, 'Completed plant results')} tone="cyan" />
+        <MetricCard icon="bookmark" label={adminText(language, 'Plant articles')} value={totalContent} detail={adminText(language, `${metrics.published_contents ?? 0} published · ${metrics.draft_contents ?? 0} draft`)} tone="gold" />
+        <MetricCard icon="chat" label={adminText(language, 'Community posts')} value={metrics.community_posts} detail={adminText(language, 'Published community activity')} tone="violet" />
+        <MetricCard icon="live" label={adminText(language, 'All comments')} value={totalComments} detail={adminText(language, `${metrics.hidden_comments ?? 0} require moderation`)} tone="coral" />
+        <MetricCard icon="plant" label={adminText(language, 'Plants & pests')} value={totalSpecies} detail={adminText(language, `${metrics.plants ?? 0} plants · ${metrics.pests ?? 0} pests`)} tone="green" />
+        <MetricCard icon="shop" label={adminText(language, 'Simulation catalog')} value={totalGameCatalog} detail={adminText(language, `${metrics.items ?? 0} items · ${metrics.quests ?? 0} quests`)} tone="blue" />
       </div>
 
       <div className="admin-dashboard-grid">
         <section className="admin-panel admin-panel--trend">
           <header className="admin-panel__header">
-            <div><small>ACTIVITY</small><h2>Academy growth</h2></div>
+            <div><small>{adminText(language, 'ACTIVITY')}</small><h2>{adminText(language, 'System activity')}</h2></div>
             <div className="admin-panel__tools">
-              <div className="admin-series-picker" role="group" aria-label="Chart data">
-                {trendSeriesConfig.map((series) => <button className={activeSeries.includes(series.key) ? 'is-active' : ''} type="button" aria-pressed={activeSeries.includes(series.key)} key={series.key} onClick={() => toggleSeries(series.key)}><i style={{ background: series.color }} />{series.label}</button>)}
+              <div className="admin-series-picker" role="group" aria-label={adminText(language, 'Chart data')}>
+                {trendSeriesConfig.map((series) => <button className={activeSeries.includes(series.key) ? 'is-active' : ''} type="button" aria-pressed={activeSeries.includes(series.key)} key={series.key} onClick={() => toggleSeries(series.key)}><i style={{ background: series.color }} />{adminText(language, series.label)}</button>)}
               </div>
               <div className="admin-trend-filter">
-                <div className="admin-range-switch" role="group" aria-label="Chart period type">
-                  {['day', 'month', 'year'].map((period) => <button className={trendSelection.period === period ? 'is-active' : ''} type="button" aria-pressed={trendSelection.period === period} key={period} onClick={() => changeTrendPeriod(period)}>{period}</button>)}
+                <div className="admin-range-switch" role="group" aria-label={adminText(language, 'Chart period type')}>
+                  {['day', 'month', 'year'].map((period) => <button className={trendSelection.period === period ? 'is-active' : ''} type="button" aria-pressed={trendSelection.period === period} key={period} onClick={() => changeTrendPeriod(period)}>{adminText(language, period[0].toUpperCase() + period.slice(1))}</button>)}
                 </div>
-                <label className="admin-trend-picker">
+                <label className={`admin-trend-picker ${trendSelection.period !== 'year' ? 'admin-trend-picker--parts' : ''}`}>
                   <span className="sr-only">Select {trendSelection.period}</span>
                   {trendSelection.period === 'year' ? (
                     <select value={trendSelection.value} onChange={(event) => onChangeTrendSelection({ period: 'year', value: event.target.value })}>
-                      {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+                      {yearOptions.map((year) => <option key={year} value={year}>{language === 'th' ? year + 543 : year}</option>)}
                     </select>
                   ) : (
-                    <input
-                      aria-label={`Select ${trendSelection.period}`}
-                      type={trendSelection.period === 'day' ? 'date' : 'month'}
-                      value={trendSelection.value}
-                      onChange={(event) => event.target.value && onChangeTrendSelection({ ...trendSelection, value: event.target.value })}
-                    />
+                    <>
+                      {trendSelection.period === 'day' && <select aria-label={language === 'th' ? 'เลือกวันที่' : 'Select day'} value={selectedDay} onChange={(event) => changeTrendDatePart('day', event.target.value)}>{Array.from({ length: new Date(selectedYear, selectedMonth, 0).getDate() }, (_, index) => index + 1).map((day) => <option value={day} key={day}>{day}</option>)}</select>}
+                      <select aria-label={language === 'th' ? 'เลือกเดือน' : 'Select month'} value={selectedMonth} onChange={(event) => changeTrendDatePart('month', event.target.value)}>{Array.from({ length: 12 }, (_, index) => index + 1).map((month) => <option value={month} key={month}>{new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-US', { month: 'short' }).format(new Date(2024, month - 1, 1))}</option>)}</select>
+                      <select aria-label={language === 'th' ? 'เลือกปี' : 'Select year'} value={selectedYear} onChange={(event) => changeTrendDatePart('year', event.target.value)}>{yearOptions.map((year) => <option key={year} value={year}>{language === 'th' ? year + 543 : year}</option>)}</select>
+                    </>
                   )}
                 </label>
               </div>
             </div>
           </header>
-          <div className="admin-trend-context"><span>{data?.trend_label || trendSelection.value}</span><small>{data?.trend?.length ?? 0} data points</small></div>
-          <TrendChart trend={data?.trend} activeSeries={activeSeries} period={data?.trend_period || trendSelection.period} periodLabel={data?.trend_label} theme={theme} />
+          <div className="admin-trend-context"><span>{adminText(language, data?.trend_label || trendSelection.value)}</span><small>{adminText(language, `${data?.trend?.length ?? 0} data points`)}</small></div>
+          <TrendChart trend={data?.trend} activeSeries={activeSeries} period={data?.trend_period || trendSelection.period} periodLabel={data?.trend_label} theme={theme} language={language} />
         </section>
 
         <section className="admin-panel admin-system-panel">
-          <header className="admin-panel__header"><div><small>SYSTEM OVERVIEW</small><h2>Data composition</h2></div></header>
+          <header className="admin-panel__header"><div><small>{adminText(language, 'SYSTEM OVERVIEW')}</small><h2>{adminText(language, 'Data composition')}</h2></div></header>
           <div className="admin-system-panel__body">
-            <div className="admin-system-ring" style={{ background: overviewBackground }}><span><strong>{Number(overview.total ?? 0).toLocaleString()}</strong><small>total records</small></span></div>
+            <div className="admin-system-ring" style={{ background: overviewBackground }}><span><strong>{Number(overview.total ?? 0).toLocaleString()}</strong><small>{adminText(language, 'total records')}</small></span></div>
             <div className="admin-system-breakdown">
               {(overview.groups ?? []).map((group) => (
                 <button type="button" key={group.key} onClick={() => onOpenSection(group.section)}>
-                  <span><i style={{ background: overviewColors[group.key] }} />{group.label}</span>
+                  <span><i style={{ background: overviewColors[group.key] }} />{adminText(language, group.label)}</span>
                   <strong>{Number(group.value ?? 0).toLocaleString()}</strong>
                   <AppIcon name="arrowForward" />
                 </button>
@@ -918,7 +1039,7 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
 
       <div className="admin-dashboard-grid admin-dashboard-grid--tables">
         <section className="admin-panel">
-          <header className="admin-panel__header"><div><small>NEW ACCOUNTS</small><h2>Recent Users</h2></div><button type="button" onClick={() => onOpenSection('users')}>View all</button></header>
+          <header className="admin-panel__header"><div><small>{adminText(language, 'NEW ACCOUNTS')}</small><h2>{adminText(language, 'Recent Users')}</h2></div><button type="button" onClick={() => onOpenSection('users')}>{adminText(language, 'View all')}</button></header>
           <div className="admin-list">
             {(data?.recent_users ?? []).map((user) => (
               <div className="admin-list__row" key={user.id}>
@@ -933,48 +1054,49 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
 
         <section className="admin-panel admin-user-activity-panel">
           <header className="admin-panel__header">
-            <div><small>LEARNER ACTIVITY</small><h2>Latest user activity</h2></div>
-            <span className="admin-activity-live"><i />Live feed</span>
+            <div><small>{adminText(language, 'USER ACTIVITY')}</small><h2>{adminText(language, 'Latest user activity')}</h2></div>
+            <span className="admin-activity-live"><i />{adminText(language, 'Live feed')}</span>
           </header>
           <div className="admin-activity-filters">
             <label>
-              <span>Activity type</span>
+              <span>{adminText(language, 'Activity type')}</span>
               <select value={activityType} onChange={(event) => setActivityType(event.target.value)}>
-                <option value="all">All activities ({recentActivities.length})</option>
+                <option value="all">{adminText(language, `All activities (${recentActivities.length})`)}</option>
                 {Object.entries(userActivityMeta).map(([type, meta]) => (
-                  <option value={type} key={type}>{meta.filterLabel} ({activityTypeCounts[type] ?? 0})</option>
+                  <option value={type} key={type}>{adminText(language, meta.filterLabel)} ({activityTypeCounts[type] ?? 0})</option>
                 ))}
               </select>
             </label>
             <label>
-              <span>User</span>
+              <span>{adminText(language, 'User')}</span>
               <select value={activityUser} onChange={(event) => setActivityUser(event.target.value)}>
-                <option value="all">All users</option>
+                <option value="all">{adminText(language, 'All users')}</option>
                 {activityUsers.map((user) => <option value={String(user.id)} key={user.id}>{user.username}</option>)}
               </select>
             </label>
-            <span className="admin-activity-result">{filteredActivities.length} shown</span>
+            <span className="admin-activity-result">{adminText(language, `${filteredActivities.length} shown`)}</span>
           </div>
           <div className="admin-list admin-user-activity-list" aria-live="polite">
             {filteredActivities.map((activity) => {
               const meta = userActivityMeta[activity.type] ?? { label: 'Completed an activity', badge: 'Activity', icon: 'history', tone: 'default' }
-              const detail = activity.subject ? `${meta.label} · ${activity.subject}` : meta.label
+              const subject = language === 'th' ? (activity.subject_th || adminText(language, activity.subject)) : (activity.subject || activity.subject_th)
+              const detail = subject ? `${adminText(language, meta.label)} · ${subject}` : adminText(language, meta.label)
 
               return (
                 <div className="admin-list__row admin-list__row--activity" key={activity.id}>
                   <AdminAvatar user={activity.user} />
                   <span><strong>{activity.user?.username || 'Unknown user'}</strong><small title={detail}>{detail}</small></span>
-                  <span className={`admin-activity-kind is-${meta.tone}`}><AppIcon name={meta.icon} />{meta.badge}</span>
+                  <span className={`admin-activity-kind is-${meta.tone}`}><AppIcon name={meta.icon} />{adminText(language, meta.badge)}</span>
                   <time title={formatDate(activity.occurred_at, true)}>{formatDate(activity.occurred_at, true)}</time>
                 </div>
               )
             })}
-            {!filteredActivities.length && <div className="admin-list__empty">No user activity matches these filters.</div>}
+            {!filteredActivities.length && <div className="admin-list__empty">{adminText(language, 'No user activity matches these filters.')}</div>}
           </div>
         </section>
 
         <section className="admin-panel admin-audit-summary">
-          <header className="admin-panel__header"><div><small>ADMIN ACTIVITY</small><h2>Recent changes</h2></div><button type="button" onClick={() => onOpenSection('activity')}>View audit log</button></header>
+          <header className="admin-panel__header"><div><small>{adminText(language, 'ADMIN ACTIVITY')}</small><h2>{adminText(language, 'Recent changes')}</h2></div><button type="button" onClick={() => onOpenSection('activity')}>{adminText(language, 'View audit log')}</button></header>
           <div className="admin-list">
             {(data?.attention?.recent_admin_actions ?? []).map((action) => (
               <div className="admin-list__row admin-list__row--audit" key={action.id}>
@@ -983,17 +1105,17 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
                 <time>{formatDate(action.created_at, true)}</time>
               </div>
             ))}
-            {!data?.attention?.recent_admin_actions?.length && <div className="admin-list__empty">No recent administrator changes.</div>}
+            {!data?.attention?.recent_admin_actions?.length && <div className="admin-list__empty">{adminText(language, 'No recent administrator changes.')}</div>}
           </div>
         </section>
       </div>
 
-      <AttentionCenter attention={data?.attention} onOpenSection={onOpenSection} />
+      <AttentionCenter attention={data?.attention} onOpenSection={onOpenSection} language={language} />
     </div>
   )
 }
 
-function ContentEditor({ content, onClose, onSaved }) {
+function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) {
   const [initialState] = useState(() => ({
     form: { ...emptyContent, ...content },
     references: (content?.references ?? []).map((reference) => ({
@@ -1007,6 +1129,7 @@ function ContentEditor({ content, onClose, onSaved }) {
   const [coverUploadStatus, setCoverUploadStatus] = useState('idle')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const ui = useCallback((english, translated) => interfaceLanguage === 'th' ? translated : english, [interfaceLanguage])
   const dialogRef = useRef(null)
   const editorScrollRef = useRef(null)
   const coverInputRef = useRef(null)
@@ -1058,7 +1181,7 @@ function ContentEditor({ content, onClose, onSaved }) {
       const currentTitle = String((language === 'th' ? form.title_th : form.title) ?? '').trim()
       const currentBody = String((language === 'th' ? form.body_html_th : form.body_html) ?? '').trim()
       if (!currentTitle) throw new Error(language === 'th' ? 'กรุณาใส่ชื่อบทความ' : 'Please enter the article title.')
-      if (!currentBody) throw new Error(language === 'th' ? 'กรุณาเขียนเนื้อหาบทความใน Editor' : 'Please write the article content in the editor.')
+      if (!currentBody) throw new Error(language === 'th' ? 'กรุณาเขียนเนื้อหาบทความในเครื่องมือเขียน' : 'Please write the article content in the editor.')
       const preparedReferences = references
         .map((reference) => ({
           title: reference.title.trim(),
@@ -1096,33 +1219,33 @@ function ContentEditor({ content, onClose, onSaved }) {
     <div className="admin-editor-backdrop" role="presentation">
       <form ref={dialogRef} className="admin-editor" role="dialog" aria-modal="true" aria-labelledby="admin-content-editor-title" tabIndex="-1" onSubmit={submit}>
         <header className="admin-editor__header">
-          <div><small>{form.id ? `CONTENT / VERSION ${form.version}` : 'CONTENT / NEW ARTICLE'}</small><h2 id="admin-content-editor-title">{form.id ? 'Edit learning content' : 'Create learning content'}</h2></div>
+          <div><small>{form.id ? ui(`CONTENT / VERSION ${form.version}`, `บทความ / รุ่น ${form.version}`) : ui('CONTENT / NEW ARTICLE', 'บทความ / สร้างใหม่')}</small><h2 id="admin-content-editor-title">{form.id ? ui('Edit article', 'แก้ไขบทความ') : ui('Create article', 'สร้างบทความ')}</h2></div>
           <button type="button" onClick={requestClose} aria-label="Close editor">×</button>
         </header>
 
         <div className="admin-editor__toolbar">
           <div className="admin-editor__language"><button className={language === 'en' ? 'is-active' : ''} type="button" onClick={() => setLanguage('en')}>English</button><button className={language === 'th' ? 'is-active' : ''} type="button" onClick={() => setLanguage('th')}>ไทย</button></div>
-          <label>Status<select value={form.status} onChange={(event) => update('status', event.target.value)}><option value="draft">Draft</option><option value="published">Published</option></select></label>
+          <label>{ui('Status', 'สถานะ')}<select value={form.status} onChange={(event) => update('status', event.target.value)}><option value="draft">{ui('Draft', 'ฉบับร่าง')}</option><option value="published">{ui('Published', 'เผยแพร่แล้ว')}</option></select></label>
         </div>
 
         <div className={`admin-editor__body ${editorMode === 'visual' ? 'admin-editor__body--visual' : ''}`}>
           <div className="admin-editor__form" ref={editorScrollRef}>
             <section className="admin-writing-section">
               <div className="admin-writing-section__intro">
-                <div><small>{language === 'th' ? 'เขียนบทความแบบง่าย' : 'QUICK ARTICLE EDITOR'}</small><h3>{language === 'th' ? 'ใส่ชื่อ แล้วเริ่มเขียนได้เลย' : 'Add a title, then start writing.'}</h3></div>
-                <p>{language === 'th' ? 'Slug, สรุปบทความ และเวลาอ่าน ระบบจะสร้างให้อัตโนมัติ' : 'Slug, summary, and reading time are generated automatically.'}</p>
+                <div><small>{ui('QUICK ARTICLE EDITOR', 'เขียนบทความแบบง่าย')}</small><h3>{ui('Add a title, then start writing.', 'ใส่ชื่อ แล้วเริ่มเขียนได้เลย')}</h3></div>
+                <p>{ui('Slug, summary, and reading time are generated automatically.', 'ชื่อสำหรับ URL สรุปบทความ และเวลาอ่าน ระบบจะสร้างให้อัตโนมัติ')}</p>
               </div>
-              <label className="admin-writing-title">{language === 'th' ? 'ชื่อบทความ' : 'Article title'}<input autoFocus placeholder={language === 'th' ? 'ชื่อบทความของคุณ' : 'Enter the article title'} value={language === 'th' ? form.title_th : form.title} onChange={(event) => update(language === 'th' ? 'title_th' : 'title', event.target.value)} /></label>
+              <label className="admin-writing-title">{ui('Article title', 'ชื่อบทความ')}<input autoFocus placeholder={ui('Enter the article title', 'กรอกชื่อบทความ')} value={language === 'th' ? form.title_th : form.title} onChange={(event) => update(language === 'th' ? 'title_th' : 'title', event.target.value)} /></label>
               <div className="admin-content-mode">
-                <div><strong>{language === 'th' ? 'รูปแบบการเขียน' : 'Writing mode'}</strong><small>{language === 'th' ? 'สลับโหมดได้โดยเนื้อหาไม่หาย' : 'Switch modes without losing the content.'}</small></div>
+                <div><strong>{ui('Writing mode', 'รูปแบบการเขียน')}</strong><small>{ui('Switch modes without losing the content.', 'สลับโหมดได้โดยเนื้อหาไม่หาย')}</small></div>
                 <div className="admin-content-mode__switch" role="tablist" aria-label="Content editing mode">
-                  <button className={editorMode === 'visual' ? 'is-active' : ''} type="button" role="tab" aria-selected={editorMode === 'visual'} onClick={() => setEditorMode('visual')}><AppIcon name="edit" />{language === 'th' ? 'เขียนปกติ' : 'Visual editor'}</button>
+                  <button className={editorMode === 'visual' ? 'is-active' : ''} type="button" role="tab" aria-selected={editorMode === 'visual'} onClick={() => setEditorMode('visual')}><AppIcon name="edit" />{ui('Visual editor', 'เครื่องมือเขียน')}</button>
                   <button className={editorMode === 'html' ? 'is-active' : ''} type="button" role="tab" aria-selected={editorMode === 'html'} onClick={() => setEditorMode('html')}><AppIcon name="code" />HTML</button>
                 </div>
               </div>
               {editorMode === 'visual' ? (
                 <Suspense fallback={<div className="admin-rich-editor-loading"><span /><strong>Loading visual editor…</strong></div>}>
-                  <ContentRichEditor key={language} data={previewHtml} language={language} onChange={(html) => update(language === 'th' ? 'body_html_th' : 'body_html', html)} />
+                  <ContentRichEditor key={`${language}-${interfaceLanguage}`} data={previewHtml} language={language} interfaceLanguage={interfaceLanguage} onChange={(html) => update(language === 'th' ? 'body_html_th' : 'body_html', html)} />
                 </Suspense>
               ) : (
                 <label>{language === 'th' ? 'โครงสร้าง HTML' : 'HTML source'}<textarea className="admin-code-field admin-html-source-field" rows="20" spellCheck="false" value={previewHtml} onChange={(event) => update(language === 'th' ? 'body_html_th' : 'body_html', event.target.value)} /></label>
@@ -1180,7 +1303,7 @@ function ContentEditor({ content, onClose, onSaved }) {
                   <h3>{language === 'th' ? 'ข้อมูลบทความเพิ่มเติม' : 'Article details'}</h3>
                   <div className="admin-form-grid">
                     <label>Slug <small>AUTO</small><input placeholder="Generated from the title" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={form.slug} onChange={(event) => update('slug', event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} /></label>
-                    <label>Category<input value={form.category} onChange={(event) => update('category', event.target.value)} /></label>
+                    <label>{ui('Category', 'หมวดหมู่')}<select value={form.category} onChange={(event) => update('category', event.target.value)}><option value="plant-science">{ui('Plant science', 'ข้อมูลพืช')}</option><option value="plant-care">{ui('Plant care', 'การดูแลพืช')}</option><option value="environment">{ui('Environment', 'สภาพแวดล้อม')}</option><option value="pests">{ui('Pests and diseases', 'ศัตรูพืชและโรค')}</option><option value="simulation-guide">{ui('Simulation guide', 'คู่มือการจำลอง')}</option></select></label>
                     <label>{language === 'th' ? 'ป้ายกำกับ' : 'Eyebrow'}<input value={language === 'th' ? form.eyebrow_th : form.eyebrow} onChange={(event) => update(language === 'th' ? 'eyebrow_th' : 'eyebrow', event.target.value)} /></label>
                     <label>{language === 'th' ? 'เวลาอ่าน (นาที)' : 'Reading time'} <small>AUTO</small><input min="1" max="60" placeholder="Auto" type="number" value={form.reading_minutes} onChange={(event) => update('reading_minutes', event.target.value)} /></label>
                     <label>Sort order<input min="0" max="999" type="number" value={form.sort_order} onChange={(event) => update('sort_order', event.target.value)} /></label>
@@ -1209,13 +1332,30 @@ function ContentEditor({ content, onClose, onSaved }) {
   )
 }
 
-function ContentsView({ contents, onRefresh }) {
+function ContentsView({ contents, language = 'en', onRefresh }) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
   const [trashed, setTrashed] = useState('')
   const [editor, setEditor] = useState(null)
   const [editingContentId, setEditingContentId] = useState(null)
   const [actionError, setActionError] = useState('')
+  const [selectedIdState, setSelectedIds] = useState([])
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const selectableContentIds = contents.filter((content) => !content.deleted_at).map((content) => content.id)
+  const availableContentIds = new Set(selectableContentIds)
+  const selectedIds = selectedIdState.filter((id) => availableContentIds.has(id))
+  const selectedIdSet = new Set(selectedIds)
+  const allSelectableSelected = selectableContentIds.length > 0 && selectableContentIds.every((id) => selectedIdSet.has(id))
+
+  function toggleContent(contentId, checked) {
+    setSelectedIds((current) => checked
+      ? [...new Set([...current, contentId])]
+      : current.filter((id) => id !== contentId))
+  }
+
+  function toggleAllContents(checked) {
+    setSelectedIds(checked ? selectableContentIds : [])
+  }
 
   async function runSearch(event) {
     event?.preventDefault()
@@ -1238,7 +1378,7 @@ function ContentsView({ contents, onRefresh }) {
   async function remove(content) {
     const confirmed = await confirmAdminAction({
       title: 'Move this content to trash?',
-      text: `“${content.title}” will be hidden from the learning pages and can be restored later.`,
+      text: `“${content.title}” will be hidden from public pages and can be restored later.`,
       confirmButtonText: 'Move to trash',
     })
     if (!confirmed) return
@@ -1270,35 +1410,63 @@ function ContentsView({ contents, onRefresh }) {
     }
   }
 
+  async function removeSelectedContents() {
+    if (!selectedIds.length) return
+    const confirmed = await confirmAdminAction({
+      title: language === 'th' ? `ลบเนื้อหา ${selectedIds.length} รายการหรือไม่` : `Delete ${selectedIds.length} content items?`,
+      text: language === 'th' ? 'รายการที่เลือกจะถูกย้ายไปถังขยะและซ่อนจากหน้าสาธารณะ โดยสามารถกู้คืนภายหลังได้' : 'Selected items will move to trash and disappear from public pages. They can be restored later.',
+      confirmButtonText: language === 'th' ? `ลบ ${selectedIds.length} รายการ` : `Delete ${selectedIds.length}`,
+    })
+    if (!confirmed) return
+
+    setBulkDeleting(true)
+    setActionError('')
+    const ids = [...selectedIds]
+    try {
+      const results = await Promise.allSettled(ids.map((id) => deleteAdminContent(id)))
+      const failedIds = ids.filter((_, index) => results[index].status === 'rejected')
+      setSelectedIds(failedIds)
+      await onRefresh({ search, status: filter, trashed })
+      if (failedIds.length) {
+        setActionError(language === 'th' ? `ลบสำเร็จ ${ids.length - failedIds.length} รายการ และลบไม่สำเร็จ ${failedIds.length} รายการ` : `${ids.length - failedIds.length} deleted; ${failedIds.length} could not be deleted.`)
+      } else {
+        await showAdminSuccess(language === 'th' ? 'ลบรายการที่เลือกแล้ว' : 'Selected items deleted', language === 'th' ? `ย้าย ${ids.length} รายการไปถังขยะแล้ว` : `${ids.length} items moved to trash.`)
+      }
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   return (
     <div className="admin-view">
-      <div className="admin-content-toolbar">
+      {selectedIds.length === 0 ? <div className="admin-content-toolbar">
         <form onSubmit={runSearch}>
-          <input aria-label="Search learning content" placeholder="Search title or slug" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <input aria-label="Search articles" placeholder="Search title or slug" value={search} onChange={(event) => setSearch(event.target.value)} />
           <select aria-label="Filter content by publication status" value={filter} onChange={(event) => { const value = event.target.value; setFilter(value); onRefresh({ search, status: value, trashed }) }}><option value="">All status</option><option value="published">Published</option><option value="draft">Draft</option></select>
           <select aria-label="Filter content by trash status" value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); onRefresh({ search, status: filter, trashed: value }) }}><option value="">Active content</option><option value="only">Trash</option><option value="with">Active + trash</option></select>
-          <button className="admin-search-submit" type="submit" aria-label="Search learning content" title="Search"><AppIcon name="search" /></button>
+          <button className="admin-search-submit" type="submit" aria-label="Search articles" title="Search"><AppIcon name="search" /></button>
         </form>
         <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...emptyContent })}><AppIcon name="plus" />New content</button>
-      </div>
+      </div> : <AdminBulkDeleteBar busy={bulkDeleting} count={selectedIds.length} language={language} onClear={() => setSelectedIds([])} onDelete={removeSelectedContents} />}
       {actionError && <div className="admin-inline-error">{actionError}</div>}
       <section className="admin-panel admin-table-panel">
         <table className="admin-table">
-          <thead><tr><th className="admin-index-column">#</th><th>Content</th><th>Category</th><th>Status</th><th>Version</th><th>Updated</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th className="admin-selection-column"><AdminSelectionCheckbox checked={allSelectableSelected} disabled={!selectableContentIds.length || bulkDeleting} indeterminate={selectedIds.length > 0 && !allSelectableSelected} label={language === 'th' ? 'เลือกเนื้อหาทั้งหมดในหน้านี้' : 'Select all content on this page'} onChange={toggleAllContents} /></th><th className="admin-index-column">#</th><th>Content</th><th>Category</th><th>Status</th><th>Version</th><th>Updated</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>
             {contents.map((content, index) => (
-              <tr className={content.deleted_at ? 'is-trashed' : ''} key={content.id}>
+              <tr className={`${content.deleted_at ? 'is-trashed' : ''} ${selectedIdSet.has(content.id) ? 'is-selected' : ''}`.trim()} key={content.id}>
+                <td className="admin-selection-cell"><AdminSelectionCheckbox checked={selectedIdSet.has(content.id)} disabled={Boolean(content.deleted_at) || bulkDeleting} label={language === 'th' ? `เลือก ${content.title_th || content.title}` : `Select ${content.title || content.title_th}`} onChange={(checked) => toggleContent(content.id, checked)} /></td>
                 <td className="admin-index-cell">{index + 1}</td>
-                <td><div className="admin-content-cell">{content.cover_image_url ? <img src={resolveAssetUrl(content.cover_image_url)} alt="" /> : <span><AppIcon name="bookmark" /></span>}<div><strong>{content.title}</strong><small>/{content.slug}</small></div></div></td>
-                <td>{content.category}</td><td><StatusBadge status={content.deleted_at ? 'archived' : content.status} /></td><td>v{content.version}</td><td>{formatDate(content.updated_at, true)}</td>
-                <td><div className="admin-row-actions">{!content.deleted_at && <button disabled={editingContentId !== null} type="button" onClick={() => editContent(content)}><AppIcon name="settings" />{editingContentId === content.id ? 'Loading…' : 'Edit'}</button>}{!content.deleted_at && <button className="is-danger" type="button" aria-label={`Move ${content.title} to trash`} onClick={() => remove(content)}><AppIcon name="trash" /></button>}{content.deleted_at && <button type="button" onClick={() => restore(content)}><AppIcon name="history" />Restore</button>}</div></td>
+                <td><div className="admin-content-cell">{content.cover_image_url ? <img src={resolveAssetUrl(content.cover_image_url)} alt="" /> : <span><AppIcon name="bookmark" /></span>}<div><strong>{language === 'th' ? (content.title_th || content.title) : (content.title || content.title_th)}</strong><small>/{content.slug}</small></div></div></td>
+                <td>{adminText(language, content.category)}</td><td><StatusBadge status={content.deleted_at ? 'archived' : content.status} /></td><td>v{content.version}</td><td>{formatDate(content.updated_at, true)}</td>
+                <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{!content.deleted_at && <button className="is-edit" disabled={editingContentId !== null} type="button" onClick={() => editContent(content)}><AppIcon name="settings" />{editingContentId === content.id ? 'Loading…' : 'Edit'}</button>}{!content.deleted_at && <button className="is-danger" type="button" aria-label={`Move ${content.title} to trash`} onClick={() => remove(content)}><AppIcon name="trash" /></button>}{content.deleted_at && <button className="is-restore" type="button" onClick={() => restore(content)}><AppIcon name="history" />Restore</button>}</>}</div></td>
               </tr>
             ))}
           </tbody>
         </table>
-        {!contents.length && <div className="admin-empty"><AppIcon name="bookmark" /><strong>No content found</strong><span>Adjust the filter or create a new learning article.</span></div>}
+        {!contents.length && <div className="admin-empty"><AppIcon name="bookmark" /><strong>No articles found</strong><span>Adjust the filter or create a new article.</span></div>}
       </section>
-      {editor && <ContentEditor content={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await onRefresh({ search, status: filter, trashed }) }} />}
+      {editor && <ContentEditor content={editor} interfaceLanguage={language} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await onRefresh({ search, status: filter, trashed }) }} />}
     </div>
   )
 }
@@ -1364,15 +1532,7 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
   )
 }
 
-const eventFactorOptions = [
-  { value: 'water', label: 'Water' },
-  { value: 'light', label: 'Light' },
-  { value: 'fertilizer', label: 'Fertilizer' },
-  { value: 'soil_humidity', label: 'Soil moisture' },
-  { value: 'air_humidity', label: 'Air humidity' },
-  { value: 'soil_temp', label: 'Soil temperature' },
-  { value: 'air_temp', label: 'Air temperature' },
-]
+const eventFactorOptions = environmentFactorOptions
 
 const eventOperatorOptions = [
   { value: 'above', label: 'Above' },
@@ -1528,8 +1688,10 @@ function EffectMapEditor({ label, value, onChange, disabled, wide }) {
   )
 }
 
-function StringListEditor({ label, items, onChange, placeholder, addLabel, emptyLabel, hint, disabled, wide }) {
+function StringListEditor({ label, items, onChange, options = [], placeholder, addLabel, emptyLabel, hint, disabled, wide }) {
   const safeItems = Array.isArray(items) ? items : []
+  const selectOptions = options.map((option) => typeof option === 'object' ? option : { value: option, label: option })
+  const nextOption = selectOptions.find((option) => !safeItems.includes(option.value))
 
   function updateItem(index, value) {
     onChange(safeItems.map((item, itemIndex) => (itemIndex === index ? value : item)))
@@ -1551,19 +1713,20 @@ function StringListEditor({ label, items, onChange, placeholder, addLabel, empty
         ) : safeItems.map((item, index) => (
           <div className="admin-list-editor__row" key={index}>
             <span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span>
-            <input
-              aria-label={`${label} ${index + 1}`}
-              disabled={disabled}
-              placeholder={placeholder}
-              type="text"
-              value={item ?? ''}
-              onChange={(event) => updateItem(index, event.target.value)}
-            />
+            {selectOptions.length ? (
+              <select aria-label={`${label} ${index + 1}`} disabled={disabled} value={item ?? ''} onChange={(event) => updateItem(index, event.target.value)}>
+                <option value="">Choose an action</option>
+                {!selectOptions.some((option) => option.value === item) && item && <option value={item}>{item} (existing)</option>}
+                {selectOptions.map((option) => <option disabled={safeItems.some((selected, selectedIndex) => selectedIndex !== index && selected === option.value)} key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            ) : (
+              <input aria-label={`${label} ${index + 1}`} disabled={disabled} placeholder={placeholder} type="text" value={item ?? ''} onChange={(event) => updateItem(index, event.target.value)} />
+            )}
             <button aria-label={`Remove ${label.toLowerCase()} ${index + 1}`} disabled={disabled} title="Remove item" type="button" onClick={() => removeItem(index)}><span aria-hidden="true">×</span></button>
           </div>
         ))}
       </div>
-      <button className="admin-list-editor__add" disabled={disabled} type="button" onClick={() => onChange([...safeItems, ''])}><span aria-hidden="true">+</span>{addLabel || 'Add item'}</button>
+      <button className="admin-list-editor__add" disabled={disabled || (selectOptions.length > 0 && !nextOption)} type="button" onClick={() => onChange([...safeItems, nextOption?.value ?? ''])}><span aria-hidden="true">+</span>{addLabel || 'Add item'}</button>
     </section>
   )
 }
@@ -1593,13 +1756,83 @@ function ReferenceListEditor({ label, items, onChange, disabled, wide }) {
             <div className="admin-reference-list__row-head"><span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span><strong>Reference {index + 1}</strong><button aria-label={`Remove reference ${index + 1}`} disabled={disabled} title="Remove reference" type="button" onClick={() => removeItem(index)}><span aria-hidden="true">×</span></button></div>
             <div className="admin-reference-list__grid">
               <input aria-label={`Reference ${index + 1} English title`} disabled={disabled} placeholder="English source name" type="text" value={source?.label_en ?? ''} onChange={(event) => updateItem(index, 'label_en', event.target.value)} />
-              <input aria-label={`Reference ${index + 1} Thai title`} disabled={disabled} placeholder="ชื่อแหล่งอ้างอิงภาษาไทย" type="text" value={source?.label_th ?? ''} onChange={(event) => updateItem(index, 'label_th', event.target.value)} />
+              <input aria-label={`Reference ${index + 1} Thai title`} disabled={disabled} placeholder="Thai source name" type="text" value={source?.label_th ?? ''} onChange={(event) => updateItem(index, 'label_th', event.target.value)} />
               <input aria-label={`Reference ${index + 1} URL`} className="is-url" disabled={disabled} placeholder="https://trusted-source.example/..." type="url" value={source?.url ?? ''} onChange={(event) => updateItem(index, 'url', event.target.value)} />
             </div>
           </div>
         ))}
       </div>
       <button className="admin-list-editor__add" disabled={disabled} type="button" onClick={() => onChange([...safeItems, { label_en: '', label_th: '', url: '' }])}><span aria-hidden="true">+</span>Add reference</button>
+    </section>
+  )
+}
+
+function parseRgbColor(value) {
+  const text = String(value ?? '').trim()
+  const hex = text.match(/^#([\da-f]{3}|[\da-f]{6})$/i)
+  if (hex) {
+    const full = hex[1].length === 3 ? [...hex[1]].map((channel) => channel + channel).join('') : hex[1]
+    return [0, 2, 4].map((index) => Number.parseInt(full.slice(index, index + 2), 16))
+  }
+  const rgb = text.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,[^)]+)?\)$/i)
+  if (!rgb) return null
+  return rgb.slice(1, 4).map((channel) => Math.min(255, Math.max(0, Number(channel))))
+}
+
+function rgbToHex(channels) {
+  return `#${channels.map((channel) => Math.min(255, Math.max(0, Number(channel) || 0)).toString(16).padStart(2, '0')).join('')}`
+}
+
+function ColorRgbField({ disabled, label, onChange, required, value }) {
+  const channels = parseRgbColor(value) ?? [0, 0, 0]
+  const pickerValue = rgbToHex(channels)
+
+  function updateChannel(index, nextValue) {
+    const nextChannels = [...channels]
+    nextChannels[index] = Math.min(255, Math.max(0, Number(nextValue) || 0))
+    onChange(rgbToHex(nextChannels))
+  }
+
+  return (
+    <section className="admin-color-field" aria-label={label}>
+      <div className="admin-color-field__heading"><strong>{label}{required && <em>*</em>}</strong><small>Choose a color or enter RGB values from 0–255</small></div>
+      <div className="admin-color-field__controls">
+        <label className="admin-color-field__picker"><input aria-label={`${label} color picker`} disabled={disabled} type="color" value={pickerValue} onChange={(event) => onChange(event.target.value)} /><i style={{ backgroundColor: value || pickerValue }} /></label>
+        {channels.map((channel, index) => <label className="admin-color-field__channel" key={['R', 'G', 'B'][index]}><span>{['R', 'G', 'B'][index]}</span><input aria-label={`${label} ${['red', 'green', 'blue'][index]}`} disabled={disabled} max="255" min="0" type="number" value={channel} onChange={(event) => updateChannel(index, event.target.value)} /></label>)}
+      </div>
+      <input className="admin-color-field__code" disabled={disabled} pattern="(?:#[0-9a-fA-F]{3,6}|rgba?\(.+\))" required={required} value={value ?? ''} onChange={(event) => onChange(event.target.value)} />
+    </section>
+  )
+}
+
+function ItemEffectEditor({ disabled, label, onChange, value, wide }) {
+  let effects = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  if (typeof value === 'string') {
+    try { effects = JSON.parse(value) } catch { effects = {} }
+  }
+  const strategyOptions = [
+    { value: '', label: 'No extra behavior' },
+    { value: 'refill_reserve', label: 'Refill a plant reserve' },
+    { value: 'toward_healthy_midpoint', label: 'Move environment toward healthy range' },
+    { value: 'drainage', label: 'Reduce excess soil moisture' },
+    { value: 'moisture_retention', label: 'Retain water and soil moisture' },
+    { value: 'moisture_retention', label: 'Retain water and soil moisture' },
+  ]
+
+  function update(key, nextValue) {
+    onChange({ ...effects, [key]: nextValue })
+  }
+
+  return (
+    <section className={`admin-resource-custom-field admin-item-effect-editor ${wide ? 'is-wide' : ''}`} aria-label={label}>
+      <div className="admin-list-editor__heading"><div><strong>{label}</strong><small>Choose the intended result. The system builds the data without requiring JSON.</small></div><span className="admin-list-editor__count">EASY SETUP</span></div>
+      <div className="admin-item-effect-editor__grid">
+        <label><span>Behavior</span><select disabled={disabled} value={effects.strategy ?? ''} onChange={(event) => update('strategy', event.target.value)}>{strategyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label><span>Resource</span><select disabled={disabled} value={effects.resource ?? ''} onChange={(event) => update('resource', event.target.value)}><option value="">Automatic / not needed</option><option value="water">Water reserve</option><option value="fertilizer">Fertilizer reserve</option><option value="soil_humidity">Soil moisture</option><option value="light">Light</option><option value="air_humidity">Air humidity</option><option value="soil_temp">Soil temperature</option><option value="air_temp">Air temperature</option></select></label>
+        <label><span>Duration (updates)</span><input disabled={disabled} min="1" type="number" value={effects.duration_ticks ?? 1} onChange={(event) => update('duration_ticks', event.target.value)} /></label>
+        <label><span>Duration (seconds)</span><input disabled={disabled} max="300" min="5" type="number" value={effects.duration_seconds ?? 30} onChange={(event) => update('duration_seconds', event.target.value)} /></label>
+      </div>
+      <p className="admin-item-effect-editor__summary">{effects.strategy ? `Selected effect: ${strategyOptions.find((option) => option.value === effects.strategy)?.label ?? effects.strategy}${effects.resource ? ` · ${effects.resource.replaceAll('_', ' ')}` : ''}` : 'No extra behavior. The effect type and strength above will be used.'}</p>
     </section>
   )
 }
@@ -1611,6 +1844,10 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
   const [modelBundles, setModelBundles] = useState({})
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const quickPlantCreate = config.id === 'plants' && !record?.id
+  const visibleFields = useMemo(() => quickPlantCreate
+    ? config.fields.filter((field) => ['name_en', 'name_th', 'description', 'base_image_url', 'base_model_url'].includes(field.key))
+    : config.fields, [config.fields, quickPlantCreate])
   const dialogRef = useRef(null)
   const dirty = useMemo(() => dataSnapshot(form) !== dataSnapshot(initialForm) || Object.values(imageFiles).some((file) => file instanceof File) || Object.values(modelBundles).some((bundle) => bundle?.model), [form, imageFiles, initialForm, modelBundles])
   const requestClose = useCallback(async () => {
@@ -1627,6 +1864,13 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
     return value ?? ''
   }
 
+  function fieldRequired(field) {
+    if (field.required) return true
+    return config.id === 'pests'
+      && field.key === 'model_url'
+      && form.placement_mode !== 'plant_surface'
+  }
+
   function updateField(key, value) {
     setForm((current) => {
       const next = { ...current, [key]: value }
@@ -1636,6 +1880,10 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
         if (!value || !selectedStage || String(selectedStage.plant_id) !== String(value)) {
           next.stage_id = ''
         }
+      }
+
+      if (config.id === 'items' && key === 'effect_type' && itemEffectPresets[value]) {
+        Object.assign(next, itemEffectPresets[value])
       }
 
       return next
@@ -1673,6 +1921,16 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
         }
         if (field.type === 'condition-list') payload[field.key] = normaliseEventConditions(payload[field.key])
         if (field.type === 'effect-map') payload[field.key] = normaliseEventEffects(payload[field.key])
+        if (field.type === 'item-effect') {
+          const effects = payload[field.key] && typeof payload[field.key] === 'object' && !Array.isArray(payload[field.key]) ? { ...payload[field.key] } : {}
+          if (!effects.strategy) delete effects.strategy
+          if (!effects.resource) delete effects.resource
+          if (effects.duration_ticks !== undefined && effects.duration_ticks !== '') effects.duration_ticks = Math.max(1, Number(effects.duration_ticks) || 1)
+          else delete effects.duration_ticks
+          if (effects.duration_seconds !== undefined && effects.duration_seconds !== '') effects.duration_seconds = Math.min(300, Math.max(5, Number(effects.duration_seconds) || 30))
+          else delete effects.duration_seconds
+          payload[field.key] = effects
+        }
         if (field.type === 'reference-list') {
           const references = Array.isArray(payload[field.key]) ? payload[field.key] : []
           const cleanedReferences = references.map((source) => ({
@@ -1698,7 +1956,7 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
       setStatus('saving')
       for (const field of config.fields.filter((item) => item.type === 'model-bundle')) {
         const bundle = modelBundles[field.key]
-        if (field.required && !payload[field.key] && !bundle?.model) {
+        if (fieldRequired(field) && !payload[field.key] && !bundle?.model) {
           throw new Error(`${field.label} is required.`)
         }
         if (bundle?.model) {
@@ -1733,8 +1991,9 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
       <form ref={dialogRef} className="admin-resource-editor" data-resource={config.id} role="dialog" aria-modal="true" aria-labelledby="admin-resource-editor-title" tabIndex="-1" onSubmit={submit}>
         <header className="admin-editor__header"><div><small>{config.label.toUpperCase()} / {record?.id ? `RECORD #${record.id}` : 'NEW RECORD'}</small><h2 id="admin-resource-editor-title">{record?.id ? `Edit ${config.label}` : config.createLabel}</h2></div><button type="button" onClick={requestClose} aria-label="Close editor">×</button></header>
         <div className="admin-resource-editor__body">
+          {quickPlantCreate && <div className="admin-quick-create-note"><span><AppIcon name="robot" /></span><div><strong>{document.documentElement.lang === 'th' ? 'กรอกเพียงข้อมูลหลัก' : 'Only the essentials are needed'}</strong><p>{document.documentElement.lang === 'th' ? 'ระบบจะใส่ค่าช่วงสภาพแวดล้อมมาตรฐาน และสร้างระยะเริ่มต้น 3 ระยะให้อัตโนมัติ หลังบันทึกจะแจ้งเฉพาะข้อมูลที่ยังขาดตรงมุมขวาล่าง' : 'Standard environment ranges and three starter growth stages are generated automatically. Only missing information will be shown afterward.'}</p></div></div>}
           <div className="admin-resource-form-grid">
-            {config.fields.map((field) => (
+            {visibleFields.map((field) => (
               field.type === 'image-upload' ? (
                 <ImageUploadField
                   disabled={status !== 'idle'}
@@ -1746,7 +2005,7 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
                     setImageFiles((current) => ({ ...current, [field.key]: null }))
                     setForm((current) => ({ ...current, [field.key]: '' }))
                   }}
-                  required={field.required && !form[field.key]}
+                  required={fieldRequired(field) && !form[field.key]}
                   value={form[field.key]}
                 />
               ) : field.type === 'model-bundle' ? (
@@ -1756,8 +2015,26 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
                   key={field.key}
                   label={field.label}
                   onChange={(bundle) => setModelBundles((current) => ({ ...current, [field.key]: bundle }))}
-                  required={field.required && !form[field.key]}
+                  required={fieldRequired(field) && !form[field.key]}
                   value={form[field.key]}
+                />
+              ) : field.type === 'color-rgb' ? (
+                <ColorRgbField
+                  disabled={status !== 'idle'}
+                  key={field.key}
+                  label={field.label}
+                  onChange={(value) => updateField(field.key, value)}
+                  required={fieldRequired(field)}
+                  value={form[field.key]}
+                />
+              ) : field.type === 'item-effect' ? (
+                <ItemEffectEditor
+                  disabled={status !== 'idle'}
+                  key={field.key}
+                  label={field.label}
+                  onChange={(value) => updateField(field.key, value)}
+                  value={form[field.key]}
+                  wide={field.wide}
                 />
               ) : field.type === 'string-list' ? (
                 <StringListEditor
@@ -1769,6 +2046,7 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
                   key={field.key}
                   label={field.label}
                   onChange={(items) => updateField(field.key, items)}
+                  options={field.optionLookup === 'item-actions' ? (lookups.items ?? []).filter((item) => item.action_key).map((item) => ({ value: item.action_key, label: `${item.name} · ${item.action_key}` })) : field.options}
                   placeholder={field.itemPlaceholder}
                   wide={field.wide}
                 />
@@ -1800,16 +2078,20 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
                   wide={field.wide}
                 />
               ) : <label className={field.wide ? 'is-wide' : ''} key={field.key}>
-                {field.label}{field.required && <em>*</em>}
+                {field.label}{fieldRequired(field) && <em>*</em>}
                 {field.type === 'textarea' || field.type === 'json' ? (
-                  <textarea className={field.type === 'json' ? 'admin-code-field' : ''} required={field.required} rows={field.type === 'json' ? 8 : 4} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
+                  <textarea className={field.type === 'json' ? 'admin-code-field' : ''} required={fieldRequired(field)} rows={field.type === 'json' ? 8 : 4} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
                 ) : field.type === 'select' ? (
-                  <select required={field.required} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</select>
+                  <select required={fieldRequired(field)} value={fieldValue(field)} onChange={(event) => updateField(field.key, event.target.value)}>{field.options.map((option) => {
+                    const optionValue = typeof option === 'object' ? option.value : option
+                    const optionLabel = typeof option === 'object' ? option.label : option
+                    return <option key={optionValue} value={optionValue}>{optionLabel}</option>
+                  })}{fieldValue(field) !== '' && !field.options.some((option) => String(typeof option === 'object' ? option.value : option) === String(fieldValue(field))) && <option value={fieldValue(field)}>{fieldValue(field)} (existing)</option>}</select>
                 ) : field.type === 'lookup' ? (
                   <>
                     <select
                       disabled={field.lookup === 'stages' && (!form.plant_id || !lookupOptions(field).length)}
-                      required={field.required}
+                      required={fieldRequired(field)}
                       value={fieldValue(field)}
                       onChange={(event) => updateField(field.key, event.target.value)}
                     >
@@ -1821,7 +2103,7 @@ function ResourceEditor({ config, record, lookups, onClose, onSaved }) {
                 ) : field.type === 'boolean' ? (
                   <button className={`admin-toggle ${form[field.key] ? 'is-active' : ''}`} type="button" role="switch" aria-checked={Boolean(form[field.key])} onClick={() => setForm((current) => ({ ...current, [field.key]: !current[field.key] }))}><i /><span>{form[field.key] ? 'Enabled' : 'Disabled'}</span></button>
                 ) : (
-                  <input required={field.required} type={field.type || 'text'} step={field.step} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
+                  <input required={fieldRequired(field)} type={field.type || 'text'} step={field.step} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
                 )}
               </label>
             ))}
@@ -1866,7 +2148,7 @@ function recordDetailValue(record, field, format) {
   if (value === null || value === undefined || value === '') return '—'
   if (format === 'date') return formatDate(value, true)
   if (format === 'percent') return `${value}%`
-  if (format === 'duration') return formatPlantDuration(record, 'en')
+  if (format === 'duration') return formatPlantDuration(record, document.documentElement.lang === 'th' ? 'th' : 'en')
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   return String(value)
 }
@@ -1881,7 +2163,7 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRe
   ]
   const person = record.user ?? record.admin
   const imageUrl = resolveAssetUrl(record.live_snapshot_url || record.snapshot_image_url || '')
-  const plantName = record.plant?.name_en || record.plant?.name_th
+  const plantName = localizedAdminName(record.plant)
 
   return (
     <div className="admin-details-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
@@ -1941,7 +2223,104 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRe
   )
 }
 
-function ResourceView({ groupKey }) {
+const plantSetupSteps = [
+  { resource: 'plants', icon: 'plant', countKey: null, minimum: 1 },
+  { resource: 'plant-stages', icon: 'sprout', countKey: 'stages_count', minimum: 3 },
+  { resource: 'plant-rules', icon: 'settings', countKey: 'condition_rules_count', minimum: 1 },
+  { resource: 'plant-variants', icon: 'eye', countKey: 'visual_variants_count', minimum: 1 },
+  { resource: 'plant-knowledge', icon: 'bookmark', countKey: 'knowledge_count', minimum: 1 },
+]
+
+const plantSetupCopy = {
+  en: {
+    title: 'Plant setup is incomplete', select: 'Plant', progress: 'complete', next: 'Add next', missing: 'Still needed',
+    steps: [
+      ['Plant information', 'Add names, image, base 3D model, growing duration, and suitable conditions.'],
+      ['Growth stages', 'Add at least 3 stages: seed, young plant, and mature plant.'],
+      ['Environment rules', 'Define how unsuitable water, light, humidity, and temperature affect the plant.'],
+      ['Visual states', 'Set how the plant looks when healthy or affected by each condition.'],
+      ['Plant guide', 'Add the public description, care instructions, photo, and trusted references.'],
+    ],
+  },
+  th: {
+    title: 'การตั้งค่าพืชยังไม่เสร็จ', select: 'พืช', progress: 'เสร็จแล้ว', next: 'เพิ่มขั้นตอนถัดไป', missing: 'ยังต้องเพิ่ม',
+    steps: [
+      ['ข้อมูลพืช', 'เพิ่มชื่อ รูป โมเดล 3 มิติ ระยะโตเต็มที่ และช่วงสภาพแวดล้อมที่เหมาะสม'],
+      ['ระยะการเติบโต', 'เพิ่มอย่างน้อย 3 ระยะ ได้แก่ เมล็ด ต้นอ่อน และโตเต็มที่'],
+      ['กฎสภาพแวดล้อม', 'กำหนดผลของน้ำ แสง ความชื้น และอุณหภูมิที่ไม่เหมาะสม'],
+      ['รูปแบบการแสดงผล', 'กำหนดลักษณะของพืชเมื่อสมบูรณ์หรือได้รับผลจากแต่ละสภาวะ'],
+      ['คู่มือพืช', 'เพิ่มคำอธิบาย วิธีดูแล รูปภาพ และแหล่งอ้างอิงที่น่าเชื่อถือ'],
+    ],
+  },
+}
+
+const plantSetupReminderCollapsedKey = 'plant-growth-admin-plant-reminder-collapsed'
+
+function PlantSetupReminder({ language, onOpenStep, onSelectPlant, plants, selectedPlantId }) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(plantSetupReminderCollapsedKey) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const copy = plantSetupCopy[language === 'th' ? 'th' : 'en']
+  const incompletePlants = plants.filter((plant) => plantSetupSteps.some((step) => step.countKey !== null && Number(plant[step.countKey] ?? 0) < step.minimum))
+  const selectedPlant = incompletePlants.find((plant) => String(plant.id) === String(selectedPlantId)) ?? incompletePlants[0]
+  if (!selectedPlant) return null
+
+  const stepStates = plantSetupSteps.map((step) => step.countKey === null || Number(selectedPlant[step.countKey] ?? 0) >= step.minimum)
+  const completedCount = stepStates.filter(Boolean).length
+  const currentStepIndex = stepStates.findIndex((complete) => !complete)
+  const currentStep = plantSetupSteps[currentStepIndex]
+  const missingLabels = stepStates.map((complete, index) => complete ? null : copy.steps[index][0]).filter(Boolean)
+
+  function toggleCollapsed() {
+    const next = !collapsed
+    setCollapsed(next)
+    try {
+      window.localStorage.setItem(plantSetupReminderCollapsedKey, String(next))
+    } catch {
+      // The reminder still works when browser storage is unavailable.
+    }
+  }
+
+  return (
+    <aside className={`admin-plant-reminder ${collapsed ? 'is-collapsed' : ''}`} aria-live="polite">
+      <header>
+        <span><AppIcon name="plant" /></span>
+        <div><small>{localizedAdminName(selectedPlant)}</small><strong>{copy.title}</strong></div>
+        <em>{completedCount}/{plantSetupSteps.length}</em>
+        <button aria-controls="admin-plant-reminder-details" aria-expanded={!collapsed} aria-label={collapsed ? (language === 'th' ? 'ขยายกล่องสถานะการตั้งค่าพืช' : 'Expand plant setup status') : (language === 'th' ? 'พับกล่องสถานะการตั้งค่าพืช' : 'Collapse plant setup status')} title={collapsed ? (language === 'th' ? 'ขยาย' : 'Expand') : (language === 'th' ? 'พับ' : 'Collapse')} type="button" onClick={toggleCollapsed}><AppIcon name={collapsed ? 'arrowDown' : 'arrowUp'} /></button>
+      </header>
+      <div className="admin-plant-reminder__details" id="admin-plant-reminder-details" hidden={collapsed}>
+        {incompletePlants.length > 1 && <label>{copy.select}<select value={selectedPlant.id} onChange={(event) => onSelectPlant(event.target.value)}>{incompletePlants.map((plant) => <option value={plant.id} key={plant.id}>{localizedAdminName(plant)}</option>)}</select></label>}
+        <div className="admin-plant-reminder__progress"><i><span style={{ width: `${(completedCount / plantSetupSteps.length) * 100}%` }} /></i><small>{completedCount}/{plantSetupSteps.length} {copy.progress}</small></div>
+        <div className="admin-plant-reminder__next"><span><AppIcon name={currentStep.icon} /></span><div><small>{copy.next}</small><strong>{copy.steps[currentStepIndex][0]}</strong><p>{copy.steps[currentStepIndex][1]}</p></div></div>
+        <div className="admin-plant-reminder__missing"><small>{copy.missing}</small><span>{missingLabels.join(' · ')}</span></div>
+        <button type="button" onClick={() => onOpenStep(currentStep.resource, selectedPlant, false)}>{copy.next}<AppIcon name="arrowForward" /></button>
+      </div>
+    </aside>
+  )
+}
+
+function PlantAutoSetupBar({ busy, language, onGenerate, onSelectPlant, plants }) {
+  const isThai = language === 'th'
+  const [selectedPlantId, setSelectedPlantId] = useState('')
+  if (!plants.length) return null
+  const value = plants.some((plant) => String(plant.id) === String(selectedPlantId)) ? selectedPlantId : ''
+  const placeholder = isThai ? 'เลือกพืชที่ต้องการ' : 'Select the plant you want'
+  return (
+    <section className="admin-auto-setup-bar">
+      <span><AppIcon name="robot" /></span>
+      <div><strong>{isThai ? 'สร้างกฎและรูปแบบให้อัตโนมัติ' : 'Generate rules and visual states'}</strong><small>{isThai ? 'ระบบใช้ช่วงสภาพแวดล้อมของพืชสร้างรายการที่สัมพันธ์กัน โดยไม่เขียนทับสิ่งที่แก้ไว้แล้ว' : 'Uses the plant’s suitable ranges and keeps existing custom records unchanged.'}</small></div>
+      <select aria-label={isThai ? 'เลือกพืชที่จะสร้างชุดแนะนำ' : 'Select a plant for automatic setup'} value={value} onChange={(event) => { setSelectedPlantId(event.target.value); onSelectPlant(event.target.value) }}><option value="" disabled>{placeholder}</option>{plants.map((plant) => <option value={plant.id} key={plant.id}>{localizedAdminName(plant)}</option>)}</select>
+      <button disabled={busy || !value} type="button" onClick={() => onGenerate(value)}><AppIcon name={busy ? 'restartAlt' : 'bolt'} />{busy ? (isThai ? 'กำลังสร้าง…' : 'Generating…') : (isThai ? 'สร้างชุดแนะนำ' : 'Generate set')}</button>
+    </section>
+  )
+}
+
+function ResourceView({ groupKey, language = 'en' }) {
   const configs = resourceGroups[groupKey]
   const [activeResource, setActiveResource] = useState(configs[0].id)
   const [payload, setPayload] = useState(null)
@@ -1957,10 +2336,31 @@ function ResourceView({ groupKey }) {
   const [selectedRecord, setSelectedRecord] = useState(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
   const [refreshState, setRefreshState] = useState('connected')
+  const [setupPlants, setSetupPlants] = useState([])
+  const [setupPlantId, setSetupPlantId] = useState('')
+  const [generatingSetup, setGeneratingSetup] = useState(false)
+  const [selectedIdState, setSelectedIds] = useState([])
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const refreshInFlightRef = useRef(false)
   const config = configs.find((item) => item.id === activeResource) ?? configs[0]
   const records = payload?.data ?? []
   const pagination = payload?.current_page ? payload : null
+  const selectionEnabled = !config.readOnly && !config.noDelete
+  const selectableRecordIds = selectionEnabled ? records.filter((record) => !record.deleted_at).map((record) => record.id) : []
+  const availableRecordIds = new Set(selectableRecordIds)
+  const selectedIds = selectedIdState.filter((id) => availableRecordIds.has(id))
+  const selectedIdSet = new Set(selectedIds)
+  const allSelectableSelected = selectableRecordIds.length > 0 && selectableRecordIds.every((id) => selectedIdSet.has(id))
+
+  function toggleRecord(recordId, checked) {
+    setSelectedIds((current) => checked
+      ? [...new Set([...current, recordId])]
+      : current.filter((id) => id !== recordId))
+  }
+
+  function toggleAllRecords(checked) {
+    setSelectedIds(checked ? selectableRecordIds : [])
+  }
 
   async function load(resource = activeResource, options = {}, { silent = false } = {}) {
     if (!silent) { setLoading(true); setError('') }
@@ -1983,11 +2383,20 @@ function ResourceView({ groupKey }) {
     let cancelled = false
     Promise.all([getAdminResource(configs[0].id), getAdminResourceLookups()])
       .then(([resourcePayload, lookupPayload]) => {
-        if (!cancelled) { setPayload(resourcePayload); setLookups(lookupPayload.data ?? {}); setLastUpdatedAt(new Date()); setRefreshState('connected'); setLoading(false) }
+        if (!cancelled) {
+          setPayload(resourcePayload)
+          setLookups(lookupPayload.data ?? {})
+          if (groupKey === 'plants') {
+            const plants = resourcePayload.data ?? []
+            setSetupPlants(plants)
+            setSetupPlantId((current) => current || String(plants.find((plant) => Number(plant.stages_count ?? 0) < 3 || Number(plant.condition_rules_count ?? 0) < 1 || Number(plant.visual_variants_count ?? 0) < 1 || Number(plant.knowledge_count ?? 0) < 1)?.id ?? plants[0]?.id ?? ''))
+          }
+          setLastUpdatedAt(new Date()); setRefreshState('connected'); setLoading(false)
+        }
       })
       .catch((loadError) => { if (!cancelled) { setError(loadError.message || 'Unable to load management data.'); setLoading(false) } })
     return () => { cancelled = true }
-  }, [configs])
+  }, [configs, groupKey])
 
   useEffect(() => {
     let cancelled = false
@@ -2028,6 +2437,7 @@ function ResourceView({ groupKey }) {
   }, [appliedFilter, appliedSearch, config.id, editor, pagination?.current_page, selectedRecord, trashed])
 
   async function chooseResource(resource) {
+    setSelectedIds([])
     setActiveResource(resource)
     setSearch('')
     setFilter('')
@@ -2036,7 +2446,45 @@ function ResourceView({ groupKey }) {
     setTrashed('')
     setEditor(null)
     setSelectedRecord(null)
-    await load(resource)
+    return load(resource)
+  }
+
+  async function openPlantSetupStep(resource, plant, complete = false) {
+    const targetConfig = configs.find((item) => item.id === resource)
+    if (!targetConfig) return
+    await chooseResource(resource)
+    if (complete) return
+    setEditor(resource === 'plants' ? plant : { ...targetConfig.defaults, plant_id: String(plant.id) })
+  }
+
+  async function refreshPlantSetup(savedRecord) {
+    const plantsPayload = await getAdminResource('plants')
+    const plants = plantsPayload.data ?? []
+    setSetupPlants(plants)
+    if (savedRecord?.id && config.id === 'plants') setSetupPlantId(String(savedRecord.id))
+  }
+
+  async function generateRecommendedSetup(plantId) {
+    const plant = setupPlants.find((item) => String(item.id) === String(plantId))
+    if (!plant) return
+    const confirmed = await confirmAdminAction({
+      title: language === 'th' ? 'สร้างชุดแนะนำสำหรับพืชนี้หรือไม่' : 'Generate the recommended setup?',
+      text: language === 'th' ? `ระบบจะเพิ่มกฎและรูปแบบที่ยังขาดสำหรับ “${localizedAdminName(plant)}” โดยไม่เขียนทับรายการเดิม` : `Missing rules and visual states will be added for “${localizedAdminName(plant)}” without replacing existing records.`,
+      confirmButtonText: language === 'th' ? 'สร้างชุดแนะนำ' : 'Generate set',
+      icon: 'question',
+    })
+    if (!confirmed) return
+    setGeneratingSetup(true)
+    setError('')
+    try {
+      await generateAdminPlantSetup(plant.id)
+      await Promise.all([load(config.id, { search: appliedSearch, status: appliedFilter, trashed }), refreshPlantSetup()])
+      await showAdminSuccess(language === 'th' ? 'สร้างชุดแนะนำแล้ว' : 'Recommended setup generated', language === 'th' ? 'เพิ่มกฎและรูปแบบที่ขาดเรียบร้อยแล้ว' : 'Missing rules and visual states were added.')
+    } catch (setupError) {
+      setError(setupError.message || (language === 'th' ? 'ไม่สามารถสร้างชุดแนะนำได้' : 'Unable to generate the recommended setup.'))
+    } finally {
+      setGeneratingSetup(false)
+    }
   }
 
   async function updateModeration(record, field, value) {
@@ -2101,35 +2549,68 @@ function ResourceView({ groupKey }) {
     }
   }
 
+  async function removeSelectedRecords() {
+    if (!selectedIds.length || !selectionEnabled) return
+    const confirmed = await confirmAdminAction({
+      title: language === 'th' ? `ลบ ${selectedIds.length} รายการหรือไม่` : `Delete ${selectedIds.length} records?`,
+      text: language === 'th' ? `รายการที่เลือกจาก “${adminText(language, config.label)}” จะถูกย้ายไปถังขยะและสามารถกู้คืนภายหลังได้` : `Selected records from “${config.label}” will move to trash and can be restored later.`,
+      confirmButtonText: language === 'th' ? `ลบ ${selectedIds.length} รายการ` : `Delete ${selectedIds.length}`,
+    })
+    if (!confirmed) return
+
+    setBulkDeleting(true)
+    setError('')
+    const ids = [...selectedIds]
+    try {
+      const results = await Promise.allSettled(ids.map((id) => deleteAdminResource(config.id, id)))
+      const failedIds = ids.filter((_, index) => results[index].status === 'rejected')
+      setSelectedIds(failedIds)
+      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
+      if (groupKey === 'plants') await refreshPlantSetup()
+      if (failedIds.length) {
+        setError(language === 'th' ? `ลบสำเร็จ ${ids.length - failedIds.length} รายการ และลบไม่สำเร็จ ${failedIds.length} รายการ` : `${ids.length - failedIds.length} deleted; ${failedIds.length} could not be deleted.`)
+      } else {
+        await showAdminSuccess(language === 'th' ? 'ลบรายการที่เลือกแล้ว' : 'Selected records deleted', language === 'th' ? `ย้าย ${ids.length} รายการไปถังขยะแล้ว` : `${ids.length} records moved to trash.`)
+      }
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   return (
     <div className="admin-view admin-resource-view">
       <div className="admin-subtable-tabs" role="tablist" aria-label="Database tables">
         {configs.map((item) => <button className={activeResource === item.id ? 'is-active' : ''} type="button" role="tab" aria-selected={activeResource === item.id} key={item.id} onClick={() => chooseResource(item.id)}><AppIcon name={item.icon} /><span>{item.label}</span></button>)}
       </div>
 
-      <div className="admin-content-toolbar">
-        <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed, page: 1 }) }}>
+      {groupKey === 'plants' && <PlantSetupReminder language={language} plants={setupPlants} selectedPlantId={setupPlantId} onSelectPlant={setSetupPlantId} onOpenStep={openPlantSetupStep} />}
+
+      {selectedIds.length === 0 ? <div className="admin-content-toolbar">
+        <form onSubmit={(event) => { event.preventDefault(); setSelectedIds([]); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed, page: 1 }) }}>
           <input aria-label={`Search ${config.label}`} placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />
-          {config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => { const value = event.target.value; setFilter(value); setAppliedSearch(search); setAppliedFilter(value); load(config.id, { search, status: value, trashed, page: 1 }) }}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}
-          {!config.readOnly && !config.noTrashFilter && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setTrashed(value); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}
+          {config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => { const value = event.target.value; setSelectedIds([]); setFilter(value); setAppliedSearch(search); setAppliedFilter(value); load(config.id, { search, status: value, trashed, page: 1 }) }}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}
+          {!config.readOnly && !config.noTrashFilter && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setSelectedIds([]); setTrashed(value); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}
           <button className="admin-search-submit" type="submit" aria-label={`Search ${config.label}`} title="Search"><AppIcon name="search" /></button>
         </form>
         {!config.moderation && !config.readOnly && !config.noCreate && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
         {config.readOnly && <span className="admin-readonly-label"><AppIcon name="shield" />Read-only audit evidence</span>}
         <span className={`admin-refresh-state is-${refreshState}`}><i />{refreshState === 'stale' ? 'Update delayed' : 'Live data'}<small>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Connecting…'}</small></span>
-      </div>
+      </div> : <AdminBulkDeleteBar busy={bulkDeleting} count={selectedIds.length} language={language} onClear={() => setSelectedIds([])} onDelete={removeSelectedRecords} />}
+
+      {groupKey === 'plants' && ['plant-rules', 'plant-variants'].includes(activeResource) && <PlantAutoSetupBar busy={generatingSetup} language={language} plants={setupPlants} onSelectPlant={setSetupPlantId} onGenerate={generateRecommendedSetup} />}
 
       {error && <div className="admin-inline-error">{error}</div>}
       <section className="admin-panel admin-table-panel">
         {loading ? <div className="admin-resource-loading"><AdminTableSkeleton embedded /></div> : (
           <table className="admin-table admin-resource-table">
-            <thead><tr><th className="admin-index-column">#</th>{config.columns.map((column) => <th key={column.label}>{column.label}</th>)}{!config.readOnly && <th>Status</th>}<th><span className="sr-only">Actions</span></th></tr></thead>
+            <thead><tr>{selectionEnabled && <th className="admin-selection-column"><AdminSelectionCheckbox checked={allSelectableSelected} disabled={!selectableRecordIds.length || bulkDeleting} indeterminate={selectedIds.length > 0 && !allSelectableSelected} label={language === 'th' ? 'เลือกทุกรายการในหน้านี้' : 'Select all records on this page'} onChange={toggleAllRecords} /></th>}<th className="admin-index-column">#</th>{config.columns.map((column) => <th key={column.label}>{column.label}</th>)}{!config.readOnly && <th>Status</th>}<th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>{records.map((record, index) => (
-              <tr className={record.deleted_at ? 'is-trashed' : ''} key={record.id}>
+              <tr className={`${record.deleted_at ? 'is-trashed' : ''} ${selectedIdSet.has(record.id) ? 'is-selected' : ''}`.trim()} key={record.id}>
+                {selectionEnabled && <td className="admin-selection-cell"><AdminSelectionCheckbox checked={selectedIdSet.has(record.id)} disabled={Boolean(record.deleted_at) || bulkDeleting} label={language === 'th' ? `เลือกรายการที่ ${record.id}` : `Select record ${record.id}`} onChange={(checked) => toggleRecord(record.id, checked)} /></td>}
                 <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
                 {config.columns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
-                {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-                <td><div className="admin-row-actions"><button type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</div></td>
+                {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
+                <td><div className="admin-row-actions">{selectedIds.length === 0 && <><button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -2137,9 +2618,9 @@ function ResourceView({ groupKey }) {
         {!loading && !records.length && <div className="admin-empty"><AppIcon name={config.icon} /><strong>No records found</strong><span>This database table does not have matching records yet.</span></div>}
       </section>
 
-      {pagination && <AdminPagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={(page) => load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page })} />}
+      {pagination && <AdminPagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={(page) => { setSelectedIds([]); load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page }) }} />}
       {selectedRecord && <ResourceDetailsDrawer config={config} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onRestore={() => restoreRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
-      {editor && <ResourceEditor config={config} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, trashed })]); setLookups(lookupPayload.data ?? {}) }} />}
+      {editor && <ResourceEditor config={config} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async (savedRecord) => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, trashed }), groupKey === 'plants' ? refreshPlantSetup(savedRecord) : Promise.resolve()]); setLookups(lookupPayload.data ?? {}) }} />}
     </div>
   )
 }
@@ -2158,6 +2639,7 @@ function writeAdminSectionToHistory(section, method = 'pushState') {
 }
 
 export function AdminPage({ user, onLogout }) {
+  const adminShellRef = useRef(null)
   const [section, setSection] = useState(adminSectionFromLocation)
   const [dashboard, setDashboard] = useState(null)
   const [contents, setContents] = useState([])
@@ -2179,10 +2661,12 @@ export function AdminPage({ user, onLogout }) {
   const refreshInFlightRef = useRef(false)
   const initialSectionRef = useRef(section)
 
+  useAdminLanguage(language, adminShellRef)
+
   const sectionMeta = useMemo(() => ({
-    dashboard: ['Academy overview', 'Monitor learning activity and system health.'],
-    contents: ['Learning content', 'Create, review, and publish bilingual educational articles.'],
-    users: ['Users & access', 'Manage learner status and administrator permissions.'],
+    dashboard: ['System overview', 'Monitor user activity and system health.'],
+    contents: ['Content library', 'Manage articles, plant information, and bilingual public content.'],
+    users: ['Users & access', 'Manage user status and administrator permissions.'],
     plants: ['Plants & growth data', 'Manage plant profiles, growth stages, plant knowledge, condition rules, and visual states.'],
     pests: ['Pests & occurrence rules', 'Maintain pest definitions and the environmental rules that trigger them.'],
     store: ['Items & shop', 'Manage usable items, effects, prices, stock, and availability.'],
@@ -2194,7 +2678,7 @@ export function AdminPage({ user, onLogout }) {
     simulations: ['Simulation records', 'Review simulation runs and harvested plant histories.'],
     activity: ['Administrator activity', 'Review an immutable audit trail of management actions.'],
     reports: [language === 'th' ? 'รายงานปัญหา' : 'Problem reports', language === 'th' ? 'ตรวจสอบหลักฐาน เปลี่ยนสถานะ และแจ้งความคืบหน้าแก่ผู้ใช้' : 'Review immutable evidence, update status, and publish progress to reporters.'],
-  }[section]), [language, section])
+  }[section].map((value) => adminText(language, value))), [language, section])
   const refreshIntervalSeconds = section === 'dashboard' ? ADMIN_DASHBOARD_REFRESH_MS / 1000 : ADMIN_TABLE_REFRESH_MS / 1000
 
   const loadDashboard = useCallback(async ({ silent = false, selection = trendSelectionRef.current } = {}) => {
@@ -2299,6 +2783,7 @@ export function AdminPage({ user, onLogout }) {
   function changeLanguage(nextLanguage) {
     const normalized = nextLanguage === 'th' ? 'th' : 'en'
     setLanguage(normalized)
+    document.documentElement.lang = normalized
     saveSettings({ ...loadSettings(), language: normalized })
   }
 
@@ -2364,40 +2849,40 @@ export function AdminPage({ user, onLogout }) {
   }
 
   return (
-    <main className={`admin-shell admin-theme--${preferences.theme} ${preferences.collapsed ? 'is-sidebar-collapsed' : ''} ${preferences.textSize === 'large' ? 'is-text-large' : ''}`}>
+    <main ref={adminShellRef} className={`admin-shell admin-theme--${preferences.theme} ${preferences.collapsed ? 'is-sidebar-collapsed' : ''} ${preferences.textSize === 'large' ? 'is-text-large' : ''}`}>
       <aside className="admin-sidebar">
-        <div className="admin-brand"><img src={plantGrowthLogo} alt="Plant Growth Academy" /><span><strong>Plant Growth</strong><small>ADMIN CONSOLE</small></span><button type="button" onClick={() => updatePreferences({ collapsed: !preferences.collapsed })} aria-label={preferences.collapsed ? 'Expand navigation' : 'Collapse navigation'} title={preferences.collapsed ? 'Expand navigation' : 'Collapse navigation'}><AppIcon name={preferences.collapsed ? 'panelOpen' : 'panelClose'} /></button></div>
-        <nav aria-label="Admin navigation">
+        <div className="admin-brand"><img src={plantGrowthLogo} alt="Plant Growth" /><span><strong>Plant Growth</strong><small>{adminText(language, 'ADMIN CONSOLE')}</small></span><button type="button" onClick={() => updatePreferences({ collapsed: !preferences.collapsed })} aria-label={adminText(language, preferences.collapsed ? 'Expand navigation' : 'Collapse navigation')} title={adminText(language, preferences.collapsed ? 'Expand navigation' : 'Collapse navigation')}><AppIcon name={preferences.collapsed ? 'panelOpen' : 'panelClose'} /></button></div>
+        <nav aria-label={adminText(language, 'Admin navigation')}>
           {navigationGroups.map((group) => (
             <div className="admin-nav-group" key={group.label}>
-              <small>{group.label}</small>
-              {group.items.filter((item) => !hiddenAdminNavigationItems.has(item.id)).map((item) => <button className={section === item.id ? 'is-active' : ''} type="button" key={item.id} title={preferences.collapsed ? item.label : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{item.id === 'reports' && language === 'th' ? 'รายงานปัญหา' : item.label}</b>{item.id === 'reports' && unseenReportCount > 0 ? <em className="admin-nav-badge">{unseenReportCount > 99 ? '99+' : unseenReportCount}</em> : <span />}</button>)}
+              <small>{adminText(language, group.label)}</small>
+              {group.items.filter((item) => !hiddenAdminNavigationItems.has(item.id)).map((item) => <button className={section === item.id ? 'is-active' : ''} type="button" key={item.id} title={preferences.collapsed ? adminText(language, item.label) : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{adminText(language, item.label)}</b>{item.id === 'reports' && unseenReportCount > 0 ? <em className="admin-nav-badge">{unseenReportCount > 99 ? '99+' : unseenReportCount}</em> : <span />}</button>)}
             </div>
           ))}
         </nav>
-        <div className="admin-sidebar__account"><AdminAvatar user={user} /><span><strong>{user.username}</strong><small>Administrator</small></span><button type="button" onClick={onLogout} aria-label="Log out"><AppIcon name="logout" /></button></div>
+        <div className="admin-sidebar__account"><AdminAvatar user={user} /><span><strong>{user.username}</strong><small>{adminText(language, 'Administrator')}</small></span><button type="button" onClick={onLogout} aria-label={adminText(language, 'Log out')}><AppIcon name="logout" /></button></div>
       </aside>
 
       <section className="admin-main">
         <header className="admin-topbar">
-          <div><small>ADMINISTRATION / {section.toUpperCase()}</small><h1>{sectionMeta[0]}</h1><p>{sectionMeta[1]}</p></div>
+          <div><small>{adminText(language, 'ADMINISTRATION')} / {adminText(language, section.toUpperCase())}</small><h1>{sectionMeta[0]}</h1><p>{sectionMeta[1]}</p></div>
           <div className="admin-topbar__actions">
-            <span className={`admin-system-status is-${refreshState}`}><AppIcon name="live" /><i />{refreshState === 'connecting' ? 'Connecting data' : refreshState === 'stale' ? 'Update delayed' : 'Live data'}<em>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · Auto ${refreshIntervalSeconds}s` : `Auto refresh · ${refreshIntervalSeconds}s`}</em></span>
-            <div className="admin-language-switch" role="group" aria-label="Interface language"><AppIcon name="translate" /><button className={language === 'en' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('en')} aria-pressed={language === 'en'}>EN</button><button className={language === 'th' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('th')} aria-pressed={language === 'th'}>ไทย</button></div>
-            <button className="admin-text-size-button" type="button" onClick={() => updatePreferences({ textSize: preferences.textSize === 'large' ? 'default' : 'large' })} aria-label={preferences.textSize === 'large' ? 'Use standard text size' : 'Use large text size'} aria-pressed={preferences.textSize === 'large'} title={preferences.textSize === 'large' ? 'Standard text size' : 'Large text size'}>{preferences.textSize === 'large' ? 'A' : 'A+'}</button>
-            <button type="button" onClick={() => updatePreferences({ theme: preferences.theme === 'dark' ? 'light' : 'dark' })} aria-label={preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme'} title={preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme'}><AppIcon name={preferences.theme === 'dark' ? 'lightMode' : 'darkMode'} /></button>
+            <span className={`admin-system-status is-${refreshState}`}><AppIcon name="live" /><i />{adminText(language, refreshState === 'connecting' ? 'Connecting data' : refreshState === 'stale' ? 'Update delayed' : 'Live data')}<em>{adminText(language, lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString(language === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · Auto ${refreshIntervalSeconds}s` : `Auto refresh · ${refreshIntervalSeconds}s`)}</em></span>
+            <div className="admin-language-switch" role="group" aria-label={adminText(language, 'Interface language')}><AppIcon name="translate" /><button className={language === 'en' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('en')} aria-pressed={language === 'en'}>EN</button><button className={language === 'th' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('th')} aria-pressed={language === 'th'}>ไทย</button></div>
+            <button className="admin-text-size-button" type="button" onClick={() => updatePreferences({ textSize: preferences.textSize === 'large' ? 'default' : 'large' })} aria-label={adminText(language, preferences.textSize === 'large' ? 'Use standard text size' : 'Use large text size')} aria-pressed={preferences.textSize === 'large'} title={adminText(language, preferences.textSize === 'large' ? 'Standard text size' : 'Large text size')}>{preferences.textSize === 'large' ? 'A' : 'A+'}</button>
+            <button type="button" onClick={() => updatePreferences({ theme: preferences.theme === 'dark' ? 'light' : 'dark' })} aria-label={adminText(language, preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme')} title={adminText(language, preferences.theme === 'dark' ? 'Use light theme' : 'Use dark theme')}><AppIcon name={preferences.theme === 'dark' ? 'lightMode' : 'darkMode'} /></button>
             <time>{formatDate(new Date())}</time>
           </div>
         </header>
 
         <div className="admin-content">
           {status === 'loading' && <div className="admin-loading">{section === 'dashboard' ? <AdminDashboardSkeleton /> : <AdminTableSkeleton />}</div>}
-          {status === 'error' && <div className="admin-error"><AppIcon name="shield" /><h2>Unable to load this section</h2><p>{error}</p><button type="button" onClick={() => openSection(section)}>Try again</button></div>}
-          {status === 'ready' && section === 'dashboard' && <DashboardView data={dashboard} trendSelection={trendSelection} onChangeTrendSelection={changeTrendSelection} onOpenSection={openSection} theme={preferences.theme} />}
-          {status === 'ready' && section === 'contents' && <ContentsView contents={contents} onRefresh={loadContents} />}
+          {status === 'error' && <div className="admin-error"><AppIcon name="shield" /><h2>{adminText(language, 'Unable to load this section')}</h2><p>{adminText(language, error)}</p><button type="button" onClick={() => openSection(section)}>{adminText(language, 'Try again')}</button></div>}
+          {status === 'ready' && section === 'dashboard' && <DashboardView data={dashboard} trendSelection={trendSelection} onChangeTrendSelection={changeTrendSelection} onOpenSection={openSection} theme={preferences.theme} language={language} />}
+          {status === 'ready' && section === 'contents' && <ContentsView contents={contents} language={language} onRefresh={loadContents} />}
           {status === 'ready' && section === 'users' && <UsersView currentUser={user} usersPayload={users} onRefresh={loadUsers} />}
           {status === 'ready' && section === 'reports' && <IssueReportsAdminView language={language} onSeenChange={loadReportSummary} />}
-          {status === 'ready' && resourceGroups[section] && <ResourceView key={section} groupKey={section} />}
+          {status === 'ready' && resourceGroups[section] && <ResourceView key={section} groupKey={section} language={language} />}
         </div>
       </section>
     </main>

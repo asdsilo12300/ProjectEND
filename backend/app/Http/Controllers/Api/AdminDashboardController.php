@@ -60,7 +60,7 @@ class AdminDashboardController extends Controller
 
         $systemGroups = [
             ['key' => 'accounts', 'label' => 'Accounts', 'value' => $metrics['users'], 'section' => 'users'],
-            ['key' => 'learning', 'label' => 'Learning content', 'value' => $metrics['published_contents'] + $metrics['draft_contents'], 'section' => 'contents'],
+            ['key' => 'learning', 'label' => 'Plant content', 'value' => $metrics['published_contents'] + $metrics['draft_contents'], 'section' => 'contents'],
             ['key' => 'game_data', 'label' => 'Game data', 'value' => $metrics['plants'] + $metrics['plant_stages'] + $metrics['plant_rules'] + $metrics['plant_variants'] + $metrics['pests'] + $metrics['pest_rules'] + $metrics['items'] + $metrics['shop_items'] + $metrics['quests'] + $metrics['achievements'] + $metrics['model_assets'], 'section' => 'plants'],
             ['key' => 'activity', 'label' => 'Simulation activity', 'value' => $metrics['simulations'] + $metrics['harvests'], 'section' => 'simulations'],
             ['key' => 'community', 'label' => 'Community', 'value' => $metrics['community_posts'] + $metrics['post_comments'] + $metrics['simulator_comments'], 'section' => 'community'],
@@ -295,7 +295,7 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * Build one chronological feed from the main learner activity tables.
+     * Build one chronological feed from the main user activity tables.
      * UNION ALL keeps this to one database round trip even as more activity
      * types are displayed and filtered on the dashboard.
      */
@@ -311,6 +311,7 @@ class AdminDashboardController extends Controller
                 actors.email,
                 actors.avatar_url,
                 actors.email AS subject,
+                actors.email AS subject_th,
                 actors.created_at AS occurred_at
             ");
 
@@ -329,6 +330,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         COALESCE(plants.name_en, plants.name_th, events.status) AS subject,
+                        COALESCE(plants.name_th, plants.name_en, events.status) AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -346,6 +348,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         COALESCE(plants.name_en, plants.name_th) AS subject,
+                        COALESCE(plants.name_th, plants.name_en) AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -362,6 +365,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         SUBSTR(events.caption, 1, 100) AS subject,
+                        SUBSTR(events.caption, 1, 100) AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -378,6 +382,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         SUBSTR(events.comment_text, 1, 100) AS subject,
+                        SUBSTR(events.comment_text, 1, 100) AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -394,6 +399,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         SUBSTR(events.comment_text, 1, 100) AS subject,
+                        SUBSTR(events.comment_text, 1, 100) AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -409,6 +415,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         NULL AS subject,
+                        NULL AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -424,6 +431,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         NULL AS subject,
+                        NULL AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -440,6 +448,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         items.name AS subject,
+                        items.name AS subject_th,
                         events.created_at AS occurred_at
                     "),
             )
@@ -456,6 +465,7 @@ class AdminDashboardController extends Controller
                         actors.email,
                         actors.avatar_url,
                         events.reference_type AS subject,
+                        events.reference_type AS subject_th,
                         events.created_at AS occurred_at
                     "),
             );
@@ -471,6 +481,7 @@ class AdminDashboardController extends Controller
                 'type' => $event->type,
                 'category' => $event->category,
                 'subject' => $event->subject,
+                'subject_th' => $event->subject_th,
                 'occurred_at' => $event->occurred_at,
                 'user' => [
                     'id' => $event->user_id,

@@ -12,6 +12,8 @@ class SocialNotification extends Model
         'actor_id',
         'post_id',
         'comment_id',
+        'simulator_id',
+        'simulator_comment_id',
         'type',
         'excerpt',
         'read_at',
@@ -40,5 +42,15 @@ class SocialNotification extends Model
     public function comment(): BelongsTo
     {
         return $this->belongsTo(Comment::class);
+    }
+
+    public function simulator(): BelongsTo
+    {
+        return $this->belongsTo(Simulator::class);
+    }
+
+    public function simulatorComment(): BelongsTo
+    {
+        return $this->belongsTo(SimulatorComment::class);
     }
 }

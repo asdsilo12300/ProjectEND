@@ -1,4 +1,4 @@
-export const TUTORIAL_VERSION = 5
+export const TUTORIAL_VERSION = 6
 
 export const tutorialCatalog = {
   lab: {
@@ -25,6 +25,7 @@ export const tutorialCatalog = {
       },
       {
         icon: 'plant',
+        reveal: ['[data-tour="lab-left-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-plants"]'],
         targets: ['[data-tour="lab-plant-card"]', '[data-tour="lab-plants"]', '[data-tour="lab-assets"]', '.lab-library-toggle'],
         requirement: 'lab-plant-selected',
         autoAdvance: true,
@@ -37,6 +38,7 @@ export const tutorialCatalog = {
       },
       {
         icon: 'help',
+        reveal: ['[data-tour="lab-left-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-plants"]'],
         targets: ['[data-tour="lab-plant-knowledge"]', '[data-tour="lab-plant-guide-button"]', '[data-tour="lab-plant-card"]'],
         requirement: 'lab-knowledge-viewed',
         autoAdvance: true,
@@ -57,7 +59,27 @@ export const tutorialCatalog = {
         },
       },
       {
+        icon: 'clock',
+        targets: ['[data-tour="simulation-guidance"]'],
+        title: { en: 'Understand the time and weather HUD', th: 'เข้าใจ HUD เวลาและสภาพอากาศ' },
+        description: {
+          en: 'This HUD changes with the mode. Controlled mode provides growth-day speed controls, while Outdoor and Seasonal modes show live weather, daylight, rain, and the seasonal clock.',
+          th: 'HUD นี้เปลี่ยนตามโหมด โหมดควบคุมปัจจัยมีตัวควบคุมวันเติบโต ส่วนโหมดกลางแจ้งและฤดูกาลจะแสดงอากาศ แสง ฝน และนาฬิกาฤดูกาล',
+        },
+      },
+      {
+        icon: 'heart',
+        reveal: ['[data-tour="lab-right-toggle"][aria-expanded="false"]'],
+        targets: ['[data-tour="lab-status-summary"]'],
+        title: { en: 'Read the complete plant status', th: 'อ่านสถานะพืชให้ครบก่อนปรับค่า' },
+        description: {
+          en: 'Use the right summary to compare health, growth, pace, water, and nutrients. These values explain whether the next action should support recovery or continue growth.',
+          th: 'ใช้สรุปด้านขวาเปรียบเทียบสุขภาพ การเติบโต ความเร็ว น้ำ และธาตุอาหาร เพื่อเลือกว่าจะฟื้นฟูพืชหรือเดินหน้าการเติบโตต่อ',
+        },
+      },
+      {
         icon: 'speed',
+        reveal: ['[data-tour="lab-left-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-monitor"]'],
         targets: ['[data-panel-id="monitor"]'],
         title: { en: 'Read Plant Monitor before acting', th: 'อ่าน Plant Monitor ก่อนตัดสินใจ' },
         description: {
@@ -67,6 +89,7 @@ export const tutorialCatalog = {
       },
       {
         icon: 'settings',
+        reveal: ['[data-tour="lab-right-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-overview"]'],
         targets: ['[data-panel-id="climate"]', '[data-tour="mobile-panel-dock"]'],
         title: { en: 'Preview and confirm each change', th: 'ตรวจค่าแล้วกดยืนยันการใช้งาน' },
         description: {
@@ -75,16 +98,8 @@ export const tutorialCatalog = {
         },
       },
       {
-        icon: 'location',
-        targets: ['[data-panel-id="climate"]', '[data-tour="mobile-panel-dock"]'],
-        title: { en: 'Outdoor weather belongs to the saved plant', th: 'อากาศกลางแจ้งผูกกับพืชที่บันทึก' },
-        description: {
-          en: 'Outdoor mode uses the plant’s saved location for weather, daylight, and rain. Transfer location with GPS, search, or the map; growth progress stays unchanged and the new weather starts next cycle.',
-          th: 'โหมดกลางแจ้งใช้อากาศ แสง และฝนจากตำแหน่งที่บันทึกกับต้นพืช ย้ายสถานที่ได้ด้วย GPS การค้นหา หรือแผนที่ โดยความคืบหน้าไม่หายและอากาศใหม่เริ่มใช้รอบถัดไป',
-        },
-      },
-      {
         icon: 'tool',
+        reveal: ['[data-tour="lab-left-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-tools"]'],
         targets: ['[data-tour="lab-items"]', '[data-panel-id="monitor"]', '[data-tour="lab-assets"]'],
         title: { en: 'Match plant-care items to the problem', th: 'เลือกไอเทมให้ตรงกับปัญหา' },
         description: {
@@ -94,6 +109,7 @@ export const tutorialCatalog = {
       },
       {
         icon: 'clock',
+        reveal: ['[data-tour="lab-left-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-monitor"]'],
         targets: ['[data-panel-id="monitor"]', '[data-tour="lab-items"]'],
         title: { en: 'Respond to naturally scheduled events', th: 'รับมือเหตุการณ์ที่เกิดตามธรรมชาติ' },
         description: {
@@ -103,6 +119,7 @@ export const tutorialCatalog = {
       },
       {
         icon: 'chat',
+        reveal: ['[data-tour="lab-right-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-comments"]'],
         targets: ['[data-panel-id="comments"]', '[data-tour="mobile-panel-dock"]'],
         title: { en: 'Share observations in Comments', th: 'แบ่งปันข้อสังเกตในความคิดเห็น' },
         description: {
@@ -112,6 +129,7 @@ export const tutorialCatalog = {
       },
       {
         icon: 'groups',
+        reveal: ['[data-tour="lab-right-toggle"][aria-expanded="false"]', '[data-tour="lab-tab-friends"]'],
         targets: ['[data-panel-id="friends"]', '[data-tour="mobile-panel-dock"]'],
         title: { en: 'Explore gardens from Friends', th: 'สำรวจสวนผ่านหน้าต่างเพื่อน' },
         description: {
@@ -126,6 +144,15 @@ export const tutorialCatalog = {
         description: {
           en: 'Harvest becomes available at maturity and saves the full calculation to History. Uproot ends the active plant without a harvest result.',
           th: 'เมื่อโตเต็มที่จะเก็บเกี่ยวและบันทึกผลคำนวณทั้งหมดไป History ส่วนถอนต้นใช้จบรอบโดยไม่มีผลเก็บเกี่ยว',
+        },
+      },
+      {
+        icon: 'help',
+        targets: ['[data-tour="global-topbar"]'],
+        title: { en: 'Use the global game bar', th: 'รู้จักแถบคำสั่งหลักของเกม' },
+        description: {
+          en: 'The top bar provides page navigation, Help & tutorials, notifications, coins, profile settings, and the Demo exit. You can replay any guide from Help whenever needed.',
+          th: 'แถบบนใช้เปลี่ยนหน้า เปิดช่วยเหลือและบทแนะนำ ดูการแจ้งเตือน เหรียญ การตั้งค่าโปรไฟล์ และออกจาก Demo โดยเปิดดูคู่มือซ้ำได้ทุกเมื่อจากเมนูช่วยเหลือ',
         },
       },
     ],

@@ -9,9 +9,9 @@ const storagePrefix = 'plant-growth-academy:onboarding'
 const pendingTourKey = 'plant-growth-academy:pending-tour'
 
 const guidePreviewByTopic = {
-  lab: { src: '/media/plant-lab-preview.png', focus: 'center' },
-  'lab-items': { src: '/media/plant-lab-preview.png', focus: 'left center' },
-  'lab-friends': { src: '/media/plant-lab-preview.png', focus: 'right center' },
+  lab: { src: '/media/plant-lab-preview-current-v1.png', focus: 'center' },
+  'lab-items': { src: '/media/plant-lab-preview-current-v1.png', focus: 'left center' },
+  'lab-friends': { src: '/media/plant-lab-preview-current-v1.png', focus: 'right center' },
   navigation: { src: '/media/community-preview.png', focus: 'left top' },
   shop: { src: '/media/shop-preview.png', focus: 'center' },
   history: { src: '/media/history-preview.png', focus: 'center' },
@@ -525,6 +525,14 @@ export function OnboardingExperience({
     let attempts = 0
     let observedTarget = null
     let observer = null
+    let revealTimer = 0
+
+    function revealStepTargets() {
+      for (const selector of step.reveal ?? []) {
+        const trigger = document.querySelector(selector)
+        if (trigger instanceof HTMLElement) trigger.click()
+      }
+    }
 
     function updateTarget({ scroll = false } = {}) {
       const target = visibleTarget(step.targets)
@@ -547,7 +555,10 @@ export function OnboardingExperience({
       setTargetRect(paddedRect(target.getBoundingClientRect()))
     }
 
-    const timer = window.setTimeout(() => updateTarget({ scroll: true }), 120)
+    const timer = window.setTimeout(() => {
+      revealStepTargets()
+      revealTimer = window.setTimeout(() => updateTarget({ scroll: true }), 80)
+    }, 120)
     const handlePositionChange = () => {
       window.cancelAnimationFrame(frame)
       frame = window.requestAnimationFrame(() => {
@@ -563,6 +574,7 @@ export function OnboardingExperience({
 
     return () => {
       window.clearTimeout(timer)
+      window.clearTimeout(revealTimer)
       window.cancelAnimationFrame(frame)
       window.removeEventListener('resize', handlePositionChange)
       window.removeEventListener('scroll', handlePositionChange, true)

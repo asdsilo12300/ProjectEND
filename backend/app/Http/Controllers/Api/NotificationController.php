@@ -26,7 +26,7 @@ class NotificationController extends Controller
         $communityUnread = (int) ($unreadCounts?->community ?? 0);
 
         $notifications = SocialNotification::query()
-            ->with(['actor', 'post.plantHistory.plant', 'post.simulator.plant', 'comment'])
+            ->with(['actor', 'post.plantHistory.plant', 'post.simulator.plant', 'comment', 'simulator.plant', 'simulatorComment'])
             ->where('recipient_id', $request->user()->id)
             ->latest()
             ->limit(80)
@@ -52,7 +52,7 @@ class NotificationController extends Controller
             $notification->forceFill(['read_at' => now()])->save();
         }
 
-        return response()->json(['data' => $this->payload($notification->loadMissing(['actor', 'post', 'comment']))]);
+        return response()->json(['data' => $this->payload($notification->loadMissing(['actor', 'post', 'comment', 'simulator.plant', 'simulatorComment']))]);
     }
 
     private function payload(SocialNotification $notification): array
@@ -60,6 +60,7 @@ class NotificationController extends Controller
         $post = $notification->post;
         $plantName = $post?->plantHistory?->plant?->name_en
             ?? $post?->simulator?->plant?->name_en
+            ?? $notification->simulator?->plant?->name_en
             ?? 'plant update';
 
         return [
@@ -73,6 +74,8 @@ class NotificationController extends Controller
             'plant_name' => $plantName,
             'post_id' => $notification->post_id,
             'comment_id' => $notification->comment_id,
+            'simulator_id' => $notification->simulator_id,
+            'simulator_comment_id' => $notification->simulator_comment_id,
             'actor' => $notification->actor ? [
                 'id' => $notification->actor->id,
                 'username' => $notification->actor->username,

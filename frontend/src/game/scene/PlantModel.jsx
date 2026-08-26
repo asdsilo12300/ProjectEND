@@ -2,7 +2,7 @@
 import { Html, useAnimations, useGLTF } from '@react-three/drei'
 import { useLayoutEffect, useState } from 'react'
 import { createPortal, useFrame } from '@react-three/fiber'
-import { AnimationMixer, Box3, Color, DoubleSide, Matrix4, Vector3 } from 'three'
+import { AnimationMixer, Box3, Color, DoubleSide, Group, Matrix4, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { resolveAssetUrl } from '../../lib/api'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
@@ -11,6 +11,7 @@ import { useGrowthAnimationPose } from './growthAnimationPose'
 import { collectGenericPestAttachments, usePlantAttachments, useRegisterPlantAttachments } from './plantAttachments'
 import { updateFungusMaterial } from './fungusMaterial'
 import { attachPlantStressPivots, attachSunflowerStressPivots, usePlantStressMotion } from './plantStressMotion'
+import { PEST_PLACEMENT_MODES, pestPlacementMode } from './pestPlacement'
 
 const BASE_PLANT_SCALE = 1.1
 const PLANT_BASE_LOCAL_Y = 1.45
@@ -19,7 +20,8 @@ const PLANT_LOCAL_OFFSET = [0, -PLANT_BASE_LOCAL_Y, 0]
 const PLANT_ASSET_ALIGNMENT_POSITION = [-0.1, -0.026, 0.02]
 const PLANT_ASSET_ALIGNMENT_SCALE = 0.9
 const SNAIL_CONTACT_LIFT = 0.006
-const GENERIC_PLANT_TARGET_HEIGHT = 2.15
+const GENERIC_PLANT_TARGET_HEIGHT = 1.82
+const GENERIC_PLANT_TARGET_FOOTPRINT = 1.28
 // The sunflower asset is authored with a much smaller source bounding box
 // than the other uploaded plants. Normalising it to the generic height makes
 // the mature model tower over the planting ring, so give it a deliberate,
@@ -358,6 +360,13 @@ function getMorphSignature(object) {
   return signature.join('|')
 }
 
+function getActionTimeSignature(actions = {}) {
+  return Object.values(actions)
+    .filter(Boolean)
+    .map((action) => Number(action.time ?? 0).toFixed(5))
+    .join('|')
+}
+
 function applyFungusToPlant(object, fungusRisk = 0) {
   const leafMaterials = new Map()
   const fallbackMaterials = new Map()
@@ -386,7 +395,7 @@ function applyFungusToPlant(object, fungusRisk = 0) {
 function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, windMotion = null, ...props }) {
   const group = useRef(null)
   const clonedSceneRef = useRef(null)
-  const morphSignatureRef = useRef(null)
+  const poseSignatureRef = useRef(null)
   const isTulip = isTulipPlant(plantName)
   const isSunflower = isSunflowerPlant(plantName)
   const soilEmbedDepth = plantSoilEmbedDepth(plantName)
@@ -397,6 +406,9 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
   const { scene, animations } = useGLTF(modelUrl)
   const clonedScene = useMemo(() => {
     const clone = cloneSkeleton(scene)
+    const orientedRoot = new Group()
+    orientedRoot.name = 'Uploaded_plant_orientation'
+    orientedRoot.add(clone)
     const decorativeGroundMeshes = []
     const planterGroups = []
 
@@ -452,7 +464,8 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
       clone.updateMatrixWorld(true)
     }
 
-    const sourceBox = new Box3().setFromObject(clone)
+    orientedRoot.updateMatrixWorld(true)
+    const sourceBox = new Box3().setFromObject(orientedRoot)
     const sourceSize = new Vector3()
     sourceBox.getSize(sourceSize)
 
@@ -460,34 +473,44 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     // for example, can arrive Z-up and otherwise appear flat or far too large.
     let sourceUpAxis = 'y'
     if (sourceSize.z > sourceSize.y * 1.25 && sourceSize.z >= sourceSize.x) {
-      clone.rotation.x = Math.PI / 2
+      orientedRoot.rotation.x = Math.PI / 2
       sourceUpAxis = 'z'
     } else if (sourceSize.x > sourceSize.y * 1.25 && sourceSize.x > sourceSize.z) {
-      clone.rotation.z = Math.PI / 2
+      orientedRoot.rotation.z = Math.PI / 2
       sourceUpAxis = 'x'
     }
-    clone.updateMatrixWorld(true)
+    orientedRoot.updateMatrixWorld(true)
 
     // Box3 already accounts for the bone transforms used by the Tulip asset.
     // Sunflower's clip is morph-based, however, so measure its visible mature
     // pose explicitly; otherwise its tiny authored base bounds are scaled into
     // a giant plant at runtime.
     const box = isSunflower
-      ? getDeformedBounds(clone)
-      : new Box3().setFromObject(clone)
+      ? getDeformedBounds(orientedRoot)
+      : new Box3().setFromObject(orientedRoot)
     const size = new Vector3()
     const center = new Vector3()
     box.getSize(size)
     box.getCenter(center)
 
-    const scale = genericPlantTargetHeight(plantName) / Math.max(size.y, 0.001)
-    clone.scale.setScalar(scale)
-    clone.position.set(
+    // Normalise on a wrapper instead of overwriting the imported scene's own
+    // transform. Exporters often store a large root offset or a non-unit root
+    // scale; replacing that transform made an otherwise valid model jump away
+    // from the planting ring. Fit both height and footprint so broad or tall
+    // uploads always stay comfortably inside the marked planting area.
+    const heightScale = genericPlantTargetHeight(plantName) / Math.max(size.y, 0.001)
+    const footprintScale = GENERIC_PLANT_TARGET_FOOTPRINT / Math.max(size.x, size.z, 0.001)
+    const scale = Math.min(heightScale, footprintScale)
+    const normalizedRoot = new Group()
+    normalizedRoot.name = 'Uploaded_plant_normalized'
+    normalizedRoot.add(orientedRoot)
+    normalizedRoot.scale.setScalar(scale)
+    normalizedRoot.position.set(
       -center.x * scale,
       plantBaseTargetY - box.min.y * scale,
       -center.z * scale,
     )
-    clone.updateMatrixWorld(true)
+    normalizedRoot.updateMatrixWorld(true)
 
     // The uploaded Sunflower uses morph targets and has no native skeleton.
     // Keep its independent meshes under one stress pivot so wind/wilt motion
@@ -498,13 +521,13 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
       measurementMixer.setTime(0)
       measurementMixer.stopAllAction()
       measurementMixer.uncacheRoot(clone)
-      clone.updateMatrixWorld(true)
+      normalizedRoot.updateMatrixWorld(true)
     }
 
     if (!isSunflower) attachPlantStressPivots(clone, { upAxis: sourceUpAxis })
-    clone.userData.pestAttachments = collectGenericPestAttachments(clone)
+    normalizedRoot.userData.pestAttachments = collectGenericPestAttachments(clone)
 
-    return clone
+    return normalizedRoot
   }, [animations, isSunflower, isTulip, plantBaseTargetY, plantName, scene])
   const { actions, mixer } = useAnimations(animations, group)
   const progress = Math.min(1, Math.max(0, Number(growthProgress) || 0))
@@ -519,32 +542,38 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
 
   useLayoutEffect(() => {
     clonedSceneRef.current = clonedScene
-    morphSignatureRef.current = null
+    poseSignatureRef.current = null
     return () => {
       if (clonedSceneRef.current === clonedScene) clonedSceneRef.current = null
     }
   }, [clonedScene])
 
-  // Uploaded sunflower clips change their visible base slightly while the
-  // growth pose and stress pivots are applied. Correct only that model, after
-  // those animations have run, so the stem/root stays planted instead of
-  // visibly floating above the ring. The correction is bounded to avoid a bad
-  // asset transform ever teleporting the plant.
+  // Growth clips may animate a mesh's translation as well as its size. Re-anchor
+  // each new pose after the mixer has applied it so every uploaded model stays
+  // centred on the planting spot with its lowest visible point touching soil.
   useFrame(() => {
     const plant = clonedSceneRef.current
-    if (!isSunflower || !plant?.parent) return
+    if (!plant?.parent || animations.length === 0 || isTulip) return
 
-    // Recalculate only when the growth clip changes morph weights. This keeps
-    // the anchor correction inexpensive while still following a new pose.
-    const morphSignature = getMorphSignature(plant)
-    if (morphSignature === morphSignatureRef.current) return
-    morphSignatureRef.current = morphSignature
+    const actionSignature = getActionTimeSignature(actions)
+    if (!actionSignature) return
+    const poseSignature = isSunflower
+      ? `${actionSignature}:${getMorphSignature(plant)}`
+      : actionSignature
+    if (poseSignature === poseSignatureRef.current) return
+    poseSignatureRef.current = poseSignature
 
     const bounds = getDeformedBounds(plant, plant.parent)
-    const correction = plantBaseTargetY - Number(bounds?.min?.y)
-    if (!Number.isFinite(correction) || Math.abs(correction) < 0.0005 || Math.abs(correction) > 0.5) return
+    if (!bounds || bounds.isEmpty()) return
+    const center = bounds.getCenter(new Vector3())
+    const correctionX = -Number(center.x)
+    const correctionY = plantBaseTargetY - Number(bounds.min.y)
+    const correctionZ = -Number(center.z)
+    if (![correctionX, correctionY, correctionZ].every(Number.isFinite)) return
 
-    plant.position.y += correction
+    if (Math.abs(correctionX) >= 0.0005) plant.position.x += correctionX
+    if (Math.abs(correctionY) >= 0.0005) plant.position.y += correctionY
+    if (Math.abs(correctionZ) >= 0.0005) plant.position.z += correctionZ
   })
 
   useRegisterPlantAttachments(clonedScene.userData?.pestAttachments)
@@ -628,17 +657,45 @@ function stableIndex(seed, length) {
   return hash % length
 }
 
-function getVisiblePestAnchors(name, riskChance = 0, seed = '') {
-  const anchors = pestAnchors[name] ?? pestAnchors.fungus
+function stableUnit(seed) {
+  return stableIndex(seed, 10000) / 9999
+}
+
+function visiblePestCount(name, riskChance = 0) {
   const risk = Number(riskChance) || 0
-  const count = name === 'fungus'
-    ? (risk >= 75 ? 4 : risk >= 45 ? 3 : 2)
-    : name === 'aphid'
+  return name === 'aphid'
       ? (risk >= 75 ? 4 : risk >= 45 ? 3 : 2)
     : (risk >= 75 ? 3 : risk >= 45 ? 2 : 1)
+}
+
+function getVisibleLeafAnchors(name, riskChance = 0, seed = '') {
+  const anchors = pestAnchors.aphid
+  const count = visiblePestCount(name, riskChance)
   const start = stableIndex(`${name}-${seed}`, anchors.length)
 
   return Array.from({ length: Math.min(count, anchors.length) }, (_, index) => anchors[(start + index) % anchors.length])
+}
+
+function getRandomGroundAnchors(name, riskChance = 0, seed = '', groundY = null) {
+  const count = visiblePestCount(name, riskChance)
+  const resolvedGroundY = Number.isFinite(Number(groundY)) ? Number(groundY) : -0.105
+
+  return Array.from({ length: count }, (_, index) => {
+    const angle = stableUnit(`${seed}:angle:${index}`) * Math.PI * 2
+    const radius = 0.28 + stableUnit(`${seed}:radius:${index}`) * 0.38
+    const size = 0.095 + stableUnit(`${seed}:size:${index}`) * 0.035
+
+    return {
+      position: [
+        PLANT_PIVOT[0] + Math.cos(angle) * radius,
+        resolvedGroundY + SNAIL_CONTACT_LIFT,
+        Math.sin(angle) * radius,
+      ],
+      rotation: [0, stableUnit(`${seed}:rotation:${index}`) * Math.PI * 2, 0],
+      size,
+      modelOffset: [0, 0.002, 0],
+    }
+  })
 }
 
 function getGrowthAdjustedAnchor(anchor, growthProgress, pestName) {
@@ -665,6 +722,8 @@ function normalizePestName(pest) {
       ?? pest?.pest?.type
       ?? pest?.type
       ?? pest?.pest_type
+      ?? pest?.pest?.name_th
+      ?? pest?.name_th
       ?? pest?.pest?.name
       ?? pest?.name
       ?? 'fungus',
@@ -693,34 +752,29 @@ function pestModelUrl(name, pest) {
 
 export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgress = 0, groundY = null }) {
   const name = normalizePestName(pest)
+  const placementMode = pestPlacementMode(pest, name)
   const modelUrl = pestModelUrl(name, pest)
-  const useSurfaceFungus = name === 'fungus' || !modelUrl
+  const usePlantSurface = placementMode === PEST_PLACEMENT_MODES.PLANT_SURFACE
   const useProceduralSnail = name === 'snail' && modelUrl === '/snails.gltf'
   const risk = Number(pest?.risk_chance) || 0
   const stableSeed = `${name}-${pest?.id ?? index}`
   const plantAttachments = usePlantAttachments()
-  if (useSurfaceFungus) return null
+  const leafAttachments = plantAttachments.filter((attachment) => attachment.surface === 'leaf')
 
-  const anchors = getVisiblePestAnchors(name, risk, stableSeed)
-    .map((anchor) => getGrowthAdjustedAnchor(anchor, growthProgress, name))
-  const presentation = getPlantPresentation(visualOverrides)
-  const resolvedGroundY = Number(groundY)
-  const groundedSnailAnchors = name === 'snail' && Number.isFinite(resolvedGroundY)
-    ? anchors.map((anchor) => ({
-        ...anchor,
-        position: [
-          PLANT_PIVOT[0] + anchor.position[0] * presentation.scale,
-          resolvedGroundY + SNAIL_CONTACT_LIFT,
-          anchor.position[2] * presentation.scale,
-        ],
-        size: anchor.size * presentation.scale,
-      }))
-    : anchors
-  const attachmentStart = plantAttachments.length > 0
-    ? stableIndex(`surface-${stableSeed}`, plantAttachments.length)
+  if (usePlantSurface) return null
+
+  if (!modelUrl) return null
+
+  const isGroundPlacement = placementMode === PEST_PLACEMENT_MODES.GROUND_RANDOM
+  const anchors = isGroundPlacement
+    ? getRandomGroundAnchors(name, risk, stableSeed, groundY)
+    : getVisibleLeafAnchors(name, risk, stableSeed)
+      .map((anchor) => getGrowthAdjustedAnchor(anchor, growthProgress, name))
+  const attachmentStart = leafAttachments.length > 0
+    ? stableIndex(`leaf-${stableSeed}`, leafAttachments.length)
     : 0
-  const pestVisuals = useProceduralSnail
-    ? groundedSnailAnchors.map((anchor, anchorIndex) => (
+  const pestVisuals = useProceduralSnail && isGroundPlacement
+    ? anchors.map((anchor, anchorIndex) => (
         <SnailSurfaceModel key={`${stableSeed}-${anchorIndex}`} anchor={anchor} />
       ))
     : anchors.map((anchor, anchorIndex) => (
@@ -728,14 +782,14 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
           key={`${stableSeed}-${anchorIndex}`}
           modelUrl={modelUrl}
           anchor={anchor}
-          attachment={name === 'aphid' && plantAttachments.length > 0
-            ? plantAttachments[(attachmentStart + anchorIndex) % plantAttachments.length]
+          attachment={!isGroundPlacement && leafAttachments.length > 0
+            ? leafAttachments[(attachmentStart + anchorIndex) % leafAttachments.length]
             : null}
           pestName={name}
         />
       ))
 
-  if (name === 'snail') return <>{pestVisuals}</>
+  if (isGroundPlacement) return <>{pestVisuals}</>
 
   return (
     <PlantPresentationGroup visualOverrides={visualOverrides}>

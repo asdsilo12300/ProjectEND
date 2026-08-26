@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\FriendController;
+use App\Http\Controllers\Api\PlantController;
 use App\Http\Controllers\Api\SimulatorController;
 use App\Models\Friendship;
 use App\Models\Item;
@@ -13,10 +14,12 @@ use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Models\User;
 use App\Models\UserItem;
+use App\Services\PublicCatalogCache;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -221,6 +224,29 @@ class SimulatorSnapshotTest extends TestCase
         $this->assertSame([], $comments->getData(true)['data']);
     }
 
+    public function test_simulator_comments_accept_280_characters_and_reject_281(): void
+    {
+        [$simulator] = $this->seedSimulator();
+
+        $accepted = app(SimulatorController::class)->storeComment(
+            $this->request(['comment_text' => str_repeat('a', 280)]),
+            $simulator,
+        );
+
+        $this->assertSame(201, $accepted->getStatusCode());
+        $this->assertSame(280, strlen($accepted->getData(true)['data']['comment_text']));
+
+        try {
+            app(SimulatorController::class)->storeComment(
+                $this->request(['comment_text' => str_repeat('a', 281)]),
+                $simulator->fresh(),
+            );
+            $this->fail('A simulator comment longer than 280 characters must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('comment_text', $exception->errors());
+        }
+    }
+
     public function test_private_simulator_comments_remain_hidden_from_a_non_friend_viewer(): void
     {
         [$simulator] = $this->seedSimulator();
@@ -290,6 +316,44 @@ class SimulatorSnapshotTest extends TestCase
         $this->assertSame(2, $data['inventory']['quantity']);
         $this->assertSame('treated', $activePest->fresh()->status);
         $this->assertLessThanOrEqual(7, $queryCount);
+    }
+
+    public function test_deleted_plant_is_hidden_from_catalog_and_catalog_is_not_browser_cached(): void
+    {
+        $plant = $this->seedPlayablePlant('Maintenance Plant');
+        $plant->delete();
+        app(PublicCatalogCache::class)->clear();
+
+        $response = app(PlantController::class)->index();
+
+        $this->assertSame([], $response->getData(true)['data']);
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+    }
+
+    public function test_deleted_plant_simulation_is_reported_as_unavailable_and_cannot_sync(): void
+    {
+        [$simulator] = $this->seedSimulator();
+        $simulator->plant->delete();
+
+        $request = Request::create('/api/simulators?status=active', 'GET', ['status' => 'active']);
+        $user = new User;
+        $user->id = 99;
+        $request->setUserResolver(fn () => $user);
+
+        $payload = app(SimulatorController::class)->index($request)->response()->getData(true);
+        $this->assertFalse($payload['data'][0]['plant_available']);
+        $this->assertSame($simulator->plant_id, $payload['data'][0]['plant_id']);
+
+        try {
+            app(SimulatorController::class)->sync(
+                $this->request($this->snapshotPayload(['water' => 80])),
+                $simulator->fresh(),
+            );
+            $this->fail('A simulation for a deleted plant must be unavailable.');
+        } catch (HttpException $exception) {
+            $this->assertSame(423, $exception->getStatusCode());
+            $this->assertSame('This plant species is currently under maintenance.', $exception->getMessage());
+        }
     }
 
     /** @return array{0: Simulator, 1: array<int, int>} */

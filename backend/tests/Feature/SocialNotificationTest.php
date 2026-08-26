@@ -162,6 +162,36 @@ class SocialNotificationTest extends TestCase
         $this->assertSame('game', collect($mixedNotifications->json('data'))->firstWhere('type', 'garden_prank')['category']);
     }
 
+    public function test_post_comments_and_replies_accept_280_characters_and_reject_281(): void
+    {
+        $owner = $this->createUser('limit-owner');
+        $commenter = $this->createUser('limit-commenter');
+        $post = Post::query()->create([
+            'user_id' => $owner->id,
+            'caption' => 'Comment length test',
+            'visibility' => 'public',
+        ]);
+
+        $commentResponse = $this->withToken($this->token($commenter))
+            ->postJson("/api/posts/{$post->id}/comments", ['comment_text' => str_repeat('a', 280)])
+            ->assertCreated();
+        $commentId = $commentResponse->json('data.id');
+
+        $this->withToken($this->token($commenter))
+            ->postJson("/api/posts/{$post->id}/comments", ['comment_text' => str_repeat('a', 281)])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('comment_text');
+
+        $this->withToken($this->token($owner))
+            ->postJson("/api/posts/{$post->id}/comments/{$commentId}/replies", ['comment_text' => str_repeat('b', 280)])
+            ->assertCreated();
+
+        $this->withToken($this->token($owner))
+            ->postJson("/api/posts/{$post->id}/comments/{$commentId}/replies", ['comment_text' => str_repeat('b', 281)])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('comment_text');
+    }
+
     private function createUser(string $username): User
     {
         return User::query()->create([

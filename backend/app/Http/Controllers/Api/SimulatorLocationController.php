@@ -13,6 +13,7 @@ class SimulatorLocationController extends Controller
     public function update(Request $request, Simulator $simulator): SimulatorResource
     {
         abort_unless((int) $simulator->user_id === (int) $request->user()->id, 403);
+        abort_unless($simulator->hasAvailablePlant(), 423, 'This plant species is currently under maintenance.');
         $data = $request->validate([
             'location_name' => ['required', 'string', 'max:191'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],

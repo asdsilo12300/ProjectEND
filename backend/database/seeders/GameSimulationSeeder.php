@@ -96,9 +96,9 @@ class GameSimulationSeeder extends Seeder
         }
 
         $pests = [
-            ['name_th' => 'เพลี้ย', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'base_chance' => 0, 'damage_per_turn' => 5, 'behavior' => 'More likely in dry and hot air.'],
-            ['name_th' => 'หอยทาก', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'base_chance' => 0, 'damage_per_turn' => 6, 'behavior' => 'More likely when soil is wet or rain is present.'],
-            ['name_th' => 'เชื้อรา', 'name_en' => 'fungus', 'model_url' => null, 'base_chance' => 0, 'damage_per_turn' => 7, 'behavior' => 'More likely with high humidity and wet soil.'],
+            ['name_th' => 'เพลี้ย', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'placement_mode' => 'leaf', 'base_chance' => 4, 'damage_per_turn' => 5, 'behavior' => 'Can appear randomly; much more likely in dry and hot air.'],
+            ['name_th' => 'หอยทาก', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'placement_mode' => 'ground_random', 'base_chance' => 3, 'damage_per_turn' => 6, 'behavior' => 'Can appear randomly; much more likely when soil is wet or rain is present.'],
+            ['name_th' => 'เชื้อรา', 'name_en' => 'fungus', 'model_url' => null, 'placement_mode' => 'plant_surface', 'base_chance' => 2, 'damage_per_turn' => 7, 'behavior' => 'Can appear randomly; much more likely with high humidity and wet soil.'],
         ];
 
         foreach ($pests as $pestData) {

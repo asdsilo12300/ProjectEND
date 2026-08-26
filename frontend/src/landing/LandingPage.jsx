@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import heroImage from '../assets/hero.png'
 import learnAboutPlantsBanner from '../assets/learn-about-plants-banner.jpg'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 import { AppIcon } from '../game/icons/FontAwesomeIcon'
@@ -7,9 +6,38 @@ import { ParticleNetworkBackground } from '../game/components/ParticleNetworkBac
 import { loadSettings, saveSettings } from '../game/settings/settingsPreferences'
 import { getLearningContent, getLearningContents, resolveAssetUrl } from '../lib/api'
 import './LandingPage.css'
+import './LandingPageRefinements.css'
 
 const LANDING_THEME_KEY = 'plant-growth-landing-theme'
 const LandingPlantPreview3D = lazy(() => import('./LandingPlantPreview3D'))
+
+const pixelIconIndexes = {
+  home: ['nav', 0],
+  learn: ['nav', 1],
+  lab: ['nav', 2],
+  shop: ['nav', 3],
+  history: ['nav', 4],
+  community: ['nav', 5],
+  light: ['factor', 0],
+  water: ['factor', 1],
+  air: ['factor', 2],
+  soil: ['factor', 3],
+  nutrients: ['factor', 4],
+  temperature: ['factor', 5],
+}
+
+function PixelIcon({ className = '', name }) {
+  const [sheet, index] = pixelIconIndexes[name] ?? pixelIconIndexes.learn
+  return <span aria-hidden="true" className={`landing-pixel-icon landing-pixel-icon--${sheet} ${className}`} style={{ '--pixel-index': index }} />
+}
+
+function GameButton({ children, className = '', variant = 'primary', ...props }) {
+  return <button className={`landing-game-button landing-game-button--${variant} ${className}`} type="button" {...props}>{children}</button>
+}
+
+function GamePanel({ as: Component = 'div', children, className = '', ...props }) {
+  return <Component className={`landing-game-panel ${className}`} {...props}>{children}</Component>
+}
 
 const factors = [
   { icon: 'bolt', title: 'Light', value: '85%', description: 'Light supplies the energy plants need to create food through photosynthesis.' },
@@ -29,19 +57,60 @@ const features = [
 
 const tourSteps = [
   {
-    title: 'Choose a plant and prepare the lab',
-    description: 'Select a plant from your collection, inspect its profile, and start with a clear growing goal.',
-    focus: 'assets',
+    shortTitle: 'Plant & workspace',
+    title: 'Know your plant and workspace',
+    description: 'The left panel identifies the active plant and mode. Switch between Plants, Tools, and Monitor, or collapse the panel when you need more room.',
+    focus: 'workspace',
+    captionSide: 'right',
+    spotlight: { x: '1.1%', y: '8%', width: '23.4%', height: '83%' },
   },
   {
-    title: 'Tune the growing environment',
-    description: 'Balance water, light, fertilizer, soil, air, and temperature with responsive laboratory controls.',
+    shortTitle: 'Growth monitor',
+    title: 'Read the growth forecast and pest risks',
+    description: 'Monitor growth progress, the real-world day estimate, and warning cards for pests before choosing the next care action.',
+    focus: 'monitor',
+    captionSide: 'right-top',
+    spotlight: { x: '1.1%', y: '34%', width: '23.4%', height: '57%' },
+  },
+  {
+    shortTitle: 'Time controls',
+    title: 'Control simulation time and growth pace',
+    description: 'The top HUD shows the biological day and its real-time equivalent. Use x1, x2, x4, or Skip to move through the experiment deliberately.',
+    focus: 'clock',
+    captionSide: 'left-bottom',
+    spotlight: { x: '26.1%', y: '8.5%', width: '20.6%', height: '19%' },
+  },
+  {
+    shortTitle: '3D plant',
+    title: 'Observe the live 3D plant stage',
+    description: 'The center stage visualizes growth and stress. Compare visible changes with the data panels instead of judging the plant from appearance alone.',
+    focus: 'stage',
+    captionSide: 'left-bottom',
+    spotlight: { x: '25.6%', y: '31%', width: '48.2%', height: '50%' },
+  },
+  {
+    shortTitle: 'Plant actions',
+    title: 'Use the plant action bar',
+    description: 'The bottom commands collect the important actions in one place: manage the plant, harvest when ready, and share the live simulation.',
+    focus: 'actions',
+    captionSide: 'left-top',
+    spotlight: { x: '31.2%', y: '81.5%', width: '35.5%', height: '15.5%' },
+  },
+  {
+    shortTitle: 'Plant status',
+    title: 'Check health, growth, and care resources',
+    description: 'The right summary shows health, growth, speed, water, and nutrients together so you can diagnose the plant before changing a control.',
+    focus: 'status',
+    captionSide: 'left-bottom',
+    spotlight: { x: '75.1%', y: '8%', width: '23.7%', height: '47%' },
+  },
+  {
+    shortTitle: 'Environment',
+    title: 'Adjust the environment and record evidence',
+    description: 'Use Overview for notes and environmental controls, then open Comments or Friends to discuss and compare the experiment with the community.',
     focus: 'environment',
-  },
-  {
-    title: 'Observe, diagnose, and improve',
-    description: 'Watch the 3D plant respond, monitor health and growth, then use evidence to improve the next cycle.',
-    focus: 'plant',
+    captionSide: 'left-top',
+    spotlight: { x: '75.1%', y: '48%', width: '23.7%', height: '49%' },
   },
 ]
 
@@ -52,7 +121,7 @@ const journeySteps = [
     eyebrow: 'Your learning identity',
     description: 'Continue with Google to create or reopen your learner profile—no registration form or academy password.',
     detail: 'Google securely verifies your identity while your academy profile keeps progress consistent across the Plant Lab, Shop, History, and Community. Every experiment becomes part of one continuous learning record that you can return to at any time.',
-    image: '/media/register-tour.png',
+    image: '/media/register-tour-current-v1.png',
     imageAlt: 'Plant Growth Academy Google sign-in screen',
     highlights: ['Sign in or create your profile with Google', 'Carry coins and purchased items forward', 'Build a personal record of every experiment'],
   },
@@ -62,7 +131,7 @@ const journeySteps = [
     eyebrow: 'Know before you grow',
     description: 'Choose a plant, review its needs, and decide whether to grow in the controlled lab or outdoors.',
     detail: 'Each species reacts differently to water, light, soil, temperature, and pests. Read the plant guide, compare healthy ranges, and choose the growing mode that matches the experiment you want to run.',
-    image: '/media/plant-lab-preview.png',
+    image: '/media/plant-selection-current-v1.png',
     imageAlt: 'Complete Plant Lab plant selection screen',
     highlights: ['Review scientific and common plant information', 'Compare controlled and outdoor growing modes', 'Begin with recommended healthy values'],
   },
@@ -72,7 +141,7 @@ const journeySteps = [
     eyebrow: 'Observe cause and effect',
     description: 'Adjust environmental factors and observe cause and effect through the live 3D simulation.',
     detail: 'Change one factor at a time and watch the live model respond. Plant Monitor explains health, growth pace, pests, and the next recommended action while visual changes make stress and recovery easier to understand.',
-    image: '/media/plant-lab-tour.png',
+    image: '/media/plant-lab-preview-current-v1.png',
     imageAlt: 'Complete live 3D Plant Lab experiment screen',
     highlights: ['Balance six connected environmental factors', 'Observe growth and plant health in real time', 'Choose the correct item when a problem appears'],
   },
@@ -89,7 +158,7 @@ const journeySteps = [
 ]
 
 const gameSpaces = [
-  { page: 'lab', icon: 'controller', title: 'Plant Lab', eyebrow: 'Core experience', description: 'Grow a living 3D plant and control the conditions around it in real time.', preview: 'lab', image: '/media/plant-lab-preview.png', imageAlt: 'Plant Lab preview interface' },
+  { page: 'lab', icon: 'controller', title: 'Plant Lab', eyebrow: 'Core experience', description: 'Grow a living 3D plant and control the conditions around it in real time.', preview: 'lab', image: '/media/plant-lab-preview-current-v1.png', imageAlt: 'Current Plant Lab preview interface' },
   { page: 'shop', icon: 'shop', title: 'Shop', eyebrow: 'Tools & supplies', description: 'Use earned coins to unlock practical tools for pests and plant care.', preview: 'shop', image: '/media/shop-preview.png', imageAlt: 'Shop preview interface' },
   { page: 'history', icon: 'history', title: 'History', eyebrow: 'Experiment records', description: 'Revisit completed sessions, scores, conditions, and saved evidence.', preview: 'history', image: '/media/history-preview.png', imageAlt: 'Saved experiment history preview interface' },
   { page: 'community', icon: 'groups', title: 'Community', eyebrow: 'Learn together', description: 'Share observations, view live gardens, and learn from other growers.', preview: 'community', image: '/media/community-preview.png', imageAlt: 'Community preview interface' },
@@ -100,6 +169,8 @@ const growingModes = [
   {
     key: 'controlled',
     icon: 'settings',
+    asset: '/media/game-ui/mode-controlled-pixel-v1.png',
+    assetAlt: 'Pixel art controlled plant laboratory',
     eyebrow: 'CONTROLLED LAB',
     title: 'Control the variables',
     description: 'Tune water, light, soil, air, nutrients, and temperature to see one clear cause-and-effect relationship at a time.',
@@ -109,6 +180,8 @@ const growingModes = [
   {
     key: 'outdoor',
     icon: 'weatherCloudSun',
+    asset: '/media/game-ui/mode-outdoor-pixel-v1.png',
+    assetAlt: 'Pixel art outdoor plant growing through changing weather',
     eyebrow: 'OUTDOOR FIELD',
     title: 'Respond to the real world',
     description: 'Let daylight, weather, rain, and location shape the cycle while you protect your plant with the right care action.',
@@ -118,6 +191,8 @@ const growingModes = [
   {
     key: 'seasonal',
     icon: 'history',
+    asset: '/media/game-ui/mode-seasonal-pixel-v1.png',
+    assetAlt: 'Pixel art plant surrounded by the four seasons',
     eyebrow: 'SEASONAL JOURNEY',
     title: 'Grow through a season',
     description: 'Follow a seeded weather timeline, track biological days, and prepare for seasonal changes without losing your progress.',
@@ -206,19 +281,19 @@ function LandingHeader({ page, user, onHome, onLearn, onOpenPage, onStart, onSig
       <div className="landing-container landing-header__inner">
         <BrandButton onClick={onHome} />
         <nav className={`landing-nav ${menuOpen ? 'landing-nav--open' : ''}`} aria-label="Main navigation">
-          <button className={page === 'home' ? 'is-active' : ''} type="button" onClick={() => run(onHome)}>Home</button>
-          <button className={page === 'learn' ? 'is-active' : ''} type="button" onClick={() => run(onLearn)}>Learn about</button>
+          <button className={page === 'home' ? 'is-active' : ''} type="button" onClick={() => run(onHome)}><PixelIcon name="home" /><span>Home</span></button>
+          <button className={page === 'learn' ? 'is-active' : ''} type="button" onClick={() => run(onLearn)}><PixelIcon name="learn" /><span>Learn about</span></button>
           {user ? (
             <>
-              <button type="button" onClick={() => run(() => onOpenPage?.('shop'))}>Shop</button>
-              <button type="button" onClick={() => run(() => onOpenPage?.('history'))}>History</button>
-              <button type="button" onClick={() => run(() => onOpenPage?.('community'))}>Community</button>
+              <button type="button" onClick={() => run(() => onOpenPage?.('shop'))}><PixelIcon name="shop" /><span>Shop</span></button>
+              <button type="button" onClick={() => run(() => onOpenPage?.('history'))}><PixelIcon name="history" /><span>History</span></button>
+              <button type="button" onClick={() => run(() => onOpenPage?.('community'))}><PixelIcon name="community" /><span>Community</span></button>
             </>
           ) : null}
-          {!user && <button type="button" onClick={() => run(onSignIn)}>Log in</button>}
+          {!user && <button type="button" onClick={() => run(onSignIn)}><AppIcon name="key" /><span>Log in</span></button>}
           <button className="landing-nav__cta" type="button" onClick={() => run(onStart)}>
-            <AppIcon name="sprout" />
-            {user ? 'Open Plant Lab' : 'Start growing'}
+            <PixelIcon name="lab" />
+            <span>{user ? 'Open Plant Lab' : 'Start growing'}</span>
           </button>
         </nav>
         <div className="landing-header__actions">
@@ -247,7 +322,7 @@ function ProductTour() {
     if (!playing || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
     const interval = window.setInterval(() => {
       setActiveStep((step) => (step + 1) % tourSteps.length)
-    }, 4600)
+    }, 6000)
     return () => window.clearInterval(interval)
   }, [playing])
 
@@ -270,16 +345,28 @@ function ProductTour() {
           <div className="product-tour-player__screen">
             {tourSteps.map((step, index) => (
               <div className={`product-tour-frame product-tour-frame--${step.focus} ${activeStep === index ? 'is-active' : ''}`} key={step.title} aria-hidden={activeStep !== index}>
-                <img src="/media/plant-lab-tour.png" alt="Plant Growth Academy simulation interface" />
+                <img src="/media/plant-lab-preview-current-v1.png" alt="Current Plant Growth Academy simulation interface" />
                 <div className="product-tour-frame__shade" />
+                <div
+                  className="product-tour-frame__spotlight"
+                  style={{
+                    '--tour-focus-x': step.spotlight.x,
+                    '--tour-focus-y': step.spotlight.y,
+                    '--tour-focus-width': step.spotlight.width,
+                    '--tour-focus-height': step.spotlight.height,
+                  }}
+                  aria-hidden="true"
+                >
+                  <span>{String(index + 1).padStart(2, '0')} · {step.shortTitle}</span>
+                </div>
               </div>
             ))}
             <div className="product-tour-player__chrome">
               <span><i /> Plant Growth Academy</span>
               <strong>SIMULATION PREVIEW</strong>
             </div>
-            <div className="product-tour-player__caption">
-              <span>0{activeStep + 1}</span>
+            <div className={`product-tour-player__caption product-tour-player__caption--${tourSteps[activeStep].captionSide}`}>
+              <span>{String(activeStep + 1).padStart(2, '0')} / {String(tourSteps.length).padStart(2, '0')}</span>
               <div>
                 <strong>{tourSteps[activeStep].title}</strong>
                 <p>{tourSteps[activeStep].description}</p>
@@ -293,8 +380,8 @@ function ProductTour() {
           <div className="product-tour-timeline" role="tablist" aria-label="Simulation preview steps">
             {tourSteps.map((step, index) => (
               <button className={activeStep === index ? 'is-active' : ''} type="button" role="tab" aria-selected={activeStep === index} onClick={() => selectStep(index)} key={step.title}>
-                <span className="product-tour-timeline__number">0{index + 1}</span>
-                <span><strong>{step.title}</strong><small>{step.description}</small></span>
+                <span className="product-tour-timeline__number">{String(index + 1).padStart(2, '0')}</span>
+                <span><strong>{step.shortTitle}</strong></span>
                 <i><b /></i>
               </button>
             ))}
@@ -378,7 +465,6 @@ function ModeExplorer({ user, onStart, onOpenDemo }) {
       <div className="landing-container">
         <div className="landing-section-heading landing-mode-explorer__heading" data-reveal="up">
           <div>
-            <span className="landing-section-kicker"><AppIcon name="sprout" /> Choose your growing path</span>
             <h2 id="mode-explorer-title">One plant. Three ways to understand it.</h2>
           </div>
           <p>Start with a guided lab, respond to outdoor conditions, or follow a full seasonal journey. Your choice changes what you observe—not the quality of the lesson.</p>
@@ -397,7 +483,9 @@ function ModeExplorer({ user, onStart, onOpenDemo }) {
                 onClick={() => setActiveModeKey(mode.key)}
               >
                 <span className="landing-mode-card__number">0{index + 1}</span>
-                <span className="landing-mode-card__icon"><AppIcon name={mode.icon} /></span>
+                <span className="landing-mode-card__icon">
+                  <img src={mode.asset} alt="" aria-hidden="true" />
+                </span>
                 <span className="landing-mode-card__copy">
                   <small>{mode.eyebrow}</small>
                   <strong>{mode.title}</strong>
@@ -413,7 +501,10 @@ function ModeExplorer({ user, onStart, onOpenDemo }) {
               <span><i /> Preview path</span>
               <span>LOCAL DEMO · NO DATA SAVED</span>
             </div>
-            <div className="landing-mode-explorer__panel-icon"><AppIcon name={activeMode.icon} /></div>
+            <div className="landing-mode-explorer__asset" aria-hidden="true">
+              <span className="landing-mode-explorer__asset-shadow" />
+              <img src={activeMode.asset} alt={activeMode.assetAlt} />
+            </div>
             <span className="landing-mode-explorer__panel-eyebrow">{activeMode.eyebrow}</span>
             <h3>{activeMode.title}</h3>
             <p>{activeMode.description}</p>
@@ -571,52 +662,46 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
 
   return (
     <>
-      <section className="landing-hero" data-tour="home-hero">
-        <img className="landing-hero__image" src={heroImage} alt="A young plant growing in healthy soil" />
+      <section className="landing-hero landing-hero--quest-banner" data-tour="home-hero">
+        <img
+          className="landing-hero__image"
+          src="/media/landing-game-ui/plant-academy-cavern-hero-v1.png"
+          alt="Pixel art botanical field laboratory hidden inside a glowing underground cavern"
+        />
         <div className="landing-hero__shade" />
         <HeroParticles />
-        <div className="landing-hero__orb landing-hero__orb--one" />
-        <div className="landing-hero__orb landing-hero__orb--two" />
-        <div className="landing-container landing-hero__content landing-hero__content--product">
+        <div className="landing-container landing-hero__content landing-hero__content--banner">
           <div className="landing-hero__copy">
-            <h1>Grow a plant.<br />Understand the science.</h1>
-            <p>
+            <h1>
+              <span>Growth a plant.</span>
+              <span>Understand the science.</span>
+            </h1>
+            <p className="landing-hero__tagline">
               Plant Growth Academy is a learning simulation where you shape a 3D plant's environment,
               observe its response, and build real understanding through every growing cycle.
             </p>
-            <div className="landing-actions">
-              <button className="landing-button landing-button--primary" data-tour="home-start" type="button" onClick={onStart}>
-                <AppIcon name="controller" />
+            <p className="landing-hero__mission">Choose the conditions · Observe the response · Master the growing cycle</p>
+            <div className="landing-actions landing-hero__actions">
+              <GameButton className="landing-hero__start" data-tour="home-start" onClick={onStart}>
+                <PixelIcon name="lab" />
                 {user ? 'Continue your experiment' : 'Play the simulation'}
                 <AppIcon name="arrowForward" />
-              </button>
-              <button className="landing-button landing-button--secondary" type="button" onClick={() => document.querySelector('.landing-product-tour')?.scrollIntoView({ behavior: 'smooth' })}>
-                <AppIcon name="live" />
-                Watch simulation preview
-              </button>
+              </GameButton>
             </div>
-            <div className="landing-hero__proof">
-              <span><AppIcon name="check" /> Account-based progress</span>
-              <span><AppIcon name="check" /> Thai & English</span>
-              <span><AppIcon name="check" /> Research-backed learning</span>
-            </div>
+            <button
+              className="landing-hero__secondary"
+              type="button"
+              onClick={() => document.querySelector('.landing-product-tour')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              See how the field lab works <AppIcon name="arrowForward" />
+            </button>
           </div>
 
-          <div className="landing-hero-product" aria-label="Plant Lab simulation preview">
-            <div className="landing-hero-product__topbar">
-              <span><i /><i /><i /></span>
-              <strong>PLANT LAB / LIVE SIMULATION</strong>
-              <AppIcon name="live" />
-            </div>
-            <div className="landing-hero-product__viewport">
-              <img src="/media/plant-lab-tour.png" alt="Plant Lab showing a 3D plant and environmental controls" />
-              <span className="landing-hero-product__hotspot landing-hero-product__hotspot--plant"><i />Live plant response</span>
-              <span className="landing-hero-product__hotspot landing-hero-product__hotspot--controls"><i />6 connected factors</span>
-            </div>
-            <div className="landing-hero-product__footer">
-              <span><AppIcon name="sprout" /> Interactive 3D laboratory</span>
-              <span>01:12</span>
-            </div>
+          <div className="landing-hero__feature-strip" aria-label="Academy highlights">
+            <span><AppIcon name="check" /> Account-based progress</span>
+            <span><AppIcon name="translate" /> Thai & English</span>
+            <span><AppIcon name="leaf" /> Research-backed learning</span>
+            <span><AppIcon name="controller" /> Interactive 3D lab</span>
           </div>
         </div>
 
@@ -653,12 +738,12 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
           </div>
           <div className="landing-game-intro__pillars">
             {features.slice(0, 3).map((feature, index) => (
-              <article data-reveal="up" key={feature.title} style={{ '--reveal-delay': `${index * 90}ms` }}>
+              <GamePanel as="article" data-reveal="up" key={feature.title} style={{ '--reveal-delay': `${index * 90}ms` }}>
                 <span>0{index + 1}</span>
-                <div className="landing-icon-box"><AppIcon name={feature.icon} /></div>
+                <div className="landing-icon-box"><PixelIcon name={index === 0 ? 'lab' : index === 1 ? 'history' : 'community'} /></div>
                 <h3>{feature.title}</h3>
                 <p>{feature.description}</p>
-              </article>
+              </GamePanel>
             ))}
           </div>
         </div>
@@ -676,7 +761,8 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
           </div>
           <div className="landing-journey__grid">
             {journeySteps.map((step, index) => (
-              <article
+              <GamePanel
+                as="article"
                 aria-haspopup="dialog"
                 aria-label={`View details: ${step.title}`}
                 data-reveal="up"
@@ -702,7 +788,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
                   <p>{step.description}</p>
                   <div className="landing-journey__open">View full step <AppIcon name="arrowForward" /></div>
                 </div>
-              </article>
+              </GamePanel>
             ))}
           </div>
         </div>
@@ -721,7 +807,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
               <article className={`landing-space-card landing-space-card--${space.preview}`} data-reveal="up" key={space.page} style={{ '--reveal-delay': `${(index % 3) * 80}ms` }}>
                 <div className="landing-space-card__preview">
                   <img src={space.image} alt={space.imageAlt} loading="lazy" decoding="async" />
-                  <span className="landing-space-card__icon"><AppIcon name={space.icon} /></span>
+                  <span className="landing-space-card__icon"><PixelIcon name={space.page === 'settings' ? 'lab' : space.page} /></span>
                 </div>
                 <div className="landing-space-card__body">
                   <small>{space.eyebrow}</small>
@@ -779,11 +865,11 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
           </div>
           <h2>Start with one plant. Leave with a better question.</h2>
           <p>Sign in to begin your first growing cycle and keep every result connected to your learner profile.</p>
-          <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
-            <AppIcon name="controller" />
+          <GameButton onClick={onStart}>
+            <PixelIcon name="lab" />
             {user ? 'Continue your experiment' : 'Continue with Google and play'}
             <AppIcon name="arrowForward" />
-          </button>
+          </GameButton>
         </div>
       </section>
       </div>
@@ -989,12 +1075,12 @@ function LearningContentCard({ article, language, onOpen, index }) {
   const imageAlt = localizedContent(article, 'cover_image_alt', language)
 
   return (
-    <article className="learning-content-card" style={{ '--reveal-delay': `${index * 90}ms` }}>
+    <GamePanel as="article" className="learning-content-card" style={{ '--reveal-delay': `${index * 90}ms` }}>
       <button type="button" onClick={() => onOpen(article.slug)} aria-label={`${language === 'th' ? 'เปิดบทความ' : 'Open article'}: ${title}`}>
         <div className="learning-content-card__image">
           {article.cover_image_url
             ? <img src={resolveAssetUrl(article.cover_image_url)} alt={imageAlt} />
-            : <div className="learning-content-card__placeholder"><AppIcon name={article.icon || 'eco'} /></div>}
+            : <div className="learning-content-card__placeholder"><PixelIcon name="learn" /></div>}
           <span className="learning-content-card__number">0{index + 1}</span>
         </div>
         <div className="learning-content-card__body">
@@ -1010,7 +1096,7 @@ function LearningContentCard({ article, language, onOpen, index }) {
           </span>
         </div>
       </button>
-    </article>
+    </GamePanel>
   )
 }
 
@@ -1162,12 +1248,12 @@ function LearningArticlePage({ slug, user, onBack, onStart }) {
       <div className="landing-container learning-article-layout">
         <div className="learning-article-body" dangerouslySetInnerHTML={{ __html: safeHtml }} />
         <aside className="learning-article-aside">
-          <div className="learning-article-aside__card">
-            <span className="learning-article-aside__icon"><AppIcon name="bookmark" /></span>
+          <GamePanel className="learning-article-aside__card">
+            <span className="learning-article-aside__icon"><PixelIcon name="learn" /></span>
             <h2>Source notes</h2>
             <p>This lesson is paraphrased and organized for learning. Use the original sources for further study.</p>
-          </div>
-          <div className="learning-article-aside__card">
+          </GamePanel>
+          <GamePanel className="learning-article-aside__card">
             <h2>References</h2>
             <ol>
               {(article.references ?? []).map((reference) => (
@@ -1177,16 +1263,16 @@ function LearningArticlePage({ slug, user, onBack, onStart }) {
                 </li>
               ))}
             </ol>
-          </div>
+          </GamePanel>
         </aside>
       </div>
 
       <section className="landing-section learning-article-cta">
         <div className="landing-container learning-article-cta__inner">
           <div><h2>Test the idea in the plant lab.</h2></div>
-          <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
-            <AppIcon name="sprout" />{user ? 'Enter the plant lab' : 'Log in to start'}<AppIcon name="arrowForward" />
-          </button>
+          <GameButton onClick={onStart}>
+            <PixelIcon name="lab" />{user ? 'Enter the plant lab' : 'Log in to start'}<AppIcon name="arrowForward" />
+          </GameButton>
         </div>
       </section>
     </article>
@@ -1224,11 +1310,11 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
               <div className="landing-equation">6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂</div>
             </div>
             <div className="landing-process-card" data-reveal="right">
-              <div><AppIcon name="bolt" /><span>Light energy</span></div>
+              <div><PixelIcon name="light" /><span>Light energy</span></div>
               <AppIcon className="landing-process-card__arrow" name="arrowDown" />
-              <div><AppIcon name="eco" /><span>Leaves create food</span></div>
+              <div><PixelIcon name="nutrients" /><span>Leaves create food</span></div>
               <AppIcon className="landing-process-card__arrow" name="arrowDown" />
-              <div><AppIcon name="air" /><span>Oxygen is released</span></div>
+              <div><PixelIcon name="air" /><span>Oxygen is released</span></div>
             </div>
           </div>
         </section>
@@ -1241,11 +1327,11 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
             </div>
             <div className="landing-factor-grid">
               {factors.map((factor, index) => (
-                <article className="landing-factor-card" data-reveal="up" key={factor.title} style={{ '--reveal-delay': `${index * 65}ms` }}>
-                  <div className="landing-icon-box"><AppIcon name={factor.icon} /></div>
+                <GamePanel as="article" className="landing-factor-card" data-reveal="up" key={factor.title} style={{ '--reveal-delay': `${index * 65}ms` }}>
+                  <div className="landing-icon-box"><PixelIcon name={factor.title.toLowerCase()} /></div>
                   <div className="landing-factor-card__title"><h3>{factor.title}</h3><strong>{factor.value}</strong></div>
                   <p>{factor.description}</p>
-                </article>
+                </GamePanel>
               ))}
             </div>
           </div>
@@ -1253,14 +1339,14 @@ function LearnPage({ user, onHome, onStart, onOpenArticle }) {
 
         <section className="landing-section landing-final-cta">
           <div className="landing-container landing-final-cta__inner" data-reveal="up">
-            <div className="landing-final-cta__icon"><AppIcon name="controller" /></div>
+            <div className="landing-final-cta__icon"><PixelIcon name="lab" /></div>
             <h2>Put the science into practice.</h2>
             <p>Enter the simulation, tune the environment, and observe how every decision changes your plant.</p>
-            <button className="landing-button landing-button--primary" type="button" onClick={onStart}>
-              <AppIcon name="sprout" />
+            <GameButton onClick={onStart}>
+              <PixelIcon name="lab" />
               {user ? 'Enter the plant lab' : 'Log in to start'}
               <AppIcon name="arrowForward" />
-            </button>
+            </GameButton>
           </div>
         </section>
       </div>
@@ -1280,6 +1366,64 @@ function LandingFooter({ onHome, onLearn }) {
         <small>© 2026 Plant Growth Academy</small>
       </div>
     </footer>
+  )
+}
+
+function ScrollGrowthHud({ language, pageKey }) {
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    let animationFrame = 0
+    const scrollContainer = document.querySelector('.landing-shell')
+
+    const updateProgress = () => {
+      animationFrame = 0
+      if (!scrollContainer) return
+      const scrollableDistance = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight)
+      const nextProgress = scrollableDistance > 0
+        ? Math.min(100, Math.max(0, Math.round((scrollContainer.scrollTop / scrollableDistance) * 100)))
+        : 0
+      setProgress((current) => current === nextProgress ? current : nextProgress)
+    }
+
+    const scheduleUpdate = () => {
+      if (animationFrame) return
+      animationFrame = window.requestAnimationFrame(updateProgress)
+    }
+
+    const resizeObserver = 'ResizeObserver' in window ? new ResizeObserver(scheduleUpdate) : null
+    if (scrollContainer) resizeObserver?.observe(scrollContainer)
+    scrollContainer?.addEventListener('scroll', scheduleUpdate, { passive: true })
+    window.addEventListener('resize', scheduleUpdate)
+    scheduleUpdate()
+
+    return () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame)
+      resizeObserver?.disconnect()
+      scrollContainer?.removeEventListener('scroll', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+    }
+  }, [pageKey])
+
+  const stageIndex = progress < 20 ? 0 : progress < 40 ? 1 : progress < 70 ? 2 : progress < 100 ? 3 : 4
+  const stageLabels = language === 'th'
+    ? ['เมล็ด', 'เริ่มงอก', 'ต้นอ่อน', 'เริ่มออกดอก', 'โตเต็มที่']
+    : ['Seed', 'Sprout', 'Young plant', 'Flower bud', 'Full bloom']
+
+  return (
+    <aside
+      className={`landing-growth-hud landing-growth-hud--stage-${stageIndex}`}
+      aria-label={language === 'th' ? `ความคืบหน้าการเลื่อน ${progress} เปอร์เซ็นต์ ระยะ${stageLabels[stageIndex]}` : `Scroll progress ${progress} percent, ${stageLabels[stageIndex]} stage`}
+      style={{ '--growth-progress': `${progress}%`, '--growth-stage': stageIndex }}
+    >
+      <div className="landing-growth-hud__sprite" aria-hidden="true">
+        <img src="/media/landing-game-ui/sunflower-scroll-growth-sprites-v1.png" alt="" />
+      </div>
+      <div className="landing-growth-hud__readout">
+        <strong>{progress}%</strong>
+        <span>{stageLabels[stageIndex]}</span>
+      </div>
+    </aside>
   )
 }
 
@@ -1359,6 +1503,7 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
           ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />
           : <LearnPage user={user} onHome={openHome} onOpenArticle={openArticle} onStart={onStart} />
         : <HomePage user={user} onStart={onStart} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onOpenDemo={onOpenDemo} />}
+      <ScrollGrowthHud language={language} pageKey={`${page}:${articleSlug ?? 'library'}`} />
       <LandingFooter onHome={openHome} onLearn={openLearningLibrary} />
     </main>
   )
