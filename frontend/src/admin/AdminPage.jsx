@@ -2593,7 +2593,6 @@ function ResourceView({ groupKey, language = 'en' }) {
           <button className="admin-search-submit" type="submit" aria-label={`Search ${config.label}`} title="Search"><AppIcon name="search" /></button>
         </form>
         {!config.moderation && !config.readOnly && !config.noCreate && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
-        {config.readOnly && <span className="admin-readonly-label"><AppIcon name="shield" />Read-only audit evidence</span>}
         <span className={`admin-refresh-state is-${refreshState}`}><i />{refreshState === 'stale' ? 'Update delayed' : 'Live data'}<small>{lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Connecting…'}</small></span>
       </div> : <AdminBulkDeleteBar busy={bulkDeleting} count={selectedIds.length} language={language} onClear={() => setSelectedIds([])} onDelete={removeSelectedRecords} />}
 

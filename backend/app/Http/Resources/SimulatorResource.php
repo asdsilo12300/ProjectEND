@@ -141,14 +141,15 @@ class SimulatorResource extends JsonResource
     private function pestRisks(): array
     {
         $tickRisks = $this->resource->getAttribute('pest_risks');
-        if (is_array($tickRisks)) {
-            return $tickRisks;
-        }
 
         return Pest::query()
             ->with('conditionRules')
             ->get()
-            ->mapWithKeys(fn ($pest) => [$pest->name_en => $this->pestRiskChance($pest)])
+            ->mapWithKeys(fn ($pest) => [
+                $pest->name_en => is_array($tickRisks) && array_key_exists($pest->name_en, $tickRisks)
+                    ? (int) $tickRisks[$pest->name_en]
+                    : $this->pestRiskChance($pest),
+            ])
             ->all();
     }
 

@@ -439,19 +439,38 @@ function useCountdownSeconds(targetTime) {
   return targetTime ? seconds : null
 }
 
-function buildPestChances(simulationVisual) {
+function buildPestChances(simulationVisual, language = 'en') {
   const risks = simulationVisual?.pest_risks
   if (!risks) return pestChances
 
-  const activeNames = new Set((simulationVisual?.active_pests ?? []).map((entry) => String(
-    entry?.pest?.name_en ?? entry?.name_en ?? entry?.type ?? '',
-  ).toLowerCase()))
+  const normalizeKey = (value) => String(value ?? '').trim().toLocaleLowerCase('en')
+  const templates = new Map(pestChances.flatMap((pest) => [
+    [normalizeKey(pest.icon), pest],
+    [normalizeKey(pest.label), pest],
+  ]))
+  const activePests = (simulationVisual?.active_pests ?? []).map((entry) => entry?.pest ?? entry)
+  const dynamicColors = ['#78b989', '#d59a62', '#7ba9c9', '#c184b6', '#a8a866', '#8f91c7']
 
-  return pestChances.map((pest) => ({
-    ...pest,
-    value: Number(risks[pest.icon] ?? pest.value),
-    active: activeNames.has(pest.icon),
-  }))
+  return Object.entries(risks).map(([riskKey, value], index) => {
+    const normalizedKey = normalizeKey(riskKey)
+    const template = templates.get(normalizedKey)
+    const activePest = activePests.find((pest) => [pest?.name_en, pest?.name_th, pest?.type]
+      .some((name) => normalizeKey(name) === normalizedKey))
+
+    return {
+      ...template,
+      active: Boolean(activePest),
+      color: template?.color ?? dynamicColors[index % dynamicColors.length],
+      icon: template?.icon ?? normalizedKey,
+      imageUrl: resolveAssetUrl(activePest?.image_url) || template?.imageUrl,
+      label: language === 'th'
+        ? activePest?.name_th || activePest?.name_en || riskKey
+        : activePest?.name_en || activePest?.name_th || riskKey,
+      name_en: activePest?.name_en || riskKey,
+      name_th: activePest?.name_th || riskKey,
+      value: Number(value) || 0,
+    }
+  })
 }
 
 function getGrowthProgress(simulationVisual) {
@@ -628,7 +647,7 @@ function RealGrowthScale({ estimate, language, pace, referenceUrl }) {
 
 export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'idle', hasPlant = true, nextCycleAt = null, simulationSpeed = 1, windows, setWindows, simulationVisual, presentation = 'floating', hideHeader = false }) {
   const language = useAppLanguage()
-  const visiblePestChances = buildPestChances(simulationVisual)
+  const visiblePestChances = buildPestChances(simulationVisual, language)
   const [selectedPestId, setSelectedPestId] = useState(null)
   const selectedPest = visiblePestChances.find((pest) => pest.icon === selectedPestId) ?? null
   const targetGrowthProgress = getGrowthProgress(simulationVisual)

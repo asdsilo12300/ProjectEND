@@ -111,7 +111,35 @@ const knowledgeByPest = {
 
 export function getPestKnowledge(pest, language = 'en') {
   const key = String(pest?.icon ?? pest?.id ?? pest ?? '').toLowerCase()
-  const knowledge = knowledgeByPest[key] ?? knowledgeByPest.aphid
+  const fallbackName = language === 'th'
+    ? pest?.name_th || pest?.name_en || pest?.label || key
+    : pest?.name_en || pest?.name_th || pest?.label || key
+  const knowledge = knowledgeByPest[key] ?? {
+    name: { en: pest?.name_en || fallbackName, th: pest?.name_th || fallbackName },
+    shortName: { en: pest?.name_en || fallbackName, th: pest?.name_th || fallbackName },
+    scientificName: '—',
+    category: { en: 'Plant pest', th: 'ศัตรูพืช' },
+    imageUrl: pest?.imageUrl || null,
+    photo: null,
+    summary: {
+      en: 'This pest was added by an administrator. Monitor its risk and use the treatment configured for it.',
+      th: 'ศัตรูพืชชนิดนี้เพิ่มโดยผู้ดูแลระบบ ควรติดตามความเสี่ยงและใช้วิธีจัดการที่กำหนดไว้',
+    },
+    signs: {
+      en: ['Inspect the plant for new feeding damage or unusual changes.'],
+      th: ['ตรวจดูร่องรอยการกัดกินหรือความเปลี่ยนแปลงผิดปกติบนพืช'],
+    },
+    favorableConditions: {
+      en: ['Risk follows the environmental rules configured by the administrator.'],
+      th: ['ความเสี่ยงเป็นไปตามกฎสภาพแวดล้อมที่ผู้ดูแลระบบกำหนด'],
+    },
+    prevention: {
+      en: ['Keep monitoring the plant and maintain suitable growing conditions.'],
+      th: ['ติดตามพืชอย่างสม่ำเสมอและรักษาสภาพแวดล้อมให้เหมาะสม'],
+    },
+    treatments: [],
+    sources: [],
+  }
   const localize = (value) => value?.[language] ?? value?.en ?? value
 
   return {

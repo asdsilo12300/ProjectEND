@@ -77,7 +77,13 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
           <div className="grid gap-4 sm:grid-cols-[142px_minmax(0,1fr)]">
             <figure className="overflow-hidden rounded-xl border border-lime-100/15 bg-[#182019]">
               <div className="aspect-[4/3] overflow-hidden sm:aspect-square">
-                <img className="h-full w-full object-cover" src={knowledge.imageUrl} alt={knowledge.shortName} draggable="false" />
+                {knowledge.imageUrl ? (
+                  <img className="h-full w-full object-cover" src={knowledge.imageUrl} alt={knowledge.shortName} draggable="false" />
+                ) : (
+                  <span className="grid h-full w-full place-items-center bg-[#182019] text-[#9bcf82]" aria-label={knowledge.shortName}>
+                    <AppIcon className="h-12 w-12" name="pest" />
+                  </span>
+                )}
               </div>
               {knowledge.photo && (
                 <figcaption className="border-t border-lime-100/10 bg-black/25 px-2 py-1.5 text-[8px] leading-3 text-slate-400">
