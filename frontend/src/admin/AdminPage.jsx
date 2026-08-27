@@ -418,6 +418,36 @@ const resourceGroups = {
   ],
   pests: [
     { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', placement_mode: 'ground_random', base_chance: 3, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'placement_mode', label: '3D placement', type: 'select', required: true, options: [{ value: 'ground_random', label: 'Random on soil' }, { value: 'leaf', label: 'Attached to leaves' }, { value: 'plant_surface', label: 'Plant surface effect' }] }, { key: 'image_url', label: 'Pest image', type: 'image-upload', scope: 'pests', wide: true }, { key: 'model_url', label: 'Pest 3D model package', type: 'model-bundle', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => localizedAdminName(row) }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Placement', render: (row) => ({ ground_random: 'Soil', leaf: 'Leaf', plant_surface: 'Surface' })[row.placement_mode] ?? 'Soil' }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
+    {
+      id: 'pest-knowledge', label: 'Pest knowledge', createLabel: 'New pest guide', icon: 'bookmark',
+      defaults: {
+        pest_id: '', scientific_name: '', family: '', category_en: '', category_th: '', summary_en: '', summary_th: '',
+        signs_en: [], signs_th: [], favorable_conditions_en: [], favorable_conditions_th: [], prevention_en: [], prevention_th: [],
+        treatment_action_keys: [], sources: [],
+      },
+      fields: [
+        { key: 'pest_id', label: 'Pest', type: 'lookup', lookup: 'pests', required: true },
+        { key: 'scientific_name', label: 'Scientific name' }, { key: 'family', label: 'Group / family' },
+        { key: 'category_en', label: 'Category (English)' }, { key: 'category_th', label: 'Category (Thai)' },
+        { key: 'summary_en', label: 'Summary (English)', type: 'textarea', wide: true },
+        { key: 'summary_th', label: 'Summary (Thai)', type: 'textarea', wide: true },
+        { key: 'signs_en', label: 'What to look for (English)', type: 'string-list', itemPlaceholder: 'Add one sign…', addLabel: 'Add sign', emptyLabel: 'No English signs yet.', wide: true },
+        { key: 'signs_th', label: 'What to look for (Thai)', type: 'string-list', itemPlaceholder: 'เพิ่มอาการที่ควรสังเกต…', addLabel: 'เพิ่มอาการ', emptyLabel: 'ยังไม่มีอาการภาษาไทย', wide: true },
+        { key: 'favorable_conditions_en', label: 'Risk conditions (English)', type: 'string-list', itemPlaceholder: 'Add one condition…', addLabel: 'Add condition', emptyLabel: 'No English risk conditions yet.', wide: true },
+        { key: 'favorable_conditions_th', label: 'Risk conditions (Thai)', type: 'string-list', itemPlaceholder: 'เพิ่มปัจจัยเพิ่มความเสี่ยง…', addLabel: 'เพิ่มปัจจัย', emptyLabel: 'ยังไม่มีปัจจัยภาษาไทย', wide: true },
+        { key: 'prevention_en', label: 'Prevention steps (English)', type: 'string-list', itemPlaceholder: 'Add one prevention step…', addLabel: 'Add prevention step', emptyLabel: 'No English prevention steps yet.', wide: true },
+        { key: 'prevention_th', label: 'Prevention steps (Thai)', type: 'string-list', itemPlaceholder: 'เพิ่มวิธีป้องกัน…', addLabel: 'เพิ่มวิธีป้องกัน', emptyLabel: 'ยังไม่มีวิธีป้องกันภาษาไทย', wide: true },
+        { key: 'treatment_action_keys', label: 'Items that can remove this pest', type: 'string-list', optionLookup: 'item-actions', addLabel: 'Add treatment item', emptyLabel: 'No treatment item configured.', hint: 'Choose existing active items. The selected items will also be allowed to remove this pest in the simulation.', wide: true },
+        { key: 'sources', label: 'Sources and further reading', type: 'reference-list', wide: true },
+      ],
+      columns: [
+        { label: 'Pest', render: (row) => localizedAdminName(row.pest) || `#${row.pest_id}` },
+        { label: 'Group / family', render: (row) => row.family || row.category_en || row.category_th || '—' },
+        { label: 'Guide content', render: (row) => `${Array.isArray(row.signs_en) ? row.signs_en.length : 0} signs · ${Array.isArray(row.prevention_en) ? row.prevention_en.length : 0} prevention steps` },
+        { label: 'Treatment items', render: (row) => Array.isArray(row.treatment_action_keys) ? row.treatment_action_keys.length : 0 },
+        { label: 'Sources', render: (row) => Array.isArray(row.sources) ? row.sources.length : 0 },
+      ],
+    },
     { id: 'pest-rules', label: 'Occurrence rules', createLabel: 'New pest rule', icon: 'bug', defaults: { pest_id: '', plant_id: '', factor: 'air_humidity', operator: 'above', min_value: 0, max_value: 100, chance_delta: 0, severity: 1, is_active: true }, fields: [{ key: 'pest_id', label: 'Pest', type: 'lookup', lookup: 'pests', required: true }, { key: 'plant_id', label: 'Specific plant (optional)', type: 'lookup', lookup: 'plants' }, { key: 'factor', label: 'Factor', type: 'select', options: environmentFactorOptions, required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'chance_delta', label: 'Chance change', type: 'number', step: '0.01', required: true }, { key: 'severity', label: 'Severity', type: 'select', options: severityOptions, required: true }, commonActiveField], columns: [{ label: 'Pest', render: (row) => localizedAdminName(row.pest) }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) || 'All plants' }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Chance / severity', render: (row) => `${row.chance_delta} / ${row.severity}` }] },
   ],
   store: [

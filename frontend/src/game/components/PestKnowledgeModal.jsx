@@ -140,9 +140,13 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
               <span className="rounded-md bg-violet-300/10 px-2 py-1 text-[10px] font-bold text-violet-200">{copy('Simulation values', 'ค่าภายในระบบจำลอง')}</span>
             </div>
             <div className={`mt-3 grid gap-2 ${knowledge.treatments.length > 1 ? 'sm:grid-cols-2' : ''}`}>
-              {knowledge.treatments.map((treatment) => (
+              {knowledge.treatments.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-lime-100/15 px-3 py-4 text-center text-xs text-slate-400">
+                  {copy('No treatment item has been configured by the administrator.', 'ผู้ดูแลระบบยังไม่ได้กำหนดไอเทมสำหรับกำจัดศัตรูพืชชนิดนี้')}
+                </p>
+              ) : knowledge.treatments.map((treatment) => (
                 <article className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-lime-100/10 bg-black/20 p-2" key={treatment.id}>
-                  <img className="h-[52px] w-[52px] rounded-md bg-[#9bcf82] object-contain" src={treatment.imageUrl} alt="" draggable="false" />
+                  {treatment.imageUrl ? <img className="h-[52px] w-[52px] rounded-md bg-[#9bcf82] object-contain" src={treatment.imageUrl} alt="" draggable="false" /> : <span className="grid h-[52px] w-[52px] place-items-center rounded-md bg-[#9bcf82]/15 text-[#9bcf82]"><AppIcon className="h-6 w-6" name="tool" /></span>}
                   <span className="min-w-0">
                     <strong className="block truncate text-xs text-lime-50">{treatment.name}</strong>
                     <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{treatment.detail}</span>
@@ -160,7 +164,7 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
             </p>
           </section>
 
-          <section className="mt-4 border-t border-lime-100/10 pt-3">
+          {knowledge.sources.length > 0 && <section className="mt-4 border-t border-lime-100/10 pt-3">
             <strong className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{copy('Sources and further reading', 'แหล่งอ้างอิงและอ่านเพิ่มเติม')}</strong>
             <div className="mt-2 grid gap-1.5">
               {knowledge.sources.map((source) => (
@@ -176,7 +180,7 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
                 </a>
               ))}
             </div>
-          </section>
+          </section>}
         </div>
       </section>
     </div>,

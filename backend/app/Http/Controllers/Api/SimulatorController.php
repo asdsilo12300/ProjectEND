@@ -635,6 +635,11 @@ class SimulatorController extends Controller
             $targets = collect(explode(',', $targetText))
                 ->map(fn ($target) => trim(strtolower($target)))
                 ->filter()
+                ->merge(Pest::query()
+                    ->whereHas('knowledge', fn ($query) => $query->whereJsonContains('treatment_action_keys', $item->action_key))
+                    ->pluck('name_en')
+                    ->map(fn ($name) => strtolower((string) $name)))
+                ->unique()
                 ->values();
 
             $matchedPests = collect();

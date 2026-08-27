@@ -114,6 +114,35 @@ export function getPestKnowledge(pest, language = 'en') {
   const fallbackName = language === 'th'
     ? pest?.name_th || pest?.name_en || pest?.label || key
     : pest?.name_en || pest?.name_th || pest?.label || key
+  const managed = pest?.knowledge
+
+  if (managed) {
+    const localizeField = (name, fallback = '') => managed[`${name}_${language}`] || managed[`${name}_en`] || managed[`${name}_th`] || fallback
+    const localizeList = (name, fallback) => {
+      const selected = managed[`${name}_${language}`]
+      const alternate = managed[`${name}_en`] || managed[`${name}_th`]
+      return Array.isArray(selected) && selected.length ? selected : Array.isArray(alternate) && alternate.length ? alternate : fallback
+    }
+
+    return {
+      category: localizeField('category', language === 'th' ? 'ศัตรูพืช' : 'Plant pest'),
+      favorableConditions: localizeList('favorable_conditions', [language === 'th' ? 'ติดตามกฎความเสี่ยงที่ผู้ดูแลระบบกำหนด' : 'Monitor the risk rules configured by the administrator.']),
+      imageUrl: pest?.imageUrl || null,
+      name: fallbackName,
+      photo: null,
+      prevention: localizeList('prevention', [language === 'th' ? 'ติดตามพืชอย่างสม่ำเสมอ' : 'Keep monitoring the plant regularly.']),
+      scientificName: [managed.scientific_name, managed.family].filter(Boolean).join(' · ') || '—',
+      shortName: fallbackName,
+      signs: localizeList('signs', [language === 'th' ? 'ตรวจดูความเปลี่ยนแปลงผิดปกติบนพืช' : 'Inspect the plant for unusual changes.']),
+      sources: (Array.isArray(managed.sources) ? managed.sources : []).map((source) => ({
+        label: source?.[`label_${language}`] || source?.label_en || source?.label_th || source?.url,
+        url: source?.url,
+      })).filter((source) => source.url),
+      summary: localizeField('summary', language === 'th' ? 'ข้อมูลศัตรูพืชที่ผู้ดูแลระบบกำหนด' : 'Pest information configured by the administrator.'),
+      treatments: Array.isArray(pest?.treatments) ? pest.treatments : [],
+    }
+  }
+
   const knowledge = knowledgeByPest[key] ?? {
     name: { en: pest?.name_en || fallbackName, th: pest?.name_th || fallbackName },
     shortName: { en: pest?.name_en || fallbackName, th: pest?.name_th || fallbackName },

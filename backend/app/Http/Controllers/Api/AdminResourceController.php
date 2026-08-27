@@ -11,6 +11,7 @@ use App\Models\Item;
 use App\Models\ModelAsset;
 use App\Models\Pest;
 use App\Models\PestConditionRule;
+use App\Models\PestKnowledge;
 use App\Models\Plant;
 use App\Models\PlantConditionRule;
 use App\Models\PlantGrowthStage;
@@ -256,7 +257,8 @@ class AdminResourceController extends Controller
             'plant-stages' => ['model' => PlantGrowthStage::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['stage_name', 'description']],
             'plant-rules' => ['model' => PlantConditionRule::class, 'with' => ['plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['factor', 'visual_state', 'analysis_result']],
             'plant-variants' => ['model' => PlantVisualVariant::class, 'with' => ['plant:id,name_th,name_en', 'stage:id,stage_name'], 'with_count' => [], 'search' => ['state_key', 'label']],
-            'pests' => ['model' => Pest::class, 'with' => [], 'with_count' => ['conditionRules'], 'search' => ['name_th', 'name_en', 'description']],
+            'pests' => ['model' => Pest::class, 'with' => [], 'with_count' => ['conditionRules', 'knowledge'], 'search' => ['name_th', 'name_en', 'description']],
+            'pest-knowledge' => ['model' => PestKnowledge::class, 'with' => ['pest:id,name_th,name_en'], 'with_count' => [], 'search' => ['scientific_name', 'family', 'category_en', 'category_th', 'summary_en', 'summary_th']],
             'pest-rules' => ['model' => PestConditionRule::class, 'with' => ['pest:id,name_th,name_en', 'plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['factor']],
             'items' => ['model' => Item::class, 'with' => [], 'with_count' => [], 'search' => ['name', 'type', 'description']],
             'shop-items' => ['model' => ShopItem::class, 'with' => ['item:id,name,type,image_url'], 'with_count' => [], 'search' => []],
@@ -278,6 +280,7 @@ class AdminResourceController extends Controller
         $activeStageForPlant = Rule::exists('plant_growth_stages', 'id')->whereNull('deleted_at')->where('plant_id', $plantId);
         $activePest = Rule::exists('pests', 'id')->whereNull('deleted_at');
         $activeItem = Rule::exists('items', 'id')->whereNull('deleted_at');
+        $activeItemAction = Rule::exists('items', 'action_key')->whereNull('deleted_at')->where('is_active', true);
         $environmentFactors = ['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'];
         $visualStates = ['healthy', 'underwatered', 'overwatered', 'dry_soil', 'waterlogged', 'low_light', 'nutrient_deficient', 'fertilizer_burn', 'burnt', 'heat_stress', 'cold_stress', 'dry_air', 'fungal_risk', 'botrytis', 'wind_stress', 'stunted'];
         $leafStates = ['normal', 'upright', 'wilted', 'drooping', 'yellowing', 'pale', 'spotted', 'burnt_edges', 'root_burn', 'darkened', 'small'];
@@ -327,6 +330,34 @@ class AdminResourceController extends Controller
                 'sources.*.url' => ['required', 'url', 'max:2048'],
             ],
             'pests' => ['name_th' => ['required', 'string', 'max:191', Rule::unique('pests', 'name_th')->ignore($id)], 'name_en' => ['nullable', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'model_url' => ['nullable', 'string', 'max:2048', 'required_unless:placement_mode,plant_surface'], 'placement_mode' => ['required', Rule::in(['ground_random', 'leaf', 'plant_surface'])], 'base_chance' => ['required', 'numeric', 'between:0,100'], 'damage_per_turn' => ['required', 'integer', 'between:0,100'], 'behavior' => ['nullable', 'string', 'max:5000']],
+            'pest-knowledge' => [
+                'pest_id' => ['required', $activePest, Rule::unique('pest_knowledge', 'pest_id')->ignore($id)],
+                'scientific_name' => ['nullable', 'string', 'max:191'],
+                'family' => ['nullable', 'string', 'max:191'],
+                'category_en' => ['nullable', 'string', 'max:191'],
+                'category_th' => ['nullable', 'string', 'max:191'],
+                'summary_en' => ['nullable', 'string', 'max:10000'],
+                'summary_th' => ['nullable', 'string', 'max:10000'],
+                'signs_en' => ['nullable', 'array', 'max:30'],
+                'signs_en.*' => ['string', 'max:2000'],
+                'signs_th' => ['nullable', 'array', 'max:30'],
+                'signs_th.*' => ['string', 'max:2000'],
+                'favorable_conditions_en' => ['nullable', 'array', 'max:30'],
+                'favorable_conditions_en.*' => ['string', 'max:2000'],
+                'favorable_conditions_th' => ['nullable', 'array', 'max:30'],
+                'favorable_conditions_th.*' => ['string', 'max:2000'],
+                'prevention_en' => ['nullable', 'array', 'max:30'],
+                'prevention_en.*' => ['string', 'max:2000'],
+                'prevention_th' => ['nullable', 'array', 'max:30'],
+                'prevention_th.*' => ['string', 'max:2000'],
+                'treatment_action_keys' => ['nullable', 'array', 'max:30'],
+                'treatment_action_keys.*' => ['string', 'max:100', 'distinct', $activeItemAction],
+                'sources' => ['nullable', 'array', 'max:30'],
+                'sources.*' => ['array'],
+                'sources.*.label_en' => ['nullable', 'string', 'max:255'],
+                'sources.*.label_th' => ['nullable', 'string', 'max:255'],
+                'sources.*.url' => ['required', 'url', 'max:2048'],
+            ],
             'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', Rule::in($environmentFactors)], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
             'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])], 'effect_payload' => ['nullable', 'array'], 'effect_payload.strategy' => ['nullable', Rule::in(['refill_reserve', 'toward_healthy_midpoint', 'drainage', 'moisture_retention'])], 'effect_payload.resource' => ['nullable', Rule::in($environmentFactors)], 'effect_payload.duration_ticks' => ['nullable', 'integer', 'between:1,100'], 'effect_payload.duration_seconds' => ['nullable', 'integer', 'between:5,300'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
             'shop-items' => ['item_id' => ['required', $activeItem, Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at']],

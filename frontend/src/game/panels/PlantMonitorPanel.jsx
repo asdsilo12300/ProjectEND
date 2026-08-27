@@ -448,26 +448,37 @@ function buildPestChances(simulationVisual, language = 'en') {
     [normalizeKey(pest.icon), pest],
     [normalizeKey(pest.label), pest],
   ]))
+  const catalog = Array.isArray(simulationVisual?.pest_catalog) ? simulationVisual.pest_catalog : []
   const activePests = (simulationVisual?.active_pests ?? []).map((entry) => entry?.pest ?? entry)
   const dynamicColors = ['#78b989', '#d59a62', '#7ba9c9', '#c184b6', '#a8a866', '#8f91c7']
 
   return Object.entries(risks).map(([riskKey, value], index) => {
     const normalizedKey = normalizeKey(riskKey)
     const template = templates.get(normalizedKey)
+    const catalogPest = catalog.find((pest) => [pest?.name_en, pest?.name_th]
+      .some((name) => normalizeKey(name) === normalizedKey))
     const activePest = activePests.find((pest) => [pest?.name_en, pest?.name_th, pest?.type]
       .some((name) => normalizeKey(name) === normalizedKey))
+    const pestRecord = activePest || catalogPest
 
     return {
       ...template,
       active: Boolean(activePest),
       color: template?.color ?? dynamicColors[index % dynamicColors.length],
       icon: template?.icon ?? normalizedKey,
-      imageUrl: resolveAssetUrl(activePest?.image_url) || template?.imageUrl,
+      imageUrl: resolveAssetUrl(pestRecord?.image_url) || template?.imageUrl,
+      knowledge: catalogPest?.knowledge,
       label: language === 'th'
-        ? activePest?.name_th || activePest?.name_en || riskKey
-        : activePest?.name_en || activePest?.name_th || riskKey,
-      name_en: activePest?.name_en || riskKey,
-      name_th: activePest?.name_th || riskKey,
+        ? pestRecord?.name_th || pestRecord?.name_en || riskKey
+        : pestRecord?.name_en || pestRecord?.name_th || riskKey,
+      name_en: pestRecord?.name_en || riskKey,
+      name_th: pestRecord?.name_th || riskKey,
+      treatments: (catalogPest?.treatments ?? []).map((treatment) => ({
+        ...treatment,
+        detail: treatment.description || '',
+        imageUrl: resolveAssetUrl(treatment.image_url),
+        success: Number(treatment.success) || 0,
+      })),
       value: Number(value) || 0,
     }
   })

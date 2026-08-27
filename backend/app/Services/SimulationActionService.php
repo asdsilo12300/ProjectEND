@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Item;
+use App\Models\Pest;
 use App\Models\SimulationAction;
 use App\Models\SimulationEvent;
 use App\Models\SimulationModifier;
@@ -324,7 +325,16 @@ class SimulationActionService
     private function treatPest(Simulator $simulator, Item $item, string $actionKey): array
     {
         $effect = strtolower((string) $item->effect_type.' '.$actionKey);
-        $targets = collect(['aphid', 'snail', 'fungus'])->filter(fn ($name) => str_contains($effect, $name));
+        $configuredTargets = Pest::query()
+            ->whereHas('knowledge', fn ($query) => $query->whereJsonContains('treatment_action_keys', $actionKey))
+            ->pluck('name_en')
+            ->map(fn ($name) => strtolower((string) $name));
+        $targets = collect(['aphid', 'snail', 'fungus'])
+            ->filter(fn ($name) => str_contains($effect, $name))
+            ->merge($configuredTargets)
+            ->filter()
+            ->unique()
+            ->values();
         if ($targets->isEmpty() && str_contains($effect, 'manual')) $targets = collect(['aphid', 'snail']);
         $pests = SimulationPest::query()
             ->select('simulation_pests.*')->addSelect('pests.name_en as pest_name_en')

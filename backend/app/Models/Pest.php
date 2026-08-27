@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Pest extends Model
@@ -33,5 +34,10 @@ class Pest extends Model
     public function conditionRules(): HasMany
     {
         return $this->hasMany(PestConditionRule::class);
+    }
+
+    public function knowledge(): HasOne
+    {
+        return $this->hasOne(PestKnowledge::class);
     }
 }

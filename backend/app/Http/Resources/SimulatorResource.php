@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Item;
 use App\Models\Pest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -79,6 +80,7 @@ class SimulatorResource extends JsonResource
             'current_stage' => $stage ? new PlantStageResource($stage) : null,
             'current_model_url' => $this->publicUrl($modelPath),
             'pest_risks' => $this->pestRisks(),
+            'pest_catalog' => $this->pestCatalog(),
             'visual_variant' => $variant ? [
                 'id' => $variant->id,
                 'state_key' => $variant->state_key,
@@ -151,6 +153,69 @@ class SimulatorResource extends JsonResource
                     : $this->pestRiskChance($pest),
             ])
             ->all();
+    }
+
+    private function pestCatalog(): array
+    {
+        $pests = Pest::query()->with('knowledge')->orderBy('id')->get();
+        $actionKeys = $pests
+            ->flatMap(fn (Pest $pest) => $pest->knowledge?->treatment_action_keys ?? [])
+            ->filter()
+            ->unique()
+            ->values();
+        $items = Item::query()
+            ->where('is_active', true)
+            ->whereIn('action_key', $actionKeys)
+            ->get()
+            ->keyBy('action_key');
+
+        return $pests->map(function (Pest $pest) use ($items): array {
+            $knowledge = $pest->knowledge;
+            $treatments = collect($knowledge?->treatment_action_keys ?? [])
+                ->map(function (string $actionKey) use ($items): ?array {
+                    $item = $items->get($actionKey);
+                    if (! $item) {
+                        return null;
+                    }
+
+                    return [
+                        'id' => $item->id,
+                        'action_key' => $item->action_key,
+                        'name' => $item->name,
+                        'description' => $item->description,
+                        'image_url' => $this->publicUrl($item->image_url),
+                        'success' => Str::startsWith(strtolower((string) $item->effect_type), 'pest_control')
+                            ? 100
+                            : min(100, max(0, (int) $item->effect_value)),
+                    ];
+                })
+                ->filter()
+                ->values()
+                ->all();
+
+            return [
+                'id' => $pest->id,
+                'name_en' => $pest->name_en,
+                'name_th' => $pest->name_th,
+                'image_url' => $this->publicUrl($pest->image_url),
+                'knowledge' => $knowledge ? [
+                    'scientific_name' => $knowledge->scientific_name,
+                    'family' => $knowledge->family,
+                    'category_en' => $knowledge->category_en,
+                    'category_th' => $knowledge->category_th,
+                    'summary_en' => $knowledge->summary_en,
+                    'summary_th' => $knowledge->summary_th,
+                    'signs_en' => $knowledge->signs_en ?? [],
+                    'signs_th' => $knowledge->signs_th ?? [],
+                    'favorable_conditions_en' => $knowledge->favorable_conditions_en ?? [],
+                    'favorable_conditions_th' => $knowledge->favorable_conditions_th ?? [],
+                    'prevention_en' => $knowledge->prevention_en ?? [],
+                    'prevention_th' => $knowledge->prevention_th ?? [],
+                    'sources' => $knowledge->sources ?? [],
+                ] : null,
+                'treatments' => $treatments,
+            ];
+        })->all();
     }
 
     private function pestRiskChance($pest): int
