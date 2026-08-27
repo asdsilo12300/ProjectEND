@@ -344,6 +344,33 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame(100, $result->getAttribute('pest_risks')['base-pest']);
     }
 
+    public function test_multiple_pests_can_spawn_during_every_cycle_including_the_first(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['event_tick_count' => 1]);
+
+        Pest::query()->create([
+            'name_th' => 'ศัตรูพืชหนึ่ง',
+            'name_en' => 'pest-one',
+            'base_chance' => 100,
+            'damage_per_turn' => 4,
+        ]);
+        Pest::query()->create([
+            'name_th' => 'ศัตรูพืชสอง',
+            'name_en' => 'pest-two',
+            'base_chance' => 100,
+            'damage_per_turn' => 7,
+        ]);
+
+        $result = app(PlantSimulationEngine::class)->tick($simulator, $this->healthyFactors());
+
+        $this->assertSame(2, SimulationPest::query()
+            ->where('simulator_id', $result->id)
+            ->where('status', 'active')
+            ->count());
+        $this->assertSame(89, (int) $result->health);
+    }
+
     public function test_completed_simulation_cannot_advance(): void
     {
         [, $simulator] = $this->seedPlantAndSimulator();

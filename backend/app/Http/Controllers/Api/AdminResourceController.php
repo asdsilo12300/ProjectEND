@@ -25,6 +25,7 @@ use App\Models\Simulator;
 use App\Models\SimulatorComment;
 use App\Models\SimulationModeReward;
 use App\Services\AdminDataCache;
+use App\Services\AdminSimulationDataValidator;
 use App\Services\KnownPlantProfileService;
 use App\Services\PlantKnowledgeProfileService;
 use App\Services\PublicCatalogCache;
@@ -33,13 +34,16 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AdminResourceController extends Controller
 {
     public function __construct(
         private readonly AdminDataCache $cache,
         private readonly PublicCatalogCache $catalogCache,
+        private readonly AdminSimulationDataValidator $simulationDataValidator,
     ) {}
 
     public function lookups(): JsonResponse
@@ -69,7 +73,8 @@ class AdminResourceController extends Controller
             }
             $this->applySearch($query, $request, $config['search']);
 
-            $payload = $query->orderBy('id')->paginate(25)->toArray();
+            $perPage = min(250, max(1, (int) $request->input('per_page', 25)));
+            $payload = $query->orderBy('id')->paginate($perPage)->toArray();
 
             return response()->json([...$payload, 'resource' => $resource, 'mode' => 'catalog']);
         }
@@ -83,23 +88,27 @@ class AdminResourceController extends Controller
         $config = $this->catalogConfig($resource);
         abort_if($config === null, 404, 'This resource cannot be created here.');
 
-        $data = $request->validate($this->rules($resource, null, $request));
-        $record = DB::transaction(function () use ($config, $data, $resource) {
-            $record = $config['model']::query()->create($data);
+        $data = $this->validatedData($request, $resource);
+        try {
+            $record = DB::transaction(function () use ($config, $data, $resource) {
+                $record = $config['model']::query()->create($data);
 
-            if ($resource === 'plants' && $record instanceof Plant) {
-                $record->stages()->createMany([
-                    ['stage_no' => 1, 'stage_name' => 'Seedling', 'required_growth_point' => 0, 'model_url' => $record->base_model_url, 'description' => 'Automatically created starting stage.'],
-                    ['stage_no' => 2, 'stage_name' => 'Sprout', 'required_growth_point' => 40, 'model_url' => $record->base_model_url, 'description' => 'Automatically created intermediate stage.'],
-                    ['stage_no' => 3, 'stage_name' => 'Mature', 'required_growth_point' => 100, 'model_url' => $record->base_model_url, 'description' => 'Automatically created mature stage.'],
-                ]);
+                if ($resource === 'plants' && $record instanceof Plant) {
+                    $record->stages()->createMany([
+                        ['stage_no' => 1, 'stage_name' => 'Seedling', 'required_growth_point' => 0, 'model_url' => $record->base_model_url, 'description' => 'Automatically created starting stage.'],
+                        ['stage_no' => 2, 'stage_name' => 'Sprout', 'required_growth_point' => 40, 'model_url' => $record->base_model_url, 'description' => 'Automatically created intermediate stage.'],
+                        ['stage_no' => 3, 'stage_name' => 'Mature', 'required_growth_point' => 100, 'model_url' => $record->base_model_url, 'description' => 'Automatically created mature stage.'],
+                    ]);
 
-                app(KnownPlantProfileService::class)->apply($record);
-                app(PlantKnowledgeProfileService::class)->syncIfMissing($record);
-            }
+                    app(KnownPlantProfileService::class)->apply($record);
+                    app(PlantKnowledgeProfileService::class)->syncIfMissing($record);
+                }
 
-            return $record;
-        });
+                return $record;
+            });
+        } catch (QueryException) {
+            throw ValidationException::withMessages(['record' => 'This record conflicts with data already stored in this table. Check duplicate names, keys, and grouped values.']);
+        }
 
         $freshRecord = $record->fresh($resource === 'plants' ? ['stages', 'knowledge'] : []);
         AdminActivityLog::record($request->user(), 'created', $resource, $record->id, ['after' => $freshRecord->toArray()]);
@@ -114,7 +123,12 @@ class AdminResourceController extends Controller
         if ($config !== null) {
             $model = $config['model']::query()->findOrFail($record);
             $before = $model->toArray();
-            $model->fill($request->validate($this->rules($resource, $record, $request)))->save();
+            $data = $this->validatedData($request, $resource, $record);
+            try {
+                $model->fill($data)->save();
+            } catch (QueryException) {
+                throw ValidationException::withMessages(['record' => 'These changes conflict with data already stored in this table. Check duplicate names, keys, and grouped values.']);
+            }
 
             // A known plant may have been created before its automatic
             // profile was added. Backfill only incomplete profiles so an
@@ -361,9 +375,9 @@ class AdminResourceController extends Controller
             'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', Rule::in($environmentFactors)], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
             'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])], 'effect_payload' => ['nullable', 'array'], 'effect_payload.strategy' => ['nullable', Rule::in(['refill_reserve', 'toward_healthy_midpoint', 'drainage', 'moisture_retention'])], 'effect_payload.resource' => ['nullable', Rule::in($environmentFactors)], 'effect_payload.duration_ticks' => ['nullable', 'integer', 'between:1,100'], 'effect_payload.duration_seconds' => ['nullable', 'integer', 'between:5,300'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
             'shop-items' => ['item_id' => ['required', $activeItem, Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at']],
-            'model-assets' => ['asset_key' => ['required', 'string', 'max:191', Rule::unique('model_assets', 'asset_key')->ignore($id)], 'label' => ['nullable', 'string', 'max:191'], 'type' => ['required', 'string', 'max:80'], 'url' => ['required', 'string', 'max:2048'], 'metadata' => ['nullable', 'array']],
-            'quests' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'quest_type' => ['required', Rule::in(['daily', 'weekly', 'story', 'event'])], 'target_type' => ['required', 'string', 'max:100'], 'target_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'reward_gem' => ['required', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],
-            'achievements' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'condition_type' => ['required', 'string', 'max:100'], 'condition_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'badge_image_url' => $nullableUrl, 'is_active' => ['required', 'boolean']],
+            'model-assets' => ['asset_key' => ['required', 'string', 'max:191', Rule::unique('model_assets', 'asset_key')->ignore($id)], 'label' => ['nullable', 'string', 'max:191'], 'type' => ['required', Rule::in(['model', 'plant', 'scene', 'pest', 'item', 'action', 'effect'])], 'url' => ['required', 'string', 'max:2048'], 'metadata' => ['nullable', 'array']],
+            'quests' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'quest_type' => ['required', Rule::in(['daily', 'weekly', 'story', 'event'])], 'target_type' => ['required', Rule::in(['simulation_started', 'simulation_completed', 'plant_harvested', 'item_used', 'item_purchased', 'post_created', 'comment_created', 'friend_added'])], 'target_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'reward_gem' => ['required', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],
+            'achievements' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'condition_type' => ['required', Rule::in(['simulation_started', 'simulation_completed', 'plant_harvested', 'perfect_health_harvest', 'item_used', 'item_purchased', 'post_created', 'friend_added', 'level_reached'])], 'condition_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'badge_image_url' => $nullableUrl, 'is_active' => ['required', 'boolean']],
             'simulation-mode-rewards' => [
                 'mode' => ['required', Rule::in(['greenhouse', 'outdoor', 'seasonal']), Rule::unique('simulation_mode_rewards', 'mode')->ignore($id)],
                 'name_en' => ['required', 'string', 'max:120'],
@@ -386,10 +400,25 @@ class AdminResourceController extends Controller
                 'conditions.*.operator' => ['nullable', 'string', Rule::in(['above', 'above_or_equal', 'below', 'below_or_equal', 'between', 'outside', 'equals', '='])],
                 'conditions.*.value' => ['nullable', 'numeric'], 'conditions.*.min' => ['nullable', 'numeric'], 'conditions.*.max' => ['nullable', 'numeric'],
                 'effects.factor_delta' => ['nullable', 'array'], 'effects.factor_delta.*' => ['numeric', 'between:-100,100'],
-                'response_action_keys.*' => ['string', 'max:100'], 'is_harmful' => ['required', 'boolean'], 'is_active' => ['required', 'boolean'],
+                'response_action_keys.*' => ['string', 'max:100', 'distinct', $activeItemAction], 'is_harmful' => ['required', 'boolean'], 'is_active' => ['required', 'boolean'],
             ],
             default => [],
         };
+    }
+
+    /** @return array<string, mixed> */
+    private function validatedData(Request $request, string $resource, ?int $recordId = null): array
+    {
+        $validator = Validator::make($request->all(), $this->rules($resource, $recordId, $request), [
+            'unique' => 'Duplicate value: another active row already uses this :attribute.',
+            'distinct' => 'Duplicate value: :attribute contains the same selection more than once.',
+            'ends_at.after_or_equal' => 'The shop end date must be the same as or later than its start date.',
+        ]);
+        $validator->after(function ($validator) use ($recordId, $request, $resource): void {
+            $this->simulationDataValidator->validate($resource, $request->all(), $recordId, $validator);
+        });
+
+        return $validator->validate();
     }
 
     private function moderationIndex(Request $request, string $resource): JsonResponse

@@ -12,7 +12,6 @@ use App\Models\SimulationPest;
 use App\Models\Simulator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PlantSimulationEngine
@@ -501,10 +500,7 @@ class PlantSimulationEngine
         $activeCount = 0;
         $damage = 0;
         $changed = false;
-        $newPestCreated = false;
         $tick = (int) ($simulator->event_tick_count ?? 0);
-        $hasEventClock = Schema::hasColumn('simulators', 'event_tick_count');
-        $canIntroducePest = ! $hasEventClock || ($tick > 2 && $tick % 2 === 0);
         $pests = Pest::query()->with('conditionRules')->get();
 
         foreach ($pests as $pest) {
@@ -523,7 +519,9 @@ class PlantSimulationEngine
             }
 
             $roll = (abs(crc32($simulator->id.':'.$tick.':pest:'.$pest->id)) % 100) + 1;
-            if (! $newPestCreated && $canIntroducePest && $chance > 0 && ($chance >= 100 || $roll <= $chance)) {
+            // Every pest rolls independently. More than one species may appear
+            // in any simulation cycle when their individual risks succeed.
+            if ($chance > 0 && ($chance >= 100 || $roll <= $chance)) {
                 SimulationPest::query()->create([
                     'simulator_id' => $simulator->id,
                     'pest_id' => $pest->id,
@@ -533,7 +531,6 @@ class PlantSimulationEngine
                 $activeCount++;
                 $damage += max(0, (int) $pest->damage_per_turn);
                 $changed = true;
-                $newPestCreated = true;
             }
         }
 

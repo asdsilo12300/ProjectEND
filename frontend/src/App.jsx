@@ -11,7 +11,6 @@ import { PlantKnowledgeModal } from './game/components/PlantKnowledgeModal'
 import { ToastStack } from './game/components/ToastStack'
 import { SimulationOperationLoading } from './game/components/SimulationOperationLoading'
 import { CriticalAlertCenter } from './game/components/CriticalAlertCenter'
-import { ActionConfirmDialog } from './game/components/ActionConfirmDialog'
 import { LocationTransferModal } from './game/components/LocationTransferModal'
 import { TopBar } from './game/components/TopBar'
 import { CommentsPanel } from './game/panels/CommentsPanel'
@@ -716,7 +715,6 @@ function App() {
   const [climate, setClimate] = useState(defaultClimate)
   const [openSections, setOpenSections] = useState({ Plants: true, Items: true })
   const [appliedAsset, setAppliedAsset] = useState(null)
-  const [actionConfirmAsset, setActionConfirmAsset] = useState(null)
   const { actionState, cancelAction, executeAction, selectAction } = useSimulationAction()
   const [criticalAlert, setCriticalAlert] = useState(null)
   const [locationTransferOpen, setLocationTransferOpen] = useState(false)
@@ -2231,31 +2229,7 @@ function App() {
 
     const isThai = getAppLanguage() === 'th'
     const targetName = visitingFriend?.user?.username ?? (isThai ? 'เพื่อนของคุณ' : 'your friend')
-    const plantName = localizedPlantName(selectedPlant, isThai ? 'th' : 'en')
     const assetName = localizedItemName(asset, isThai ? 'th' : 'en')
-    const confirmation = await Swal.fire({
-      title: isThai ? `ใช้ ${assetName} หรือไม่?` : `Use ${assetName}?`,
-      text: isThai
-        ? `ส่งไอเทมแกล้งไปยัง ${plantName} ของ ${targetName} หรือไม่? ระบบจะใช้ไอเทม 1 ชิ้น`
-        : `Send this prank to ${targetName}'s ${plantName}? One item will be used.`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: isThai ? 'ส่งไอเทม' : 'Send prank',
-      cancelButtonText: isThai ? 'ยกเลิก' : 'Cancel',
-      background: '#101511',
-      color: '#eaf7df',
-      buttonsStyling: false,
-      reverseButtons: true,
-      customClass: {
-        popup: 'plantsim-shop-alert',
-        title: 'plantsim-shop-alert__title',
-        actions: 'plantsim-shop-alert__actions',
-        confirmButton: 'plantsim-shop-alert__confirm',
-        cancelButton: 'plantsim-shop-alert__cancel',
-      },
-    })
-    if (!confirmation.isConfirmed) return
-
     prankBusyRef.current = true
     setActionMessage(isThai ? `กำลังส่ง ${assetName} ไปยัง ${targetName}...` : `Sending ${assetName} to ${targetName}...`)
 
@@ -2366,7 +2340,6 @@ function App() {
           ? `ใช้ ${displayName} สำเร็จ: ${resultMessage}`
           : `${displayName} applied successfully: ${resultMessage}`)
         setAppliedAsset(null)
-        setActionConfirmAsset(null)
         return result
       })
     } catch (error) {
@@ -2689,7 +2662,6 @@ function App() {
 
       if (appliedAsset?.type === 'item' && appliedAsset.id === asset.id) {
         setAppliedAsset(null)
-        setActionConfirmAsset(null)
         cancelAction()
         setActionMessage(`${asset.name} cancelled`)
         return
@@ -2716,18 +2688,9 @@ function App() {
         return
       }
 
-      const actionKey = asset.actionKey ?? asset.itemKey ?? asset.id
-      if (['water', 'fertilizer', 'mulch', 'drainage', 'shade', 'windbreak', 'frost-cover'].includes(actionKey)) {
-        setActionConfirmAsset(asset)
-        setActionMessage(getAppLanguage() === 'th'
-          ? `ตรวจสอบผลของ ${localizedItemName(asset)} แล้วกดยืนยัน`
-          : `Review ${asset.name}, then confirm use.`)
-        return
-      }
-
       setActionMessage(getAppLanguage() === 'th'
-        ? `เลือก ${localizedItemName(asset)} แล้ว คลิกศัตรูพืชหรือพืชเพื่อใช้งาน`
-        : `Selected ${asset.name}. Click the matching pest or plant to use it.`)
+        ? `เลือก ${localizedItemName(asset)} แล้ว คลิกพื้นที่ปลูกเพื่อวางและใช้งาน`
+        : `Selected ${asset.name}. Click the planting area to place and use it.`)
       return
     }
 
@@ -3903,23 +3866,6 @@ function App() {
       <SimulationOperationLoading language={getAppLanguage()} operation={simulationOperation} />
       <ToastStack onDismiss={dismissActionToast} toasts={actionToasts} />
       <CriticalAlertCenter alert={criticalAlert} onClose={() => setCriticalAlert(null)} />
-      <ActionConfirmDialog
-        asset={actionConfirmAsset}
-        busy={['animating', 'applying'].includes(actionState.phase)}
-        language={getAppLanguage()}
-        onCancel={() => {
-          if (['animating', 'applying'].includes(actionState.phase)) return
-          setActionConfirmAsset(null)
-          setAppliedAsset(null)
-          cancelAction()
-        }}
-        onConfirm={async () => {
-          const asset = actionConfirmAsset
-          if (!asset || ['animating', 'applying'].includes(actionState.phase)) return
-          setActionConfirmAsset(null)
-          await applySelectedItem(asset)
-        }}
-      />
       {friendGardenLoading.active && (
         <FriendGardenLoadingScreen
           loading={friendGardenLoading}

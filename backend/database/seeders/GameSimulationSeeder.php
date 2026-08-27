@@ -12,6 +12,7 @@ use App\Models\ModelAsset;
 use App\Models\Item;
 use App\Models\ShopItem;
 use App\Services\PlantKnowledgeProfileService;
+use App\Services\PestKnowledgeProfileService;
 use Illuminate\Database\Seeder;
 
 class GameSimulationSeeder extends Seeder
@@ -246,6 +247,8 @@ class GameSimulationSeeder extends Seeder
                 );
             }
         }
+
+        app(PestKnowledgeProfileService::class)->syncCoreIfMissing();
 
 
         $assets = [

@@ -199,8 +199,8 @@ export const tutorialCatalog = {
         targets: ['[data-tour="lab-stage"]'],
         title: { en: 'Click the plant to apply the selected item', th: 'คลิกต้นพืชเพื่อใช้ไอเทมที่เลือก' },
         description: {
-          en: 'After selecting an item, click the plant once and confirm use when prompted. A notification on the right and the refreshed monitor appear after the server accepts it.',
-          th: 'หลังเลือกไอเทมให้คลิกต้นพืชหนึ่งครั้งและกดยืนยันเมื่อระบบถาม เมื่อ Server ยอมรับแล้วจะแจ้งผลด้านขวาและอัปเดต Monitor',
+          en: 'After selecting an item, move its cursor onto the planting area and click once to place and use it. A notification and the refreshed monitor appear after the server accepts it.',
+          th: 'หลังเลือกไอเทม ให้เลื่อนเคอร์เซอร์ไอเทมไปยังพื้นที่ปลูกแล้วคลิกหนึ่งครั้งเพื่อวางและใช้งาน เมื่อ Server ยอมรับแล้วจะแจ้งผลและอัปเดต Monitor',
         },
       },
       {
@@ -263,10 +263,10 @@ export const tutorialCatalog = {
       {
         icon: 'mouse',
         targets: ['[data-tour="lab-stage"]'],
-        title: { en: 'Click the friend plant and confirm', th: 'คลิกพืชของเพื่อนแล้วกดยืนยัน' },
+        title: { en: 'Click the friend plant to place the prank', th: 'คลิกพืชของเพื่อนเพื่อวางไอเทมแกล้ง' },
         description: {
-          en: 'Click the planted model after choosing a prank. Confirm the dialog to consume one item and send a danger notification to your friend.',
-          th: 'หลังเลือกไอเทมให้คลิกโมเดลพืชและยืนยัน ระบบจะหักหนึ่งชิ้น พร้อมส่งการแจ้งเตือนอันตรายไปหาเพื่อน',
+          en: 'After choosing a prank, click the planted model once to use one item and send a danger notification to your friend.',
+          th: 'หลังเลือกไอเทมให้คลิกโมเดลพืชหนึ่งครั้ง ระบบจะใช้หนึ่งชิ้นและส่งการแจ้งเตือนอันตรายไปหาเพื่อนทันที',
         },
       },
       {

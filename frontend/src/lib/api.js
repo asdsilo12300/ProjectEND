@@ -353,8 +353,9 @@ export async function getAdminResourceLookups() {
   return apiFetch('/admin/resources/lookups')
 }
 
-export async function getAdminResource(resource, { search = '', status = '', trashed = '', page = 1 } = {}) {
+export async function getAdminResource(resource, { search = '', status = '', trashed = '', page = 1, perPage = null } = {}) {
   const params = new URLSearchParams({ page: String(page) })
+  if (perPage) params.set('per_page', String(perPage))
   if (search) params.set('search', search)
   if (status) params.set('status', status)
   if (trashed) params.set('trashed', trashed)
