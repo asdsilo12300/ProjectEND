@@ -54,6 +54,7 @@ class PublicMediaController extends Controller
             'png' => 'image/png',
             'jpg', 'jpeg' => 'image/jpeg',
             'webp' => 'image/webp',
+            'svg' => 'image/svg+xml',
             default => 'application/octet-stream',
         };
     }

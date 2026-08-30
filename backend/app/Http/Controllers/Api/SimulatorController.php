@@ -780,18 +780,36 @@ class SimulatorController extends Controller
         $this->authorizeSimulatorConversation($request, $simulator);
 
         $data = $request->validate([
-            'item_key' => ['required', Rule::in(['aphid-prank', 'snail-prank'])],
+            'item_id' => ['nullable', 'integer', 'required_without:item_key', Rule::exists('items', 'id')->whereNull('deleted_at')],
+            'item_key' => ['nullable', 'string', 'max:100', 'required_without:item_id'],
         ]);
-        $itemName = $data['item_key'] === 'aphid-prank' ? 'Aphid Prank' : 'Snail Prank';
-        $targetPestName = $data['item_key'] === 'aphid-prank' ? 'aphid' : 'snail';
         $item = Item::query()
-            ->where('name', $itemName)
             ->where('is_active', true)
-            ->where('effect_type', "friend_pest:{$targetPestName}")
+            ->where('effect_type', 'like', 'friend_pest:%')
+            ->when(
+                ! empty($data['item_id']),
+                fn ($query) => $query->whereKey($data['item_id']),
+                function ($query) use ($data): void {
+                    $itemKey = strtolower((string) ($data['item_key'] ?? ''));
+                    $legacyName = match ($itemKey) {
+                        'aphid-prank' => 'Aphid Prank',
+                        'snail-prank' => 'Snail Prank',
+                        default => null,
+                    };
+                    $query->where(function ($nested) use ($itemKey, $legacyName): void {
+                        $nested->where('action_key', $itemKey);
+                        if ($legacyName) $nested->orWhere('name', $legacyName);
+                    });
+                },
+            )
             ->firstOrFail();
-        $pest = Pest::query()
-            ->whereRaw('LOWER(name_en) = ?', [$targetPestName])
-            ->firstOrFail();
+        $linkedPestId = data_get($item->effect_payload, 'pest_id');
+        $effectPestKey = Str::after(strtolower((string) $item->effect_type), 'friend_pest:');
+        $pest = $linkedPestId
+            ? Pest::query()->findOrFail($linkedPestId)
+            : Pest::query()->get()->first(fn (Pest $candidate) => Str::slug((string) ($candidate->name_en ?: $candidate->name_th)) === $effectPestKey);
+        abort_unless($pest, 422, 'The pest linked to this prank item is no longer available.');
+        $targetPestName = (string) ($pest->name_en ?: $pest->name_th ?: 'pest');
 
         $result = DB::transaction(function () use ($item, $pest, $simulator, $targetPestName, $userId) {
             $lockedSimulator = Simulator::query()->lockForUpdate()->findOrFail($simulator->id);
@@ -829,12 +847,8 @@ class SimulatorController extends Controller
                 'updated_at' => now(),
             ])->save();
 
-            $message = $targetPestName === 'aphid'
-                ? "Aphids were sent to your friend's plant."
-                : "A snail was sent to your friend's plant.";
-            $notificationExcerpt = $targetPestName === 'aphid'
-                ? 'Aphids appeared on your active plant.'
-                : 'A snail appeared on your active plant.';
+            $message = "{$targetPestName} was sent to your friend's plant.";
+            $notificationExcerpt = "{$targetPestName} appeared on your active plant.";
 
             ItemUsage::query()->create([
                 'user_id' => $userId,

@@ -1582,6 +1582,8 @@ const runtimeThaiMessages = {
   'Only active simulations accept care actions.': 'ใช้การดูแลพืชได้เฉพาะการจำลองที่กำลังดำเนินอยู่',
   'Outdoor care and inventory actions require an available item.': 'การดูแลพืชกลางแจ้งต้องใช้ไอเท็มที่มีอยู่ในคลัง',
   'This item cannot be used in the selected growing mode.': 'ไอเท็มนี้ใช้ไม่ได้กับโหมดปลูกที่เลือก',
+  'Seasonal Journey allows watering, fertilizer, treatment for an active pest, and event-specific emergency care only.': 'โหมดปลูกตามฤดูกาลอนุญาตให้ใช้น้ำ ปุ๋ย การกำจัดศัตรูพืชที่กำลังระบาด และไอเท็มฉุกเฉินที่ตรงกับเหตุการณ์เท่านั้น',
+  'This emergency item becomes available only when the matching seasonal warning is active.': 'ไอเท็มฉุกเฉินนี้ใช้ได้เฉพาะเมื่อมีคำเตือนตามฤดูกาลที่ตรงกัน',
   'Not enough item quantity.': 'จำนวนไอเท็มไม่เพียงพอ',
   'This laboratory control is not available.': 'ไม่พบการควบคุมห้องทดลองนี้',
   'No matching active pest or care target was found.': 'ไม่พบศัตรูพืชหรือเป้าหมายที่ตรงกับการดูแลนี้',

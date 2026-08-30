@@ -14,7 +14,7 @@ class AdminSimulationDataValidatorTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        foreach (['model_assets', 'achievements', 'quests', 'simulation_mode_rewards', 'event_definitions', 'shop_items', 'items', 'pest_condition_rules', 'pest_knowledge', 'pests', 'plant_knowledge', 'plant_visual_variants', 'plant_condition_rules', 'plant_growth_stages', 'plants'] as $table) {
+        foreach (['model_assets', 'achievements', 'quests', 'simulation_mode_rewards', 'event_definitions', 'shop_items', 'items', 'item_types', 'pest_condition_rules', 'pest_knowledge', 'pests', 'plant_knowledge', 'plant_visual_variants', 'plant_condition_rules', 'plant_growth_stages', 'plants'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -40,6 +40,9 @@ class AdminSimulationDataValidatorTest extends TestCase
         });
         Schema::create('items', function (Blueprint $table): void {
             $this->baseTable($table); $table->string('name'); $table->string('action_key')->nullable();
+        });
+        Schema::create('item_types', function (Blueprint $table): void {
+            $this->baseTable($table); $table->string('key'); $table->string('name_en'); $table->string('name_th');
         });
         Schema::create('shop_items', function (Blueprint $table): void {
             $this->baseTable($table); $table->unsignedBigInteger('item_id');
@@ -68,6 +71,7 @@ class AdminSimulationDataValidatorTest extends TestCase
         DB::table('plant_knowledge')->insert(['id' => 1, 'plant_id' => 1]);
         DB::table('pest_knowledge')->insert(['id' => 1, 'pest_id' => 1]);
         DB::table('items')->insert(['id' => 1, 'name' => 'Insect Spray', 'action_key' => 'aphid-treatment']);
+        DB::table('item_types')->insert(['id' => 1, 'key' => 'treatment', 'name_en' => 'Plant treatment tools', 'name_th' => 'อุปกรณ์รักษาพืช']);
         DB::table('shop_items')->insert(['id' => 1, 'item_id' => 1]);
         DB::table('event_definitions')->insert(['id' => 1, 'name_en' => 'Heat Wave', 'name_th' => 'คลื่นความร้อน']);
         DB::table('simulation_mode_rewards')->insert(['id' => 1, 'mode' => 'greenhouse']);
@@ -80,6 +84,7 @@ class AdminSimulationDataValidatorTest extends TestCase
         $this->assertHasError('plant-knowledge', ['plant_id' => 1], 'plant_id');
         $this->assertHasError('pest-knowledge', ['pest_id' => 1], 'pest_id');
         $this->assertHasError('items', ['name' => 'insect spray', 'action_key' => 'other'], 'name');
+        $this->assertHasError('item-types', ['key' => 'TREATMENT', 'name_en' => 'Other', 'name_th' => 'อื่น'], 'key');
         $this->assertHasError('shop-items', ['item_id' => 1], 'item_id');
         $this->assertHasError('event-definitions', ['name_en' => 'heat wave', 'name_th' => 'อื่น', 'conditions' => []], 'name_en');
         $this->assertHasError('simulation-mode-rewards', ['mode' => 'greenhouse'], 'mode');

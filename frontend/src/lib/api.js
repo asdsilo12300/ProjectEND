@@ -213,7 +213,7 @@ export function updateAdminIssueReportStatus(id, payload) {
 }
 
 export async function getShopItems() {
-  return apiFetch('/shop/items', { auth: false, cacheTtl: 15000 })
+  return apiFetch('/shop/items', { auth: false, cacheTtl: 0, cache: 'no-store' })
 }
 
 export async function getInventory() {
@@ -353,21 +353,24 @@ export async function getAdminResourceLookups() {
   return apiFetch('/admin/resources/lookups')
 }
 
-export async function getAdminResource(resource, { search = '', status = '', trashed = '', page = 1, perPage = null } = {}) {
+export async function getAdminResource(resource, { search = '', status = '', trashed = '', groupBy = '', page = 1, perPage = null } = {}) {
   const params = new URLSearchParams({ page: String(page) })
   if (perPage) params.set('per_page', String(perPage))
   if (search) params.set('search', search)
   if (status) params.set('status', status)
   if (trashed) params.set('trashed', trashed)
+  if (groupBy) params.set('group_by', groupBy)
   return apiFetch(`/admin/resources/${encodeURIComponent(resource)}?${params.toString()}`)
 }
 
 export async function saveAdminResource(resource, record) {
   const hasId = Boolean(record.id)
-  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}${hasId ? `/${record.id}` : ''}`, {
+  const response = await apiFetch(`/admin/resources/${encodeURIComponent(resource)}${hasId ? `/${record.id}` : ''}`, {
     method: hasId ? 'PUT' : 'POST',
     body: JSON.stringify(record),
   })
+  notifyContentCatalogChanged()
+  return response
 }
 
 export async function generateAdminPlantSetup(plantId) {
@@ -375,11 +378,15 @@ export async function generateAdminPlantSetup(plantId) {
 }
 
 export async function deleteAdminResource(resource, recordId) {
-  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}`, { method: 'DELETE' })
+  const response = await apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}`, { method: 'DELETE' })
+  notifyContentCatalogChanged()
+  return response
 }
 
 export async function restoreAdminResource(resource, recordId) {
-  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}/restore`, { method: 'POST' })
+  const response = await apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}/restore`, { method: 'POST' })
+  notifyContentCatalogChanged()
+  return response
 }
 
 export async function uploadAdminModelBundle({ model, resources = [] }) {
@@ -802,10 +809,10 @@ export async function restoreAdminEventDefinition(id) {
   return apiFetch(`/admin/event-definitions/${id}/restore`, { method: 'POST' })
 }
 
-export async function prankFriendSimulator(simulatorId, itemKey) {
+export async function prankFriendSimulator(simulatorId, itemKey, itemId = null) {
   return apiFetch(`/simulators/${simulatorId}/prank`, {
     method: 'POST',
-    body: JSON.stringify({ item_key: itemKey }),
+    body: JSON.stringify(itemId ? { item_id: itemId } : { item_key: itemKey }),
   })
 }
 

@@ -146,7 +146,7 @@ class GameSimulationSeeder extends Seeder
         $items = [
             [
                 'name' => 'Hand Pick',
-                'type' => 'pesticide',
+                'type' => 'treatment',
                 'description' => 'Manual removal. Aphid success 40%, snail success 80%. Does not consume inventory.',
                 'image_url' => '/storage/icon%20picture/hand-Photoroom.png',
                 'effect_type' => 'manual_pest_control:aphid,snail',
@@ -160,7 +160,7 @@ class GameSimulationSeeder extends Seeder
             ],
             [
                 'name' => 'Insect Spray',
-                'type' => 'pesticide',
+                'type' => 'treatment',
                 'description' => 'Clears aphids with 100% success.',
                 'image_url' => '/storage/icon%20picture/Insecticide%20spray-Photoroom.png',
                 'effect_type' => 'pest_control:aphid',
@@ -174,7 +174,7 @@ class GameSimulationSeeder extends Seeder
             ],
             [
                 'name' => 'Snail Spray',
-                'type' => 'pesticide',
+                'type' => 'treatment',
                 'description' => 'Clears snails with 100% success.',
                 'image_url' => '/storage/icon%20picture/snail%20spray.png',
                 'effect_type' => 'pest_control:snail',
@@ -188,7 +188,7 @@ class GameSimulationSeeder extends Seeder
             ],
             [
                 'name' => 'Fungus Spray',
-                'type' => 'pesticide',
+                'type' => 'treatment',
                 'description' => 'Clears fungus with 100% success.',
                 'image_url' => '/storage/icon%20picture/Antifungal%20spray-Photoroom.png',
                 'effect_type' => 'pest_control:fungus',
@@ -202,7 +202,7 @@ class GameSimulationSeeder extends Seeder
             ],
             [
                 'name' => 'Aphid Prank',
-                'type' => 'cosmetic',
+                'type' => 'prank',
                 'description' => 'Send aphids to one active plant in a friend garden.',
                 'image_url' => '/storage/icon%20picture/aphid-Photoroom.png',
                 'effect_type' => 'friend_pest:aphid',
@@ -213,7 +213,7 @@ class GameSimulationSeeder extends Seeder
             ],
             [
                 'name' => 'Snail Prank',
-                'type' => 'cosmetic',
+                'type' => 'prank',
                 'description' => 'Send a snail to one active plant in a friend garden.',
                 'image_url' => '/storage/icon%20picture/snails-Photoroom.png',
                 'effect_type' => 'friend_pest:snail',

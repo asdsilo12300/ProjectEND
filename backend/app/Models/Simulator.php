@@ -114,7 +114,10 @@ class Simulator extends Model
 
     public function activePests(): HasMany
     {
-        return $this->hasMany(SimulationPest::class)->where('status', 'active')->with('pest');
+        return $this->hasMany(SimulationPest::class)
+            ->where('status', 'active')
+            ->whereHas('pest', fn ($query) => $query->whereNull('pests.deleted_at'))
+            ->with('pest');
     }
 
     public function posts(): HasMany

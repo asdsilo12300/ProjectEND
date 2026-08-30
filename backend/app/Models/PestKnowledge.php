@@ -26,6 +26,8 @@ class PestKnowledge extends Model
         'favorable_conditions_th',
         'prevention_en',
         'prevention_th',
+        'photo_url',
+        'photo_source_url',
         'treatment_action_keys',
         'sources',
     ];

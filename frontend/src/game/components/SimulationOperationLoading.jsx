@@ -65,6 +65,34 @@ export function SimulationOperationLoading({ language = 'en', operation }) {
   const activeStep = Math.min(content.steps.length - 1, Math.max(0, Number(operation.step) || 0))
   const progress = Math.round(((activeStep + 1) / content.steps.length) * 100)
 
+  if (operation.type === 'uproot') {
+    const statusRows = [
+      { label: { en: 'Plant data', th: 'ข้อมูลพืช' }, readyAt: 1 },
+      { label: { en: 'Simulation session', th: 'การจำลอง' }, readyAt: 2 },
+      { label: { en: 'Next growing space', th: 'พื้นที่ปลูกใหม่' }, readyAt: 3 },
+    ]
+
+    return (
+      <section className="simulation-operation-loader" role="status" aria-busy="true" aria-live="polite" aria-label={content.title[locale]}>
+        <div className="simulation-operation-loader__backdrop" />
+        <div className="simulation-operation-loader__card simulation-operation-loader__card--compact">
+          <div className="simulation-operation-loader__orb" aria-hidden="true"><span /></div>
+          <h2>{locale === 'th' ? 'กำลังถอนพืชและเตรียมพื้นที่ใหม่' : 'Uprooting the plant and preparing a new space'}</h2>
+          <p className="simulation-operation-loader__compact-description">
+            {locale === 'th' ? 'กำลังบันทึกสถานะล่าสุดและปิดการจำลอง กรุณารอสักครู่' : 'Saving the latest state and closing the simulation. Please wait.'}
+          </p>
+          <div className="simulation-operation-loader__compact-rows">
+            {statusRows.map((row) => {
+              const complete = activeStep >= row.readyAt
+              return <div key={row.label.en}><span>{row.label[locale]}</span><strong data-complete={complete}>{complete ? (locale === 'th' ? 'เสร็จแล้ว' : 'Ready') : (locale === 'th' ? 'กำลังโหลด' : 'Loading')}</strong></div>
+            })}
+          </div>
+          <p className="simulation-operation-loader__compact-notice"><AppIcon name="clock" />{locale === 'th' ? 'โปรดอย่าปิดหน้านี้จนกว่าการถอนต้นจะเสร็จ' : 'Keep this page open until uprooting is complete.'}</p>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section
       className="simulation-operation-loader"

@@ -102,12 +102,13 @@ function applyGrowthPose(actions, mixer, progress, options, lastPoseRef) {
  * progress. The clip never advances by wall-clock time, so it cannot outrun a
  * Slow or Paused growth calculation and never needs to reset on API updates.
  */
-export function useGrowthAnimationPose(actions, mixer, growthProgress, configuration = 1) {
+export function useGrowthAnimationPose(actions, mixer, growthProgress, configuration = 1, previewLoop = false) {
   const options = useMemo(() => normalizedOptions(configuration), [configuration])
   const targetProgress = clamp01(growthProgress)
   const targetProgressRef = useRef(targetProgress)
   const displayedProgressRef = useRef(null)
   const lastPoseRef = useRef('')
+  const previewElapsedRef = useRef(0)
 
   useLayoutEffect(() => {
     targetProgressRef.current = targetProgress
@@ -123,11 +124,11 @@ export function useGrowthAnimationPose(actions, mixer, growthProgress, configura
     })
 
     if (displayedProgressRef.current === null || options.transitionResponse <= 0) {
-      displayedProgressRef.current = targetProgress
+      displayedProgressRef.current = previewLoop ? 0 : targetProgress
     }
     lastPoseRef.current = ''
     applyGrowthPose(actions, mixer, displayedProgressRef.current, options, lastPoseRef)
-  }, [actions, mixer, options, targetProgress])
+  }, [actions, mixer, options, previewLoop, targetProgress])
 
   useFrame((_, delta) => {
     // Drei exposes animation actions lazily. On the first committed frame the
@@ -147,6 +148,16 @@ export function useGrowthAnimationPose(actions, mixer, growthProgress, configura
       applyGrowthPose(actions, mixer, displayedProgressRef.current, options, lastPoseRef)
     }
 
+    if (previewLoop) {
+      previewElapsedRef.current += Math.min(Math.max(delta, 0), 0.1)
+      // Ping-pong through the authored clip so the preview has no abrupt jump
+      // from the final frame back to the first frame.
+      const loopProgress = 0.5 - Math.cos(previewElapsedRef.current * 0.82) * 0.5
+      displayedProgressRef.current = loopProgress
+      applyGrowthPose(actions, mixer, loopProgress, options, lastPoseRef)
+      return
+    }
+
     if (options.transitionResponse <= 0 || displayedProgressRef.current === null) return
 
     const target = targetProgressRef.current
@@ -162,6 +173,7 @@ export function useGrowthAnimationPose(actions, mixer, growthProgress, configura
   useEffect(() => () => {
     Object.values(actions).forEach((action) => action?.stop?.())
     displayedProgressRef.current = null
+    previewElapsedRef.current = 0
     lastPoseRef.current = ''
   }, [actions])
 }

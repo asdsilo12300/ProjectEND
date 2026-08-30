@@ -3,9 +3,12 @@
 namespace Tests\Unit;
 
 use App\Models\Item;
+use App\Models\Pest;
+use App\Models\PestKnowledge;
 use App\Models\Plant;
 use App\Models\SimulationAction;
 use App\Models\SimulationModifier;
+use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Models\UserItem;
 use App\Services\SimulationActionService;
@@ -161,6 +164,44 @@ class SimulationActionServiceTest extends TestCase
         ]);
     }
 
+    public function test_seasonal_mode_allows_an_admin_mapped_spray_with_a_custom_action_key(): void
+    {
+        [$simulator, $item] = $this->seedSimulation('seasonal');
+        $item->update([
+            'name' => 'Worm spray',
+            'type' => 'treatment',
+            'action_key' => 'worm-spray',
+            'effect_type' => null,
+            'animation_key' => 'pest-spray',
+        ]);
+        $pest = Pest::query()->create([
+            'name_th' => 'หนอน',
+            'name_en' => 'worm',
+            'base_chance' => 99,
+            'damage_per_turn' => 10,
+        ]);
+        PestKnowledge::query()->create([
+            'pest_id' => $pest->id,
+            'treatment_action_keys' => ['worm-spray'],
+        ]);
+        $activePest = SimulationPest::query()->create([
+            'simulator_id' => $simulator->id,
+            'pest_id' => $pest->id,
+            'status' => 'active',
+        ]);
+
+        $result = app(SimulationActionService::class)->apply($simulator->fresh(), 1, [
+            'client_action_id' => 'aa412e82-525f-41e3-a174-97146377ab42',
+            'action_key' => 'worm-spray',
+            'item_id' => $item->id,
+            'target_value' => null,
+            'event_id' => null,
+        ]);
+
+        $this->assertSame(1, (int) $result['inventory_quantity']);
+        $this->assertSame('treated', $activePest->fresh()->status);
+    }
+
     public function test_temporary_protection_expires_after_thirty_seconds(): void
     {
         [$simulator, $item] = $this->seedSimulation('outdoor');
@@ -284,7 +325,7 @@ class SimulationActionServiceTest extends TestCase
 
     private function buildSchema(): void
     {
-        foreach (['simulation_weather_days', 'simulation_modifiers', 'simulation_actions', 'user_items', 'items', 'simulators', 'plants'] as $table) {
+        foreach (['simulation_weather_days', 'simulation_modifiers', 'simulation_actions', 'simulation_pests', 'pest_knowledge', 'pests', 'user_items', 'items', 'simulators', 'plants'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -312,6 +353,22 @@ class SimulationActionServiceTest extends TestCase
             $table->string('rarity'); $table->boolean('is_active')->default(true); $table->string('action_key')->nullable();
             $table->string('mode_scope')->default('both'); $table->json('effect_payload')->nullable(); $table->string('animation_key')->nullable();
             $table->timestamps(); $table->softDeletes();
+        });
+        Schema::create('pests', function (Blueprint $table): void {
+            $table->id(); $table->string('name_th'); $table->string('name_en')->nullable();
+            $table->text('description')->nullable(); $table->string('image_url')->nullable();
+            $table->string('model_url')->nullable(); $table->string('placement_mode')->default('ground_random');
+            $table->decimal('base_chance', 5, 2)->default(0); $table->integer('damage_per_turn')->default(0);
+            $table->text('behavior')->nullable(); $table->timestamps(); $table->softDeletes();
+        });
+        Schema::create('pest_knowledge', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('pest_id')->unique();
+            $table->json('treatment_action_keys')->nullable(); $table->timestamps(); $table->softDeletes();
+        });
+        Schema::create('simulation_pests', function (Blueprint $table): void {
+            $table->id(); $table->unsignedBigInteger('simulator_id'); $table->unsignedBigInteger('pest_id');
+            $table->string('status')->default('active'); $table->timestamp('appeared_at')->nullable();
+            $table->timestamp('treated_at')->nullable();
         });
         Schema::create('user_items', function (Blueprint $table): void {
             $table->id(); $table->unsignedBigInteger('user_id'); $table->unsignedBigInteger('item_id');

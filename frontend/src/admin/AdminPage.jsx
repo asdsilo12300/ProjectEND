@@ -6,7 +6,9 @@ import { AppIcon } from '../game/icons/FontAwesomeIcon'
 import { loadSettings, saveSettings } from '../game/settings/settingsPreferences'
 import { formatPlantDuration } from '../utils/plantDuration'
 import { ImageUploadField } from './ImageUploadField'
+import { IconSourceField } from './IconSourceField'
 import { ModelBundleField } from './ModelBundleField'
+import { AdminAssetPreview } from './AdminAssetPreview'
 import {
   deleteAdminContent,
   deleteAdminResource,
@@ -23,6 +25,7 @@ import {
   saveAdminResource,
   saveAdminContent,
   resolveAssetUrl,
+  storageAsset,
   updateAdminUser,
   uploadAdminContentImage,
   uploadAdminImage,
@@ -274,6 +277,8 @@ const lookupLabel = {
   stages: (row) => `${row.stage_no}. ${row.stage_name}`,
   pests: (row) => document.documentElement.lang === 'th' ? row.name_th || row.name_en : row.name_en || row.name_th,
   items: (row) => row.name,
+  itemTypes: (row) => `${document.documentElement.lang === 'th' ? row.name_th || row.name_en : row.name_en || row.name_th} · ${row.key}`,
+  animationPresets: (row) => document.documentElement.lang === 'th' ? row.name_th || row.name_en : row.name_en || row.name_th,
 }
 
 function localizedAdminName(row) {
@@ -300,38 +305,28 @@ const visualStateOptions = [
 const leafStateOptions = ['normal', 'upright', 'wilted', 'drooping', 'yellowing', 'pale', 'spotted', 'burnt_edges', 'root_burn', 'darkened', 'small']
 const stemStateOptions = ['normal', 'upright', 'leaning', 'soft', 'thin', 'dry', 'slow', 'short']
 const severityOptions = Array.from({ length: 10 }, (_, index) => ({ value: index + 1, label: `${index + 1} / 10` }))
-const itemEffectTypeOptions = [
-  { value: '', label: 'No legacy effect' },
-  ...['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover', 'mulch'].map((key) => ({ value: `environment:${key}`, label: `Environment · ${key.replaceAll('-', ' ')}` })),
-  { value: 'manual_pest_control:aphid,snail', label: 'Manual pest control · aphid and snail' },
-  { value: 'pest_control:aphid', label: 'Pest control · aphid' },
-  { value: 'pest_control:snail', label: 'Pest control · snail' },
-  { value: 'pest_control:fungus', label: 'Pest control · fungus' },
-  { value: 'friend_pest:aphid', label: 'Friend prank · aphid' },
-  { value: 'friend_pest:snail', label: 'Friend prank · snail' },
-]
-const itemActionOptions = [
-  { value: '', label: 'No simulation action' },
-  ...['water', 'fertilizer', 'drainage', 'shade', 'windbreak', 'frost-cover', 'mulch', 'manual-pest-control', 'aphid-treatment', 'snail-treatment', 'fungus-treatment'].map((value) => ({ value, label: value.replaceAll('-', ' ') })),
-]
 const itemAnimationOptions = [
   { value: '', label: 'No 3D animation' },
-  ...['watering-can', 'fertilizer-pour', 'soil-mix', 'shade-cover', 'windbreak', 'frost-cover', 'straw-mulch', 'hand-pick', 'pest-spray'].map((value) => ({ value, label: value.replaceAll('-', ' ') })),
+  { value: 'place-down', label: 'Place beside plant — slide in and settle' },
+  { value: 'pour-liquid', label: 'Pour liquid — tilt and release droplets' },
+  { value: 'scatter', label: 'Scatter material — shake and spread particles' },
+  { value: 'spray-mist', label: 'Spray mist — aim and spray toward plant' },
+  { value: 'dig-mix', label: 'Dig or mix soil — press and swing tool' },
+  { value: 'sweep', label: 'Sweep across — move from side to side' },
+  { value: 'spin-activate', label: 'Spin to activate — rotate with a glow' },
+  { value: 'hover-pulse', label: 'Hover and pulse — float above the target' },
+  { value: 'bounce-drop', label: 'Drop and bounce — fall from above' },
+  { value: 'shake-use', label: 'Shake while working — rapid tool motion' },
+  { value: 'watering-can', label: 'Watering can — pour water on soil' },
+  { value: 'fertilizer-pour', label: 'Fertilizer shaker — spread pellets' },
+  { value: 'pest-spray', label: 'Pest spray — spray detected pests' },
+  { value: 'hand-pick', label: 'Hand pick — approach and remove by hand' },
+  { value: 'soil-mix', label: 'Soil tool — loosen and mix soil' },
+  { value: 'straw-mulch', label: 'Mulch deployment — arrange around plant' },
+  { value: 'shade-cover', label: 'Shade deployment — unfold over plant' },
+  { value: 'windbreak', label: 'Windbreak deployment — rise around plant' },
+  { value: 'frost-cover', label: 'Frost cover — enclose the plant' },
 ]
-const itemEffectPresets = {
-  'environment:water': { action_key: 'water', animation_key: 'watering-can', effect_payload: { strategy: 'refill_reserve', resource: 'water', duration_ticks: 1, duration_seconds: 30 } },
-  'environment:fertilizer': { action_key: 'fertilizer', animation_key: 'fertilizer-pour', effect_payload: { strategy: 'refill_reserve', resource: 'fertilizer', duration_ticks: 1, duration_seconds: 30 } },
-  'environment:drainage': { action_key: 'drainage', animation_key: 'soil-mix', effect_payload: { strategy: 'drainage', resource: 'soil_humidity', duration_ticks: 2, duration_seconds: 30 } },
-  'environment:shade': { action_key: 'shade', animation_key: 'shade-cover', effect_payload: { strategy: 'toward_healthy_midpoint', resource: 'light', duration_ticks: 2, duration_seconds: 30 } },
-  'environment:windbreak': { action_key: 'windbreak', animation_key: 'windbreak', effect_payload: { strategy: 'toward_healthy_midpoint', resource: 'air_humidity', duration_ticks: 2, duration_seconds: 30 } },
-  'environment:frost-cover': { action_key: 'frost-cover', animation_key: 'frost-cover', effect_payload: { strategy: 'toward_healthy_midpoint', resource: 'air_temp', duration_ticks: 2, duration_seconds: 30 } },
-  'environment:mulch': { action_key: 'mulch', animation_key: 'straw-mulch', effect_payload: { strategy: 'moisture_retention', resource: 'soil_humidity', duration_ticks: 2, duration_seconds: 30 } },
-  'manual_pest_control:aphid,snail': { action_key: 'manual-pest-control', animation_key: 'hand-pick', effect_payload: {} },
-  'pest_control:aphid': { action_key: 'aphid-treatment', animation_key: 'pest-spray', effect_payload: {} },
-  'pest_control:snail': { action_key: 'snail-treatment', animation_key: 'pest-spray', effect_payload: {} },
-  'pest_control:fungus': { action_key: 'fungus-treatment', animation_key: 'pest-spray', effect_payload: {} },
-}
-
 function ColorCodePreview({ value }) {
   if (!value) return <span className="admin-color-code is-empty">—</span>
   return <span className="admin-color-code"><i style={{ backgroundColor: value }} /><code>{value}</code></span>
@@ -345,7 +340,7 @@ const commonActiveField = { key: 'is_active', label: 'Active', type: 'boolean' }
 const resourceGroups = {
   plants: [
     {
-      id: 'plants', label: 'Plant catalog', createLabel: 'New plant', icon: 'plant',
+      id: 'plants', label: 'Plant catalog', createLabel: 'New plant', icon: 'plant', previewType: 'plant',
       defaults: { name_th: '', name_en: '', description: '', base_image_url: '', base_model_url: '', real_maturity_days: 90, growth_reference_url: '', water_min: 40, water_max: 80, light_min: 40, light_max: 90, fertilizer_min: 20, fertilizer_max: 70, soil_humidity_min: 40, soil_humidity_max: 80, air_humidity_min: 40, air_humidity_max: 80, soil_temp_min: 18, soil_temp_max: 32, air_temp_min: 18, air_temp_max: 35 },
       fields: [
         { key: 'name_en', label: 'English name', required: true }, { key: 'name_th', label: 'Thai name', required: true },
@@ -417,13 +412,13 @@ const resourceGroups = {
     },
   ],
   pests: [
-    { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', placement_mode: 'ground_random', base_chance: 3, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'placement_mode', label: '3D placement', type: 'select', required: true, options: [{ value: 'ground_random', label: 'Random on soil' }, { value: 'leaf', label: 'Attached to leaves' }, { value: 'plant_surface', label: 'Plant surface effect' }] }, { key: 'image_url', label: 'Pest image', type: 'image-upload', scope: 'pests', wide: true }, { key: 'model_url', label: 'Pest 3D model package', type: 'model-bundle', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => localizedAdminName(row) }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Placement', render: (row) => ({ ground_random: 'Soil', leaf: 'Leaf', plant_surface: 'Surface' })[row.placement_mode] ?? 'Soil' }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
+    { id: 'pests', label: 'Pest catalog', createLabel: 'New pest', icon: 'pest', previewType: 'pest', defaults: { name_th: '', name_en: '', description: '', image_url: '', model_url: '', placement_mode: 'ground_random', base_chance: 3, damage_per_turn: 0, behavior: '' }, fields: [{ key: 'name_en', label: 'English name' }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'placement_mode', label: '3D placement', type: 'select', required: true, options: [{ value: 'ground_random', label: 'Random on soil' }, { value: 'leaf', label: 'Attached to leaves' }, { value: 'plant_surface', label: 'Plant surface effect' }] }, { key: 'image_url', label: 'Pest image', type: 'image-upload', scope: 'pests', wide: true }, { key: 'model_url', label: 'Pest 3D model package', type: 'model-bundle', wide: true }, { key: 'base_chance', label: 'Base chance (%)', type: 'number', step: '0.01', required: true }, { key: 'damage_per_turn', label: 'Damage per turn', type: 'number', required: true }, { key: 'behavior', label: 'Behavior notes', type: 'textarea', wide: true }], columns: [{ label: 'Pest', render: (row) => localizedAdminName(row) }, { label: 'Thai name', render: (row) => row.name_th }, { label: 'Placement', render: (row) => ({ ground_random: 'Soil', leaf: 'Leaf', plant_surface: 'Surface' })[row.placement_mode] ?? 'Soil' }, { label: 'Base chance', render: (row) => `${row.base_chance}%` }, { label: 'Rules / damage', render: (row) => `${row.condition_rules_count} rules · ${row.damage_per_turn} damage` }] },
     {
       id: 'pest-knowledge', label: 'Pest knowledge', createLabel: 'New pest guide', icon: 'bookmark',
       defaults: {
         pest_id: '', scientific_name: '', family: '', category_en: '', category_th: '', summary_en: '', summary_th: '',
         signs_en: [], signs_th: [], favorable_conditions_en: [], favorable_conditions_th: [], prevention_en: [], prevention_th: [],
-        treatment_action_keys: [], sources: [],
+        photo_url: '', photo_source_url: '', treatment_action_keys: [], sources: [],
       },
       fields: [
         { key: 'pest_id', label: 'Pest', type: 'lookup', lookup: 'pests', required: true },
@@ -437,6 +432,8 @@ const resourceGroups = {
         { key: 'favorable_conditions_th', label: 'Risk conditions (Thai)', type: 'string-list', itemPlaceholder: 'เพิ่มปัจจัยเพิ่มความเสี่ยง…', addLabel: 'เพิ่มปัจจัย', emptyLabel: 'ยังไม่มีปัจจัยภาษาไทย', wide: true },
         { key: 'prevention_en', label: 'Prevention steps (English)', type: 'string-list', itemPlaceholder: 'Add one prevention step…', addLabel: 'Add prevention step', emptyLabel: 'No English prevention steps yet.', wide: true },
         { key: 'prevention_th', label: 'Prevention steps (Thai)', type: 'string-list', itemPlaceholder: 'เพิ่มวิธีป้องกัน…', addLabel: 'เพิ่มวิธีป้องกัน', emptyLabel: 'ยังไม่มีวิธีป้องกันภาษาไทย', wide: true },
+        { key: 'photo_url', label: 'Pest guide photo', type: 'image-upload', scope: 'pest-guides', wide: true },
+        { key: 'photo_source_url', label: 'Photo reference URL', type: 'url', requiredWith: 'photo_url', wide: true },
         { key: 'treatment_action_keys', label: 'Items that can remove this pest', type: 'string-list', optionLookup: 'item-actions', addLabel: 'Add treatment item', emptyLabel: 'No treatment item configured.', hint: 'Choose existing active items. The selected items will also be allowed to remove this pest in the simulation.', wide: true },
         { key: 'sources', label: 'Sources and further reading', type: 'reference-list', wide: true },
       ],
@@ -445,14 +442,17 @@ const resourceGroups = {
         { label: 'Group / family', render: (row) => row.family || row.category_en || row.category_th || '—' },
         { label: 'Guide content', render: (row) => `${Array.isArray(row.signs_en) ? row.signs_en.length : 0} signs · ${Array.isArray(row.prevention_en) ? row.prevention_en.length : 0} prevention steps` },
         { label: 'Treatment items', render: (row) => Array.isArray(row.treatment_action_keys) ? row.treatment_action_keys.length : 0 },
+        { label: 'Photo', render: (row) => row.photo_url ? 'Configured with reference' : 'Not set' },
         { label: 'Sources', render: (row) => Array.isArray(row.sources) ? row.sources.length : 0 },
       ],
     },
     { id: 'pest-rules', label: 'Occurrence rules', createLabel: 'New pest rule', icon: 'bug', groupBy: 'pest', defaults: { pest_id: '', plant_id: '', factor: 'air_humidity', operator: 'above', min_value: 0, max_value: 100, chance_delta: 0, severity: 1, is_active: true }, fields: [{ key: 'pest_id', label: 'Pest', type: 'lookup', lookup: 'pests', required: true }, { key: 'plant_id', label: 'Specific plant (optional)', type: 'lookup', lookup: 'plants' }, { key: 'factor', label: 'Factor', type: 'select', options: environmentFactorOptions, required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'chance_delta', label: 'Chance change', type: 'number', step: '0.01', required: true }, { key: 'severity', label: 'Severity', type: 'select', options: severityOptions, required: true }, commonActiveField], columns: [{ label: 'Pest', render: (row) => localizedAdminName(row.pest) }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) || 'All plants' }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Chance / severity', render: (row) => `${row.chance_delta} / ${row.severity}` }] },
   ],
   store: [
-    { id: 'items', label: 'Item catalog', createLabel: 'New item', icon: 'shop', defaults: { name: '', type: 'pesticide', description: '', image_url: '', effect_type: '', effect_value: 0, action_key: '', animation_key: '', mode_scope: 'both', effect_payload: { strategy: '', resource: '', duration_ticks: 1, duration_seconds: 30 }, rarity: 'common', is_active: true }, fields: [{ key: 'name', label: 'Item name', required: true }, { key: 'type', label: 'Type', type: 'select', options: ['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'], required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Item image', type: 'image-upload', scope: 'items', wide: true }, { key: 'effect_type', label: 'Effect type', type: 'select', options: itemEffectTypeOptions }, { key: 'effect_value', label: 'Effect strength', type: 'number', required: true }, { key: 'action_key', label: 'Simulation action', type: 'select', options: itemActionOptions }, { key: 'animation_key', label: '3D animation', type: 'select', options: itemAnimationOptions }, { key: 'mode_scope', label: 'Available mode', type: 'select', options: ['both', 'greenhouse', 'outdoor', 'seasonal'], required: true }, { key: 'effect_payload', label: 'How this item works', type: 'item-effect', wide: true }, { key: 'rarity', label: 'Rarity', type: 'select', options: ['common', 'rare', 'epic', 'legendary'], required: true }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.name }, { label: 'Type / mode', render: (row) => `${row.type} · ${row.mode_scope || 'both'}` }, { label: 'Action', render: (row) => row.action_key || row.effect_type || '—' }, { label: 'Animation', render: (row) => row.animation_key || '—' }] },
-    { id: 'shop-items', label: 'Shop listings', createLabel: 'New listing', icon: 'shoppingCart', defaults: { item_id: '', price_coin: 0, price_gem: 0, stock_limit: '', is_active: true, starts_at: '', ends_at: '' }, fields: [{ key: 'item_id', label: 'Item', type: 'lookup', lookup: 'items', required: true }, { key: 'price_coin', label: 'Coin price', type: 'number', required: true }, { key: 'price_gem', label: 'Gem price', type: 'number', required: true }, { key: 'stock_limit', label: 'Stock limit', type: 'number' }, { key: 'starts_at', label: 'Starts at', type: 'datetime-local' }, { key: 'ends_at', label: 'Ends at', type: 'datetime-local' }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.item?.name }, { label: 'Type', render: (row) => row.item?.type }, { label: 'Price', render: (row) => `${row.price_coin} coins / ${row.price_gem} gems` }, { label: 'Stock', render: (row) => row.stock_limit ?? 'Unlimited' }] },
+    { id: 'item-types', label: 'Item types', createLabel: 'New item type', icon: 'bookmark', defaults: { name_en: '', name_th: '', description_en: '', description_th: '', icon: '', is_active: true }, fields: [{ key: 'name_en', label: 'English name', required: true }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description_en', label: 'English description', type: 'textarea', wide: true }, { key: 'description_th', label: 'Thai description', type: 'textarea', wide: true }, { key: 'icon', label: 'Category icon', type: 'icon-source', scope: 'item-types', required: true, wide: true }, commonActiveField], columns: [{ label: 'Item type', render: (row) => localizedAdminName(row) || '—' }, { label: 'Description', render: (row) => document.documentElement.lang === 'th' ? (row.description_th || row.description_en || '—') : (row.description_en || row.description_th || '—') }, { label: 'Items using this type', render: (row) => row.items_count ?? 0 }] },
+    { id: 'animation-presets', label: 'Animation presets', createLabel: 'New animation preset', icon: 'live', previewType: 'animation', noCreate: true, defaults: { name_en: '', name_th: '', description_en: '', description_th: '', motion_type: 'place-down', effect_type: 'none', target_type: 'plant', duration_ms: 1200, speed: 1, amplitude: 1, particle_color: '#dff8ed', particle_count: 24, scale: 1, is_active: true }, fields: [{ key: 'name_en', label: 'English name', required: true }, { key: 'name_th', label: 'Thai name', required: true }, { key: 'description_en', label: 'English description', type: 'textarea', wide: true }, { key: 'description_th', label: 'Thai description', type: 'textarea', wide: true }, { key: 'motion_type', label: 'Movement style', type: 'select', options: itemAnimationOptions.filter((option) => option.value), required: true }, { key: 'effect_type', label: 'Visual effect', type: 'select', options: ['none', 'water', 'spray', 'fertilizer', 'drainage', 'light', 'air', 'temperature'], required: true }, { key: 'target_type', label: 'Animation target', type: 'select', options: ['plant', 'soil', 'pest', 'scene'], required: true }, { key: 'duration_ms', label: 'Duration (milliseconds)', type: 'number', required: true }, { key: 'speed', label: 'Movement speed', type: 'number', step: '0.1', required: true }, { key: 'amplitude', label: 'Movement distance', type: 'number', step: '0.1', required: true }, { key: 'particle_color', label: 'Effect color', type: 'color-rgb', required: true }, { key: 'particle_count', label: 'Particle amount', type: 'number', required: true }, { key: 'scale', label: 'Model scale', type: 'number', step: '0.1', required: true }, commonActiveField], columns: [{ label: 'Animation', render: (row) => localizedAdminName(row) }, { label: 'Movement', render: (row) => itemAnimationOptions.find((option) => option.value === row.motion_type)?.label?.split(' — ')[0] || row.motion_type }, { label: 'Effect / target', render: (row) => `${row.effect_type} · ${row.target_type}` }, { label: 'Timing', render: (row) => `${row.duration_ms} ms · ${row.speed}×` }, { label: 'Items using preset', render: (row) => row.items_count ?? 0 }] },
+    { id: 'items', label: 'Item catalog', createLabel: 'New item', icon: 'shop', previewType: 'item', defaults: { name: '', type: 'care', pest_id: '', description: '', image_url: '', model_url: '', effect_type: '', effect_value: 0, action_key: '', animation_preset_id: '', animation_key: '', mode_scope: 'both', effect_payload: { strategy: '', resource: '', duration_ticks: 1, duration_seconds: 30 }, rarity: 'common', is_active: true }, fields: [{ key: 'name', label: 'Item name', required: true }, { key: 'type', label: 'Item type', type: 'lookup-key', lookup: 'itemTypes', required: true }, { key: 'pest_id', label: 'Pest used for this prank', type: 'lookup', lookup: 'pests', required: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }, { key: 'image_url', label: 'Item image', type: 'image-upload', scope: 'items', wide: true }, { key: 'model_url', label: 'Item 3D model package', type: 'model-bundle', wide: true }, { key: 'effect_value', label: 'Effect strength', type: 'number', required: true }, { key: 'animation_preset_id', label: '3D animation preset', type: 'lookup', lookup: 'animationPresets' }, { key: 'mode_scope', label: 'Available mode', type: 'select', options: ['both', 'greenhouse', 'outdoor', 'seasonal'], required: true }, { key: 'effect_payload', label: 'How this item works', type: 'item-effect', wide: true }, { key: 'rarity', label: 'Rarity', type: 'select', options: ['common', 'rare', 'epic', 'legendary'], required: true }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.name }, { label: 'Item type', render: (row) => localizedAdminName(row.type_definition) || row.type }, { label: '3D model', render: (row) => row.model_url ? 'Configured' : 'Uses built-in model' }, { label: 'Animation', render: (row) => localizedAdminName(row.animation_preset) || itemAnimationOptions.find((option) => option.value === row.animation_key)?.label?.split(' — ')[0] || 'None' }] },
+    { id: 'shop-items', label: 'Shop listings', createLabel: 'New listing', icon: 'shoppingCart', defaults: { item_id: '', price_coin: 0, stock_limit: '', is_active: true }, fields: [{ key: 'item_id', label: 'Item', type: 'lookup', lookup: 'items', required: true }, { key: 'price_coin', label: 'Coin price', type: 'number', required: true }, { key: 'stock_limit', label: 'Stock limit', type: 'number' }, commonActiveField], columns: [{ label: 'Item', render: (row) => row.item?.name }, { label: 'Type', render: (row) => row.item?.type }, { label: 'Price', render: (row) => `${row.price_coin} coins` }, { label: 'Stock', render: (row) => row.stock_limit ?? 'Unlimited' }] },
   ],
   events: [
     {
@@ -506,13 +506,13 @@ const resourceGroups = {
     { id: 'model-assets', label: 'Model assets', createLabel: 'New model asset', icon: 'hardware', defaults: { asset_key: '', label: '', type: 'model', url: '', metadata: {} }, fields: [{ key: 'asset_key', label: 'Asset key', required: true }, { key: 'label', label: 'Display label' }, { key: 'type', label: 'Asset type', type: 'select', options: ['model', 'plant', 'scene', 'pest', 'item', 'action', 'effect'], required: true }, { key: 'url', label: 'GLTF model package', type: 'model-bundle', required: true, wide: true }, { key: 'metadata', label: 'Metadata (JSON)', type: 'json', wide: true }], columns: [{ label: 'Asset', render: (row) => row.label || row.asset_key }, { label: 'Key', render: (row) => row.asset_key }, { label: 'Type', render: (row) => row.type }, { label: 'Model file', render: (row) => row.url ? decodeURIComponent(String(row.url).split(/[?#]/, 1)[0].split('/').pop()) : 'Not set' }] },
   ],
   community: [
-    { id: 'posts', label: 'Posts', icon: 'chat', moderation: true, noDelete: true, statusField: 'visibility', statusOptions: ['public', 'friends', 'private'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Caption', render: (row) => row.caption || 'No caption' }, { label: 'Engagement', render: (row) => `${row.comments_count} comments · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
-    { id: 'comments', label: 'Post comments', icon: 'chat', moderation: true, noDelete: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Thread', render: (row) => `${row.replies_count} replies · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
-    { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, noDelete: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'posts', label: 'Posts', icon: 'chat', moderation: true, noDelete: true, groupBy: 'user', serverGrouped: true, statusField: 'visibility', statusOptions: ['public', 'friends', 'private'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Caption', render: (row) => row.caption || 'No caption' }, { label: 'Engagement', render: (row) => `${row.comments_count} comments · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'comments', label: 'Post comments', icon: 'chat', moderation: true, noDelete: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Thread', render: (row) => `${row.replies_count} replies · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, noDelete: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   simulations: [
-    { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${localizedAdminName(row.plant) || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
-    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Grow time', render: (row) => formatPlantDuration(row, document.documentElement.lang === 'th' ? 'th' : 'en', { compact: true }) }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${localizedAdminName(row.plant) || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
+    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, groupBy: 'user', serverGrouped: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Grow time', render: (row) => formatPlantDuration(row, document.documentElement.lang === 'th' ? 'th' : 'en', { compact: true }) }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   activity: [
     { id: 'activity-logs', label: 'Admin activity log', icon: 'history', readOnly: true, columns: [{ label: 'Administrator', render: (row) => row.admin?.username }, { label: 'Action', render: (row) => row.action }, { label: 'Target', render: (row) => `${row.target_type || 'system'} #${row.target_id || '—'}` }, { label: 'Time', render: (row) => formatDate(row.created_at, true) }] },
@@ -593,13 +593,6 @@ function AdminDashboardSkeleton() {
         </section>
       </div>
 
-      <section className="admin-skeleton-attention">
-        <div><AdminSkeletonBlock className="is-eyebrow" /><AdminSkeletonBlock className="is-heading" /></div>
-        <AdminSkeletonBlock className="is-badge" />
-        <div className="admin-skeleton-attention-grid">
-          {Array.from({ length: 6 }, (_, index) => <AdminSkeletonBlock className="is-action" key={index} />)}
-        </div>
-      </section>
       <span className="sr-only">Loading management data</span>
     </div>
   )
@@ -709,42 +702,6 @@ const userActivityMeta = {
   comment_liked: { label: 'Liked a comment', filterLabel: 'Comment likes', badge: 'Like', icon: 'thumbUp', tone: 'reaction' },
   item_used: { label: 'Used an item in the lab', filterLabel: 'Items used', badge: 'Item', icon: 'tool', tone: 'inventory' },
   shop_purchase: { label: 'Spent currency in the shop', filterLabel: 'Shop purchases', badge: 'Shop', icon: 'shop', tone: 'inventory' },
-}
-
-const attentionItemMeta = {
-  moderated_comments: { label: 'Comments to review', detail: 'Hidden or suspended discussions', icon: 'chat' },
-  draft_contents: { label: 'Draft content', detail: 'Articles waiting to be published', icon: 'bookmark' },
-  suspended_users: { label: 'Suspended accounts', detail: 'Accounts with restricted access', icon: 'groups' },
-  failed_simulations: { label: 'Failed simulations', detail: 'Runs that may need investigation', icon: 'controller' },
-  cancelled_simulations: { label: 'Cancelled simulations', detail: 'Interrupted user sessions', icon: 'history' },
-  stale_active_simulations: { label: 'Long-running simulations', detail: 'Active for more than seven days', icon: 'live' },
-  missing_model_assets: { label: 'Missing model files', detail: 'Asset records without a configured URL', icon: 'hardware' },
-}
-
-function AttentionCenter({ attention, onOpenSection, language = 'en' }) {
-  const items = attention?.items ?? []
-
-  return (
-    <section className="admin-panel admin-attention-panel">
-      <header className="admin-panel__header">
-        <div><small>{adminText(language, 'ACTION CENTER')}</small><h2>{adminText(language, 'Items that need attention')}</h2></div>
-        <span className={attention?.total ? 'has-items' : 'is-clear'}>{adminText(language, attention?.total ? `${Number(attention.total).toLocaleString()} open` : 'All clear')}</span>
-      </header>
-      <div className="admin-attention-grid">
-        {items.map((item) => {
-          const meta = attentionItemMeta[item.key] ?? { label: item.key.replaceAll('_', ' '), detail: 'Open the related section to review', icon: 'shield' }
-          return (
-            <button className={`admin-attention-item is-${item.severity} ${item.value ? 'has-items' : 'is-clear'}`} type="button" key={item.key} onClick={() => onOpenSection(item.section)}>
-              <span><AppIcon name={meta.icon} /></span>
-              <span><strong>{adminText(language, meta.label)}</strong><small>{adminText(language, meta.detail)}</small></span>
-              <b>{Number(item.value ?? 0).toLocaleString()}</b>
-              <AppIcon name="arrowForward" />
-            </button>
-          )
-        })}
-      </div>
-    </section>
-  )
 }
 
 function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = '', theme = 'dark', language = 'en' }) {
@@ -1139,8 +1096,6 @@ function DashboardView({ data, trendSelection, onChangeTrendSelection, onOpenSec
           </div>
         </section>
       </div>
-
-      <AttentionCenter attention={data?.attention} onOpenSection={onOpenSection} language={language} />
     </div>
   )
 }
@@ -1846,38 +1801,74 @@ function ItemEffectEditor({ disabled, label, onChange, value, wide }) {
     { value: 'toward_healthy_midpoint', label: 'Move environment toward healthy range' },
     { value: 'drainage', label: 'Reduce excess soil moisture' },
     { value: 'moisture_retention', label: 'Retain water and soil moisture' },
-    { value: 'moisture_retention', label: 'Retain water and soil moisture' },
   ]
+  const allResourceOptions = [
+    { value: 'water', label: 'Water reserve' },
+    { value: 'fertilizer', label: 'Fertilizer reserve' },
+    { value: 'soil_humidity', label: 'Soil moisture' },
+    { value: 'light', label: 'Light' },
+    { value: 'air_humidity', label: 'Air humidity' },
+    { value: 'soil_temp', label: 'Soil temperature' },
+    { value: 'air_temp', label: 'Air temperature' },
+  ]
+  const allowedResources = {
+    refill_reserve: ['water', 'fertilizer'],
+    toward_healthy_midpoint: allResourceOptions.map((option) => option.value),
+    drainage: ['soil_humidity'],
+    moisture_retention: ['soil_humidity'],
+  }
+  const resourceOptions = allResourceOptions.filter((option) => (allowedResources[effects.strategy] ?? []).includes(option.value))
 
   function update(key, nextValue) {
     onChange({ ...effects, [key]: nextValue })
+  }
+
+  function updateStrategy(nextStrategy) {
+    const resources = allowedResources[nextStrategy] ?? []
+    const nextResource = resources.includes(effects.resource) ? effects.resource : (resources[0] ?? '')
+    onChange({ ...effects, strategy: nextStrategy, resource: nextResource })
   }
 
   return (
     <section className={`admin-resource-custom-field admin-item-effect-editor ${wide ? 'is-wide' : ''}`} aria-label={label}>
       <div className="admin-list-editor__heading"><div><strong>{label}</strong><small>Choose the intended result. The system builds the data without requiring JSON.</small></div><span className="admin-list-editor__count">EASY SETUP</span></div>
       <div className="admin-item-effect-editor__grid">
-        <label><span>Behavior</span><select disabled={disabled} value={effects.strategy ?? ''} onChange={(event) => update('strategy', event.target.value)}>{strategyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-        <label><span>Resource</span><select disabled={disabled} value={effects.resource ?? ''} onChange={(event) => update('resource', event.target.value)}><option value="">Automatic / not needed</option><option value="water">Water reserve</option><option value="fertilizer">Fertilizer reserve</option><option value="soil_humidity">Soil moisture</option><option value="light">Light</option><option value="air_humidity">Air humidity</option><option value="soil_temp">Soil temperature</option><option value="air_temp">Air temperature</option></select></label>
+        <label><span>Behavior</span><select disabled={disabled} value={effects.strategy ?? ''} onChange={(event) => updateStrategy(event.target.value)}>{strategyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label><span>Resource</span><select disabled={disabled || !effects.strategy} value={effects.resource ?? ''} onChange={(event) => update('resource', event.target.value)}><option value="">{effects.strategy ? 'Select a resource' : 'Choose behavior first'}</option>{resourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         <label><span>Duration (updates)</span><input disabled={disabled} min="1" type="number" value={effects.duration_ticks ?? 1} onChange={(event) => update('duration_ticks', event.target.value)} /></label>
         <label><span>Duration (seconds)</span><input disabled={disabled} max="300" min="5" type="number" value={effects.duration_seconds ?? 30} onChange={(event) => update('duration_seconds', event.target.value)} /></label>
       </div>
-      <p className="admin-item-effect-editor__summary">{effects.strategy ? `Selected effect: ${strategyOptions.find((option) => option.value === effects.strategy)?.label ?? effects.strategy}${effects.resource ? ` · ${effects.resource.replaceAll('_', ' ')}` : ''}` : 'No extra behavior. The effect type and strength above will be used.'}</p>
+      <p className="admin-item-effect-editor__summary">{effects.strategy ? `Selected effect: ${strategyOptions.find((option) => option.value === effects.strategy)?.label ?? effects.strategy}${effects.resource ? ` · ${effects.resource.replaceAll('_', ' ')}` : ''}` : 'No automatic plant effect. For pest treatment, connect this item from the pest knowledge form.'}</p>
     </section>
   )
 }
 
 function ResourceEditor({ config, language = 'en', record, lookups, onClose, onSaved }) {
-  const [initialForm] = useState(() => ({ ...config.defaults, ...record }))
+  const [initialForm] = useState(() => {
+    if (config.id !== 'items') return { ...config.defaults, ...record }
+    const effectPestKey = String(record?.effect_type ?? '').toLowerCase().replace(/^friend_pest:/, '')
+    const linkedPest = (lookups.pests ?? []).find((pest) => {
+      const pestKey = String(pest.name_en || pest.name_th || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      return pestKey === effectPestKey
+    })
+    return { ...config.defaults, ...record, pest_id: record?.effect_payload?.pest_id ?? record?.pest_id ?? linkedPest?.id ?? '' }
+  })
   const [form, setForm] = useState(initialForm)
   const [imageFiles, setImageFiles] = useState({})
   const [modelBundles, setModelBundles] = useState({})
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
-  const quickPlantCreate = config.id === 'plants' && !record?.id
-  const visibleFields = useMemo(() => quickPlantCreate
-    ? config.fields.filter((field) => ['name_en', 'name_th', 'description', 'base_image_url', 'base_model_url'].includes(field.key))
-    : config.fields, [config.fields, quickPlantCreate])
+  const [previewRecord, setPreviewRecord] = useState(null)
+  const isPrankItem = config.id === 'items' && form.type === 'prank'
+  const visibleFields = useMemo(() => {
+    if (config.id !== 'items') return config.fields
+    if (isPrankItem) return config.fields.filter((field) => !['image_url', 'model_url', 'effect_value', 'animation_preset_id', 'effect_payload'].includes(field.key))
+    return config.fields.filter((field) => field.key !== 'pest_id')
+  }, [config.fields, config.id, isPrankItem])
+  const selectedPrankPest = isPrankItem ? (lookups.pests ?? []).find((pest) => String(pest.id) === String(form.pest_id)) : null
+  const selectedPrankPestImage = selectedPrankPest?.image_url
+    ? (/^(?:blob:|data:|https?:\/\/|\/)/i.test(String(selectedPrankPest.image_url)) ? resolveAssetUrl(selectedPrankPest.image_url) : storageAsset(selectedPrankPest.image_url))
+    : null
   const dialogRef = useRef(null)
   const dirty = useMemo(() => dataSnapshot(form) !== dataSnapshot(initialForm) || Object.values(imageFiles).some((file) => file instanceof File) || Object.values(modelBundles).some((bundle) => bundle?.model), [form, imageFiles, initialForm, modelBundles])
   const requestClose = useCallback(async () => {
@@ -1896,6 +1887,9 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
 
   function fieldRequired(field) {
     if (field.required) return true
+    if (field.requiredWith) {
+      return Boolean(form[field.requiredWith] || imageFiles[field.requiredWith] instanceof File)
+    }
     return config.id === 'pests'
       && field.key === 'model_url'
       && form.placement_mode !== 'plant_surface'
@@ -1912,9 +1906,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
         }
       }
 
-      if (config.id === 'items' && key === 'effect_type' && itemEffectPresets[value]) {
-        Object.assign(next, itemEffectPresets[value])
-      }
+      if (key === 'type' && value !== 'prank' && Object.prototype.hasOwnProperty.call(current, 'pest_id')) next.pest_id = ''
 
       return next
     })
@@ -1934,6 +1926,39 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
       return 'All stages / not specified'
     }
     return field.required ? 'Select a record' : 'All / not specified'
+  }
+
+  function openPreview() {
+    const next = { ...form }
+    const objectUrls = []
+    for (const field of config.fields) {
+      const file = imageFiles[field.key]
+      if ((field.type === 'image-upload' || field.type === 'icon-source') && file instanceof File) {
+        const url = URL.createObjectURL(file)
+        objectUrls.push(url)
+        next[field.key] = url
+      }
+      const model = modelBundles[field.key]?.model
+      if (field.type === 'model-bundle' && model instanceof File) {
+        const url = URL.createObjectURL(model)
+        objectUrls.push(url)
+        next[field.key] = url
+      }
+    }
+    if (config.id === 'items') {
+      next.animation_preset = (lookups.animationPresets ?? []).find((preset) => String(preset.id) === String(next.animation_preset_id)) ?? record?.animation_preset ?? null
+      if (next.type === 'prank') {
+        const pest = (lookups.pests ?? []).find((option) => String(option.id) === String(next.pest_id))
+        next.image_url = pest?.image_url ?? ''
+        next.model_url = pest?.model_url ?? ''
+      }
+    }
+    setPreviewRecord({ data: next, objectUrls })
+  }
+
+  function closePreview() {
+    previewRecord?.objectUrls?.forEach((url) => URL.revokeObjectURL(url))
+    setPreviewRecord(null)
   }
 
   async function submit(event) {
@@ -1995,7 +2020,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
           payload[field.key] = uploaded.reference
         }
       }
-      for (const field of config.fields.filter((item) => item.type === 'image-upload')) {
+      for (const field of config.fields.filter((item) => item.type === 'image-upload' || item.type === 'icon-source')) {
         const file = imageFiles[field.key]
         if (field.required && !payload[field.key] && !(file instanceof File)) {
           throw new Error(`${field.label} is required.`)
@@ -2021,7 +2046,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
       <form ref={dialogRef} className="admin-resource-editor" data-resource={config.id} role="dialog" aria-modal="true" aria-labelledby="admin-resource-editor-title" tabIndex="-1" onSubmit={submit}>
         <header className="admin-editor__header"><div><small>{config.label.toUpperCase()} / {record?.id ? `RECORD #${record.id}` : 'NEW RECORD'}</small><h2 id="admin-resource-editor-title">{record?.id ? `Edit ${config.label}` : config.createLabel}</h2></div><button type="button" onClick={requestClose} aria-label="Close editor">×</button></header>
         <div className="admin-resource-editor__body">
-          {quickPlantCreate && <div className="admin-quick-create-note"><span><AppIcon name="robot" /></span><div><strong>{document.documentElement.lang === 'th' ? 'กรอกเพียงข้อมูลหลัก' : 'Only the essentials are needed'}</strong><p>{document.documentElement.lang === 'th' ? 'ระบบจะใส่ค่าช่วงสภาพแวดล้อมมาตรฐาน และสร้างระยะเริ่มต้น 3 ระยะให้อัตโนมัติ หลังบันทึกจะแจ้งเฉพาะข้อมูลที่ยังขาดตรงมุมขวาล่าง' : 'Standard environment ranges and three starter growth stages are generated automatically. Only missing information will be shown afterward.'}</p></div></div>}
+          {isPrankItem && <div className="admin-prank-pest-note"><span className="admin-prank-pest-note__visual">{selectedPrankPestImage ? <img alt="" src={selectedPrankPestImage} /> : <AppIcon name="pest" />}</span><div><strong>{language === 'th' ? 'ใช้ข้อมูลจากศัตรูพืชโดยอัตโนมัติ' : 'Pest assets are linked automatically'}</strong><p>{language === 'th' ? 'เลือกศัตรูพืชด้านล่าง ระบบจะใช้รูปและโมเดล 3 มิติจากข้อมูลศัตรูพืช ไม่ต้องอัปโหลดซ้ำ' : 'Choose a pest below. Its image and 3D model will be reused, so no duplicate upload is needed.'}</p>{selectedPrankPest && <small>{language === 'th' ? 'กำลังใช้' : 'Using'}: {lookupLabel.pests(selectedPrankPest)}</small>}</div></div>}
           <div className="admin-resource-form-grid">
             {visibleFields.map((field) => (
               field.type === 'image-upload' ? (
@@ -2030,6 +2055,21 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                   file={imageFiles[field.key]}
                   key={field.key}
                   label={field.label}
+                  onFileChange={(file) => setImageFiles((current) => ({ ...current, [field.key]: file }))}
+                  onRemove={() => {
+                    setImageFiles((current) => ({ ...current, [field.key]: null }))
+                    setForm((current) => ({ ...current, [field.key]: '' }))
+                  }}
+                  required={fieldRequired(field) && !form[field.key]}
+                  value={form[field.key]}
+                />
+              ) : field.type === 'icon-source' ? (
+                <IconSourceField
+                  disabled={status !== 'idle'}
+                  file={imageFiles[field.key]}
+                  key={field.key}
+                  label={field.label}
+                  language={language}
                   onFileChange={(file) => setImageFiles((current) => ({ ...current, [field.key]: file }))}
                   onRemove={() => {
                     setImageFiles((current) => ({ ...current, [field.key]: null }))
@@ -2076,7 +2116,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                   key={field.key}
                   label={field.label}
                   onChange={(items) => updateField(field.key, items)}
-                  options={field.optionLookup === 'item-actions' ? (lookups.items ?? []).filter((item) => item.action_key).map((item) => ({ value: item.action_key, label: `${item.name} · ${item.action_key}` })) : field.options}
+                  options={field.optionLookup === 'item-actions' ? (lookups.items ?? []).filter((item) => item.action_key).map((item) => ({ value: item.action_key, label: item.name })) : field.options}
                   placeholder={field.itemPlaceholder}
                   wide={field.wide}
                 />
@@ -2117,7 +2157,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                     const optionLabel = typeof option === 'object' ? option.label : option
                     return <option key={optionValue} value={optionValue}>{optionLabel}</option>
                   })}{fieldValue(field) !== '' && !field.options.some((option) => String(typeof option === 'object' ? option.value : option) === String(fieldValue(field))) && <option value={fieldValue(field)}>{fieldValue(field)} (existing)</option>}</select>
-                ) : field.type === 'lookup' ? (
+                ) : field.type === 'lookup' || field.type === 'lookup-key' ? (
                   <>
                     <select
                       disabled={field.lookup === 'stages' && (!form.plant_id || !lookupOptions(field).length)}
@@ -2126,7 +2166,10 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                       onChange={(event) => updateField(field.key, event.target.value)}
                     >
                       <option value="">{lookupPlaceholder(field)}</option>
-                      {lookupOptions(field).map((option) => <option key={option.id} value={option.id}>{lookupLabel[field.lookup](option)}</option>)}
+                      {lookupOptions(field).map((option) => {
+                        const optionValue = field.type === 'lookup-key' ? option.key : option.id
+                        return <option key={optionValue} value={optionValue}>{lookupLabel[field.lookup](option)}</option>
+                      })}
                     </select>
                     {field.lookup === 'stages' && !form.plant_id && <small className="admin-field-hint">Choose a plant to show only its growth stages.</small>}
                   </>
@@ -2140,8 +2183,9 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
           </div>
         </div>
         {error && <div className="admin-editor__error admin-resource-editor__conflict" role="alert"><span className="admin-resource-editor__conflict-icon"><AppIcon name="warning" /></span><div><strong>{language === 'th' ? 'บันทึกไม่ได้ — พบข้อมูลซ้ำหรือขัดแย้ง' : 'Cannot save — duplicate or conflicting data'}</strong><p>{error}</p><small>{language === 'th' ? 'ข้อมูลที่กรอกยังอยู่ในฟอร์ม แก้ไขจุดที่แจ้งแล้วบันทึกอีกครั้ง' : 'Your form values are preserved. Correct the conflict and save again.'}</small></div></div>}
-        <footer className="admin-editor__footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span><button disabled={status !== 'idle'} type="button" onClick={requestClose}>Cancel</button><button className="is-primary" disabled={status !== 'idle'} type="submit"><AppIcon name="save" />{status === 'uploading' ? 'Uploading files…' : status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
+        <footer className="admin-editor__footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span>{config.previewType && <button className="admin-preview-trigger" disabled={status !== 'idle'} type="button" onClick={openPreview}><AppIcon name="eye" />Preview</button>}<button disabled={status !== 'idle'} type="button" onClick={requestClose}>Cancel</button><button className="is-primary" disabled={status !== 'idle'} type="submit"><AppIcon name="save" />{status === 'uploading' ? 'Uploading files…' : status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
       </form>
+      {previewRecord && <AdminAssetPreview config={config} language={language} record={previewRecord.data} onClose={closePreview} />}
     </div>
   )
 }
@@ -2152,7 +2196,7 @@ const detailFieldMap = {
     ['Plant history', 'plant_history_id'], ['Simulation', 'simulator_id'], ['Created', 'created_at', 'date'], ['Last updated', 'updated_at', 'date'],
   ],
   comments: [
-    ['Record ID', 'id'], ['Moderation status', 'status'], ['Full comment', 'comment_text'], ['Post', 'post_id'], ['Parent comment', 'parent_id'],
+    ['Record ID', 'id'], ['Moderation status', 'status'], ['Full comment', 'comment_text'], ['Post number', 'post_id'], ['Parent comment', 'parent_id'],
     ['Replies', 'replies_count'], ['Likes', 'likes_count'], ['Created', 'created_at', 'date'], ['Last updated', 'updated_at', 'date'],
   ],
   'simulator-comments': [
@@ -2183,8 +2227,9 @@ function recordDetailValue(record, field, format) {
   return String(value)
 }
 
-function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRestore, onModerate }) {
+function ResourceDetailsDrawer({ config, language = 'en', record, onClose, onEdit, onDelete, onRestore, onModerate }) {
   const dialogRef = useRef(null)
+  const [plantPreviewOpen, setPlantPreviewOpen] = useState(false)
   useModalLifecycle(onClose, dialogRef)
   const fields = detailFieldMap[config.id] ?? [
     ['Record ID', 'id'],
@@ -2192,10 +2237,14 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRe
     ['Created', 'created_at', 'date'], ['Last updated', 'updated_at', 'date'],
   ]
   const person = record.user ?? record.admin
-  const imageUrl = resolveAssetUrl(record.live_snapshot_url || record.snapshot_image_url || '')
+  const imagePath = record.live_snapshot_url || record.snapshot_image_url || record.plant?.base_image_url || ''
+  const imageUrl = /^(?:blob:|data:|https?:\/\/|\/)/i.test(String(imagePath)) ? resolveAssetUrl(imagePath) : storageAsset(imagePath)
   const plantName = localizedAdminName(record.plant)
+  const isSimulation = config.id === 'simulators'
+  const cancelledSimulation = config.id === 'simulators' && record.status === 'cancelled'
 
   return (
+    <>
     <div className="admin-details-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <aside ref={dialogRef} className="admin-details-drawer" role="dialog" aria-modal="true" aria-labelledby="admin-details-title" tabIndex="-1">
         <header className="admin-details-drawer__header">
@@ -2218,11 +2267,28 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRe
             </section>
           )}
 
-          {imageUrl && <img className="admin-details-media" src={imageUrl} alt="Simulation or harvested plant preview" onError={(event) => { event.currentTarget.hidden = true }} />}
+          {isSimulation && (
+            <section className="admin-simulation-plant-card">
+              <div className="admin-simulation-plant-card__visual">
+                {imageUrl ? <img src={imageUrl} alt={plantName || (language === 'th' ? 'พืชของผู้ใช้' : 'User plant')} onError={(event) => { event.currentTarget.hidden = true }} /> : <AppIcon name="plant" />}
+                <span><i />{language === 'th' ? 'สถานะล่าสุดที่บันทึกไว้' : 'LAST SAVED STATE'}</span>
+              </div>
+              <div className="admin-simulation-plant-card__content">
+                <span><small>{language === 'th' ? 'พืชของผู้ใช้' : 'USER PLANT'}</small><strong>{plantName || (language === 'th' ? 'ไม่มีข้อมูลชื่อพืช' : 'Plant name unavailable')}</strong></span>
+                <dl><div><dt>{language === 'th' ? 'สุขภาพ' : 'Health'}</dt><dd>{record.health ?? 0}%</dd></div><div><dt>{language === 'th' ? 'การเติบโต' : 'Growth'}</dt><dd>{record.growth_point ?? 0}/100</dd></div></dl>
+                <button type="button" onClick={() => setPlantPreviewOpen(true)}><AppIcon name="eye" />{language === 'th' ? 'ดูสภาพพืชแบบ 3 มิติ' : 'View plant in 3D'}</button>
+                {cancelledSimulation && <p><AppIcon name="lock" />{language === 'th' ? 'รายการยกเลิกแล้ว แต่ยังเปิดดูพืชย้อนหลังได้' : 'Cancelled record — the saved plant remains available to view.'}</p>}
+              </div>
+            </section>
+          )}
+
+          {!isSimulation && imageUrl && <img className="admin-details-media" src={imageUrl} alt="Simulation or harvested plant preview" onError={(event) => { event.currentTarget.hidden = true }} />}
 
           {record.deleted_at && <div className="admin-trash-notice"><AppIcon name="history" /><span><strong>This record is in the trash.</strong><small>Restore it to edit or use it again.</small></span></div>}
 
-          {config.moderation && !record.deleted_at && (
+          {cancelledSimulation && <div className="admin-locked-record-notice"><AppIcon name="lock" /><span><strong>{language === 'th' ? 'การจำลองนี้ถูกยกเลิกและล็อกแล้ว' : 'This cancelled simulation is locked'}</strong><small>{language === 'th' ? 'ผู้ดูแลระบบเปิดดูหรือลบได้เท่านั้น ไม่สามารถเปลี่ยนสถานะหรือการมองเห็นได้' : 'Administrators can only view or delete it. Status and sharing can no longer be changed.'}</small></span></div>}
+
+          {config.moderation && !record.deleted_at && !cancelledSimulation && (
             <section className="admin-details-moderation">
               <div><small>MODERATION</small><h3>Review decision</h3><p>Changes are confirmed before they are applied and recorded in the audit log.</p></div>
               <label>{config.statusField.replaceAll('_', ' ')}<select value={record[config.statusField]} onChange={(event) => onModerate(config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
@@ -2245,11 +2311,13 @@ function ResourceDetailsDrawer({ config, record, onClose, onEdit, onDelete, onRe
         <footer className="admin-details-drawer__footer">
           {!record.deleted_at && !config.moderation && !config.readOnly && <button type="button" onClick={onEdit}><AppIcon name="settings" />Edit record</button>}
           {!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" onClick={onDelete}><AppIcon name="trash" />Move to trash</button>}
-          {record.deleted_at && !config.readOnly && <button type="button" onClick={onRestore}><AppIcon name="history" />Restore record</button>}
+          {record.deleted_at && !config.readOnly && !cancelledSimulation && <button type="button" onClick={onRestore}><AppIcon name="history" />Restore record</button>}
           <button className="is-primary" type="button" onClick={onClose}>Done</button>
         </footer>
       </aside>
     </div>
+    {plantPreviewOpen && <AdminAssetPreview config={{ previewType: 'simulation-plant' }} language={language} record={record} onClose={() => setPlantPreviewOpen(false)} />}
+    </>
   )
 }
 
@@ -2350,6 +2418,13 @@ function PlantAutoSetupBar({ busy, language, onGenerate, onSelectPlant, plants }
   )
 }
 
+function adminResourceRequestOptions(resourceConfig, options = {}) {
+  if (resourceConfig?.serverGrouped) {
+    return { ...options, groupBy: resourceConfig.groupBy, perPage: options.perPage ?? 10 }
+  }
+  return (resourceConfig?.groupBy || resourceConfig?.groupByPlant) ? { ...options, perPage: 200 } : options
+}
+
 function ResourceView({ groupKey, language = 'en' }) {
   const configs = resourceGroups[groupKey]
   const [activeResource, setActiveResource] = useState(configs[0].id)
@@ -2364,6 +2439,7 @@ function ResourceView({ groupKey, language = 'en' }) {
   const [error, setError] = useState('')
   const [editor, setEditor] = useState(null)
   const [selectedRecord, setSelectedRecord] = useState(null)
+  const [previewRecord, setPreviewRecord] = useState(null)
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
   const [refreshState, setRefreshState] = useState('connected')
   const [setupPlants, setSetupPlants] = useState([])
@@ -2394,9 +2470,13 @@ function ResourceView({ groupKey, language = 'en' }) {
       const relationId = record[`${groupRelation}_id`] ?? relation?.id ?? 'unassigned'
       const key = `${groupRelation}-${relationId}`
       if (!groups.has(key)) {
+        const fallbackRelation = groupRelation === 'user'
+          ? (language === 'th' ? 'ไม่พบข้อมูลเจ้าของ' : 'Owner not available')
+          : (language === 'th' ? `ยังไม่ได้ระบุ${groupRelation === 'pest' ? 'ศัตรูพืช' : 'พืช'}` : `${groupRelation === 'pest' ? 'Pest' : 'Plant'} not specified`)
         groups.set(key, {
           key,
-          name: localizedAdminName(relation) || (language === 'th' ? `ยังไม่ได้ระบุ${groupRelation === 'pest' ? 'ศัตรูพืช' : 'พืช'}` : `${groupRelation === 'pest' ? 'Pest' : 'Plant'} not specified`),
+          name: (groupRelation === 'user' ? relation?.username : localizedAdminName(relation)) || fallbackRelation,
+          detail: groupRelation === 'user' ? relation?.email : '',
           records: [],
         })
       }
@@ -2429,7 +2509,7 @@ function ResourceView({ groupKey, language = 'en' }) {
     if (!silent) { setLoading(true); setError('') }
     try {
       const resourceConfig = configs.find((item) => item.id === resource)
-      const result = await getAdminResource(resource, (resourceConfig?.groupBy || resourceConfig?.groupByPlant) ? { ...options, perPage: 200 } : options)
+      const result = await getAdminResource(resource, adminResourceRequestOptions(resourceConfig, options))
       setPayload(result)
       setLastUpdatedAt(new Date())
       setRefreshState('connected')
@@ -2445,7 +2525,9 @@ function ResourceView({ groupKey, language = 'en' }) {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([getAdminResource(configs[0].id), getAdminResourceLookups()])
+    const firstConfig = configs[0]
+    const firstResourceOptions = adminResourceRequestOptions(firstConfig)
+    Promise.all([getAdminResource(firstConfig.id, firstResourceOptions), getAdminResourceLookups()])
       .then(([resourcePayload, lookupPayload]) => {
         if (!cancelled) {
           setPayload(resourcePayload)
@@ -2479,7 +2561,7 @@ function ResourceView({ groupKey, language = 'en' }) {
       }
       refreshInFlightRef.current = true
       try {
-        const result = await getAdminResource(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1, perPage: groupRelation ? 200 : null })
+        const result = await getAdminResource(config.id, adminResourceRequestOptions(config, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }))
         if (!cancelled) {
           setPayload(result)
           setLastUpdatedAt(new Date())
@@ -2498,7 +2580,7 @@ function ResourceView({ groupKey, language = 'en' }) {
       cancelled = true
       window.clearTimeout(refreshTimer)
     }
-  }, [appliedFilter, appliedSearch, config.id, editor, groupRelation, pagination?.current_page, selectedRecord, trashed])
+  }, [appliedFilter, appliedSearch, config, editor, groupRelation, pagination?.current_page, selectedRecord, trashed])
 
   async function chooseResource(resource) {
     setSelectedIds([])
@@ -2553,6 +2635,10 @@ function ResourceView({ groupKey, language = 'en' }) {
   }
 
   async function updateModeration(record, field, value) {
+    if (config.id === 'simulators' && record.status === 'cancelled') {
+      setError(language === 'th' ? 'การจำลองที่ยกเลิกแล้วถูกล็อก สามารถเปิดดูหรือลบได้เท่านั้น' : 'Cancelled simulations are locked and can only be viewed or deleted.')
+      return false
+    }
     const confirmed = await confirmAdminAction({
       title: 'Confirm this change?',
       text: `Record #${record.id} will change ${field.replaceAll('_', ' ')} to “${value}”.`,
@@ -2576,15 +2662,22 @@ function ResourceView({ groupKey, language = 'en' }) {
   }
 
   async function removeRecord(record) {
+    const cancelledSimulation = config.id === 'simulators' && record.status === 'cancelled'
     const confirmed = await confirmAdminAction({
       title: 'Move this record to trash?',
-      text: `Record #${record.id} from ${config.label} will be hidden from the live system. It can be restored later.`,
+      text: cancelledSimulation
+        ? `Cancelled simulation #${record.id} will be moved to trash and cannot be restored.`
+        : `Record #${record.id} from ${config.label} will be hidden from the live system. It can be restored later.`,
       confirmButtonText: 'Move to trash',
     })
     if (!confirmed) return
     try {
       await deleteAdminResource(config.id, record.id)
-      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
+      const [, lookupPayload] = await Promise.all([
+        load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }),
+        getAdminResourceLookups(),
+      ])
+      setLookups(lookupPayload.data ?? {})
       setSelectedRecord(null)
       await showAdminSuccess('Moved to trash')
       return true
@@ -2595,6 +2688,10 @@ function ResourceView({ groupKey, language = 'en' }) {
   }
 
   async function restoreRecord(record) {
+    if (config.id === 'simulators' && record.status === 'cancelled') {
+      setError(language === 'th' ? 'ไม่สามารถกู้คืนการจำลองที่ยกเลิกแล้วได้' : 'Cancelled simulations cannot be restored.')
+      return false
+    }
     const confirmed = await confirmAdminAction({
       title: 'Restore this record?',
       text: `Record #${record.id} will become available to the live system again.`,
@@ -2604,7 +2701,11 @@ function ResourceView({ groupKey, language = 'en' }) {
     if (!confirmed) return false
     try {
       await restoreAdminResource(config.id, record.id)
-      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
+      const [, lookupPayload] = await Promise.all([
+        load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }),
+        getAdminResourceLookups(),
+      ])
+      setLookups(lookupPayload.data ?? {})
       setSelectedRecord(null)
       await showAdminSuccess('Record restored')
       return true
@@ -2630,7 +2731,11 @@ function ResourceView({ groupKey, language = 'en' }) {
       const results = await Promise.allSettled(ids.map((id) => deleteAdminResource(config.id, id)))
       const failedIds = ids.filter((_, index) => results[index].status === 'rejected')
       setSelectedIds(failedIds)
-      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
+      const [, lookupPayload] = await Promise.all([
+        load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }),
+        getAdminResourceLookups(),
+      ])
+      setLookups(lookupPayload.data ?? {})
       if (groupKey === 'plants') await refreshPlantSetup()
       if (failedIds.length) {
         setError(language === 'th' ? `ลบสำเร็จ ${ids.length - failedIds.length} รายการ และลบไม่สำเร็จ ${failedIds.length} รายการ` : `${ids.length - failedIds.length} deleted; ${failedIds.length} could not be deleted.`)
@@ -2643,13 +2748,14 @@ function ResourceView({ groupKey, language = 'en' }) {
   }
 
   function renderResourceRecord(record, index, grouped = false) {
+    const cancelledSimulation = config.id === 'simulators' && record.status === 'cancelled'
     return (
-      <tr className={`${grouped ? 'admin-plant-child-row' : ''} ${record.deleted_at ? 'is-trashed' : ''} ${selectedIdSet.has(record.id) ? 'is-selected' : ''}`.trim()} key={record.id}>
+      <tr className={`${grouped ? 'admin-plant-child-row' : ''} ${cancelledSimulation ? 'is-locked-record' : ''} ${record.deleted_at ? 'is-trashed' : ''} ${selectedIdSet.has(record.id) ? 'is-selected' : ''}`.trim()} key={record.id}>
         {selectionEnabled && <td className="admin-selection-cell"><AdminSelectionCheckbox checked={selectedIdSet.has(record.id)} disabled={Boolean(record.deleted_at) || bulkDeleting} label={language === 'th' ? `เลือกรายการที่ ${record.id}` : `Select record ${record.id}`} onChange={(checked) => toggleRecord(record.id, checked)} /></td>}
         <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
         {visibleColumns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
-        {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-        <td><div className="admin-row-actions">{selectedIds.length === 0 && <><button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
+        {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : cancelledSimulation ? <div className="admin-locked-status"><StatusBadge status="cancelled" /><small>{language === 'th' ? 'ดู/ลบเท่านั้น' : 'View/delete only'}</small></div> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
+        <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{config.previewType && <button className="is-preview" type="button" onClick={() => setPreviewRecord(record)}><AppIcon name={config.icon} />Preview</button>}<button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
       </tr>
     )
   }
@@ -2682,16 +2788,17 @@ function ResourceView({ groupKey, language = 'en' }) {
             <thead><tr>{selectionEnabled && <th className="admin-selection-column"><AdminSelectionCheckbox checked={allSelectableSelected} disabled={!selectableRecordIds.length || bulkDeleting} indeterminate={selectedIds.length > 0 && !allSelectableSelected} label={language === 'th' ? 'เลือกทุกรายการในหน้านี้' : 'Select all records on this page'} onChange={toggleAllRecords} /></th>}<th className="admin-index-column">#</th>{visibleColumns.map((column) => <th key={column.label}>{column.label}</th>)}{!config.readOnly && <th>Status</th>}<th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>{groupRelation ? resourceRecordGroups.map((group) => {
               const expanded = expandedPlantGroups.has(group.key)
-              const activeCount = group.records.filter(({ record }) => !record.deleted_at && record.is_active !== false).length
+              const availableCount = group.records.filter(({ record }) => !record.deleted_at).length
+              const cancelledCount = config.id === 'simulators' ? group.records.filter(({ record }) => !record.deleted_at && record.status === 'cancelled').length : 0
               const selectedCount = group.records.filter(({ record }) => selectedIdSet.has(record.id)).length
               return (
                 <Fragment key={group.key}>
                   <tr className={`admin-plant-group-row ${expanded ? 'is-expanded' : ''}`}>
                     <td colSpan={tableColumnCount}>
                       <button aria-expanded={expanded} type="button" onClick={() => togglePlantGroup(group.key)}>
-                        <span className="admin-plant-group-row__icon"><AppIcon name={groupRelation === 'pest' ? 'pest' : 'plant'} /></span>
-                        <span className="admin-plant-group-row__title"><strong>{group.name}</strong><small>{group.records.length} {adminText(language, config.label)}</small></span>
-                        <span className="admin-plant-group-row__meta">{selectedCount > 0 && <b>{language === 'th' ? `เลือก ${selectedCount}` : `${selectedCount} selected`}</b>}<em>{activeCount} {language === 'th' ? 'ใช้งาน' : 'active'}</em></span>
+                        <span className="admin-plant-group-row__icon"><AppIcon name={groupRelation === 'user' ? 'groups' : groupRelation === 'pest' ? 'pest' : 'plant'} /></span>
+                        <span className="admin-plant-group-row__title"><strong>{group.name}</strong><small>{group.detail || `${group.records.length} ${adminText(language, config.label)}`}</small>{group.detail && <small>{group.records.length} {adminText(language, config.label)}</small>}</span>
+                        <span className="admin-plant-group-row__meta">{selectedCount > 0 && <b>{language === 'th' ? `เลือก ${selectedCount}` : `${selectedCount} selected`}</b>}{cancelledCount > 0 && <em className="is-locked">{cancelledCount} {language === 'th' ? 'ยกเลิก' : 'cancelled'}</em>}<em>{availableCount} {language === 'th' ? 'รายการ' : 'records'}</em></span>
                         <AppIcon className="admin-plant-group-row__chevron" name="arrowForward" />
                       </button>
                     </td>
@@ -2706,7 +2813,8 @@ function ResourceView({ groupKey, language = 'en' }) {
       </section>
 
       {pagination && <AdminPagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={(page) => { setSelectedIds([]); load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page }) }} />}
-      {selectedRecord && <ResourceDetailsDrawer config={config} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onRestore={() => restoreRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
+      {selectedRecord && <ResourceDetailsDrawer config={config} language={language} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onRestore={() => restoreRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
+      {previewRecord && <AdminAssetPreview config={config} language={language} record={previewRecord} onClose={() => setPreviewRecord(null)} />}
       {editor && <ResourceEditor config={config} language={language} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async (savedRecord) => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, trashed }), groupKey === 'plants' ? refreshPlantSetup(savedRecord) : Promise.resolve()]); setLookups(lookupPayload.data ?? {}) }} />}
     </div>
   )
@@ -2952,7 +3060,7 @@ export function AdminPage({ user, onLogout }) {
 
       <section className="admin-main">
         <header className="admin-topbar">
-          <div><small>{adminText(language, 'ADMINISTRATION')} / {adminText(language, section.toUpperCase())}</small><h1>{sectionMeta[0]}</h1><p>{sectionMeta[1]}</p></div>
+          <div><h1>{sectionMeta[0]}</h1><p>{sectionMeta[1]}</p></div>
           <div className="admin-topbar__actions">
             <span className={`admin-system-status is-${refreshState}`}><AppIcon name="live" /><i />{adminText(language, refreshState === 'connecting' ? 'Connecting data' : refreshState === 'stale' ? 'Update delayed' : 'Live data')}<em>{adminText(language, lastUpdatedAt ? `Last updated ${lastUpdatedAt.toLocaleTimeString(language === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · Auto ${refreshIntervalSeconds}s` : `Auto refresh · ${refreshIntervalSeconds}s`)}</em></span>
             <div className="admin-language-switch" role="group" aria-label={adminText(language, 'Interface language')}><AppIcon name="translate" /><button className={language === 'en' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('en')} aria-pressed={language === 'en'}>EN</button><button className={language === 'th' ? 'is-active' : ''} type="button" onClick={() => changeLanguage('th')} aria-pressed={language === 'th'}>ไทย</button></div>

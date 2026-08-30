@@ -151,17 +151,23 @@ class SimulationActionService
     {
         if (in_array($actionKey, ['water', 'fertilizer', 'mulch'], true)) return;
 
+        $configuredForActivePest = $simulator->activePests()
+            ->whereHas('pest.knowledge', fn ($query) => $query->whereJsonContains('treatment_action_keys', $actionKey))
+            ->exists();
+        if ($configuredForActivePest) return;
+
         if (str_ends_with($actionKey, '-treatment')) {
             // Pest care is an emergency response and remains unavailable when
             // there is no matching active pest (the normal treatment check
-            // below still validates the exact target).
+            // below still validates the exact target). Keep this fallback for
+            // legacy treatment items that predate administrator mappings.
             if ($simulator->activePests()->exists()) return;
         }
 
         $emergencyKeys = ['drainage', 'shade', 'windbreak', 'frost-cover'];
         if (! in_array($actionKey, $emergencyKeys, true)) {
             throw ValidationException::withMessages([
-                'action_key' => 'Seasonal Journey allows watering, fertilizer, and event-specific emergency care only.',
+                'action_key' => 'Seasonal Journey allows watering, fertilizer, treatment for an active pest, and event-specific emergency care only.',
             ]);
         }
 
@@ -237,6 +243,31 @@ class SimulationActionService
     {
         $plant = $simulator->plant()->firstOrFail();
         $strength = $item ? max(5, min(35, abs((int) $item->effect_value) ?: 20)) : 100;
+        $knownActionKeys = ['water', 'fertilizer', 'soil', 'light', 'air', 'soil-temp', 'temp', 'mulch', 'drainage', 'shade', 'windbreak', 'frost-cover'];
+        $strategy = $item ? (string) Arr::get($item->effect_payload ?? [], 'strategy', '') : '';
+        $resource = $item ? (string) Arr::get($item->effect_payload ?? [], 'resource', '') : '';
+
+        if ($item && $strategy !== '' && $resource !== '' && ! in_array($actionKey, $knownActionKeys, true)) {
+            $current = is_numeric($simulator->{$resource} ?? null) ? (float) $simulator->{$resource} : null;
+            $minimum = is_numeric($plant->{$resource.'_min'} ?? null) ? (float) $plant->{$resource.'_min'} : null;
+            $maximum = is_numeric($plant->{$resource.'_max'} ?? null) ? (float) $plant->{$resource.'_max'} : null;
+
+            if ($current !== null && $strategy === 'refill_reserve' && in_array($resource, ['water', 'fertilizer'], true)) {
+                return [$resource => min(100, $current + $strength)];
+            }
+            if ($current !== null && $minimum !== null && $maximum !== null && $strategy === 'toward_healthy_midpoint') {
+                $midpoint = ($minimum + $maximum) / 2;
+                $step = max(1, ($maximum - $minimum) * ($strength / 100));
+                $next = $current < $midpoint ? min($midpoint, $current + $step) : max($midpoint, $current - $step);
+                return [$resource => round($next, str_contains($resource, 'temp') ? 2 : 0)];
+            }
+            if ($current !== null && $minimum !== null && $strategy === 'drainage') {
+                return [$resource => max($minimum, $current - $strength)];
+            }
+            if ($current !== null && $strategy === 'moisture_retention') {
+                return [$resource => $current];
+            }
+        }
 
         // Water and nutrients are reserves consumed by the plant. A care item
         // replenishes the reserve by a dose; it no longer moves an arbitrary
@@ -309,7 +340,10 @@ class SimulationActionService
             'windbreak' => ['wind_speed' => -25, 'wind_gust' => -35, 'air_humidity' => 3],
             'frost-cover' => ['air_temp' => 4, 'soil_temp' => 2],
             'drainage' => ['soil_humidity' => -8],
-            default => [],
+            default => match ((string) Arr::get($item->effect_payload ?? [], 'strategy', '')) {
+                'moisture_retention' => [(string) Arr::get($item->effect_payload ?? [], 'resource', 'soil_humidity') => 3, 'water' => 2],
+                default => [],
+            },
         };
         foreach ($temporary as $factor => $value) {
             SimulationModifier::query()->create([

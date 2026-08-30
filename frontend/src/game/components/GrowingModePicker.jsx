@@ -82,9 +82,9 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
       <section className="growing-mode-dialog" data-tour="lab-mode-picker">
         {onCancel && <button aria-label={isThai ? 'ยกเลิก' : 'Cancel'} className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-white/12 bg-white/5 text-slate-300 hover:bg-rose-300/10 hover:text-rose-100" type="button" onClick={onCancel}><AppIcon className="h-4 w-4" name="close" /></button>}
         <header className="mb-5 pr-10 text-center">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#9bcf82]">{choosingForPlant ? (isThai ? 'เพิ่มพืชชนิดใหม่ · เลือกโหมดปลูก' : 'New species · Choose mode') : (isThai ? 'ขั้นตอน 1 จาก 3 · เลือกโหมดปลูก' : 'Step 1 of 3 · Growing mode')}</p>
+          {!choosingForPlant && <p className="text-xs font-black uppercase tracking-[0.14em] text-[#9bcf82]">{isThai ? 'ขั้นตอน 1 จาก 3 · เลือกโหมดปลูก' : 'Step 1 of 3 · Growing mode'}</p>}
           <h2 className="mt-1 text-2xl font-black text-white">{choosingForPlant ? (isThai ? `เลือกโหมดปลูกสำหรับ ${plantName}` : `Choose a mode for ${plantName}`) : (isThai ? 'เลือกโหมดการปลูก' : 'Choose a growing mode')}</h2>
-          <p className="mx-auto mt-2 max-w-[62ch] text-sm leading-6 text-slate-300">{choosingForPlant ? (isThai ? 'ต้นปัจจุบันยังถูกบันทึกไว้ แต่ละพืชมีโหมด สถานที่ และความคืบหน้าของตนเอง' : 'Your current plant remains saved. Each species keeps its own mode, location, and progress.') : (isThai ? 'แต่ละโหมดมีปัจจัยที่ควบคุมได้แตกต่างกัน เลือกให้ตรงกับการทดลองที่ต้องการ' : 'Each mode exposes different controls. Choose the experiment you want to run.')}</p>
+          {!choosingForPlant && <p className="mx-auto mt-2 max-w-[62ch] text-sm leading-6 text-slate-300">{isThai ? 'แต่ละโหมดมีปัจจัยที่ควบคุมได้แตกต่างกัน เลือกให้ตรงกับการทดลองที่ต้องการ' : 'Each mode exposes different controls. Choose the experiment you want to run.'}</p>}
         </header>
 
         <div className="growing-mode-grid">
@@ -110,7 +110,6 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
                   : option.badge && <span className="rounded-full bg-current/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em]">{option.badge[language]}</span>}
               </span>
               <strong className="growing-mode-card__title">{option.title[language]}</strong>
-              <span className="growing-mode-card__subtitle">{option.subtitle[language]}</span>
               <span className="growing-mode-card__detail">{option.detail[language]}</span>
               <span className="growing-mode-card__rewards" aria-label={isThai ? 'รางวัลเมื่อปลูกสำเร็จ' : 'Completion rewards'}>
                 <span><b>EXP</b> +{rewards[option.id]?.experience_reward ?? 0}</span>

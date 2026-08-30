@@ -381,15 +381,75 @@ function TemperatureEffect({ active, cold = false }) {
   )
 }
 
+function AnimatedItemModel({ active, animationKey, preset, url }) {
+  const model = useRef(null)
+
+  useFrame(({ clock }) => {
+    if (!model.current) return
+    const speed = THREE.MathUtils.clamp(Number(preset?.speed) || 1, 0.1, 5)
+    const amplitude = THREE.MathUtils.clamp(Number(preset?.amplitude) || 1, 0, 3)
+    const modelScale = THREE.MathUtils.clamp(Number(preset?.scale) || 1, 0.1, 5)
+    const time = clock.elapsedTime * speed
+    model.current.position.set(0, 0, 0)
+    model.current.rotation.set(0, 0, 0)
+    model.current.scale.setScalar(modelScale)
+
+    if (['pour-liquid', 'watering-can'].includes(animationKey)) model.current.rotation.z = -0.48 + Math.sin(time * 3.4) * 0.04 * amplitude
+    if (['scatter', 'fertilizer-pour'].includes(animationKey)) model.current.rotation.z = -0.28 + Math.sin(time * 10) * 0.07 * amplitude
+    if (['spray-mist', 'pest-spray'].includes(animationKey)) model.current.rotation.z = -0.22 + Math.sin(time * 5) * 0.025 * amplitude
+    if (['dig-mix', 'soil-mix'].includes(animationKey)) model.current.rotation.z = -0.38 + Math.sin(time * 4.5) * 0.24 * amplitude
+    if (animationKey === 'sweep' || animationKey === 'hand-pick') model.current.rotation.y = Math.sin(time * 3.2) * 0.42 * amplitude
+    if (animationKey === 'spin-activate') model.current.rotation.y = time * 4.2
+    if (animationKey === 'hover-pulse') {
+      model.current.position.y = 0.08 + Math.sin(time * 3) * 0.07 * amplitude
+      model.current.scale.setScalar(modelScale * (1 + Math.sin(time * 4.5) * 0.055 * amplitude))
+    }
+    if (animationKey === 'bounce-drop') model.current.position.y = Math.abs(Math.sin(time * 4.2)) * 0.1 * amplitude
+    if (animationKey === 'shake-use') {
+      model.current.rotation.x = Math.sin(time * 13) * 0.07
+      model.current.rotation.z = Math.cos(time * 11) * 0.09
+    }
+  })
+
+  return (
+    <group ref={model}>
+      {url
+        ? <GltfActionModel url={url} maxSize={0.72} />
+        : (
+          <group>
+            <mesh castShadow position={[0, 0.18, 0]}><boxGeometry args={[0.36, 0.42, 0.26]} /><meshStandardMaterial color="#79c98b" metalness={0.18} roughness={0.48} /></mesh>
+            <mesh castShadow position={[0, 0.48, 0]}><cylinderGeometry args={[0.055, 0.075, 0.24, 12]} /><meshStandardMaterial color="#d7e7d7" metalness={0.28} roughness={0.4} /></mesh>
+          </group>
+        )}
+      {active && animationKey === 'spin-activate' && <pointLight color="#9cffbd" intensity={2.4} distance={2.8} />}
+    </group>
+  )
+}
+
+function CustomItemEffect({ active, animationKey, kind, preset }) {
+  if (!active) return null
+  const color = preset?.particle_color
+  const requestedCount = Number(preset?.particle_count)
+  const count = Math.max(0, Math.min(100, Number.isFinite(requestedCount) ? requestedCount : 24))
+  if (kind === 'water') return <group position={[0, 0.08, 0]}><FallingParticles active color={color || '#72d7ff'} count={count} spread={0.42} size={0.019} /></group>
+  if (kind === 'spray') return <group position={[0.42, 0.2, 0]} rotation={[0, 0, Math.PI / 2]}><FallingParticles active color={color || '#dff8ed'} count={count} spread={0.5} size={0.017} /></group>
+  if (kind === 'fertilizer') return <group position={[0.12, 0.05, 0]}><FallingParticles active color={color || '#e7c653'} count={count} spread={0.55} size={0.022} /></group>
+  if (kind === 'drainage') return <group position={[0.18, -0.12, 0]}><FallingParticles active color={color || '#9f7751'} count={count} spread={0.48} size={0.026} /></group>
+  if (['spin-activate', 'hover-pulse'].includes(animationKey)) {
+    return <pointLight color="#9cffbd" intensity={2.1} distance={3} />
+  }
+  return null
+}
+
 function actionKind(animationKey) {
   if (/frost|cold/.test(animationKey)) return 'frost'
   if (/shade/.test(animationKey)) return 'shade'
   if (/windbreak/.test(animationKey)) return 'windbreak'
-  if (/drainage|soil-mix/.test(animationKey)) return 'drainage'
+  if (/drainage|soil-mix|dig-mix/.test(animationKey)) return 'drainage'
   if (animationKey === 'soil' || /straw|mulch/.test(animationKey)) return 'straw'
   if (/spray|aphid|snail|fungus/.test(animationKey)) return 'spray'
-  if (/water/.test(animationKey)) return 'water'
-  if (/fertilizer/.test(animationKey)) return 'fertilizer'
+  if (/water|pour-liquid/.test(animationKey)) return 'water'
+  if (/fertilizer|scatter/.test(animationKey)) return 'fertilizer'
   if (/light/.test(animationKey)) return 'light'
   if (/air|wind/.test(animationKey)) return 'air'
   if (/temp/.test(animationKey)) return 'temperature'
@@ -412,6 +472,13 @@ const TARGET_OFFSETS = {
   none: [0.8, 1.15, 0.45],
 }
 
+const PRESET_TARGET_OFFSETS = {
+  plant: [0.62, 0.78, 0.62],
+  soil: [0.18, 0.12, 0.18],
+  pest: [0.72, 0.92, 0.7],
+  scene: [0, 0.04, 0],
+}
+
 const GROUNDED_KINDS = new Set(['straw', 'shade', 'windbreak', 'frost'])
 
 export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }) {
@@ -419,8 +486,13 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
   const start = useRef(0)
   const phase = actionState?.phase
   const asset = actionState?.asset
-  const animationKey = String(asset?.animationKey ?? asset?.actionKey ?? '')
-  const kind = actionKind(animationKey)
+  const preset = asset?.animationPreset ?? null
+  const animationKey = String(preset?.motion_type ?? asset?.animationKey ?? asset?.actionKey ?? '')
+  const configuredEffect = String(preset?.effect_type ?? '')
+  const kind = configuredEffect && configuredEffect !== 'none' ? configuredEffect : actionKind(animationKey)
+  const customModelUrl = String(asset?.modelUrl ?? '').trim()
+  const customPreset = Boolean(preset?.key && preset.key !== preset.motion_type)
+  const usesGenericModel = Boolean(customModelUrl) || customPreset || ['place-down', 'pour-liquid', 'scatter', 'spray-mist', 'dig-mix', 'sweep', 'spin-activate', 'hover-pulse', 'bounce-drop', 'shake-use', 'hand-pick'].includes(animationKey)
   const visible = Boolean(asset) && VISIBLE_PHASES.includes(phase)
   const active = visible
 
@@ -432,13 +504,21 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
     if (!group.current || !visible) return
     if (!start.current) start.current = clock.elapsedTime
     const elapsed = clock.elapsedTime - start.current
-    const progress = phase === 'success' ? 1 : Math.min(1, elapsed / 0.95)
+    const durationSeconds = THREE.MathUtils.clamp((Number(preset?.duration_ms) || 950) / 1000, 0.3, 10)
+    const progress = phase === 'success' ? 1 : Math.min(1, elapsed / durationSeconds)
     const eased = Math.sin(progress * Math.PI * 0.5)
     const [centerX, groundY, centerZ] = plantingSurface?.position ?? [0.75, -0.38, 0]
-    const [offsetX, offsetY, offsetZ] = TARGET_OFFSETS[kind] ?? TARGET_OFFSETS.tool
+    const customTarget = preset?.key && preset.key !== preset.motion_type ? PRESET_TARGET_OFFSETS[preset.target_type] : null
+    const [offsetX, offsetY, offsetZ] = customTarget ?? TARGET_OFFSETS[kind] ?? TARGET_OFFSETS.none
     const targetX = centerX + offsetX
     const targetY = groundY + offsetY
     const targetZ = centerZ + offsetZ
+    if (animationKey === 'bounce-drop') {
+      const bounce = Math.abs(Math.sin(progress * Math.PI * 2.5)) * (1 - progress) * 0.18
+      group.current.position.set(targetX, THREE.MathUtils.lerp(targetY + 2.2, targetY, eased) + bounce, targetZ)
+      group.current.rotation.set(0, 0, 0)
+      return
+    }
     if (GROUNDED_KINDS.has(kind)) {
       group.current.position.set(targetX, targetY, targetZ)
       group.current.rotation.set(0, 0, 0)
@@ -481,16 +561,16 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
 
   return (
     <group ref={group} position={[2.45, 1.3, 0.9]} scale={toolScale}>
-      {kind === 'water' && <WateringCan active={active} />}
-      {kind === 'spray' && <SprayBottle active={active} />}
-      {kind === 'fertilizer' && (
+      {!usesGenericModel && kind === 'water' && <WateringCan active={active} />}
+      {!usesGenericModel && kind === 'spray' && <SprayBottle active={active} />}
+      {!usesGenericModel && kind === 'fertilizer' && (
         <FertilizerShaker
           active={active}
           plantCenter={[-TARGET_OFFSETS.fertilizer[0], -TARGET_OFFSETS.fertilizer[1], -TARGET_OFFSETS.fertilizer[2]]}
           plantingRadius={plantingSurface?.radius ?? 0.96}
         />
       )}
-      {kind === 'drainage' && <DrainageTool active={active} />}
+      {!usesGenericModel && kind === 'drainage' && <DrainageTool active={active} />}
       {kind === 'straw' && <StrawMulch active={active} plantingRadius={plantingSurface?.radius ?? 0.96} />}
       {kind === 'shade' && <ShadeCloth active={active} plantScale={plantScale} />}
       {kind === 'windbreak' && <Windbreak active={active} plantScale={plantScale} />}
@@ -498,6 +578,8 @@ export function ActionAnimation({ actionState, plantingSurface, plantScale = 1 }
       {kind === 'light' && <LightEffect active={active} />}
       {kind === 'air' && <WindLines active={active} color="#a9e8f2" />}
       {kind === 'temperature' && <TemperatureEffect active={active} cold={Number(asset?.targetValue) < 18} />}
+      {usesGenericModel && <AnimatedItemModel active={active} animationKey={animationKey} preset={preset} url={customModelUrl || null} />}
+      {usesGenericModel && <CustomItemEffect active={active} animationKey={animationKey} kind={kind} preset={preset} />}
     </group>
   )
 }

@@ -78,19 +78,21 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
             <figure className="overflow-hidden rounded-xl border border-lime-100/15 bg-[#182019]">
               <div className="aspect-[4/3] overflow-hidden sm:aspect-square">
                 {knowledge.imageUrl ? (
-                  <img className="h-full w-full object-cover" src={knowledge.imageUrl} alt={knowledge.shortName} draggable="false" />
+                  <img className="h-full w-full object-cover" src={knowledge.imageUrl} alt={knowledge.photo?.alt || knowledge.shortName} draggable="false" />
                 ) : (
                   <span className="grid h-full w-full place-items-center bg-[#182019] text-[#9bcf82]" aria-label={knowledge.shortName}>
                     <AppIcon className="h-12 w-12" name="pest" />
                   </span>
                 )}
               </div>
-              {knowledge.photo && (
+              {knowledge.photo?.sourceUrl && (
                 <figcaption className="border-t border-lime-100/10 bg-black/25 px-2 py-1.5 text-[8px] leading-3 text-slate-400">
                   <span>{copy('Photo', 'ภาพ')}: </span>
-                  <a className="text-sky-300 hover:text-sky-200" href={knowledge.photo.sourceUrl} rel="noreferrer" target="_blank">{knowledge.photo.credit}</a>
-                  <span> · </span>
-                  <a className="text-sky-300 hover:text-sky-200" href={knowledge.photo.licenseUrl} rel="noreferrer" target="_blank">{knowledge.photo.license}</a>
+                  <a className="text-sky-300 hover:text-sky-200" href={knowledge.photo.sourceUrl} rel="noreferrer" target="_blank">{knowledge.photo.credit || copy('View reference', 'ดูแหล่งอ้างอิง')}</a>
+                  {knowledge.photo.license && <span> · </span>}
+                  {knowledge.photo.license && knowledge.photo.licenseUrl ? (
+                    <a className="text-sky-300 hover:text-sky-200" href={knowledge.photo.licenseUrl} rel="noreferrer" target="_blank">{knowledge.photo.license}</a>
+                  ) : knowledge.photo.license ? <span>{knowledge.photo.license}</span> : null}
                 </figcaption>
               )}
             </figure>

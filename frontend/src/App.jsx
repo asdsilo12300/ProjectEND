@@ -433,7 +433,7 @@ function legacyItemAnimationKey(item, actionKey) {
   if (effect.startsWith('pest_control:')) return 'pest-spray'
   if (effect.startsWith('manual_pest_control:')) return 'hand-pick'
 
-  return item?.animation_key ?? actionKey
+  return item?.animation_preset?.motion_type ?? item?.animation_key ?? actionKey
 }
 
 function readablePlantName(plant) {
@@ -499,7 +499,8 @@ function itemAssetFromApi(entry, quantity = null) {
   const itemKey = inventoryItemKey(item)
   const actionKey = legacyItemActionKey(item, itemKey)
   const meta = itemMetaByKey[itemKey] ?? {}
-  const friendUsable = String(item?.effect_type ?? '').startsWith('friend_pest:')
+  const friendUsable = String(item?.type_definition?.key ?? item?.type ?? '') === 'prank'
+    || String(item?.effect_type ?? '').startsWith('friend_pest:')
 
   return {
     id: itemKey,
@@ -513,6 +514,7 @@ function itemAssetFromApi(entry, quantity = null) {
     type: 'item',
     icon: meta.icon ?? 'hand',
     imageUrl: resolveAssetUrl(item?.image_url) ?? itemImageByKey[itemKey],
+    modelUrl: resolveAssetUrl(item?.model_url),
     targetImages: itemTargetsByKey[itemKey] ?? [],
     quantity: Number.isFinite(Number(quantity)) ? Number(quantity) : 0,
     quantityLabel: Number.isFinite(Number(quantity)) ? `x${quantity}` : 'x0',
@@ -525,8 +527,10 @@ function itemAssetFromApi(entry, quantity = null) {
     friendUsable,
     actionKey,
     animationKey: legacyItemAnimationKey(item, actionKey),
+    animationPreset: item?.animation_preset ?? null,
     modeScope: item?.mode_scope ?? 'both',
     effectPayload: item?.effect_payload ?? null,
+    itemType: item?.type_definition ?? null,
   }
 }
 
@@ -783,6 +787,7 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [inventoryItems, setInventoryItems] = useState([])
   const [shopCatalog, setShopCatalog] = useState([])
+  const [itemTypes, setItemTypes] = useState([])
   const [inventoryStatus, setInventoryStatus] = useState('loading')
   const [plantCatalogStatus, setPlantCatalogStatus] = useState('loading')
   const [shareBusy, setShareBusy] = useState(false)
@@ -1468,16 +1473,26 @@ function App() {
   useEffect(() => {
     let cancelled = false
 
-    getShopItems()
-      .then((payload) => {
-        if (!cancelled) setShopCatalog(payload.data ?? [])
-      })
-      .catch(() => {
-        if (!cancelled) setShopCatalog([])
-      })
+    function syncShopCatalog() {
+      getShopItems()
+        .then((payload) => {
+          if (cancelled) return
+          setShopCatalog(payload.data ?? [])
+          setItemTypes(payload.item_types ?? [])
+        })
+        .catch(() => {
+          if (cancelled) return
+          setShopCatalog([])
+          setItemTypes([])
+        })
+    }
+
+    syncShopCatalog()
+    window.addEventListener('plant-game:content-catalog-updated', syncShopCatalog)
 
     return () => {
       cancelled = true
+      window.removeEventListener('plant-game:content-catalog-updated', syncShopCatalog)
     }
   }, [])
 
@@ -2218,7 +2233,7 @@ function App() {
     const simulatorId = visitingFriend?.simulatorId ?? simulationVisual?.id
 
     if (!asset?.friendUsable) {
-      setActionMessage('Choose an aphid or snail prank item for a friend garden')
+      setActionMessage('Choose a friend prank item for this garden')
       return
     }
     if (!simulatorId || !selectedPlant) {
@@ -2234,7 +2249,7 @@ function App() {
     setActionMessage(isThai ? `กำลังส่ง ${assetName} ไปยัง ${targetName}...` : `Sending ${assetName} to ${targetName}...`)
 
     try {
-      const payload = await prankFriendSimulator(simulatorId, asset.itemKey ?? asset.id)
+      const payload = await prankFriendSimulator(simulatorId, asset.itemKey ?? asset.id, asset.backendId)
       const result = payload.data ?? payload
       const simulator = result.simulator ?? null
 
@@ -2674,7 +2689,7 @@ function App() {
         if (!asset.friendUsable) {
           setAppliedAsset(null)
           cancelAction()
-          setActionMessage('Only aphid and snail prank items can be used in a friend garden')
+          setActionMessage('Only friend prank items can be used in a friend garden')
           return
         }
         if (!visitingFriend.simulatorId || !selectedPlant) {
@@ -3969,7 +3984,7 @@ function App() {
               onLeftCollapsedChange={(leftCollapsed) => setWorkspaceLayout((current) => ({ ...current, leftCollapsed, ...(!leftCollapsed && window.matchMedia('(max-width: 1179px)').matches ? { rightCollapsed: true } : {}) }))}
               onRightCollapsedChange={(rightCollapsed) => setWorkspaceLayout((current) => ({ ...current, rightCollapsed, ...(!rightCollapsed && window.matchMedia('(max-width: 1179px)').matches ? { leftCollapsed: true } : {}) }))}
               leftLibrary={(
-                <LibrarySidebar activeEvents={previewSimulationVisual?.events ?? []} activeModifiers={previewSimulationVisual?.active_modifiers ?? []} seasonalContext={previewSimulationVisual?.seasonal_context} busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} mulchConditions={mulchConditions} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} presentation="docked" view={workspaceLayout.leftTab === 'tools' ? 'tools' : 'plants'} />
+                <LibrarySidebar activeEvents={previewSimulationVisual?.events ?? []} activeModifiers={previewSimulationVisual?.active_modifiers ?? []} seasonalContext={previewSimulationVisual?.seasonal_context} busy={plantingBusy || modeLoading} error={inventoryStatus === 'error' ? 'Some tools could not be loaded. The academy will retry automatically.' : plantCatalogStatus === 'error' ? 'Plant choices could not be refreshed. The academy will retry automatically.' : ''} friendHasPlant={Boolean(selectedPlant)} growingMode={growingMode} loading={inventoryStatus === 'loading' || plantCatalogStatus === 'loading'} mulchConditions={mulchConditions} plantNeeds={simulationVisual?.plant_needs} readOnly={Boolean(visitingFriend)} selectedAsset={appliedAsset} inventoryMap={inventoryMap} itemTypes={itemTypes} sections={labSections} openSections={openSections} onToggle={toggleLibrarySection} onApply={applyLabAsset} onShowPlantInfo={setPlantKnowledgeAsset} presentation="docked" view={workspaceLayout.leftTab === 'tools' ? 'tools' : 'plants'} />
               )}
               leftMonitor={(
                 <PlantMonitorPanel

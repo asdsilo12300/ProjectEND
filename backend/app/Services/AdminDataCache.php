@@ -22,7 +22,7 @@ class AdminDataCache
     public function rememberLookups(Closure $callback): array
     {
         return $this->rememberArray(
-            'admin-data:lookups:v2',
+            'admin-data:lookups:v3',
             max(1, (int) config('admin.lookup_cache_seconds', 300)),
             $callback,
         );
@@ -45,6 +45,7 @@ class AdminDataCache
         try {
             $this->store()->put('admin-data:dashboard:version', (string) hrtime(true), 86400);
             $this->store()->forget('admin-data:lookups:v2');
+            $this->store()->forget('admin-data:lookups:v3');
             $this->store()->put('admin-data:users:version', (string) hrtime(true), 86400);
         } catch (Throwable $error) {
             report($error);

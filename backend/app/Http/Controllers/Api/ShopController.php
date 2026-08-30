@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ItemType;
 use App\Models\ShopItem;
 use App\Models\User;
 use App\Models\UserItem;
@@ -19,7 +20,7 @@ class ShopController extends Controller
     public function index(): JsonResponse
     {
         $items = $this->cache->remember('shop-items', fn () => ShopItem::query()
-            ->with('item')
+            ->with(['item.typeDefinition', 'item.animationPreset'])
             ->whereHas('item', fn ($query) => $query->whereNull('deleted_at')->where('is_active', true))
             ->where('is_active', true)
             ->get()
@@ -39,15 +40,22 @@ class ShopController extends Controller
 
         $seconds = max(0, (int) config('catalog.browser_cache_seconds', 30));
 
+        $itemTypes = ItemType::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name_en')
+            ->get(['id', 'key', 'name_en', 'name_th', 'description_en', 'description_th', 'icon', 'sort_order'])
+            ->toArray();
+
         return response()
-            ->json(['data' => $items])
+            ->json(['data' => $items, 'item_types' => $itemTypes])
             ->header('Cache-Control', "public, max-age={$seconds}, stale-while-revalidate=300");
     }
 
     public function inventory(Request $request): JsonResponse
     {
         $items = UserItem::query()
-            ->with('item')
+            ->with(['item.typeDefinition', 'item.animationPreset'])
             ->whereHas('item', fn ($query) => $query->whereNull('deleted_at')->where('is_active', true))
             ->where('user_id', $request->user()->id)
             ->get();
@@ -110,7 +118,7 @@ class ShopController extends Controller
             $inventory->quantity = ($inventory->quantity ?? 0) + $quantity;
             $inventory->save();
 
-            return [$inventory->load('item'), $user->refresh(), $totalCoin, $totalGem];
+            return [$inventory->load(['item.typeDefinition', 'item.animationPreset']), $user->refresh(), $totalCoin, $totalGem];
         });
 
         return response()->json([

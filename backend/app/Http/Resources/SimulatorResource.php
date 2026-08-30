@@ -164,6 +164,7 @@ class SimulatorResource extends JsonResource
             ->unique()
             ->values();
         $items = Item::query()
+            ->with('animationPreset')
             ->where('is_active', true)
             ->whereIn('action_key', $actionKeys)
             ->get()
@@ -184,6 +185,9 @@ class SimulatorResource extends JsonResource
                         'name' => $item->name,
                         'description' => $item->description,
                         'image_url' => $this->publicUrl($item->image_url),
+                        'model_url' => $this->publicUrl($item->model_url),
+                        'animation_key' => $item->animation_key,
+                        'animation_preset' => $item->animationPreset?->toArray(),
                         'success' => Str::startsWith(strtolower((string) $item->effect_type), 'pest_control')
                             ? 100
                             : min(100, max(0, (int) $item->effect_value)),
@@ -211,6 +215,8 @@ class SimulatorResource extends JsonResource
                     'favorable_conditions_th' => $knowledge->favorable_conditions_th ?? [],
                     'prevention_en' => $knowledge->prevention_en ?? [],
                     'prevention_th' => $knowledge->prevention_th ?? [],
+                    'photo_url' => $this->publicUrl($knowledge->photo_url),
+                    'photo_source_url' => $knowledge->photo_source_url,
                     'sources' => $knowledge->sources ?? [],
                 ] : null,
                 'treatments' => $treatments,

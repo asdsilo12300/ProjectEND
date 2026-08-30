@@ -127,9 +127,11 @@ export function getPestKnowledge(pest, language = 'en') {
     return {
       category: localizeField('category', language === 'th' ? 'ศัตรูพืช' : 'Plant pest'),
       favorableConditions: localizeList('favorable_conditions', [language === 'th' ? 'ติดตามกฎความเสี่ยงที่ผู้ดูแลระบบกำหนด' : 'Monitor the risk rules configured by the administrator.']),
-      imageUrl: pest?.imageUrl || null,
+      imageUrl: managed.photo_url || pest?.imageUrl || null,
       name: fallbackName,
-      photo: null,
+      photo: managed.photo_url ? {
+        sourceUrl: managed.photo_source_url,
+      } : null,
       prevention: localizeList('prevention', [language === 'th' ? 'ติดตามพืชอย่างสม่ำเสมอ' : 'Keep monitoring the plant regularly.']),
       scientificName: [managed.scientific_name, managed.family].filter(Boolean).join(' · ') || '—',
       shortName: fallbackName,

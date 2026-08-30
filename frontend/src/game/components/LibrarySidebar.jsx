@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { getAppLanguage } from '../../i18n/appI18n'
+import { resolveAssetUrl } from '../../lib/api'
 import { LibraryThumb } from './LibraryThumb'
 import { LoadingSkeleton } from './LoadingSkeleton'
 
@@ -54,7 +55,7 @@ function useAppLanguage() {
   return language
 }
 
-function itemGroupId(item) {
+function legacyItemGroupId(item) {
   const itemId = String(item?.itemKey ?? item?.id ?? '').toLowerCase()
   const actionKey = String(item?.actionKey ?? itemId)
   if (item?.friendUsable || itemId.includes('prank')) return 'prank'
@@ -64,6 +65,72 @@ function itemGroupId(item) {
   ) return 'manual'
   if (['water', 'fertilizer'].includes(actionKey)) return 'care'
   return 'treatment'
+}
+
+function itemGroupId(item) {
+  return String(item?.itemType?.key ?? '').trim() || legacyItemGroupId(item)
+}
+
+function buildItemGroups(items, itemTypes = []) {
+  const groups = new Map()
+
+  itemTypes.forEach((type, index) => {
+    const id = String(type?.key ?? '').trim()
+    if (!id) return
+    const standard = ITEM_GROUPS.find((group) => group.id === id)
+    const palette = standard ?? ITEM_GROUPS[index % ITEM_GROUPS.length]
+    const labelEn = String(type.name_en ?? '').trim() || standard?.label.en || id
+    const labelTh = String(type.name_th ?? '').trim() || standard?.label.th || labelEn
+    const detailEn = String(type.description_en ?? '').trim() || standard?.detail.en || ''
+    const detailTh = String(type.description_th ?? '').trim() || standard?.detail.th || detailEn
+
+    groups.set(id, {
+      ...palette,
+      id,
+      icon: String(type.icon ?? '').trim() || palette.icon,
+      label: { en: labelEn, th: labelTh },
+      detail: { en: detailEn, th: detailTh },
+      sortOrder: Number(type.sort_order ?? 9999),
+      items: [],
+    })
+  })
+
+  items.forEach((item) => {
+    const id = itemGroupId(item)
+    const type = item?.itemType ?? {}
+    const standard = ITEM_GROUPS.find((group) => group.id === id)
+    const palette = standard ?? ITEM_GROUPS[groups.size % ITEM_GROUPS.length]
+    const labelEn = String(type.name_en ?? '').trim() || standard?.label.en || id
+    const labelTh = String(type.name_th ?? '').trim() || standard?.label.th || labelEn
+    const detailEn = String(type.description_en ?? '').trim() || standard?.detail.en || ''
+    const detailTh = String(type.description_th ?? '').trim() || standard?.detail.th || detailEn
+
+    if (!groups.has(id)) {
+      groups.set(id, {
+        ...palette,
+        id,
+        icon: String(type.icon ?? '').trim() || palette.icon,
+        label: { en: labelEn, th: labelTh },
+        detail: { en: detailEn, th: detailTh },
+        sortOrder: Number(type.sort_order ?? standard?.sortOrder ?? 9999),
+        items: [],
+      })
+    }
+
+    groups.get(id).items.push(item)
+  })
+
+  return [...groups.values()].sort((left, right) => left.sortOrder - right.sortOrder || left.label.en.localeCompare(right.label.en))
+}
+
+function isSvgIcon(value) {
+  return String(value ?? '').split(/[?#]/, 1)[0].toLowerCase().endsWith('.svg')
+}
+
+function ItemGroupIcon({ className = '', icon }) {
+  return isSvgIcon(icon)
+    ? <img alt="" className={`${className} object-contain`} src={resolveAssetUrl(icon)} />
+    : <AppIcon className={className} name={icon} />
 }
 
 function hasBrokenEncoding(value) {
@@ -276,7 +343,7 @@ function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, lan
   )
 }
 
-export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy = false, error = '', friendHasPlant = true, growingMode = null, loading = false, mulchConditions = null, plantNeeds = null, readOnly = false, mockItems = false, seasonalContext = null, selectedAsset = null, inventoryMap = {}, sections, openSections, onToggle, onApply, onShowPlantInfo, presentation = 'floating', view = 'all' }) {
+export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy = false, error = '', friendHasPlant = true, growingMode = null, loading = false, mulchConditions = null, plantNeeds = null, readOnly = false, mockItems = false, seasonalContext = null, selectedAsset = null, inventoryMap = {}, itemTypes = [], sections, openSections, onToggle, onApply, onShowPlantInfo, presentation = 'floating', view = 'all' }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [activeItemGroup, setActiveItemGroup] = useState('care')
   const [currentTime, setCurrentTime] = useState(() => Date.now())
@@ -341,11 +408,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
           // Keep seasonal emergency tools visible so players can learn what is
           // available. Individual cards stay locked until a matching warning.
           const visibleItems = items
-          const groupedItems = section === 'Items'
-            ? ITEM_GROUPS
-              .map((group) => ({ ...group, items: visibleItems.filter((item) => itemGroupId(item) === group.id) }))
-              .filter((group) => group.items.length > 0)
-            : []
+          const groupedItems = section === 'Items' ? buildItemGroups(visibleItems, readOnly ? [] : itemTypes) : []
           const selectedGroup = groupedItems.find((group) => group.id === effectiveItemGroup) ?? groupedItems[0]
 
           return (
@@ -386,7 +449,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                           onClick={() => setActiveItemGroup(group.id)}
                           title={`${group.label[language]} — ${group.detail[language]}`}
                         >
-                          <AppIcon className={`h-4 w-4 ${selectedGroup?.id === group.id ? group.iconClass.split(' ').at(-1) : ''}`} name={group.icon} />
+                          <ItemGroupIcon className={`h-4 w-4 ${selectedGroup?.id === group.id ? group.iconClass.split(' ').at(-1) : ''}`} icon={group.icon} />
                           <span className="absolute right-1 top-1 min-w-4 rounded-full bg-black/35 px-1 py-0.5 text-center text-[9px] font-black leading-none">{group.items.length}</span>
                         </button>
                       ))}
@@ -396,7 +459,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                     <section className={`min-w-0 max-w-full overflow-hidden rounded-lg border p-1.5 ${selectedGroup.shellClass}`} key={selectedGroup.id} data-item-group={selectedGroup.id}>
                       <header className="mb-1.5 flex min-w-0 items-center gap-2 px-1 py-1">
                         <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${selectedGroup.iconClass}`}>
-                          <AppIcon className="h-3.5 w-3.5" name={selectedGroup.icon} />
+                          <ItemGroupIcon className="h-3.5 w-3.5" icon={selectedGroup.icon} />
                         </span>
                         <span className="min-w-0 flex-1">
                           <strong className="block text-[12px] font-extrabold leading-tight text-lime-50">{selectedGroup.label[language]}</strong>
@@ -407,6 +470,11 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                         </span>
                       </header>
                       <div className="grid min-w-0 max-w-full grid-cols-2 gap-1.5">
+                        {selectedGroup.items.length === 0 && (
+                          <div className="col-span-2 rounded-md border border-dashed border-white/10 bg-black/15 px-2 py-3 text-center text-[11px] leading-relaxed text-slate-400">
+                            {language === 'th' ? 'ประเภทนี้ยังไม่มีไอเทม แอดมินสามารถเพิ่มไอเทมและเลือกประเภทนี้ได้' : 'This category has no items yet. Add an item and select this category in Admin.'}
+                          </div>
+                        )}
                         {selectedGroup.items.map((item) => (
                           <ItemLibraryCard
                             activeModifiers={activeModifiers}

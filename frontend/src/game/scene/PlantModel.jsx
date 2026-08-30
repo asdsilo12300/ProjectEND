@@ -392,7 +392,7 @@ function applyFungusToPlant(object, fungusRisk = 0) {
   })
 }
 
-function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, windMotion = null, ...props }) {
+function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, previewLoop = false, windMotion = null, ...props }) {
   const group = useRef(null)
   const clonedSceneRef = useRef(null)
   const poseSignatureRef = useRef(null)
@@ -537,6 +537,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
     mixer,
     displayedGrowthProgress,
     isTulip ? TULIP_GROWTH_ANIMATION : GENERIC_MATURE_ANIMATION_FRACTION,
+    previewLoop,
   )
   usePlantStressMotion(clonedScene.userData?.plantStressPivots, visualOverrides, health, fungusRisk, windMotion)
 
@@ -603,7 +604,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
   )
 }
 
-export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, windMotion = null, ...props }) {
+export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, previewLoop = false, windMotion = null, ...props }) {
   const effectiveVisualOverrides = useMemo(
     () => getEffectiveVisualOverrides(visualOverrides, health),
     [health, visualOverrides],
@@ -613,7 +614,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
     return (
       <group {...props}>
         <PlantPresentationGroup visualOverrides={effectiveVisualOverrides}>
-          <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} windMotion={windMotion} />
+          <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} previewLoop={previewLoop} windMotion={windMotion} />
         </PlantPresentationGroup>
       </group>
     )
@@ -621,7 +622,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
 
   const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
 
-  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} windMotion={windMotion} {...props} />
+  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} previewLoop={previewLoop} windMotion={windMotion} {...props} />
 }
 
 const pestAnchors = {
@@ -800,7 +801,7 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
   )
 }
 
-function SnailSurfaceModel({ anchor }) {
+export function SnailSurfaceModel({ anchor }) {
   const modelScale = (anchor.size ?? 0.28) / 0.28
 
   return (

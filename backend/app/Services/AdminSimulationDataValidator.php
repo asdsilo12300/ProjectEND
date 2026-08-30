@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Achievement;
+use App\Models\AnimationPreset;
 use App\Models\EventDefinition;
 use App\Models\Item;
+use App\Models\ItemType;
 use App\Models\ModelAsset;
 use App\Models\Pest;
 use App\Models\PestConditionRule;
@@ -38,6 +40,8 @@ class AdminSimulationDataValidator
             'pests' => $this->validatePest($data, $recordId, $validator),
             'pest-knowledge' => $this->validateKnowledge(PestKnowledge::query(), 'pest_id', $data, $recordId, $validator, ['signs_en', 'signs_th', 'favorable_conditions_en', 'favorable_conditions_th', 'prevention_en', 'prevention_th', 'treatment_action_keys']),
             'pest-rules' => $this->validateConditionRule(PestConditionRule::class, 'pest_id', $data, $recordId, $validator),
+            'item-types' => $this->validateItemType($data, $recordId, $validator),
+            'animation-presets' => $this->validateAnimationPreset($data, $recordId, $validator),
             'items' => $this->validateItem($data, $recordId, $validator),
             'shop-items' => $this->validateUniqueValue(ShopItem::query(), 'item_id', $data['item_id'] ?? null, $recordId, $validator, 'item_id', 'This item already has a shop listing.'),
             'event-definitions' => $this->validateEvent($data, $recordId, $validator),
@@ -73,6 +77,37 @@ class AdminSimulationDataValidator
         if (! empty($data['action_key'])) {
             $this->validateUniqueText(Item::query(), 'action_key', $data['action_key'], $recordId, $validator, 'action_key', 'Another item already uses this simulation action.');
         }
+
+        $effects = is_array($data['effect_payload'] ?? null) ? $data['effect_payload'] : [];
+        $strategy = (string) ($effects['strategy'] ?? '');
+        $resource = (string) ($effects['resource'] ?? '');
+        $allowedResources = [
+            'refill_reserve' => ['water', 'fertilizer'],
+            'toward_healthy_midpoint' => ['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'],
+            'drainage' => ['soil_humidity'],
+            'moisture_retention' => ['soil_humidity'],
+        ];
+        if ($strategy !== '' && $resource === '') {
+            $validator->errors()->add('effect_payload.resource', 'Choose which plant resource this item affects.');
+        } elseif ($strategy !== '' && ! in_array($resource, $allowedResources[$strategy] ?? [], true)) {
+            $validator->errors()->add('effect_payload.resource', 'The selected resource does not match this item behavior.');
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validateItemType(array $data, ?int $recordId, Validator $validator): void
+    {
+        $this->validateUniqueText(ItemType::query(), 'key', $data['key'] ?? null, $recordId, $validator, 'key', 'An item type with this key already exists.');
+        $this->validateUniqueText(ItemType::query(), 'name_en', $data['name_en'] ?? null, $recordId, $validator, 'name_en', 'An item type with this English name already exists.');
+        $this->validateUniqueText(ItemType::query(), 'name_th', $data['name_th'] ?? null, $recordId, $validator, 'name_th', 'An item type with this Thai name already exists.');
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validateAnimationPreset(array $data, ?int $recordId, Validator $validator): void
+    {
+        $this->validateUniqueText(AnimationPreset::query(), 'key', $data['key'] ?? null, $recordId, $validator, 'key', 'An animation preset with this key already exists.');
+        $this->validateUniqueText(AnimationPreset::query(), 'name_en', $data['name_en'] ?? null, $recordId, $validator, 'name_en', 'An animation preset with this English name already exists.');
+        $this->validateUniqueText(AnimationPreset::query(), 'name_th', $data['name_th'] ?? null, $recordId, $validator, 'name_th', 'An animation preset with this Thai name already exists.');
     }
 
     /** @param array<string, mixed> $data */

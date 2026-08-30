@@ -318,6 +318,31 @@ class SimulatorSnapshotTest extends TestCase
         $this->assertLessThanOrEqual(7, $queryCount);
     }
 
+    public function test_soft_deleted_pest_is_not_returned_as_an_active_simulation_pest(): void
+    {
+        [$simulator] = $this->seedSimulator();
+        $pest = Pest::query()->create([
+            'name_th' => 'หนอน',
+            'name_en' => 'Worm',
+            'base_chance' => 20,
+            'damage_per_turn' => 3,
+        ]);
+        $activePest = SimulationPest::query()->create([
+            'simulator_id' => $simulator->id,
+            'pest_id' => $pest->id,
+            'status' => 'active',
+            'appeared_at' => now(),
+        ]);
+
+        $pest->delete();
+
+        $this->assertCount(0, $simulator->fresh()->activePests);
+        $this->assertDatabaseHas('simulation_pests', [
+            'id' => $activePest->id,
+            'status' => 'active',
+        ]);
+    }
+
     public function test_deleted_plant_is_hidden_from_catalog_and_catalog_is_not_browser_cached(): void
     {
         $plant = $this->seedPlayablePlant('Maintenance Plant');

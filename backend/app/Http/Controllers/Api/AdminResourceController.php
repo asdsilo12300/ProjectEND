@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Achievement;
 use App\Models\AdminActivityLog;
+use App\Models\AnimationPreset;
 use App\Models\Comment;
 use App\Models\EventDefinition;
 use App\Models\Item;
+use App\Models\ItemType;
 use App\Models\ModelAsset;
 use App\Models\Pest;
 use App\Models\PestConditionRule;
@@ -35,6 +37,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -51,8 +54,10 @@ class AdminResourceController extends Controller
         $lookups = $this->cache->rememberLookups(fn (): array => [
             'plants' => Plant::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en'])->toArray(),
             'stages' => PlantGrowthStage::query()->orderBy('plant_id')->orderBy('stage_no')->get(['id', 'plant_id', 'stage_no', 'stage_name'])->toArray(),
-            'pests' => Pest::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en'])->toArray(),
+            'pests' => Pest::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en', 'image_url', 'model_url', 'placement_mode'])->toArray(),
             'items' => Item::query()->orderBy('name')->get(['id', 'name', 'type', 'action_key'])->toArray(),
+            'itemTypes' => ItemType::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name_en')->get(['id', 'key', 'name_en', 'name_th'])->toArray(),
+            'animationPresets' => AnimationPreset::query()->where('is_active', true)->orderBy('name_en')->get()->toArray(),
         ]);
 
         return response()->json(['data' => $lookups]);
@@ -89,6 +94,9 @@ class AdminResourceController extends Controller
         abort_if($config === null, 404, 'This resource cannot be created here.');
 
         $data = $this->validatedData($request, $resource);
+        if ($resource === 'item-types' && ! array_key_exists('sort_order', $data)) {
+            $data['sort_order'] = ((int) ItemType::withTrashed()->max('sort_order')) + 10;
+        }
         try {
             $record = DB::transaction(function () use ($config, $data, $resource) {
                 $record = $config['model']::query()->create($data);
@@ -112,6 +120,7 @@ class AdminResourceController extends Controller
 
         $freshRecord = $record->fresh($resource === 'plants' ? ['stages', 'knowledge'] : []);
         AdminActivityLog::record($request->user(), 'created', $resource, $record->id, ['after' => $freshRecord->toArray()]);
+        $this->cache->clear();
         $this->catalogCache->clear();
 
         return response()->json(['data' => $freshRecord], 201);
@@ -124,6 +133,17 @@ class AdminResourceController extends Controller
             $model = $config['model']::query()->findOrFail($record);
             $before = $model->toArray();
             $data = $this->validatedData($request, $resource, $record);
+            if ($resource === 'item-types' && $model instanceof ItemType && $model->items()->withTrashed()->exists()) {
+                if ($model->key !== $data['key']) {
+                    throw ValidationException::withMessages(['key' => 'This key is used by existing items and cannot be changed.']);
+                }
+                if (! $data['is_active']) {
+                    throw ValidationException::withMessages(['is_active' => 'This type is used by existing items and cannot be disabled.']);
+                }
+            }
+            if ($resource === 'animation-presets' && $model instanceof AnimationPreset && $model->items()->withTrashed()->exists() && ! $data['is_active']) {
+                throw ValidationException::withMessages(['is_active' => 'This animation preset is used by existing items and cannot be disabled.']);
+            }
             try {
                 $model->fill($data)->save();
             } catch (QueryException) {
@@ -137,7 +157,14 @@ class AdminResourceController extends Controller
                 app(KnownPlantProfileService::class)->applyIfMissing($model->fresh());
             }
 
+            // Keep the legacy animation key synchronized for older saved
+            // simulations while the live catalog reads the richer preset.
+            if ($resource === 'animation-presets' && $model instanceof AnimationPreset) {
+                $model->items()->withTrashed()->update(['animation_key' => $model->motion_type]);
+            }
+
             AdminActivityLog::record($request->user(), 'updated', $resource, $model->id, ['before' => $before, 'after' => $model->fresh()->toArray()]);
+            $this->cache->clear();
             $this->catalogCache->clear();
 
             return response()->json(['data' => $model->fresh()]);
@@ -158,6 +185,12 @@ class AdminResourceController extends Controller
         abort_if($modelClass === null, 404, 'Unknown management resource.');
         abort_unless($this->usesSoftDeletes($modelClass), 409, 'This resource is not configured for safe deletion.');
         $model = $modelClass::query()->findOrFail($record);
+        if ($resource === 'item-types' && $model instanceof ItemType && $model->items()->withTrashed()->exists()) {
+            return response()->json(['message' => 'This item type is used by existing items and cannot be deleted. Move those items to another type first.'], 422);
+        }
+        if ($resource === 'animation-presets' && $model instanceof AnimationPreset && $model->items()->withTrashed()->exists()) {
+            return response()->json(['message' => 'This animation preset is used by existing items and cannot be deleted. Move those items to another preset first.'], 422);
+        }
         $before = $model->toArray();
 
         try {
@@ -167,6 +200,7 @@ class AdminResourceController extends Controller
         }
 
         AdminActivityLog::record($request->user(), 'soft_deleted', $resource, $record, ['before' => $before]);
+        $this->cache->clear();
         $this->catalogCache->clear();
 
         return response()->json(['message' => 'Record moved to trash.']);
@@ -182,10 +216,16 @@ class AdminResourceController extends Controller
         abort_unless($this->usesSoftDeletes($modelClass), 409, 'This resource does not support restoration.');
 
         $model = $modelClass::onlyTrashed()->findOrFail($record);
+        abort_if(
+            $resource === 'simulators' && $model->status === 'cancelled',
+            409,
+            'Cancelled simulations cannot be restored. They are retained as locked audit records.',
+        );
         $model->restore();
         AdminActivityLog::record($request->user(), 'restored', $resource, $record, [
             'after' => $model->fresh()->toArray(),
         ]);
+        $this->cache->clear();
         $this->catalogCache->clear();
 
         return response()->json(['message' => 'Record restored.', 'data' => $model->fresh()]);
@@ -274,7 +314,9 @@ class AdminResourceController extends Controller
             'pests' => ['model' => Pest::class, 'with' => [], 'with_count' => ['conditionRules', 'knowledge'], 'search' => ['name_th', 'name_en', 'description']],
             'pest-knowledge' => ['model' => PestKnowledge::class, 'with' => ['pest:id,name_th,name_en'], 'with_count' => [], 'search' => ['scientific_name', 'family', 'category_en', 'category_th', 'summary_en', 'summary_th']],
             'pest-rules' => ['model' => PestConditionRule::class, 'with' => ['pest:id,name_th,name_en', 'plant:id,name_th,name_en'], 'with_count' => [], 'search' => ['factor']],
-            'items' => ['model' => Item::class, 'with' => [], 'with_count' => [], 'search' => ['name', 'type', 'description']],
+            'item-types' => ['model' => ItemType::class, 'with' => [], 'with_count' => ['items'], 'search' => ['key', 'name_en', 'name_th', 'description_en', 'description_th']],
+            'animation-presets' => ['model' => AnimationPreset::class, 'with' => [], 'with_count' => ['items'], 'search' => ['key', 'name_en', 'name_th', 'description_en', 'description_th']],
+            'items' => ['model' => Item::class, 'with' => ['typeDefinition:key,name_en,name_th,description_en,description_th,icon,sort_order', 'animationPreset'], 'with_count' => [], 'search' => ['name', 'type', 'description']],
             'shop-items' => ['model' => ShopItem::class, 'with' => ['item:id,name,type,image_url'], 'with_count' => [], 'search' => []],
             'model-assets' => ['model' => ModelAsset::class, 'with' => [], 'with_count' => [], 'search' => ['asset_key', 'label', 'type', 'url']],
             'quests' => ['model' => Quest::class, 'with' => [], 'with_count' => [], 'search' => ['title', 'description', 'quest_type']],
@@ -293,12 +335,14 @@ class AdminResourceController extends Controller
         $plantId = (int) $request?->input('plant_id', 0);
         $activeStageForPlant = Rule::exists('plant_growth_stages', 'id')->whereNull('deleted_at')->where('plant_id', $plantId);
         $activePest = Rule::exists('pests', 'id')->whereNull('deleted_at');
+        $activeItemType = Rule::exists('item_types', 'key')->whereNull('deleted_at')->where('is_active', true);
         $activeItem = Rule::exists('items', 'id')->whereNull('deleted_at');
         $activeItemAction = Rule::exists('items', 'action_key')->whereNull('deleted_at')->where('is_active', true);
         $environmentFactors = ['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'];
         $visualStates = ['healthy', 'underwatered', 'overwatered', 'dry_soil', 'waterlogged', 'low_light', 'nutrient_deficient', 'fertilizer_burn', 'burnt', 'heat_stress', 'cold_stress', 'dry_air', 'fungal_risk', 'botrytis', 'wind_stress', 'stunted'];
         $leafStates = ['normal', 'upright', 'wilted', 'drooping', 'yellowing', 'pale', 'spotted', 'burnt_edges', 'root_burn', 'darkened', 'small'];
         $stemStates = ['normal', 'upright', 'leaning', 'soft', 'thin', 'dry', 'slow', 'short'];
+        $itemAnimations = ['watering-can', 'fertilizer-pour', 'pest-spray', 'hand-pick', 'soil-mix', 'straw-mulch', 'shade-cover', 'windbreak', 'frost-cover', 'place-down', 'pour-liquid', 'scatter', 'spray-mist', 'dig-mix', 'sweep', 'spin-activate', 'hover-pulse', 'bounce-drop', 'shake-use'];
 
         return match ($resource) {
             'plants' => [
@@ -364,6 +408,8 @@ class AdminResourceController extends Controller
                 'prevention_en.*' => ['string', 'max:2000'],
                 'prevention_th' => ['nullable', 'array', 'max:30'],
                 'prevention_th.*' => ['string', 'max:2000'],
+                'photo_url' => $nullableUrl,
+                'photo_source_url' => ['nullable', 'required_with:photo_url', 'url', 'max:2048'],
                 'treatment_action_keys' => ['nullable', 'array', 'max:30'],
                 'treatment_action_keys.*' => ['string', 'max:100', 'distinct', $activeItemAction],
                 'sources' => ['nullable', 'array', 'max:30'],
@@ -373,8 +419,15 @@ class AdminResourceController extends Controller
                 'sources.*.url' => ['required', 'url', 'max:2048'],
             ],
             'pest-rules' => ['pest_id' => ['required', $activePest], 'plant_id' => ['nullable', $activePlant], 'factor' => ['required', Rule::in($environmentFactors)], 'operator' => ['required', Rule::in(['below', 'above', 'between', 'outside'])], 'min_value' => ['nullable', 'numeric'], 'max_value' => ['nullable', 'numeric'], 'chance_delta' => ['required', 'numeric', 'between:-100,100'], 'severity' => ['required', 'integer', 'between:1,10'], 'is_active' => ['required', 'boolean']],
-            'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', Rule::in(['seed', 'water', 'fertilizer', 'pesticide', 'booster', 'cosmetic'])], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])], 'effect_payload' => ['nullable', 'array'], 'effect_payload.strategy' => ['nullable', Rule::in(['refill_reserve', 'toward_healthy_midpoint', 'drainage', 'moisture_retention'])], 'effect_payload.resource' => ['nullable', Rule::in($environmentFactors)], 'effect_payload.duration_ticks' => ['nullable', 'integer', 'between:1,100'], 'effect_payload.duration_seconds' => ['nullable', 'integer', 'between:5,300'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
-            'shop-items' => ['item_id' => ['required', $activeItem, Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at']],
+            'item-types' => ['key' => ['required', 'string', 'max:100', 'alpha_dash:ascii', Rule::unique('item_types', 'key')->ignore($id)], 'name_en' => ['required', 'string', 'max:191'], 'name_th' => ['required', 'string', 'max:191'], 'description_en' => ['nullable', 'string', 'max:2000'], 'description_th' => ['nullable', 'string', 'max:2000'], 'icon' => ['required', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail): void {
+                $icon = trim((string) $value);
+                $path = strtolower((string) parse_url($icon, PHP_URL_PATH));
+                $isSvg = str_ends_with($path, '.svg') && (str_starts_with($icon, '/storage/') || str_starts_with($icon, '/api/media/') || str_starts_with($icon, '/game-icons/item-types/') || filter_var($icon, FILTER_VALIDATE_URL));
+                if (! $isSvg) $fail('Upload an SVG icon. Other icon formats are not supported.');
+            }], 'sort_order' => ['sometimes', 'integer', 'between:0,9999'], 'is_active' => ['required', 'boolean']],
+            'animation-presets' => ['key' => ['required', 'string', 'max:100', 'alpha_dash:ascii', Rule::unique('animation_presets', 'key')->ignore($id)], 'name_en' => ['required', 'string', 'max:191'], 'name_th' => ['required', 'string', 'max:191'], 'description_en' => ['nullable', 'string', 'max:2000'], 'description_th' => ['nullable', 'string', 'max:2000'], 'motion_type' => ['required', Rule::in($itemAnimations)], 'effect_type' => ['required', Rule::in(['none', 'water', 'spray', 'fertilizer', 'drainage', 'light', 'air', 'temperature'])], 'target_type' => ['required', Rule::in(['plant', 'soil', 'pest', 'scene'])], 'duration_ms' => ['required', 'integer', 'between:300,10000'], 'speed' => ['required', 'numeric', 'between:0.1,5'], 'amplitude' => ['required', 'numeric', 'between:0,3'], 'particle_color' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'], 'particle_count' => ['required', 'integer', 'between:0,100'], 'scale' => ['required', 'numeric', 'between:0.1,5'], 'is_active' => ['required', 'boolean']],
+            'items' => ['name' => ['required', 'string', 'max:191'], 'type' => ['required', 'string', $activeItemType], 'pest_id' => ['nullable', 'required_if:type,prank', $activePest], 'description' => ['nullable', 'string', 'max:5000'], 'image_url' => $nullableUrl, 'model_url' => $nullableUrl, 'effect_type' => ['nullable', 'string', 'max:100'], 'effect_value' => ['required', 'integer', 'between:-10000,10000'], 'action_key' => ['nullable', 'string', 'max:100', Rule::unique('items', 'action_key')->ignore($id)], 'animation_key' => ['nullable', 'string', 'max:100'], 'animation_preset_id' => ['nullable', Rule::exists('animation_presets', 'id')->whereNull('deleted_at')->where('is_active', true)], 'mode_scope' => ['required', Rule::in(['both', 'greenhouse', 'outdoor', 'seasonal'])], 'effect_payload' => ['nullable', 'array'], 'effect_payload.pest_id' => ['nullable', $activePest], 'effect_payload.strategy' => ['nullable', Rule::in(['refill_reserve', 'toward_healthy_midpoint', 'drainage', 'moisture_retention'])], 'effect_payload.resource' => ['nullable', Rule::in($environmentFactors)], 'effect_payload.duration_ticks' => ['nullable', 'integer', 'between:1,100'], 'effect_payload.duration_seconds' => ['nullable', 'integer', 'between:5,300'], 'rarity' => ['required', Rule::in(['common', 'rare', 'epic', 'legendary'])], 'is_active' => ['required', 'boolean']],
+            'shop-items' => ['item_id' => ['required', $activeItem, Rule::unique('shop_items', 'item_id')->ignore($id)], 'price_coin' => ['required', 'integer', 'min:0'], 'price_gem' => ['required', 'integer', 'min:0'], 'stock_limit' => ['nullable', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],
             'model-assets' => ['asset_key' => ['required', 'string', 'max:191', Rule::unique('model_assets', 'asset_key')->ignore($id)], 'label' => ['nullable', 'string', 'max:191'], 'type' => ['required', Rule::in(['model', 'plant', 'scene', 'pest', 'item', 'action', 'effect'])], 'url' => ['required', 'string', 'max:2048'], 'metadata' => ['nullable', 'array']],
             'quests' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'quest_type' => ['required', Rule::in(['daily', 'weekly', 'story', 'event'])], 'target_type' => ['required', Rule::in(['simulation_started', 'simulation_completed', 'plant_harvested', 'item_used', 'item_purchased', 'post_created', 'comment_created', 'friend_added'])], 'target_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'reward_gem' => ['required', 'integer', 'min:0'], 'is_active' => ['required', 'boolean']],
             'achievements' => ['title' => ['required', 'string', 'max:191'], 'description' => ['nullable', 'string', 'max:5000'], 'condition_type' => ['required', Rule::in(['simulation_started', 'simulation_completed', 'plant_harvested', 'perfect_health_harvest', 'item_used', 'item_purchased', 'post_created', 'friend_added', 'level_reached'])], 'condition_value' => ['required', 'integer', 'min:1'], 'reward_exp' => ['required', 'integer', 'min:0'], 'reward_coin' => ['required', 'integer', 'min:0'], 'badge_image_url' => $nullableUrl, 'is_active' => ['required', 'boolean']],
@@ -409,16 +462,110 @@ class AdminResourceController extends Controller
     /** @return array<string, mixed> */
     private function validatedData(Request $request, string $resource, ?int $recordId = null): array
     {
+        if ($resource === 'item-types' && blank($request->input('key'))) {
+            $request->merge([
+                'key' => $recordId
+                    ? ItemType::withTrashed()->findOrFail($recordId)->key
+                    : $this->generateItemTypeKey((string) ($request->input('name_en') ?: $request->input('name_th'))),
+            ]);
+        }
+        if ($resource === 'items' && blank($request->input('action_key'))) {
+            $existingActionKey = $recordId
+                ? Item::withTrashed()->findOrFail($recordId)->action_key
+                : null;
+            $request->merge([
+                'action_key' => $existingActionKey
+                    ?: $this->generateItemActionKey((string) $request->input('name')),
+            ]);
+        }
+        if ($resource === 'animation-presets' && blank($request->input('key'))) {
+            $request->merge([
+                'key' => $recordId
+                    ? AnimationPreset::withTrashed()->findOrFail($recordId)->key
+                    : $this->generateAnimationPresetKey((string) ($request->input('name_en') ?: $request->input('name_th'))),
+            ]);
+        }
+        if ($resource === 'shop-items') {
+            $request->merge(['price_gem' => 0]);
+        }
+
         $validator = Validator::make($request->all(), $this->rules($resource, $recordId, $request), [
             'unique' => 'Duplicate value: another active row already uses this :attribute.',
             'distinct' => 'Duplicate value: :attribute contains the same selection more than once.',
-            'ends_at.after_or_equal' => 'The shop end date must be the same as or later than its start date.',
         ]);
         $validator->after(function ($validator) use ($recordId, $request, $resource): void {
             $this->simulationDataValidator->validate($resource, $request->all(), $recordId, $validator);
         });
 
-        return $validator->validate();
+        $data = $validator->validate();
+        if ($resource === 'items') {
+            $pestId = $data['pest_id'] ?? null;
+            unset($data['pest_id']);
+            if (($data['type'] ?? null) === 'prank') {
+                $pest = Pest::query()->findOrFail($pestId);
+                $pestKey = Str::slug((string) ($pest->name_en ?: $pest->name_th)) ?: 'pest-'.$pest->id;
+                // Prank assets stay normalized: Item resolves them from the
+                // linked pest, so an updated pest image/model is reflected
+                // everywhere without copying or re-uploading files.
+                $data['image_url'] = null;
+                $data['model_url'] = null;
+                $data['effect_type'] = 'friend_pest:'.$pestKey;
+                $data['effect_value'] = 0;
+                $data['mode_scope'] = 'both';
+                $data['effect_payload'] = ['pest_id' => $pest->id];
+                $data['animation_preset_id'] = null;
+                $data['animation_key'] = null;
+            } elseif (isset($data['effect_payload']['pest_id'])) {
+                unset($data['effect_payload']['pest_id']);
+            }
+            $preset = ! empty($data['animation_preset_id'])
+                ? AnimationPreset::query()->find($data['animation_preset_id'])
+                : null;
+            $data['animation_key'] = $preset?->motion_type ?: ($data['animation_key'] ?? null);
+        }
+
+        return $data;
+    }
+
+    private function generateItemTypeKey(string $name): string
+    {
+        $base = Str::slug($name) ?: 'item-type';
+        $base = Str::limit($base, 90, '');
+        $candidate = $base;
+        $suffix = 2;
+
+        while (ItemType::withTrashed()->where('key', $candidate)->exists()) {
+            $candidate = Str::limit($base, 90 - strlen((string) $suffix), '').'-'.$suffix;
+            $suffix++;
+        }
+
+        return $candidate;
+    }
+
+    private function generateAnimationPresetKey(string $name): string
+    {
+        $base = Str::limit(Str::slug($name) ?: 'animation-preset', 90, '');
+        $candidate = $base;
+        $suffix = 2;
+        while (AnimationPreset::withTrashed()->where('key', $candidate)->exists()) {
+            $candidate = Str::limit($base, 86, '').'-'.$suffix++;
+        }
+
+        return $candidate;
+    }
+
+    private function generateItemActionKey(string $name): string
+    {
+        $base = Str::limit(Str::slug($name) ?: 'item-action', 90, '');
+        $candidate = $base;
+        $suffix = 2;
+
+        while (Item::withTrashed()->where('action_key', $candidate)->exists()) {
+            $candidate = Str::limit($base, 88 - strlen((string) $suffix), '').'-'.$suffix;
+            $suffix++;
+        }
+
+        return $candidate;
     }
 
     private function moderationIndex(Request $request, string $resource): JsonResponse
@@ -427,7 +574,12 @@ class AdminResourceController extends Controller
             'posts' => Post::query()->with('user:id,username,email,avatar_url')->withCount(['comments', 'likes']),
             'comments' => Comment::query()->with('user:id,username,email,avatar_url')->withCount(['replies', 'likes']),
             'simulator-comments' => SimulatorComment::query()->with(['user:id,username,email,avatar_url', 'simulator:id,user_id,plant_id,status']),
-            'simulators' => Simulator::query()->with(['user:id,username,email,avatar_url', 'plant:id,name_th,name_en'])->withCount('posts'),
+            'simulators' => Simulator::query()->with([
+                'user:id,username,email,avatar_url',
+                'plant:id,name_th,name_en,base_image_url,base_model_url',
+                'currentStage:id,stage_no,stage_name,required_growth_point,model_url',
+                'visualVariant:id,state_key,label,model_url',
+            ])->withCount('posts'),
             'plant-histories' => PlantHistory::query()->with(['user:id,username,email,avatar_url', 'plant:id,name_th,name_en']),
             'activity-logs' => AdminActivityLog::query()->with('admin:id,username,email'),
             default => abort(404, 'Unknown management resource.'),
@@ -460,9 +612,56 @@ class AdminResourceController extends Controller
             }
         }
 
+        if ($request->query('group_by') === 'user' && in_array($resource, ['posts', 'comments', 'simulator-comments', 'simulators', 'plant-histories'], true)) {
+            return $this->paginateModerationByOwner($query, $request);
+        }
+
         $orderColumn = $resource === 'activity-logs' ? 'id' : 'created_at';
 
         return response()->json($query->orderBy($orderColumn)->orderBy('id')->paginate(25));
+    }
+
+    private function paginateModerationByOwner($query, Request $request): JsonResponse
+    {
+        $perPage = min(50, max(1, (int) $request->query('per_page', 10)));
+        $ownerPaginator = (clone $query)
+            ->reorder()
+            ->select('user_id')
+            ->selectRaw('MIN(created_at) AS first_record_at')
+            ->groupBy('user_id')
+            ->orderBy('first_record_at')
+            ->orderBy('user_id')
+            ->paginate($perPage);
+        $ownerIds = collect($ownerPaginator->items())
+            ->pluck('user_id')
+            ->filter(fn ($ownerId) => $ownerId !== null)
+            ->values();
+        $ownerOrder = $ownerIds->flip()->all();
+
+        $records = $ownerIds->isEmpty()
+            ? collect()
+            : (clone $query)
+                ->whereIn('user_id', $ownerIds->all())
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->get()
+                ->sort(function ($left, $right) use ($ownerOrder): int {
+                    $ownerComparison = ($ownerOrder[$left->user_id] ?? PHP_INT_MAX) <=> ($ownerOrder[$right->user_id] ?? PHP_INT_MAX);
+                    if ($ownerComparison !== 0) {
+                        return $ownerComparison;
+                    }
+
+                    $dateComparison = ($left->created_at?->getTimestamp() ?? 0) <=> ($right->created_at?->getTimestamp() ?? 0);
+
+                    return $dateComparison !== 0 ? $dateComparison : $left->id <=> $right->id;
+                });
+
+        $payload = $ownerPaginator->toArray();
+        $payload['data'] = $records->values()->toArray();
+        $payload['grouped_by'] = 'user';
+        $payload['group_count'] = $ownerIds->count();
+
+        return response()->json($payload);
     }
 
     private function moderationUpdate(Request $request, string $resource, int $record): JsonResponse
@@ -470,6 +669,11 @@ class AdminResourceController extends Controller
         $modelClass = $this->moderationModel($resource);
         abort_if($modelClass === null || $resource === 'activity-logs', 404, 'This resource cannot be changed.');
         $model = $modelClass::query()->findOrFail($record);
+        abort_if(
+            $resource === 'simulators' && $model->status === 'cancelled',
+            409,
+            'Cancelled simulations are locked. They can only be viewed or moved to trash.',
+        );
         $before = $model->toArray();
         $data = match ($resource) {
             'posts', 'plant-histories' => $request->validate(['visibility' => ['required', Rule::in(['private', 'friends', 'public'])]]),
