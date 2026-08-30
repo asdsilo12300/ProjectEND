@@ -6,7 +6,7 @@ import { resolveAssetUrl } from '../../lib/api'
 import { GrassGround, PlantingSpot } from './GrassGround'
 import { OutdoorRain } from './OutdoorRain'
 import { OutdoorWind } from './OutdoorWind'
-import { findPlantingHeight, PLANTING_CENTER } from './plantingSurface'
+import { findPlantingHeight, PLANTING_CENTER, PLANTING_SURFACE_LIFT } from './plantingSurface'
 import { getRainVisualIntensity } from './rainUtils'
 
 function getDirtModelUrl(dirtModelUrl) {
@@ -97,7 +97,7 @@ export function SceneEnvironment({
 
   useEffect(() => {
     onPlantingSurface?.({
-      position: [PLANTING_CENTER[0], plantingHeight + 0.018, PLANTING_CENTER[1]],
+      position: [PLANTING_CENTER[0], plantingHeight + PLANTING_SURFACE_LIFT, PLANTING_CENTER[1]],
       radius: 0.96,
     })
   }, [onPlantingSurface, plantingHeight])

@@ -28,6 +28,7 @@ const GENERIC_PLANT_TARGET_FOOTPRINT = 1.28
 // readable scale that remains comparable to Elephant Ear and Tulip.
 const SUNFLOWER_TARGET_HEIGHT = 1.72
 const GENERIC_MATURE_ANIMATION_FRACTION = 0.95
+const GENERIC_SOIL_EMBED_DEPTH = 0.055
 const TULIP_SOIL_EMBED_DEPTH = 0.2
 const TULIP_GROWTH_TRANSITION_RESPONSE = 3.2
 // Frames 0-82 in the uploaded Tulip clip contain extreme compensated bone
@@ -153,12 +154,13 @@ function getPlantPresentation(visualOverrides = {}) {
   }
 }
 
-function PlantPresentationGroup({ children, visualOverrides = {} }) {
+function PlantPresentationGroup({ children, groundY = null, visualOverrides = {} }) {
   const presentation = getPlantPresentation(visualOverrides)
+  const resolvedGroundY = Number.isFinite(Number(groundY)) ? Number(groundY) : PLANT_PIVOT[1]
 
   return (
     <group
-      position={PLANT_PIVOT}
+      position={[PLANT_PIVOT[0], resolvedGroundY, PLANT_PIVOT[2]]}
       rotation={[0, 0, presentation.lean]}
       scale={[presentation.scale, presentation.scale * presentation.heightScale, presentation.scale]}
     >
@@ -300,7 +302,7 @@ function isBasePlantModel(modelUrl) {
 }
 
 function plantSoilEmbedDepth(plantName = '') {
-  return isTulipPlant(plantName) ? TULIP_SOIL_EMBED_DEPTH : 0
+  return isTulipPlant(plantName) ? TULIP_SOIL_EMBED_DEPTH : GENERIC_SOIL_EMBED_DEPTH
 }
 
 /**
@@ -392,7 +394,7 @@ function applyFungusToPlant(object, fungusRisk = 0) {
   })
 }
 
-function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, previewLoop = false, windMotion = null, ...props }) {
+function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRisk = 0, groundY = null, health = 100, isMature = false, growthProgress = 0, previewLoop = false, windMotion = null, ...props }) {
   const group = useRef(null)
   const clonedSceneRef = useRef(null)
   const poseSignatureRef = useRef(null)
@@ -589,7 +591,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
 
   return (
     <group {...props}>
-      <PlantPresentationGroup visualOverrides={visualOverrides}>
+      <PlantPresentationGroup groundY={groundY} visualOverrides={visualOverrides}>
         <PlantGrowthGroup
           isTulip={isTulip}
           pivotY={plantBaseTargetY}
@@ -604,7 +606,7 @@ function GenericPlantModel({ modelUrl, plantName = '', visualOverrides, fungusRi
   )
 }
 
-export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, health = 100, isMature = false, growthProgress = 0, previewLoop = false, windMotion = null, ...props }) {
+export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOverrides = {}, fungusRisk = 0, groundY = null, health = 100, isMature = false, growthProgress = 0, previewLoop = false, windMotion = null, ...props }) {
   const effectiveVisualOverrides = useMemo(
     () => getEffectiveVisualOverrides(visualOverrides, health),
     [health, visualOverrides],
@@ -613,7 +615,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
   if (isBasePlantModel(modelUrl)) {
     return (
       <group {...props}>
-        <PlantPresentationGroup visualOverrides={effectiveVisualOverrides}>
+        <PlantPresentationGroup groundY={groundY} visualOverrides={effectiveVisualOverrides}>
           <GltfPlant modelUrl="/plant.gltf" visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} previewLoop={previewLoop} windMotion={windMotion} />
         </PlantPresentationGroup>
       </group>
@@ -622,7 +624,7 @@ export function PlantModel({ modelUrl = '/plant.gltf', plantName = '', visualOve
 
   const resolvedModelUrl = resolveAssetUrl(modelUrl) || '/plant.gltf'
 
-  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} health={health} isMature={isMature} growthProgress={growthProgress} previewLoop={previewLoop} windMotion={windMotion} {...props} />
+  return <GenericPlantModel modelUrl={resolvedModelUrl} plantName={plantName} visualOverrides={effectiveVisualOverrides} fungusRisk={fungusRisk} groundY={groundY} health={health} isMature={isMature} growthProgress={growthProgress} previewLoop={previewLoop} windMotion={windMotion} {...props} />
 }
 
 const pestAnchors = {
@@ -795,7 +797,7 @@ export function PestModel({ pest, index = 0, visualOverrides = {}, growthProgres
   if (isGroundPlacement) return <>{pestVisuals}</>
 
   return (
-    <PlantPresentationGroup visualOverrides={visualOverrides}>
+    <PlantPresentationGroup groundY={groundY} visualOverrides={visualOverrides}>
       <group position={PLANT_ASSET_ALIGNMENT_POSITION} scale={PLANT_ASSET_ALIGNMENT_SCALE}>
         {pestVisuals}
       </group>

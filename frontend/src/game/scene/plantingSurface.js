@@ -1,6 +1,7 @@
 import { Box3, Raycaster, Vector3 } from 'three'
 
 export const PLANTING_CENTER = [0.75, 0]
+export const PLANTING_SURFACE_LIFT = 0.018
 
 const DOWN = new Vector3(0, -1, 0)
 

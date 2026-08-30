@@ -3,7 +3,7 @@ import { Html, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { Box3, Color, DoubleSide, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three'
 import { getRainVisualIntensity } from './rainUtils'
-import { findGroundSurface, findPlantingHeight, PLANTING_CENTER } from './plantingSurface'
+import { findGroundSurface, findPlantingHeight, PLANTING_CENTER, PLANTING_SURFACE_LIFT } from './plantingSurface'
 
 const GRASS_MODEL_URLS = {
   meadow: '/scenes/grass/scene.gltf',
@@ -40,7 +40,7 @@ export function PlantingSpot({ groundObject, label = 'Planting area', plantSelec
   })
 
   return (
-    <group position={[PLANTING_CENTER[0], plantingHeight + 0.018, PLANTING_CENTER[1]]}>
+    <group position={[PLANTING_CENTER[0], plantingHeight + PLANTING_SURFACE_LIFT, PLANTING_CENTER[1]]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
         <circleGeometry args={[0.88, 64]} />
         <meshBasicMaterial

@@ -16,6 +16,7 @@ import { PlantRecommendationBanner } from '../panels/PlantMonitorPanel'
 import { SeasonalEffects } from './SeasonalEffects'
 import { localSeasonIcon, localSeasonLabel, localSeasonPalette } from '../utils/seasonalWeather'
 import { PEST_PLACEMENT_MODES, pestPlacementMode } from './pestPlacement'
+import { PLANTING_SURFACE_LIFT } from './plantingSurface'
 
 function useCurrentAppLanguage() {
   const [language, setLanguage] = useState(() => getAppLanguage() === 'th' ? 'th' : 'en')
@@ -712,6 +713,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
   const speciesScale = plantName.includes('elephant') || plantName.includes('xanthosoma') || plantName.includes('หูช้าง') ? 1.18 : 0.92
   const protectionScale = speciesScale * (0.7 + growthProgress * 0.3)
   const [plantingSurface, setPlantingSurface] = useState({ position: [0.75, -0.38, 0], radius: 0.96 })
+  const plantingGroundY = Number(plantingSurface?.position?.[1]) - PLANTING_SURFACE_LIFT
   const handlePlantingSurface = useCallback((nextSurface) => {
     setPlantingSurface((current) => {
       const currentPosition = current?.position ?? []
@@ -814,6 +816,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
                   plantName={simulationVisual?.plant?.name_en ?? simulationVisual?.plant?.name_th}
                   visualOverrides={simulationVisual?.visual_overrides}
                   fungusRisk={surfacePestRisk}
+                  groundY={plantingGroundY}
                   health={health}
                   isMature={isMature}
                   growthProgress={growthProgress}
@@ -844,7 +847,7 @@ export function SimulationStage({ actionState = null, awaitingFirstCycle = false
                         index={index}
                         visualOverrides={simulationVisual?.visual_overrides}
                         growthProgress={growthProgress}
-                        groundY={plantingSurface?.position?.[1]}
+                        groundY={plantingGroundY}
                       />
                     </PestErrorBoundary>
                   )
