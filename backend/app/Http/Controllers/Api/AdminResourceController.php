@@ -175,6 +175,11 @@ class AdminResourceController extends Controller
 
     public function destroy(Request $request, string $resource, int $record): JsonResponse
     {
+        abort_if(
+            in_array($resource, ['simulators', 'plant-histories'], true),
+            405,
+            'Simulation and plant history records are permanent and cannot be deleted.',
+        );
         abort_if($resource === 'simulation-mode-rewards', 405, 'Simulation mode rewards cannot be deleted.');
         if ($resource === 'activity-logs') {
             abort(405, 'Audit logs cannot be deleted.');
@@ -672,7 +677,7 @@ class AdminResourceController extends Controller
         abort_if(
             $resource === 'simulators' && $model->status === 'cancelled',
             409,
-            'Cancelled simulations are locked. They can only be viewed or moved to trash.',
+            'Cancelled simulations are locked and can only be viewed.',
         );
         $before = $model->toArray();
         $data = match ($resource) {

@@ -84,29 +84,21 @@ class AdminCancelledSimulatorLockTest extends TestCase
         ]);
     }
 
-    public function test_cancelled_simulation_can_be_deleted_but_not_restored(): void
+    public function test_cancelled_simulation_cannot_be_deleted(): void
     {
         $simulator = $this->cancelledSimulator();
         $controller = app(AdminResourceController::class);
         $deleteRequest = Request::create("/api/admin/resources/simulators/{$simulator->id}", 'DELETE');
         $deleteRequest->setUserResolver(fn () => $this->admin);
 
-        $response = $controller->destroy($deleteRequest, 'simulators', $simulator->id);
-
-        $this->assertSame(200, $response->status());
-        $this->assertNotNull(Simulator::withTrashed()->findOrFail($simulator->id)->deleted_at);
-
-        $restoreRequest = Request::create("/api/admin/resources/simulators/{$simulator->id}/restore", 'POST');
-        $restoreRequest->setUserResolver(fn () => $this->admin);
-
         try {
-            $controller->restore($restoreRequest, 'simulators', $simulator->id);
-            $this->fail('A cancelled simulation should not be restorable.');
+            $controller->destroy($deleteRequest, 'simulators', $simulator->id);
+            $this->fail('Simulation records should be permanent.');
         } catch (HttpException $exception) {
-            $this->assertSame(409, $exception->getStatusCode());
+            $this->assertSame(405, $exception->getStatusCode());
         }
 
-        $this->assertNotNull(Simulator::withTrashed()->findOrFail($simulator->id)->deleted_at);
+        $this->assertNull(Simulator::withTrashed()->findOrFail($simulator->id)->deleted_at);
     }
 
     private function cancelledSimulator(): Simulator
