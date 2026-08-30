@@ -53,6 +53,17 @@ function builtInPestImage(record) {
   return null
 }
 
+function pestModelUrl(record) {
+  const modelUrl = String(record.model_url ?? '')
+  const name = `${record.name_en ?? ''} ${record.name_th ?? ''}`.toLowerCase()
+
+  if (/aphid|เพลี้ย/.test(name) && modelUrl.endsWith('/models/aphid.gltf')) {
+    return '/aphid-static.glb'
+  }
+
+  return record.model_url
+}
+
 function NormalizedModel({ url }) {
   const { scene } = useGLTF(url)
   const prepared = useMemo(() => {
@@ -158,7 +169,7 @@ function previewValues(previewType, record) {
     model: record.current_model_url || record.visual_variant?.model_url || record.current_stage?.model_url || record.plant?.base_model_url,
     title: record.plant?.name_th || record.plant?.name_en || 'Simulation plant',
   }
-  if (previewType === 'pest') return { image: record.image_url || builtInPestImage(record), model: record.model_url, title: record.name_th || record.name_en || 'Pest' }
+  if (previewType === 'pest') return { image: record.image_url || builtInPestImage(record), model: pestModelUrl(record), title: record.name_th || record.name_en || 'Pest' }
   if (previewType === 'item') {
     const preset = record.animation_preset || (record.animation_key ? {
       key: record.animation_key,

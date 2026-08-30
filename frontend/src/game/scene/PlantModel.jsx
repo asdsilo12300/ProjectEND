@@ -743,10 +743,12 @@ function pestModelUrl(name, pest) {
   // The bundled assets mirror the seeded database models and remain same-origin
   // in development. Static files served from the API storage endpoint do not
   // carry CORS headers, which would otherwise make GLTFLoader hide these pests.
-  if (name === 'aphid' && (!configuredModelUrl || configuredModelUrl.endsWith('/models/aphid.gltf'))) return '/aphid.gltf'
+  if (name === 'aphid' && (!configuredModelUrl
+    || configuredModelUrl.endsWith('/models/aphid.gltf')
+    || configuredModelUrl.endsWith('/models/aphid-static.glb'))) return '/aphid-static.glb'
   if (name === 'snail' && (!configuredModelUrl || configuredModelUrl.endsWith('/models/snails.gltf'))) return '/snails.gltf'
   if (configuredModelUrl) return configuredModelUrl
-  if (name === 'aphid') return '/aphid.gltf'
+  if (name === 'aphid') return '/aphid-static.glb'
   if (name === 'snail') return '/snails.gltf'
   return null
 }

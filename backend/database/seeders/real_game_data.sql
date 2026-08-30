@@ -96,9 +96,9 @@ VALUES
   (@plant_id, 'air_temp', 'below', 16, NULL, 'cold_stress', 60, -8, -5, 'Air temperature is low; growth slows down.', 'Move the plant to a warmer condition.', 1, NOW(), NOW()),
   (@plant_id, 'soil_humidity', 'above', NULL, 82, 'overwatered', 68, -8, -4, 'Soil humidity is very high and may invite fungal growth.', 'Let soil drain before adding more water.', 1, NOW(), NOW());
 
-UPDATE pests SET name_th = 'เพลี้ย', model_url = 'models/aphid.gltf', base_chance = 0, damage_per_turn = 5, behavior = 'More likely in dry and hot air.', deleted_at = NULL WHERE name_en = 'aphid';
+UPDATE pests SET name_th = 'เพลี้ย', model_url = 'models/aphid-static.glb', base_chance = 0, damage_per_turn = 5, behavior = 'More likely in dry and hot air.', deleted_at = NULL WHERE name_en = 'aphid';
 INSERT INTO pests (name_th, name_en, description, image_url, model_url, base_chance, damage_per_turn, behavior)
-SELECT 'เพลี้ย', 'aphid', NULL, NULL, 'models/aphid.gltf', 0, 5, 'More likely in dry and hot air.'
+SELECT 'เพลี้ย', 'aphid', NULL, NULL, 'models/aphid-static.glb', 0, 5, 'More likely in dry and hot air.'
 WHERE NOT EXISTS (SELECT 1 FROM pests WHERE name_en = 'aphid');
 
 UPDATE pests SET name_th = 'หอยทาก', model_url = 'models/snails.gltf', base_chance = 0, damage_per_turn = 6, behavior = 'More likely when soil is wet or rain is present.', deleted_at = NULL WHERE name_en = 'snail';
@@ -160,7 +160,7 @@ INSERT INTO model_assets (asset_key, label, type, url, metadata, created_at, upd
 VALUES
   ('plant.original', 'Original plant model', 'plant', 'models/plant.gltf', JSON_OBJECT('source', 'database-seed'), NOW(), NOW()),
   ('ground.dirt', 'Dirt ground model', 'scene', 'models/dirt.gltf', JSON_OBJECT('source', 'database-seed'), NOW(), NOW()),
-  ('pest.aphid', 'Aphid pest model', 'pest', 'models/aphid.gltf', JSON_OBJECT('source', 'database-seed'), NOW(), NOW()),
+  ('pest.aphid', 'Aphid pest model', 'pest', 'models/aphid-static.glb', JSON_OBJECT('source', 'database-seed'), NOW(), NOW()),
   ('pest.snail', 'Snail pest model', 'pest', 'models/snails.gltf', JSON_OBJECT('source', 'database-seed'), NOW(), NOW())
 ON DUPLICATE KEY UPDATE
   label = VALUES(label),

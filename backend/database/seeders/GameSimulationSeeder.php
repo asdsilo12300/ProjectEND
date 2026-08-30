@@ -97,7 +97,7 @@ class GameSimulationSeeder extends Seeder
         }
 
         $pests = [
-            ['name_th' => 'เพลี้ย', 'name_en' => 'aphid', 'model_url' => 'models/aphid.gltf', 'placement_mode' => 'leaf', 'base_chance' => 4, 'damage_per_turn' => 5, 'behavior' => 'Can appear randomly; much more likely in dry and hot air.'],
+            ['name_th' => 'เพลี้ย', 'name_en' => 'aphid', 'model_url' => 'models/aphid-static.glb', 'placement_mode' => 'leaf', 'base_chance' => 4, 'damage_per_turn' => 5, 'behavior' => 'Can appear randomly; much more likely in dry and hot air.'],
             ['name_th' => 'หอยทาก', 'name_en' => 'snail', 'model_url' => 'models/snails.gltf', 'placement_mode' => 'ground_random', 'base_chance' => 3, 'damage_per_turn' => 6, 'behavior' => 'Can appear randomly; much more likely when soil is wet or rain is present.'],
             ['name_th' => 'เชื้อรา', 'name_en' => 'fungus', 'model_url' => null, 'placement_mode' => 'plant_surface', 'base_chance' => 2, 'damage_per_turn' => 7, 'behavior' => 'Can appear randomly; much more likely with high humidity and wet soil.'],
         ];
@@ -254,7 +254,7 @@ class GameSimulationSeeder extends Seeder
         $assets = [
             ['asset_key' => 'plant.original', 'label' => 'Original plant model', 'type' => 'plant', 'url' => 'models/plant.gltf'],
             ['asset_key' => 'ground.dirt', 'label' => 'Dirt ground model', 'type' => 'scene', 'url' => 'models/dirt.gltf'],
-            ['asset_key' => 'pest.aphid', 'label' => 'Aphid pest model', 'type' => 'pest', 'url' => 'models/aphid.gltf'],
+            ['asset_key' => 'pest.aphid', 'label' => 'Aphid pest model', 'type' => 'pest', 'url' => 'models/aphid-static.glb'],
             ['asset_key' => 'pest.snail', 'label' => 'Snail pest model', 'type' => 'pest', 'url' => 'models/snails.gltf'],
         ];
 
