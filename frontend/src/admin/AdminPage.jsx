@@ -214,6 +214,75 @@ function dataSnapshot(value) {
   return JSON.stringify(value)
 }
 
+const THAI_SCRIPT_PATTERN = /[\u0E00-\u0E7F]/u
+const LATIN_SCRIPT_PATTERN = /[A-Za-z]/u
+const LETTER_PATTERN = /\p{L}/u
+
+function localizedFieldLanguage(field = {}) {
+  const key = String(field.key ?? '').toLowerCase()
+  const label = String(field.label ?? '').toLowerCase()
+  if (/(?:^|_)th$/.test(key) || /\bthai\b|ภาษาไทย/.test(label)) return 'th'
+  if (/(?:^|_)en$/.test(key) || /\benglish\b|ภาษาอังกฤษ/.test(label)) return 'en'
+  return null
+}
+
+function languageRequirementMessage(expectedLanguage, interfaceLanguage = 'en') {
+  if (interfaceLanguage === 'th') {
+    return expectedLanguage === 'th'
+      ? 'ต้องกรอกช่องนี้เป็นภาษาไทยเท่านั้น กรุณานำตัวอักษรภาษาอังกฤษออก'
+      : 'ต้องกรอกช่องนี้เป็นภาษาอังกฤษเท่านั้น กรุณานำตัวอักษรภาษาไทยออก'
+  }
+  return expectedLanguage === 'th'
+    ? 'Use Thai in this field. Remove English letters before saving.'
+    : 'Use English in this field. Remove Thai characters before saving.'
+}
+
+function validateTextLanguage(value, expectedLanguage, interfaceLanguage = 'en') {
+  const text = String(value ?? '').trim()
+  if (!text || !expectedLanguage) return ''
+
+  const hasThai = THAI_SCRIPT_PATTERN.test(text)
+  const hasLatin = LATIN_SCRIPT_PATTERN.test(text)
+  const hasLetters = LETTER_PATTERN.test(text)
+  const invalid = expectedLanguage === 'th'
+    ? hasLatin || (hasLetters && !hasThai)
+    : hasThai || (hasLetters && !hasLatin)
+
+  return invalid ? languageRequirementMessage(expectedLanguage, interfaceLanguage) : ''
+}
+
+function validateLocalizedResourceFields(fields, form, interfaceLanguage = 'en') {
+  const errors = {}
+
+  for (const field of fields) {
+    if (field.type === 'reference-list') {
+      const itemErrors = (Array.isArray(form[field.key]) ? form[field.key] : []).map((source) => ({
+        label_en: validateTextLanguage(source?.label_en, 'en', interfaceLanguage),
+        label_th: validateTextLanguage(source?.label_th, 'th', interfaceLanguage),
+      }))
+      if (itemErrors.some((item) => item.label_en || item.label_th)) {
+        errors[field.key] = { items: itemErrors }
+      }
+      continue
+    }
+
+    const expectedLanguage = localizedFieldLanguage(field)
+    if (!expectedLanguage) continue
+    const value = form[field.key]
+
+    if (Array.isArray(value)) {
+      const itemErrors = value.map((item) => validateTextLanguage(item, expectedLanguage, interfaceLanguage))
+      if (itemErrors.some(Boolean)) errors[field.key] = { expectedLanguage, items: itemErrors }
+      continue
+    }
+
+    const message = validateTextLanguage(value, expectedLanguage, interfaceLanguage)
+    if (message) errors[field.key] = { expectedLanguage, message }
+  }
+
+  return errors
+}
+
 async function confirmDiscardChanges() {
   return confirmAdminAction({
     title: 'Discard unsaved changes?',
@@ -1119,6 +1188,19 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
   const editorScrollRef = useRef(null)
   const coverInputRef = useRef(null)
   const dirty = useMemo(() => dataSnapshot({ form, references }) !== dataSnapshot(initialState), [form, initialState, references])
+  const contentLanguageErrors = useMemo(() => {
+    const checks = [
+      ['eyebrow', form.eyebrow, 'en'], ['eyebrow_th', form.eyebrow_th, 'th'],
+      ['title', form.title, 'en'], ['title_th', form.title_th, 'th'],
+      ['summary', form.summary, 'en'], ['summary_th', form.summary_th, 'th'],
+      ['body_html', articleExcerpt(form.body_html), 'en'], ['body_html_th', articleExcerpt(form.body_html_th), 'th'],
+      ['cover_image_alt', form.cover_image_alt, 'en'], ['cover_image_alt_th', form.cover_image_alt_th, 'th'],
+    ]
+
+    return Object.fromEntries(checks
+      .map(([key, value, expectedLanguage]) => [key, validateTextLanguage(value, expectedLanguage, interfaceLanguage)])
+      .filter(([, message]) => message))
+  }, [form, interfaceLanguage])
   const requestClose = useCallback(async () => {
     if (status === 'saving') return
     if (dirty && !await confirmDiscardChanges()) return
@@ -1161,6 +1243,12 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
   async function submit(event, requestedStatus = form.status) {
     event?.preventDefault()
     setError('')
+    const firstLanguageErrorKey = Object.keys(contentLanguageErrors)[0]
+    if (firstLanguageErrorKey) {
+      setLanguage(firstLanguageErrorKey.endsWith('_th') ? 'th' : 'en')
+      window.requestAnimationFrame(() => dialogRef.current?.querySelector(`[data-content-language-field="${firstLanguageErrorKey}"] input, [data-content-language-field="${firstLanguageErrorKey}"] textarea`)?.focus())
+      return
+    }
     try {
       const nextForm = { ...form, status: requestedStatus }
       const currentTitle = String((language === 'th' ? form.title_th : form.title) ?? '').trim()
@@ -1199,6 +1287,11 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
   }
 
   const previewHtml = language === 'th' ? form.body_html_th : form.body_html
+  const titleLanguageKey = language === 'th' ? 'title_th' : 'title'
+  const bodyLanguageKey = language === 'th' ? 'body_html_th' : 'body_html'
+  const summaryLanguageKey = language === 'th' ? 'summary_th' : 'summary'
+  const coverAltLanguageKey = language === 'th' ? 'cover_image_alt_th' : 'cover_image_alt'
+  const eyebrowLanguageKey = language === 'th' ? 'eyebrow_th' : 'eyebrow'
 
   return (
     <div className="admin-editor-backdrop" role="presentation">
@@ -1220,7 +1313,7 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
                 <div><small>{ui('QUICK ARTICLE EDITOR', 'เขียนบทความแบบง่าย')}</small><h3>{ui('Add a title, then start writing.', 'ใส่ชื่อ แล้วเริ่มเขียนได้เลย')}</h3></div>
                 <p>{ui('Slug, summary, and reading time are generated automatically.', 'ชื่อสำหรับ URL สรุปบทความ และเวลาอ่าน ระบบจะสร้างให้อัตโนมัติ')}</p>
               </div>
-              <label className="admin-writing-title">{ui('Article title', 'ชื่อบทความ')}<input autoFocus placeholder={ui('Enter the article title', 'กรอกชื่อบทความ')} value={language === 'th' ? form.title_th : form.title} onChange={(event) => update(language === 'th' ? 'title_th' : 'title', event.target.value)} /></label>
+              <label className={`admin-writing-title ${contentLanguageErrors[titleLanguageKey] ? 'has-language-error' : ''}`} data-content-language-field={titleLanguageKey}>{ui('Article title', 'ชื่อบทความ')}<input aria-invalid={Boolean(contentLanguageErrors[titleLanguageKey])} className={contentLanguageErrors[titleLanguageKey] ? 'is-language-invalid' : ''} autoFocus placeholder={ui('Enter the article title', 'กรอกชื่อบทความ')} value={language === 'th' ? form.title_th : form.title} onChange={(event) => update(language === 'th' ? 'title_th' : 'title', event.target.value)} />{contentLanguageErrors[titleLanguageKey] && <small className="admin-language-field-error" role="alert">{contentLanguageErrors[titleLanguageKey]}</small>}</label>
               <div className="admin-content-mode">
                 <div><strong>{ui('Writing mode', 'รูปแบบการเขียน')}</strong><small>{ui('Switch modes without losing the content.', 'สลับโหมดได้โดยเนื้อหาไม่หาย')}</small></div>
                 <div className="admin-content-mode__switch" role="tablist" aria-label="Content editing mode">
@@ -1228,13 +1321,16 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
                   <button className={editorMode === 'html' ? 'is-active' : ''} type="button" role="tab" aria-selected={editorMode === 'html'} onClick={() => setEditorMode('html')}><AppIcon name="code" />HTML</button>
                 </div>
               </div>
-              {editorMode === 'visual' ? (
-                <Suspense fallback={<div className="admin-rich-editor-loading"><span /><strong>Loading visual editor…</strong></div>}>
-                  <ContentRichEditor key={`${language}-${interfaceLanguage}`} data={previewHtml} language={language} interfaceLanguage={interfaceLanguage} onChange={(html) => update(language === 'th' ? 'body_html_th' : 'body_html', html)} />
-                </Suspense>
-              ) : (
-                <label>{language === 'th' ? 'โครงสร้าง HTML' : 'HTML source'}<textarea className="admin-code-field admin-html-source-field" rows="20" spellCheck="false" value={previewHtml} onChange={(event) => update(language === 'th' ? 'body_html_th' : 'body_html', event.target.value)} /></label>
-              )}
+              <div className={`admin-content-language-block ${contentLanguageErrors[bodyLanguageKey] ? 'has-language-error' : ''}`} data-content-language-field={bodyLanguageKey}>
+                {editorMode === 'visual' ? (
+                  <Suspense fallback={<div className="admin-rich-editor-loading"><span /><strong>Loading visual editor…</strong></div>}>
+                    <ContentRichEditor key={`${language}-${interfaceLanguage}`} data={previewHtml} language={language} interfaceLanguage={interfaceLanguage} onChange={(html) => update(language === 'th' ? 'body_html_th' : 'body_html', html)} />
+                  </Suspense>
+                ) : (
+                  <label>{language === 'th' ? 'โครงสร้าง HTML' : 'HTML source'}<textarea aria-invalid={Boolean(contentLanguageErrors[bodyLanguageKey])} className={`admin-code-field admin-html-source-field ${contentLanguageErrors[bodyLanguageKey] ? 'is-language-invalid' : ''}`} rows="20" spellCheck="false" value={previewHtml} onChange={(event) => update(language === 'th' ? 'body_html_th' : 'body_html', event.target.value)} /></label>
+                )}
+                {contentLanguageErrors[bodyLanguageKey] && <small className="admin-language-field-error" role="alert">{contentLanguageErrors[bodyLanguageKey]}</small>}
+              </div>
             </section>
 
             <section className="admin-content-essentials">
@@ -1243,7 +1339,7 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
                 <span>{form.status === 'published' ? (language === 'th' ? 'จำเป็นสำหรับการเผยแพร่' : 'Required to publish') : (language === 'th' ? 'กรอกไว้ก่อนเผยแพร่' : 'Complete before publishing')}</span>
               </div>
 
-              <label>{language === 'th' ? 'สรุปบทความ' : 'Article summary'}<textarea placeholder={language === 'th' ? 'เว้นว่างได้ ระบบจะสร้างจากเนื้อหาให้อัตโนมัติ' : 'Optional — generated automatically from the article when left blank'} rows="3" value={language === 'th' ? form.summary_th : form.summary} onChange={(event) => update(language === 'th' ? 'summary_th' : 'summary', event.target.value)} /></label>
+              <label className={contentLanguageErrors[summaryLanguageKey] ? 'has-language-error' : ''} data-content-language-field={summaryLanguageKey}>{language === 'th' ? 'สรุปบทความ' : 'Article summary'}<textarea aria-invalid={Boolean(contentLanguageErrors[summaryLanguageKey])} className={contentLanguageErrors[summaryLanguageKey] ? 'is-language-invalid' : ''} placeholder={language === 'th' ? 'เว้นว่างได้ ระบบจะสร้างจากเนื้อหาให้อัตโนมัติ' : 'Optional — generated automatically from the article when left blank'} rows="3" value={language === 'th' ? form.summary_th : form.summary} onChange={(event) => update(language === 'th' ? 'summary_th' : 'summary', event.target.value)} />{contentLanguageErrors[summaryLanguageKey] && <small className="admin-language-field-error" role="alert">{contentLanguageErrors[summaryLanguageKey]}</small>}</label>
 
               <div className="admin-cover-editor">
                 <div className={`admin-cover-editor__preview ${form.cover_image_url ? 'has-image' : ''}`}>
@@ -1260,7 +1356,7 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
               </div>
 
               <div className="admin-form-grid">
-                <label>{language === 'th' ? 'คำอธิบายรูป' : 'Image description'} <small>{language === 'th' ? 'ไม่บังคับ' : 'OPTIONAL'}</small><input placeholder={language === 'th' ? 'อธิบายสิ่งที่อยู่ในภาพ' : 'Describe what is shown in the image'} value={language === 'th' ? form.cover_image_alt_th ?? '' : form.cover_image_alt ?? ''} onChange={(event) => update(language === 'th' ? 'cover_image_alt_th' : 'cover_image_alt', event.target.value)} /></label>
+                <label className={contentLanguageErrors[coverAltLanguageKey] ? 'has-language-error' : ''} data-content-language-field={coverAltLanguageKey}>{language === 'th' ? 'คำอธิบายรูป' : 'Image description'} <small>{language === 'th' ? 'ไม่บังคับ' : 'OPTIONAL'}</small><input aria-invalid={Boolean(contentLanguageErrors[coverAltLanguageKey])} className={contentLanguageErrors[coverAltLanguageKey] ? 'is-language-invalid' : ''} placeholder={language === 'th' ? 'อธิบายสิ่งที่อยู่ในภาพ' : 'Describe what is shown in the image'} value={language === 'th' ? form.cover_image_alt_th ?? '' : form.cover_image_alt ?? ''} onChange={(event) => update(language === 'th' ? 'cover_image_alt_th' : 'cover_image_alt', event.target.value)} />{contentLanguageErrors[coverAltLanguageKey] && <small className="admin-language-field-error" role="alert">{contentLanguageErrors[coverAltLanguageKey]}</small>}</label>
                 <label>{language === 'th' ? 'เครดิตรูปภาพ' : 'Image credit'} <small>{language === 'th' ? 'ไม่บังคับ' : 'OPTIONAL'}</small><input placeholder={language === 'th' ? 'ชื่อช่างภาพหรือองค์กร' : 'Photographer or organization'} value={form.image_credit ?? ''} onChange={(event) => update('image_credit', event.target.value)} /></label>
                 <label className="is-wide">Image credit URL <small>{language === 'th' ? 'ไม่บังคับ' : 'OPTIONAL'}</small><input placeholder="https://…" value={form.image_credit_url ?? ''} onChange={(event) => update('image_credit_url', event.target.value)} /></label>
               </div>
@@ -1289,7 +1385,7 @@ function ContentEditor({ content, interfaceLanguage = 'en', onClose, onSaved }) 
                   <div className="admin-form-grid">
                     <label>Slug <small>AUTO</small><input placeholder="Generated from the title" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={form.slug} onChange={(event) => update('slug', event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} /></label>
                     <label>{ui('Category', 'หมวดหมู่')}<select value={form.category} onChange={(event) => update('category', event.target.value)}><option value="plant-science">{ui('Plant science', 'ข้อมูลพืช')}</option><option value="plant-care">{ui('Plant care', 'การดูแลพืช')}</option><option value="environment">{ui('Environment', 'สภาพแวดล้อม')}</option><option value="pests">{ui('Pests and diseases', 'ศัตรูพืชและโรค')}</option><option value="simulation-guide">{ui('Simulation guide', 'คู่มือการจำลอง')}</option></select></label>
-                    <label>{language === 'th' ? 'ป้ายกำกับ' : 'Eyebrow'}<input value={language === 'th' ? form.eyebrow_th : form.eyebrow} onChange={(event) => update(language === 'th' ? 'eyebrow_th' : 'eyebrow', event.target.value)} /></label>
+                    <label className={contentLanguageErrors[eyebrowLanguageKey] ? 'has-language-error' : ''} data-content-language-field={eyebrowLanguageKey}>{language === 'th' ? 'ป้ายกำกับ' : 'Eyebrow'}<input aria-invalid={Boolean(contentLanguageErrors[eyebrowLanguageKey])} className={contentLanguageErrors[eyebrowLanguageKey] ? 'is-language-invalid' : ''} value={language === 'th' ? form.eyebrow_th : form.eyebrow} onChange={(event) => update(language === 'th' ? 'eyebrow_th' : 'eyebrow', event.target.value)} />{contentLanguageErrors[eyebrowLanguageKey] && <small className="admin-language-field-error" role="alert">{contentLanguageErrors[eyebrowLanguageKey]}</small>}</label>
                     <label>{language === 'th' ? 'เวลาอ่าน (นาที)' : 'Reading time'} <small>AUTO</small><input min="1" max="60" placeholder="Auto" type="number" value={form.reading_minutes} onChange={(event) => update('reading_minutes', event.target.value)} /></label>
                     <label>Sort order<input min="0" max="999" type="number" value={form.sort_order} onChange={(event) => update('sort_order', event.target.value)} /></label>
                   </div>
@@ -1673,7 +1769,7 @@ function EffectMapEditor({ label, value, onChange, disabled, wide }) {
   )
 }
 
-function StringListEditor({ label, items, onChange, options = [], placeholder, addLabel, emptyLabel, hint, disabled, wide }) {
+function StringListEditor({ label, items, onChange, options = [], placeholder, addLabel, emptyLabel, hint, disabled, validation, wide }) {
   const safeItems = Array.isArray(items) ? items : []
   const selectOptions = options.map((option) => typeof option === 'object' ? option : { value: option, label: option })
   const nextOption = selectOptions.find((option) => !safeItems.includes(option.value))
@@ -1687,7 +1783,7 @@ function StringListEditor({ label, items, onChange, options = [], placeholder, a
   }
 
   return (
-    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={label}>
+    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''} ${validation ? 'has-language-error' : ''}`} aria-label={label} data-language-invalid={validation ? 'true' : undefined}>
       <div className="admin-list-editor__heading">
         <div><strong>{label}</strong><small>{hint || 'One clear instruction per line. Empty lines are removed when saved.'}</small></div>
         <span className="admin-list-editor__count">{safeItems.length} {safeItems.length === 1 ? 'item' : 'items'}</span>
@@ -1696,7 +1792,7 @@ function StringListEditor({ label, items, onChange, options = [], placeholder, a
         {safeItems.length === 0 ? (
           <div className="admin-list-editor__empty">{emptyLabel}</div>
         ) : safeItems.map((item, index) => (
-          <div className="admin-list-editor__row" key={index}>
+          <div className={`admin-list-editor__row ${validation?.items?.[index] ? 'has-language-error' : ''}`} key={index}>
             <span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span>
             {selectOptions.length ? (
               <select aria-label={`${label} ${index + 1}`} disabled={disabled} value={item ?? ''} onChange={(event) => updateItem(index, event.target.value)}>
@@ -1705,9 +1801,10 @@ function StringListEditor({ label, items, onChange, options = [], placeholder, a
                 {selectOptions.map((option) => <option disabled={safeItems.some((selected, selectedIndex) => selectedIndex !== index && selected === option.value)} key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             ) : (
-              <input aria-label={`${label} ${index + 1}`} disabled={disabled} placeholder={placeholder} type="text" value={item ?? ''} onChange={(event) => updateItem(index, event.target.value)} />
+              <input aria-invalid={Boolean(validation?.items?.[index])} aria-label={`${label} ${index + 1}`} className={validation?.items?.[index] ? 'is-language-invalid' : ''} disabled={disabled} placeholder={placeholder} type="text" value={item ?? ''} onChange={(event) => updateItem(index, event.target.value)} />
             )}
             <button aria-label={`Remove ${label.toLowerCase()} ${index + 1}`} disabled={disabled} title="Remove item" type="button" onClick={() => removeItem(index)}><span aria-hidden="true">×</span></button>
+            {validation?.items?.[index] && <small className="admin-language-field-error" role="alert">{validation.items[index]}</small>}
           </div>
         ))}
       </div>
@@ -1716,7 +1813,7 @@ function StringListEditor({ label, items, onChange, options = [], placeholder, a
   )
 }
 
-function ReferenceListEditor({ label, items, onChange, disabled, wide }) {
+function ReferenceListEditor({ label, items, onChange, disabled, validation, wide }) {
   const safeItems = Array.isArray(items) ? items : []
 
   function updateItem(index, key, value) {
@@ -1728,7 +1825,7 @@ function ReferenceListEditor({ label, items, onChange, disabled, wide }) {
   }
 
   return (
-    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={label}>
+    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''} ${validation ? 'has-language-error' : ''}`} aria-label={label} data-language-invalid={validation ? 'true' : undefined}>
       <div className="admin-list-editor__heading">
         <div><strong>{label}</strong><small>Add a source name and URL. The URL is required for each non-empty reference.</small></div>
         <span className="admin-list-editor__count">{safeItems.length} {safeItems.length === 1 ? 'source' : 'sources'}</span>
@@ -1740,8 +1837,14 @@ function ReferenceListEditor({ label, items, onChange, disabled, wide }) {
           <div className="admin-reference-list__row" key={index}>
             <div className="admin-reference-list__row-head"><span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span><strong>Reference {index + 1}</strong><button aria-label={`Remove reference ${index + 1}`} disabled={disabled} title="Remove reference" type="button" onClick={() => removeItem(index)}><span aria-hidden="true">×</span></button></div>
             <div className="admin-reference-list__grid">
-              <input aria-label={`Reference ${index + 1} English title`} disabled={disabled} placeholder="English source name" type="text" value={source?.label_en ?? ''} onChange={(event) => updateItem(index, 'label_en', event.target.value)} />
-              <input aria-label={`Reference ${index + 1} Thai title`} disabled={disabled} placeholder="Thai source name" type="text" value={source?.label_th ?? ''} onChange={(event) => updateItem(index, 'label_th', event.target.value)} />
+              <div className="admin-reference-list__language-input">
+                <input aria-invalid={Boolean(validation?.items?.[index]?.label_en)} aria-label={`Reference ${index + 1} English title`} className={validation?.items?.[index]?.label_en ? 'is-language-invalid' : ''} disabled={disabled} placeholder="English source name" type="text" value={source?.label_en ?? ''} onChange={(event) => updateItem(index, 'label_en', event.target.value)} />
+                {validation?.items?.[index]?.label_en && <small className="admin-language-field-error" role="alert">{validation.items[index].label_en}</small>}
+              </div>
+              <div className="admin-reference-list__language-input">
+                <input aria-invalid={Boolean(validation?.items?.[index]?.label_th)} aria-label={`Reference ${index + 1} Thai title`} className={validation?.items?.[index]?.label_th ? 'is-language-invalid' : ''} disabled={disabled} placeholder="Thai source name" type="text" value={source?.label_th ?? ''} onChange={(event) => updateItem(index, 'label_th', event.target.value)} />
+                {validation?.items?.[index]?.label_th && <small className="admin-language-field-error" role="alert">{validation.items[index].label_th}</small>}
+              </div>
               <input aria-label={`Reference ${index + 1} URL`} className="is-url" disabled={disabled} placeholder="https://trusted-source.example/..." type="url" value={source?.url ?? ''} onChange={(event) => updateItem(index, 'url', event.target.value)} />
             </div>
           </div>
@@ -1865,6 +1968,11 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
     if (isPrankItem) return config.fields.filter((field) => !['image_url', 'model_url', 'effect_value', 'animation_preset_id', 'effect_payload'].includes(field.key))
     return config.fields.filter((field) => field.key !== 'pest_id')
   }, [config.fields, config.id, isPrankItem])
+  const languageErrors = useMemo(
+    () => validateLocalizedResourceFields(visibleFields, form, language),
+    [form, language, visibleFields],
+  )
+  const hasLanguageErrors = Object.keys(languageErrors).length > 0
   const selectedPrankPest = isPrankItem ? (lookups.pests ?? []).find((pest) => String(pest.id) === String(form.pest_id)) : null
   const selectedPrankPestImage = selectedPrankPest?.image_url
     ? (/^(?:blob:|data:|https?:\/\/|\/)/i.test(String(selectedPrankPest.image_url)) ? resolveAssetUrl(selectedPrankPest.image_url) : storageAsset(selectedPrankPest.image_url))
@@ -1964,6 +2072,10 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
   async function submit(event) {
     event.preventDefault()
     setError('')
+    if (hasLanguageErrors) {
+      dialogRef.current?.querySelector('[data-language-invalid="true"] input, [data-language-invalid="true"] textarea')?.focus()
+      return
+    }
     try {
       const payload = { ...form }
       for (const field of config.fields) {
@@ -2048,7 +2160,12 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
         <div className="admin-resource-editor__body">
           {isPrankItem && <div className="admin-prank-pest-note"><span className="admin-prank-pest-note__visual">{selectedPrankPestImage ? <img alt="" src={selectedPrankPestImage} /> : <AppIcon name="pest" />}</span><div><strong>{language === 'th' ? 'ใช้ข้อมูลจากศัตรูพืชโดยอัตโนมัติ' : 'Pest assets are linked automatically'}</strong><p>{language === 'th' ? 'เลือกศัตรูพืชด้านล่าง ระบบจะใช้รูปและโมเดล 3 มิติจากข้อมูลศัตรูพืช ไม่ต้องอัปโหลดซ้ำ' : 'Choose a pest below. Its image and 3D model will be reused, so no duplicate upload is needed.'}</p>{selectedPrankPest && <small>{language === 'th' ? 'กำลังใช้' : 'Using'}: {lookupLabel.pests(selectedPrankPest)}</small>}</div></div>}
           <div className="admin-resource-form-grid">
-            {visibleFields.map((field) => (
+            {visibleFields.map((field) => {
+              const languageValidation = languageErrors[field.key]
+              const invalidLanguage = Boolean(languageValidation?.message)
+              const fieldClassName = `${field.wide ? 'is-wide' : ''} ${invalidLanguage ? 'has-language-error' : ''}`.trim()
+
+              return (
               field.type === 'image-upload' ? (
                 <ImageUploadField
                   disabled={status !== 'idle'}
@@ -2118,6 +2235,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                   onChange={(items) => updateField(field.key, items)}
                   options={field.optionLookup === 'item-actions' ? (lookups.items ?? []).filter((item) => item.action_key).map((item) => ({ value: item.action_key, label: item.name })) : field.options}
                   placeholder={field.itemPlaceholder}
+                  validation={languageErrors[field.key]}
                   wide={field.wide}
                 />
               ) : field.type === 'reference-list' ? (
@@ -2127,6 +2245,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                   key={field.key}
                   label={field.label}
                   onChange={(items) => updateField(field.key, items)}
+                  validation={languageErrors[field.key]}
                   wide={field.wide}
                 />
               ) : field.type === 'condition-list' ? (
@@ -2147,10 +2266,10 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                   value={form[field.key]}
                   wide={field.wide}
                 />
-              ) : <label className={field.wide ? 'is-wide' : ''} key={field.key}>
+              ) : <label className={fieldClassName} data-language-invalid={invalidLanguage ? 'true' : undefined} key={field.key}>
                 {field.label}{fieldRequired(field) && <em>*</em>}
                 {field.type === 'textarea' || field.type === 'json' ? (
-                  <textarea className={field.type === 'json' ? 'admin-code-field' : ''} required={fieldRequired(field)} rows={field.type === 'json' ? 8 : 4} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
+                  <textarea aria-invalid={invalidLanguage} className={`${field.type === 'json' ? 'admin-code-field' : ''} ${invalidLanguage ? 'is-language-invalid' : ''}`.trim()} required={fieldRequired(field)} rows={field.type === 'json' ? 8 : 4} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
                 ) : field.type === 'select' ? (
                   <select required={fieldRequired(field)} value={fieldValue(field)} onChange={(event) => updateField(field.key, event.target.value)}>{field.options.map((option) => {
                     const optionValue = typeof option === 'object' ? option.value : option
@@ -2176,10 +2295,12 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                 ) : field.type === 'boolean' ? (
                   <button className={`admin-toggle ${form[field.key] ? 'is-active' : ''}`} type="button" role="switch" aria-checked={Boolean(form[field.key])} onClick={() => setForm((current) => ({ ...current, [field.key]: !current[field.key] }))}><i /><span>{form[field.key] ? 'Enabled' : 'Disabled'}</span></button>
                 ) : (
-                  <input required={fieldRequired(field)} type={field.type || 'text'} step={field.step} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
+                  <input aria-invalid={invalidLanguage} className={invalidLanguage ? 'is-language-invalid' : ''} required={fieldRequired(field)} type={field.type || 'text'} step={field.step} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
                 )}
+                {languageValidation?.message && <small className="admin-language-field-error" role="alert">{languageValidation.message}</small>}
               </label>
-            ))}
+              )
+            })}
           </div>
         </div>
         {error && <div className="admin-editor__error admin-resource-editor__conflict" role="alert"><span className="admin-resource-editor__conflict-icon"><AppIcon name="warning" /></span><div><strong>{language === 'th' ? 'บันทึกไม่ได้ — พบข้อมูลซ้ำหรือขัดแย้ง' : 'Cannot save — duplicate or conflicting data'}</strong><p>{error}</p><small>{language === 'th' ? 'ข้อมูลที่กรอกยังอยู่ในฟอร์ม แก้ไขจุดที่แจ้งแล้วบันทึกอีกครั้ง' : 'Your form values are preserved. Correct the conflict and save again.'}</small></div></div>}

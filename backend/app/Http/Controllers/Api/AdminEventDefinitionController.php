@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AdminActivityLog;
 use App\Models\EventDefinition;
+use App\Support\LocalizedFieldLanguageValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -23,7 +24,9 @@ class AdminEventDefinitionController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $event = EventDefinition::query()->create($request->validate($this->rules()));
+        $data = $request->validate($this->rules());
+        LocalizedFieldLanguageValidator::validateOrFail($data);
+        $event = EventDefinition::query()->create($data);
         AdminActivityLog::record($request->user(), 'created', 'event-definitions', $event->id, ['after' => $event->toArray()]);
         return response()->json(['data' => $event], 201);
     }
@@ -31,7 +34,9 @@ class AdminEventDefinitionController extends Controller
     public function update(Request $request, EventDefinition $eventDefinition): JsonResponse
     {
         $before = $eventDefinition->toArray();
-        $eventDefinition->fill($request->validate($this->rules($eventDefinition->id)))->save();
+        $data = $request->validate($this->rules($eventDefinition->id));
+        LocalizedFieldLanguageValidator::validateOrFail($data);
+        $eventDefinition->fill($data)->save();
         AdminActivityLog::record($request->user(), 'updated', 'event-definitions', $eventDefinition->id, ['before' => $before, 'after' => $eventDefinition->fresh()->toArray()]);
         return response()->json(['data' => $eventDefinition->fresh()]);
     }

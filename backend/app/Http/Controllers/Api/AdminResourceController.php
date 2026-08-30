@@ -31,6 +31,7 @@ use App\Services\AdminSimulationDataValidator;
 use App\Services\KnownPlantProfileService;
 use App\Services\PlantKnowledgeProfileService;
 use App\Services\PublicCatalogCache;
+use App\Support\LocalizedFieldLanguageValidator;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -94,6 +95,7 @@ class AdminResourceController extends Controller
         abort_if($config === null, 404, 'This resource cannot be created here.');
 
         $data = $this->validatedData($request, $resource);
+        LocalizedFieldLanguageValidator::validateOrFail($data);
         if ($resource === 'item-types' && ! array_key_exists('sort_order', $data)) {
             $data['sort_order'] = ((int) ItemType::withTrashed()->max('sort_order')) + 10;
         }
@@ -133,6 +135,7 @@ class AdminResourceController extends Controller
             $model = $config['model']::query()->findOrFail($record);
             $before = $model->toArray();
             $data = $this->validatedData($request, $resource, $record);
+            LocalizedFieldLanguageValidator::validateOrFail($data);
             if ($resource === 'item-types' && $model instanceof ItemType && $model->items()->withTrashed()->exists()) {
                 if ($model->key !== $data['key']) {
                     throw ValidationException::withMessages(['key' => 'This key is used by existing items and cannot be changed.']);
