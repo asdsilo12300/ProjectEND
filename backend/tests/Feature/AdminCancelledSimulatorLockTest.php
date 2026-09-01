@@ -74,12 +74,40 @@ class AdminCancelledSimulatorLockTest extends TestCase
             app(AdminResourceController::class)->update($request, 'simulators', $simulator->id);
             $this->fail('A cancelled simulation should be locked.');
         } catch (HttpException $exception) {
-            $this->assertSame(409, $exception->getStatusCode());
+            $this->assertSame(405, $exception->getStatusCode());
         }
 
         $this->assertDatabaseHas('simulators', [
             'id' => $simulator->id,
             'status' => 'cancelled',
+            'share_visibility' => 'private',
+        ]);
+    }
+
+    public function test_active_simulation_is_also_read_only_for_administrators(): void
+    {
+        $simulator = Simulator::query()->create([
+            'user_id' => $this->admin->id,
+            'mode' => 'greenhouse',
+            'status' => 'active',
+            'share_visibility' => 'private',
+        ]);
+        $request = Request::create("/api/admin/resources/simulators/{$simulator->id}", 'PUT', [
+            'status' => 'completed',
+            'share_visibility' => 'public',
+        ]);
+        $request->setUserResolver(fn () => $this->admin);
+
+        try {
+            app(AdminResourceController::class)->update($request, 'simulators', $simulator->id);
+            $this->fail('Simulation records should be view-only for administrators.');
+        } catch (HttpException $exception) {
+            $this->assertSame(405, $exception->getStatusCode());
+        }
+
+        $this->assertDatabaseHas('simulators', [
+            'id' => $simulator->id,
+            'status' => 'active',
             'share_visibility' => 'private',
         ]);
     }

@@ -580,8 +580,8 @@ const resourceGroups = {
     { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, noDelete: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   simulations: [
-    { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, noDelete: true, noTrashFilter: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${localizedAdminName(row.plant) || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
-    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, noDelete: true, noTrashFilter: true, groupBy: 'user', serverGrouped: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Grow time', render: (row) => formatPlantDuration(row, document.documentElement.lang === 'th' ? 'th' : 'en', { compact: true }) }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, viewOnly: true, noDelete: true, noTrashFilter: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${localizedAdminName(row.plant) || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
+    { id: 'plant-histories', label: 'Plant histories', icon: 'history', moderation: true, viewOnly: true, noDelete: true, noTrashFilter: true, groupBy: 'user', serverGrouped: true, statusField: 'visibility', statusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Result', render: (row) => `${row.final_health}% health · ${row.total_score} score` }, { label: 'Grow time', render: (row) => formatPlantDuration(row, document.documentElement.lang === 'th' ? 'th' : 'en', { compact: true }) }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   activity: [
     { id: 'activity-logs', label: 'Admin activity log', icon: 'history', readOnly: true, columns: [{ label: 'Administrator', render: (row) => row.admin?.username }, { label: 'Action', render: (row) => row.action }, { label: 'Target', render: (row) => `${row.target_type || 'system'} #${row.target_id || '—'}` }, { label: 'Time', render: (row) => formatDate(row.created_at, true) }] },
@@ -696,6 +696,22 @@ function AdminTableSkeleton({ embedded = false }) {
 
 function StatusBadge({ status }) {
   return <span className={`admin-status admin-status--${status}`}>{status}</span>
+}
+
+const recordStateLabels = {
+  th: { active: 'ใช้งาน', completed: 'เสร็จสิ้น', failed: 'ไม่สำเร็จ', cancelled: 'ยกเลิก', private: 'ส่วนตัว', friends: 'เพื่อน', public: 'สาธารณะ' },
+  en: { active: 'Active', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled', private: 'Private', friends: 'Friends', public: 'Public' },
+}
+
+function AdminReadOnlyRecordState({ config, language, record }) {
+  const isThai = language === 'th'
+  const labels = recordStateLabels[isThai ? 'th' : 'en']
+  const fields = [
+    { key: config.statusField, label: isThai ? (config.statusField === 'visibility' ? 'การมองเห็น' : 'สถานะ') : config.statusField.replaceAll('_', ' ') },
+    config.extraStatusField ? { key: config.extraStatusField, label: isThai ? 'การมองเห็น' : config.extraStatusField.replaceAll('_', ' ') } : null,
+  ].filter(Boolean)
+
+  return <div className="admin-readonly-state">{fields.map((field) => <span className={`is-${record[field.key]}`} key={field.key}><small>{field.label}</small><strong>{labels[record[field.key]] || record[field.key]}</strong></span>)}</div>
 }
 
 function AdminPagination({ currentPage = 1, lastPage = 1, onPageChange }) {
@@ -2363,6 +2379,7 @@ function ResourceDetailsDrawer({ config, language = 'en', record, onClose, onEdi
   const plantName = localizedAdminName(record.plant)
   const isSimulation = config.id === 'simulators'
   const cancelledSimulation = config.id === 'simulators' && record.status === 'cancelled'
+  const viewOnlyRecord = Boolean(config.viewOnly)
 
   return (
     <>
@@ -2407,9 +2424,9 @@ function ResourceDetailsDrawer({ config, language = 'en', record, onClose, onEdi
 
           {record.deleted_at && <div className="admin-trash-notice"><AppIcon name="history" /><span><strong>This record is in the trash.</strong><small>Restore it to edit or use it again.</small></span></div>}
 
-          {cancelledSimulation && <div className="admin-locked-record-notice"><AppIcon name="lock" /><span><strong>{language === 'th' ? 'การจำลองนี้ถูกยกเลิกและล็อกแล้ว' : 'This cancelled simulation is locked'}</strong><small>{language === 'th' ? 'ผู้ดูแลระบบเปิดดูได้เท่านั้น ไม่สามารถเปลี่ยนสถานะ การมองเห็น หรือลบข้อมูลได้' : 'Administrators can only view it. Status, sharing, and deletion are disabled.'}</small></span></div>}
+          {viewOnlyRecord && <div className="admin-view-only-notice"><AppIcon name="eye" /><span><strong>{language === 'th' ? 'ข้อมูลสำหรับเปิดดูเท่านั้น' : 'View-only record'}</strong><small>{language === 'th' ? 'สถานะและข้อมูลทั้งหมดแสดงตามที่บันทึกไว้ ผู้ดูแลระบบไม่สามารถแก้ไขหรือลบรายการนี้ได้' : 'All values are shown exactly as saved. Administrators cannot edit or delete this record.'}</small></span></div>}
 
-          {config.moderation && !record.deleted_at && !cancelledSimulation && (
+          {config.moderation && !config.viewOnly && !record.deleted_at && !cancelledSimulation && (
             <section className="admin-details-moderation">
               <div><small>MODERATION</small><h3>Review decision</h3><p>Changes are confirmed before they are applied and recorded in the audit log.</p></div>
               <label>{config.statusField.replaceAll('_', ' ')}<select value={record[config.statusField]} onChange={(event) => onModerate(config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
@@ -2756,6 +2773,10 @@ function ResourceView({ groupKey, language = 'en' }) {
   }
 
   async function updateModeration(record, field, value) {
+    if (config.viewOnly) {
+      setError(language === 'th' ? 'รายการนี้เปิดดูได้อย่างเดียว ไม่สามารถแก้ไขได้' : 'This record is view-only and cannot be changed.')
+      return false
+    }
     if (config.id === 'simulators' && record.status === 'cancelled') {
       setError(language === 'th' ? 'การจำลองที่ยกเลิกแล้วถูกล็อก สามารถเปิดดูได้เท่านั้น' : 'Cancelled simulations are locked and can only be viewed.')
       return false
@@ -2875,8 +2896,8 @@ function ResourceView({ groupKey, language = 'en' }) {
         {selectionEnabled && <td className="admin-selection-cell"><AdminSelectionCheckbox checked={selectedIdSet.has(record.id)} disabled={Boolean(record.deleted_at) || bulkDeleting} label={language === 'th' ? `เลือกรายการที่ ${record.id}` : `Select record ${record.id}`} onChange={(checked) => toggleRecord(record.id, checked)} /></td>}
         <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
         {visibleColumns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
-        {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : cancelledSimulation ? <div className="admin-locked-status"><StatusBadge status="cancelled" /><small>{language === 'th' ? 'ดูเท่านั้น' : 'View only'}</small></div> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-        <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{config.previewType && <button className="is-preview" type="button" onClick={() => setPreviewRecord(record)}><AppIcon name={config.icon} />Preview</button>}<button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />View</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
+        {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.viewOnly ? <AdminReadOnlyRecordState config={config} language={language} record={record} /> : cancelledSimulation ? <div className="admin-locked-status"><StatusBadge status="cancelled" /><small>{language === 'th' ? 'ดูเท่านั้น' : 'View only'}</small></div> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
+        <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{config.previewType && <button className="is-preview" type="button" onClick={() => setPreviewRecord(record)}><AppIcon name={config.icon} />Preview</button>}<button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />{language === 'th' ? 'เปิดดู' : 'View'}</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
       </tr>
     )
   }

@@ -216,6 +216,11 @@ class AdminResourceController extends Controller
 
     public function restore(Request $request, string $resource, int $record): JsonResponse
     {
+        abort_if(
+            in_array($resource, ['simulators', 'plant-histories'], true),
+            405,
+            'Simulation and plant history records are view-only and cannot be restored.',
+        );
         abort_if($resource === 'activity-logs', 405, 'Audit logs cannot be changed.');
 
         $config = $this->catalogConfig($resource);
@@ -674,14 +679,14 @@ class AdminResourceController extends Controller
 
     private function moderationUpdate(Request $request, string $resource, int $record): JsonResponse
     {
+        abort_if(
+            in_array($resource, ['simulators', 'plant-histories'], true),
+            405,
+            'Simulation and plant history records are view-only and cannot be changed.',
+        );
         $modelClass = $this->moderationModel($resource);
         abort_if($modelClass === null || $resource === 'activity-logs', 404, 'This resource cannot be changed.');
         $model = $modelClass::query()->findOrFail($record);
-        abort_if(
-            $resource === 'simulators' && $model->status === 'cancelled',
-            409,
-            'Cancelled simulations are locked and can only be viewed.',
-        );
         $before = $model->toArray();
         $data = match ($resource) {
             'posts', 'plant-histories' => $request->validate(['visibility' => ['required', Rule::in(['private', 'friends', 'public'])]]),
