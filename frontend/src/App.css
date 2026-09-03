@@ -142,6 +142,24 @@
   pointer-events: auto;
 }
 
+.plant-recommendation-stack {
+  display: flex;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(70vh, 520px);
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1px 3px 8px 1px;
+  scrollbar-color: rgba(155, 207, 130, 0.38) transparent;
+  scrollbar-width: thin;
+}
+
+.plant-recommendation-stack .plant-recommendation-rail {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
 .plant-recommendation-rail__collapse,
 .plant-recommendation-indicator {
   position: relative;
@@ -207,6 +225,23 @@
   border-radius: 999px;
   background: var(--recommendation-accent);
   box-shadow: 0 0 9px color-mix(in srgb, var(--recommendation-accent) 80%, transparent);
+}
+
+.plant-recommendation-indicator__count {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 2px solid #111912;
+  border-radius: 999px;
+  background: var(--recommendation-accent);
+  color: #0b120d;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
 }
 
 .simulation-guidance-cluster {
@@ -795,11 +830,38 @@
 }
 
 .plant-recommendation-rail__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.1em;
   line-height: 1.25;
   text-transform: uppercase;
+}
+
+.plant-recommendation-rail__eyebrow b,
+.plant-recommendation-rail__order {
+  font-variant-numeric: tabular-nums;
+}
+
+.plant-recommendation-rail__eyebrow b {
+  color: inherit;
+  opacity: 0.72;
+}
+
+.plant-recommendation-rail__order {
+  z-index: 1;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  align-self: center;
+  border: 1px solid color-mix(in srgb, var(--recommendation-accent) 28%, transparent);
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--recommendation-accent) 70%, #d8e4d9);
+  font-size: 9px;
+  font-weight: 900;
 }
 
 .plant-recommendation-rail__copy strong {
@@ -848,6 +910,7 @@ html.settings-theme-light .game-shell .plant-recommendation-indicator {
   box-shadow: 0 10px 24px rgba(29, 71, 44, 0.2);
 }
 html.settings-theme-light .game-shell .plant-recommendation-indicator__dot { border-color: #fbfcf8; }
+html.settings-theme-light .game-shell .plant-recommendation-indicator__count { border-color: #fbfcf8; }
 html.settings-theme-light .game-shell .plant-recommendation-rail--warning { --recommendation-accent: #b97816; }
 html.settings-theme-light .game-shell .plant-recommendation-rail--danger { --recommendation-accent: #bd5d32; }
 html.settings-theme-light .game-shell .plant-recommendation-rail--critical { --recommendation-accent: #b64743; }

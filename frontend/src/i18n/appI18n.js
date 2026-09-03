@@ -672,8 +672,6 @@ const thaiMessages = {
   'SEASONAL JOURNEY': 'เส้นทางตามฤดูกาล',
   'Grow through a season': 'ปลูกต่อเนื่องผ่านหนึ่งฤดูกาล',
   'Best for long-term experiments': 'เหมาะสำหรับการทดลองระยะยาว',
-  'Preview path': 'เส้นทางตัวอย่าง',
-  'LOCAL DEMO · NO DATA SAVED': 'ตัวอย่างในเครื่อง · ไม่บันทึกข้อมูล',
   'Tune water, light, soil, air, nutrients, and temperature to see one clear cause-and-effect relationship at a time.': 'ปรับน้ำ แสง ดิน อากาศ ธาตุอาหาร และอุณหภูมิ เพื่อสังเกตความสัมพันธ์ของเหตุและผลทีละปัจจัยอย่างชัดเจน',
   'Let daylight, weather, rain, and location shape the cycle while you protect your plant with the right care action.': 'ให้แสงแดด สภาพอากาศ ฝน และตำแหน่งปลูกกำหนดวงจร พร้อมดูแลและปกป้องพืชด้วยวิธีที่เหมาะสม',
   'Follow a seeded weather timeline, track biological days, and prepare for seasonal changes without losing your progress.': 'ติดตามลำดับสภาพอากาศที่กำหนดไว้ บันทึกวันชีวภาพ และเตรียมรับการเปลี่ยนแปลงตามฤดูกาลโดยไม่สูญเสียความคืบหน้า',

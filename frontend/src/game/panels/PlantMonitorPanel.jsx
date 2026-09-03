@@ -163,62 +163,70 @@ function getRecommendationLevel({ health, issue, growthRate, hasActivePests, pes
   return 'warning'
 }
 
-function getActivePestRecommendation(simulationVisual, language) {
+function getActivePestRecommendations(simulationVisual, language) {
   const activePests = simulationVisual?.active_pests ?? []
-  if (activePests.length === 0) return null
+  return activePests.map((entry, index) => {
+    const pest = entry?.pest ?? entry
+    const name = language === 'th' ? pest?.name_th ?? pest?.name_en : pest?.name_en ?? pest?.name_th
+    const normalizedName = String(pest?.name_en ?? pest?.type ?? '').toLowerCase()
+    const treatment = normalizedName.includes('snail')
+      ? (language === 'th' ? 'สเปรย์กำจัดหอยทาก' : 'Snail Spray')
+      : normalizedName.includes('aphid')
+        ? (language === 'th' ? 'สเปรย์กำจัดเพลี้ย' : 'Insect Spray')
+        : normalizedName.includes('fung')
+          ? (language === 'th' ? 'สเปรย์กำจัดเชื้อรา' : 'Fungus Spray')
+          : (language === 'th' ? 'ไอเทมรักษาที่ตรงกับศัตรูพืช' : 'the matching treatment item')
+    const pestName = name || (language === 'th' ? 'ศัตรูพืช' : 'Pest')
 
-  const entries = activePests.map((entry) => entry?.pest ?? entry)
-  const pestNames = entries
-    .map((pest) => language === 'th' ? pest?.name_th ?? pest?.name_en : pest?.name_en ?? pest?.name_th)
-    .filter(Boolean)
-  const normalizedNames = entries.map((pest) => String(pest?.name_en ?? pest?.type ?? '').toLowerCase())
-  const treatments = []
-  if (normalizedNames.some((name) => name.includes('snail'))) treatments.push(language === 'th' ? 'สเปรย์กำจัดหอยทาก' : 'Snail Spray')
-  if (normalizedNames.some((name) => name.includes('aphid'))) treatments.push(language === 'th' ? 'สเปรย์กำจัดเพลี้ย' : 'Insect Spray')
-  if (normalizedNames.some((name) => name.includes('fung'))) treatments.push(language === 'th' ? 'สเปรย์กำจัดเชื้อรา' : 'Fungus Spray')
-
-  const risk = Math.max(0, ...activePests.map((entry) => Number(entry?.risk_chance ?? 0)))
-  const names = pestNames.join(', ') || (language === 'th' ? 'ศัตรูพืช' : 'pest')
-  const treatment = treatments.join(', ') || (language === 'th' ? 'ไอเทมรักษาที่ตรงกับศัตรูพืช' : 'the matching treatment item')
-
-  return {
-    risk,
-    text: language === 'th'
-      ? `พบ${names}บนพืช - ใช้${treatment}ทันทีเพื่อลดความเสียหาย`
-      : `${names} detected - use ${treatment} now to limit plant damage.`,
-  }
+    return {
+      key: `pest-${entry?.id ?? pest?.id ?? index}`,
+      risk: Math.max(0, Number(entry?.risk_chance ?? 0)),
+      text: language === 'th'
+        ? `พบ${pestName}บนพืช - ใช้${treatment}ทันทีเพื่อลดความเสียหาย`
+        : `${pestName} detected - use ${treatment} now to limit plant damage.`,
+    }
+  }).sort((left, right) => right.risk - left.risk)
 }
 
-function getActiveEventRecommendation(simulationVisual, language) {
-  const event = (simulationVisual?.events ?? [])
+function getActivePestRecommendation(simulationVisual, language) {
+  return getActivePestRecommendations(simulationVisual, language)[0] ?? null
+}
+
+function getActiveEventRecommendations(simulationVisual, language) {
+  return (simulationVisual?.events ?? [])
     .filter((entry) => ['announced', 'active'].includes(entry?.status))
     .sort((left, right) => {
       const severityRank = { critical: 4, high: 3, medium: 2, low: 1 }
       return (severityRank[right?.severity] ?? 0) - (severityRank[left?.severity] ?? 0)
-    })[0]
+        || Number(left?.starts_tick ?? 0) - Number(right?.starts_tick ?? 0)
+    })
+    .map((event, index) => {
+      const name = language === 'th'
+        ? event.name_th || event.name_en
+        : event.name_en || event.name_th
+      const description = language === 'th'
+        ? event.description_th || event.description_en
+        : event.description_en || event.description_th
+      const harmfulLevel = {
+        critical: 'critical',
+        high: 'danger',
+        medium: 'warning',
+        low: 'warning',
+      }[event.severity] ?? 'warning'
 
-  if (!event) return null
+      return {
+        key: `event-${event.id ?? event.event_key ?? index}`,
+        detail: description || (language === 'th'
+          ? 'ตรวจสอบสภาพพืชและเลือกวิธีรับมือก่อนการอัปเดตครั้งถัดไป'
+          : 'Review the plant and choose a response before the next update.'),
+        level: event.is_harmful ? harmfulLevel : 'info',
+        text: name || (language === 'th' ? 'มีเหตุการณ์ที่ควรตรวจสอบ' : 'An event needs your attention.'),
+      }
+    })
+}
 
-  const name = language === 'th'
-    ? event.name_th || event.name_en
-    : event.name_en || event.name_th
-  const description = language === 'th'
-    ? event.description_th || event.description_en
-    : event.description_en || event.description_th
-  const harmfulLevel = {
-    critical: 'critical',
-    high: 'danger',
-    medium: 'warning',
-    low: 'warning',
-  }[event.severity] ?? 'warning'
-
-  return {
-    detail: description || (language === 'th'
-      ? 'ตรวจสอบสภาพพืชและเลือกวิธีรับมือก่อนการอัปเดตครั้งถัดไป'
-      : 'Review the plant and choose a response before the next update.'),
-    level: event.is_harmful ? harmfulLevel : 'info',
-    text: name || (language === 'th' ? 'มีเหตุการณ์ที่ควรตรวจสอบ' : 'An event needs your attention.'),
-  }
+function getActiveEventRecommendation(simulationVisual, language) {
+  return getActiveEventRecommendations(simulationVisual, language)[0] ?? null
 }
 
 function getPlantNeedRecommendation(simulationVisual, language) {
@@ -738,68 +746,95 @@ export function PlantRecommendationBanner({ awaitingFirstCycle = false, nextCycl
   const cycleSeconds = useCountdownSeconds(nextCycleAt)
   const growthProgress = getGrowthProgress(simulationVisual)
   const health = getHealth(simulationVisual)
-  const recommendation = buildRecommendation(simulationVisual, {
+  const recommendationContext = {
     awaitingFirstCycle,
     cycleSeconds,
     growthProgress,
     growthRate: Number(simulationVisual?.growth_rate ?? 0),
     health,
     language,
-  })
-  const tone = recommendationTones[recommendation.level] ?? recommendationTones.info
-  const isUrgent = ['critical', 'danger'].includes(recommendation.level)
-  const statusLabel = language === 'th' ? tone.badgeTh : tone.badge
+  }
+  const eventRecommendations = getActiveEventRecommendations(simulationVisual, language)
+  const pestRecommendations = getActivePestRecommendations(simulationVisual, language).map((recommendation) => ({
+    ...recommendation,
+    detail: language === 'th' ? 'ควรรักษาก่อนการอัปเดตครั้งถัดไป' : 'Treat before the next simulation update.',
+    level: getRecommendationLevel({
+      health,
+      growthRate: recommendationContext.growthRate,
+      hasActivePests: true,
+      pestRisk: recommendation.risk,
+    }),
+  }))
+  const urgentRecommendations = [...eventRecommendations, ...pestRecommendations]
+  const recommendations = urgentRecommendations.length > 0
+    ? urgentRecommendations
+    : [{ key: 'plant-status', ...buildRecommendation(simulationVisual, recommendationContext) }]
+  const primaryRecommendation = recommendations[0]
+  const primaryTone = recommendationTones[primaryRecommendation.level] ?? recommendationTones.info
+  const isUrgent = recommendations.some((entry) => ['critical', 'danger'].includes(entry.level))
+  const statusLabel = language === 'th' ? primaryTone.badgeTh : primaryTone.badge
   const expandLabel = language === 'th'
-    ? `เปิดคำแนะนำ: ${statusLabel}`
-    : `Open recommendation: ${statusLabel}`
+    ? `เปิดคำแนะนำ ${recommendations.length} รายการ: ${statusLabel}`
+    : `Open ${recommendations.length} recommendations: ${statusLabel}`
 
   if (collapsed) {
     return (
       <button
-        className={`plant-recommendation-indicator plant-recommendation-indicator--${recommendation.level}`}
+        className={`plant-recommendation-indicator plant-recommendation-indicator--${primaryRecommendation.level}`}
         data-tour="plant-recommendation"
         type="button"
         aria-label={expandLabel}
         title={expandLabel}
         onClick={() => setCollapsed(false)}
       >
-        <AppIcon name={tone.icon} />
+        <AppIcon name={primaryTone.icon} />
         <span className="plant-recommendation-indicator__dot" aria-hidden="true" />
+        {recommendations.length > 1 && <span className="plant-recommendation-indicator__count">{recommendations.length}</span>}
       </button>
     )
   }
 
   return (
-    <aside
-      className={`plant-recommendation-rail plant-recommendation-rail--${recommendation.level}`}
+    <div
+      className="plant-recommendation-stack"
       data-tour="plant-recommendation"
       data-i18n-skip="true"
-      role={isUrgent ? 'alert' : 'status'}
+      role="region"
+      aria-label={language === 'th' ? `คำแนะนำ ${recommendations.length} รายการ` : `${recommendations.length} recommendations`}
       aria-live={isUrgent ? 'assertive' : 'polite'}
     >
-      <span className={`plant-recommendation-rail__icon ${tone.iconBackground}`} aria-hidden="true">
-        <AppIcon className={`${tone.iconColor}`} name={tone.icon} />
-      </span>
-      <span className="plant-recommendation-rail__copy">
-        <span className={`plant-recommendation-rail__eyebrow ${tone.label}`}>
-          {language === 'th' ? 'สิ่งที่แนะนำให้ทำต่อ' : 'Recommended next action'}
-        </span>
-        <strong>{recommendation.text}</strong>
-        <span className="plant-recommendation-rail__detail">{recommendation.detail}</span>
-      </span>
-      <span className={`plant-recommendation-rail__badge ${tone.label}`}>
-        {statusLabel}
-      </span>
-      <button
-        className="plant-recommendation-rail__collapse"
-        type="button"
-        aria-label={language === 'th' ? 'ย่อคำแนะนำ' : 'Minimize recommendation'}
-        title={language === 'th' ? 'ย่อเป็นไอคอน' : 'Minimize to icon'}
-        onClick={() => setCollapsed(true)}
-      >
-        <AppIcon name="arrowForward" />
-      </button>
-    </aside>
+      {recommendations.map((recommendation, index) => {
+        const tone = recommendationTones[recommendation.level] ?? recommendationTones.info
+        const itemStatusLabel = language === 'th' ? tone.badgeTh : tone.badge
+        return (
+          <article className={`plant-recommendation-rail plant-recommendation-rail--${recommendation.level}`} key={recommendation.key ?? index}>
+            <span className={`plant-recommendation-rail__icon ${tone.iconBackground}`} aria-hidden="true">
+              <AppIcon className={`${tone.iconColor}`} name={tone.icon} />
+            </span>
+            <span className="plant-recommendation-rail__copy">
+              <span className={`plant-recommendation-rail__eyebrow ${tone.label}`}>
+                <b>{String(index + 1).padStart(2, '0')}</b>
+                {language === 'th' ? 'สิ่งที่แนะนำให้ทำต่อ' : 'Recommended next action'}
+              </span>
+              <strong>{recommendation.text}</strong>
+              <span className="plant-recommendation-rail__detail">{recommendation.detail}</span>
+            </span>
+            <span className={`plant-recommendation-rail__badge ${tone.label}`}>{itemStatusLabel}</span>
+            {index === 0 ? (
+              <button
+                className="plant-recommendation-rail__collapse"
+                type="button"
+                aria-label={language === 'th' ? 'ย่อคำแนะนำทั้งหมด' : 'Minimize all recommendations'}
+                title={language === 'th' ? 'ย่อเป็นไอคอน' : 'Minimize to icon'}
+                onClick={() => setCollapsed(true)}
+              >
+                <AppIcon name="arrowForward" />
+              </button>
+            ) : <span className="plant-recommendation-rail__order" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>}
+          </article>
+        )
+      })}
+    </div>
   )
 }
 

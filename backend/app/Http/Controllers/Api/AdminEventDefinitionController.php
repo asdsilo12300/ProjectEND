@@ -9,6 +9,7 @@ use App\Support\LocalizedFieldLanguageValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AdminEventDefinitionController extends Controller
 {
@@ -25,6 +26,7 @@ class AdminEventDefinitionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate($this->rules());
+        $this->validateModeFactors($data);
         LocalizedFieldLanguageValidator::validateOrFail($data);
         $event = EventDefinition::query()->create($data);
         AdminActivityLog::record($request->user(), 'created', 'event-definitions', $event->id, ['after' => $event->toArray()]);
@@ -35,6 +37,7 @@ class AdminEventDefinitionController extends Controller
     {
         $before = $eventDefinition->toArray();
         $data = $request->validate($this->rules($eventDefinition->id));
+        $this->validateModeFactors($data);
         LocalizedFieldLanguageValidator::validateOrFail($data);
         $eventDefinition->fill($data)->save();
         AdminActivityLog::record($request->user(), 'updated', 'event-definitions', $eventDefinition->id, ['before' => $before, 'after' => $eventDefinition->fresh()->toArray()]);
@@ -68,12 +71,28 @@ class AdminEventDefinitionController extends Controller
             'warning_ticks' => ['required', 'integer', 'between:0,20'], 'duration_ticks' => ['required', 'integer', 'between:1,50'],
             'cooldown_ticks' => ['required', 'integer', 'between:1,100'],
             'conditions' => ['nullable', 'array'], 'effects' => ['nullable', 'array'], 'response_action_keys' => ['nullable', 'array'],
-            'conditions.*.factor' => ['nullable', 'string', Rule::in(['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'])],
+            'conditions.*.factor' => ['nullable', 'string', Rule::in(['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp', 'rain', 'wind_speed'])],
             'conditions.*.operator' => ['nullable', 'string', Rule::in(['above', 'above_or_equal', 'below', 'below_or_equal', 'between', 'outside', 'equals', '='])],
             'conditions.*.value' => ['nullable', 'numeric'], 'conditions.*.min' => ['nullable', 'numeric'], 'conditions.*.max' => ['nullable', 'numeric'],
             'effects.factor_delta' => ['nullable', 'array'],
             'effects.factor_delta.*' => ['numeric', 'between:-100,100'],
             'response_action_keys.*' => ['string', 'max:100'], 'is_harmful' => ['required', 'boolean'], 'is_active' => ['required', 'boolean'],
         ];
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validateModeFactors(array $data): void
+    {
+        if (in_array($data['mode_scope'] ?? null, ['outdoor', 'seasonal'], true)) {
+            return;
+        }
+
+        foreach ($data['conditions'] ?? [] as $index => $condition) {
+            if (in_array($condition['factor'] ?? null, ['rain', 'wind_speed'], true)) {
+                throw ValidationException::withMessages([
+                    "conditions.{$index}.factor" => 'Rain and wind are available only for outdoor or seasonal events.',
+                ]);
+            }
+        }
     }
 }

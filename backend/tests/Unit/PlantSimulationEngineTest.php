@@ -193,6 +193,21 @@ class PlantSimulationEngineTest extends TestCase
         $this->assertSame(0, (int) $result->getAttribute('plant_need_rates')['fertilizer_per_cycle']);
     }
 
+    public function test_positive_event_resource_delta_is_applied_after_cycle_consumption(): void
+    {
+        [, $simulator] = $this->seedPlantAndSimulator();
+        $simulator->update(['water' => 68, 'fertilizer' => 40]);
+
+        $result = app(PlantSimulationEngine::class)->tick(
+            $simulator->fresh(),
+            $this->healthyFactors(['water' => 68, 'fertilizer' => 40]),
+            ['water' => 100, 'fertilizer' => 100],
+        );
+
+        $this->assertSame(100, (int) $result->water);
+        $this->assertSame(100, (int) $result->fertilizer);
+    }
+
     public function test_nutrient_reserve_is_consumed_more_slowly_than_water(): void
     {
         [, $simulator] = $this->seedPlantAndSimulator();

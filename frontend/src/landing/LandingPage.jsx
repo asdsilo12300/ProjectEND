@@ -497,10 +497,6 @@ function ModeExplorer({ user, onStart, onOpenDemo }) {
           </div>
 
           <div className={`landing-mode-explorer__panel landing-mode-explorer__panel--${activeMode.tone}`} id={`mode-panel-${activeMode.key}`} role="tabpanel" tabIndex={0}>
-            <div className="landing-mode-explorer__panel-topline">
-              <span><i /> Preview path</span>
-              <span>LOCAL DEMO · NO DATA SAVED</span>
-            </div>
             <div className="landing-mode-explorer__asset" aria-hidden="true">
               <span className="landing-mode-explorer__asset-shadow" />
               <img src={activeMode.asset} alt={activeMode.assetAlt} />

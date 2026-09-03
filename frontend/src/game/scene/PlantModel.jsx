@@ -189,7 +189,7 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
         ? clamp(0.66 + healthStress * 0.3, 0.66, 0.94)
         : clamp(0.48 + healthStress * 0.4, 0.48, 0.84)
       : 0
-  let targetedMaterialCount = 0
+  let plantPartMaterialCount = 0
 
   function restoreOriginalMaterial(material) {
     if (!material) return material
@@ -230,11 +230,14 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
       if (!isLeaf && !isStem && !isFlower) return material
 
       const nextMaterial = restoreOriginalMaterial(material)
+      const visibleTintStrength = isHeatScorched
+        ? clamp(0.94 + healthStress * 0.04, 0.94, 0.98)
+        : clamp(0.86 + healthStress * 0.1, 0.86, 0.96)
       if (isStressState && nextMaterial.color && leafColor && isLeaf) {
-        nextMaterial.color.lerp(leafColor, stressTintStrength)
+        nextMaterial.color.lerp(leafColor, Math.max(stressTintStrength, visibleTintStrength))
       }
       if (isStressState && nextMaterial.color && stemColor && isStem) {
-        nextMaterial.color.lerp(stemColor, stressTintStrength)
+        nextMaterial.color.lerp(stemColor, Math.max(stressTintStrength, visibleTintStrength))
       }
       if (isDead && nextMaterial.color && isFlower) {
         // A dead sunflower must not keep its bright, healthy flower colour.
@@ -252,7 +255,7 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
         nextMaterial.metalness = 0
       }
       nextMaterial.needsUpdate = true
-      targetedMaterialCount += 1
+      if (isLeaf || isStem) plantPartMaterialCount += 1
       return nextMaterial
     })
 
@@ -260,9 +263,9 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
   })
 
   // Some uploaded GLTF files use one material for petals, stems, and leaves.
-  // They have no leaf/stem names to target, so apply a restrained whole-model
+  // They have no leaf/stem material to target, so apply a readable whole-model
   // stress tint while preserving the artist's original healthy colours.
-  if (targetedMaterialCount === 0) {
+  if (plantPartMaterialCount === 0) {
     object.traverse((child) => {
       if (!child.isMesh || !child.material) return
 
@@ -274,7 +277,10 @@ function applyPlantOverrides(object, overrides = {}, health = 100) {
           // The tulip asset uses one textured material for petals, leaves, and
           // stems. A stronger whole-model tint is needed for heat/cold/water
           // symptoms to remain visible through that texture.
-          nextMaterial.color.lerp(stressColor, stressTintStrength)
+          const fallbackTintStrength = isHeatScorched
+            ? clamp(0.94 + healthStress * 0.04, 0.94, 0.98)
+            : clamp(0.86 + healthStress * 0.1, 0.86, 0.96)
+          nextMaterial.color.lerp(stressColor, Math.max(stressTintStrength, fallbackTintStrength))
         }
         if (isDead) {
           nextMaterial.roughness = 1

@@ -373,6 +373,67 @@ const visualStateOptions = [
 ]
 const leafStateOptions = ['normal', 'upright', 'wilted', 'drooping', 'yellowing', 'pale', 'spotted', 'burnt_edges', 'root_burn', 'darkened', 'small']
 const stemStateOptions = ['normal', 'upright', 'leaning', 'soft', 'thin', 'dry', 'slow', 'short']
+const plantPartStateCopy = {
+  leaf_state: {
+    normal: { en: ['Normal', 'Leaves keep their natural posture and shape.'], th: ['ปกติ', 'ใบคงท่าทางและรูปทรงตามธรรมชาติ'] },
+    upright: { en: ['Upright', 'Leaves point upward and look firm.'], th: ['ตั้งตรง', 'ใบชี้ขึ้นและดูแข็งแรง'] },
+    wilted: { en: ['Wilted', 'Leaves lose firmness and appear wilted.'], th: ['เหี่ยว', 'ใบสูญเสียความตึงและมีลักษณะเหี่ยว'] },
+    drooping: { en: ['Drooping', 'Leaves hang downward more than normal.'], th: ['ห้อยลง', 'ใบห้อยต่ำลงกว่าท่าทางปกติ'] },
+    yellowing: { en: ['Yellowing', 'Leaves turn yellow to show stress or nutrient deficiency.'], th: ['ใบเหลือง', 'ใบเปลี่ยนเป็นสีเหลืองเพื่อแสดงความเครียดหรือการขาดธาตุอาหาร'] },
+    pale: { en: ['Pale', 'Leaf color becomes lighter and less saturated.'], th: ['ใบซีด', 'สีใบอ่อนและจางลงกว่าปกติ'] },
+    spotted: { en: ['Spotted', 'Visible spots appear across the leaf surface.'], th: ['มีจุด', 'มีจุดผิดปกติปรากฏบนผิวใบ'] },
+    burnt_edges: { en: ['Burnt edges', 'Leaf edges look dry, brown, or scorched.'], th: ['ขอบใบไหม้', 'ขอบใบดูแห้ง เป็นสีน้ำตาล หรือคล้ายถูกไหม้'] },
+    root_burn: { en: ['Root burn', 'Leaves show damage associated with root or fertilizer burn.'], th: ['อาการรากไหม้', 'ใบแสดงความเสียหายที่เกี่ยวข้องกับรากไหม้หรือปุ๋ยเข้มข้นเกินไป'] },
+    darkened: { en: ['Darkened', 'Leaves become noticeably darker than normal.'], th: ['ใบคล้ำ', 'ใบมีสีเข้มหรือคล้ำกว่าปกติอย่างเห็นได้ชัด'] },
+    small: { en: ['Small', 'Leaves stay smaller to represent stunted growth.'], th: ['ใบเล็ก', 'ใบมีขนาดเล็กเพื่อแสดงการเจริญเติบโตที่ชะงัก'] },
+  },
+  stem_state: {
+    normal: { en: ['Normal', 'The stem keeps its natural shape and posture.'], th: ['ปกติ', 'ลำต้นคงรูปทรงและท่าทางตามธรรมชาติ'] },
+    upright: { en: ['Upright', 'The stem stands straight and looks healthy.'], th: ['ตั้งตรง', 'ลำต้นตั้งตรงและดูแข็งแรง'] },
+    leaning: { en: ['Leaning', 'The stem bends or leans away from its normal axis.'], th: ['เอียง', 'ลำต้นโค้งหรือเอียงออกจากแนวปกติ'] },
+    soft: { en: ['Soft', 'The stem looks weak, compressed, and sways more easily.'], th: ['อ่อนยวบ', 'ลำต้นดูอ่อน ยุบตัว และไหวได้ง่ายขึ้น'] },
+    thin: { en: ['Thin', 'The stem appears slender and less sturdy.'], th: ['ผอมบาง', 'ลำต้นดูเล็กบางและแข็งแรงน้อยลง'] },
+    dry: { en: ['Dry', 'The stem looks dry, rigid, and less flexible.'], th: ['แห้ง', 'ลำต้นดูแห้ง แข็ง และยืดหยุ่นน้อยลง'] },
+    slow: { en: ['Slow', 'Stem movement and growth appear slower than normal.'], th: ['เคลื่อนไหวช้า', 'การเคลื่อนไหวและการเติบโตของลำต้นดูช้ากว่าปกติ'] },
+    short: { en: ['Short', 'The stem is compressed to represent stunted growth.'], th: ['ลำต้นสั้น', 'ลำต้นถูกลดความสูงเพื่อแสดงการเจริญเติบโตที่ชะงัก'] },
+  },
+}
+
+function localizedPlantPartStateOption(fieldKey, value, language) {
+  const copy = plantPartStateCopy[fieldKey]?.[value]
+  if (!copy) return value
+  const primaryLanguage = language === 'th' ? 'th' : 'en'
+  const secondaryLanguage = primaryLanguage === 'th' ? 'en' : 'th'
+  return `${copy[primaryLanguage][0]} · ${copy[secondaryLanguage][0]}`
+}
+
+function PlantPartStateDescription({ fieldKey, language, value }) {
+  const copy = plantPartStateCopy[fieldKey]?.[value]
+  if (!copy) return null
+  const primaryLanguage = language === 'th' ? 'th' : 'en'
+  const secondaryLanguage = primaryLanguage === 'th' ? 'en' : 'th'
+
+  return (
+    <span className="admin-state-description" aria-live="polite">
+      <strong lang={primaryLanguage}>{copy[primaryLanguage][1]}</strong>
+      <span lang={secondaryLanguage}>{copy[secondaryLanguage][1]}</span>
+    </span>
+  )
+}
+
+function LocalizedFieldHint({ hint, language }) {
+  if (!hint) return null
+  if (typeof hint === 'string') return <small className="admin-field-hint">{adminText(language, hint)}</small>
+
+  const primaryLanguage = language === 'th' ? 'th' : 'en'
+  const secondaryLanguage = primaryLanguage === 'th' ? 'en' : 'th'
+  return (
+    <small className="admin-field-hint admin-field-hint--bilingual">
+      <strong lang={primaryLanguage}>{hint[primaryLanguage]}</strong>
+      <span lang={secondaryLanguage}>{hint[secondaryLanguage]}</span>
+    </small>
+  )
+}
 const severityOptions = Array.from({ length: 10 }, (_, index) => ({ value: index + 1, label: `${index + 1} / 10` }))
 const itemAnimationOptions = [
   { value: '', label: 'No 3D animation' },
@@ -429,19 +490,19 @@ const resourceGroups = {
       ],
     },
     {
-      id: 'plant-stages', label: 'Growth stages', createLabel: 'New stage', icon: 'sprout', groupByPlant: true,
+      id: 'plant-stages', label: 'Growth stages', createLabel: 'New stage', icon: 'sprout', previewType: 'plant-stage', groupByPlant: true,
       defaults: { plant_id: '', stage_no: 1, stage_name: '', required_growth_point: 0, image_url: '', model_url: '', description: '' },
       fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_no', label: 'Stage number', type: 'number', required: true }, { key: 'stage_name', label: 'Stage name', required: true }, { key: 'required_growth_point', label: 'Required growth points', type: 'number', required: true }, { key: 'image_url', label: 'Stage image', type: 'image-upload', scope: 'plant-stages', wide: true }, { key: 'model_url', label: 'Stage 3D model package', type: 'model-bundle', wide: true }, { key: 'description', label: 'Description', type: 'textarea', wide: true }],
       columns: [{ label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Stage', render: (row) => `${row.stage_no}. ${row.stage_name}` }, { label: 'Growth points', render: (row) => row.required_growth_point }, { label: 'Model', render: (row) => row.model_url ? 'Configured' : 'Not set' }],
     },
     {
-      id: 'plant-rules', label: 'Condition rules', createLabel: 'New rule', icon: 'settings', groupByPlant: true,
+      id: 'plant-rules', label: 'Condition rules', createLabel: 'New rule', icon: 'settings', previewType: 'plant-rule', groupByPlant: true,
       defaults: { plant_id: '', factor: 'water', operator: 'between', min_value: 0, max_value: 100, visual_state: 'healthy', severity: 1, health_delta: 0, growth_delta: 0, analysis_result: '', direction: '', is_active: true },
       fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'factor', label: 'Factor', type: 'select', options: environmentFactorOptions, required: true }, { key: 'operator', label: 'Operator', type: 'select', options: ['below', 'above', 'between', 'outside'], required: true }, { key: 'min_value', label: 'Minimum', type: 'number' }, { key: 'max_value', label: 'Maximum', type: 'number' }, { key: 'visual_state', label: 'Visual state', type: 'select', options: visualStateOptions, required: true }, { key: 'severity', label: 'Severity', type: 'select', options: severityOptions, required: true }, { key: 'health_delta', label: 'Health change', type: 'number', required: true }, { key: 'growth_delta', label: 'Growth change', type: 'number', required: true }, { key: 'analysis_result', label: 'Analysis result', type: 'textarea', wide: true }, { key: 'direction', label: 'Player guidance', type: 'textarea', wide: true }, commonActiveField],
       columns: [{ label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'Condition', render: (row) => `${row.factor} ${row.operator} ${row.min_value ?? ''}${row.max_value !== null ? `–${row.max_value}` : ''}` }, { label: 'Effect', render: (row) => `${row.health_delta} health / ${row.growth_delta} growth` }, { label: 'State', render: (row) => row.visual_state }],
     },
     {
-      id: 'plant-variants', label: 'Visual variants', createLabel: 'New visual', icon: 'eye', groupByPlant: true,
+      id: 'plant-variants', label: 'Visual variants', createLabel: 'New visual', icon: 'eye', previewType: 'plant-variant', groupByPlant: true,
       defaults: { plant_id: '', stage_id: '', state_key: 'healthy', label: '', model_url: '', leaf_color: '#6fa84f', stem_color: '#5c8f42', leaf_state: 'normal', stem_state: 'normal', scale: 1, priority: 0, is_active: true },
       fields: [{ key: 'plant_id', label: 'Plant', type: 'lookup', lookup: 'plants', required: true }, { key: 'stage_id', label: 'Growth stage', type: 'lookup', lookup: 'stages' }, { key: 'state_key', label: 'State key', type: 'select', options: visualStateOptions, required: true }, { key: 'label', label: 'Display label' }, { key: 'model_url', label: 'Variant 3D model package', type: 'model-bundle', wide: true }, { key: 'leaf_color', label: 'Leaf color', type: 'color-rgb' }, { key: 'stem_color', label: 'Stem color', type: 'color-rgb' }, { key: 'leaf_state', label: 'Leaf state', type: 'select', options: leafStateOptions }, { key: 'stem_state', label: 'Stem state', type: 'select', options: stemStateOptions }, { key: 'scale', label: 'Scale', type: 'number', step: '0.01', required: true }, { key: 'priority', label: 'Priority', type: 'number', required: true }, commonActiveField],
       columns: [{ label: 'Plant', render: (row) => localizedAdminName(row.plant) }, { label: 'State', render: (row) => row.label || row.state_key }, { label: 'Stage', render: (row) => row.stage?.stage_name || 'All stages' }, { label: 'Appearance', render: (row) => <ColorPairPreview first={row.leaf_color} second={row.stem_color} /> }],
@@ -533,7 +594,7 @@ const resourceGroups = {
         { key: 'description_en', label: 'English explanation', type: 'textarea', wide: true }, { key: 'description_th', label: 'Thai explanation', type: 'textarea', wide: true },
         { key: 'mode_scope', label: 'Mode', type: 'select', options: ['both', 'greenhouse', 'outdoor', 'seasonal'], required: true },
         { key: 'severity', label: 'Severity', type: 'select', options: ['low', 'medium', 'high'], required: true },
-        { key: 'weight', label: 'Random weight', type: 'number', required: true }, { key: 'trigger_chance', label: 'Trigger chance (%)', type: 'number', required: true },
+        { key: 'weight', label: 'Random weight', type: 'number', required: true, hint: { th: 'ค่ายิ่งสูง ยิ่งมีโอกาสถูกเลือกเมื่อหลายเหตุการณ์ผ่านเงื่อนไขพร้อมกัน — ไม่ใช่เปอร์เซ็นต์', en: 'Higher values are picked more often when multiple events qualify — this is not a percentage.' } }, { key: 'trigger_chance', label: 'Trigger chance (%)', type: 'number', required: true },
         { key: 'warning_ticks', label: 'Warning updates', type: 'number', required: true }, { key: 'duration_ticks', label: 'Duration updates', type: 'number', required: true },
         { key: 'cooldown_ticks', label: 'Recovery updates', type: 'number', required: true },
         { key: 'conditions', label: 'Environmental conditions', type: 'condition-list', wide: true },
@@ -1629,7 +1690,17 @@ function UsersView({ currentUser, usersPayload, onRefresh }) {
   )
 }
 
-const eventFactorOptions = environmentFactorOptions
+const eventWeatherFactorOptions = [
+  { value: 'rain', label: 'Rain (mm)' },
+  { value: 'wind_speed', label: 'Wind speed (km/h)' },
+]
+const eventFactorOptions = [...environmentFactorOptions, ...eventWeatherFactorOptions]
+
+function eventConditionFactorOptions(modeScope) {
+  return ['outdoor', 'seasonal'].includes(modeScope)
+    ? eventFactorOptions
+    : environmentFactorOptions
+}
 
 const eventOperatorOptions = [
   { value: 'above', label: 'Above' },
@@ -1687,8 +1758,9 @@ function normaliseEventEffects(value) {
   return { ...effects, factor_delta: cleanedDelta }
 }
 
-function ConditionListEditor({ label, conditions, onChange, disabled, wide }) {
+function ConditionListEditor({ label, conditions, onChange, disabled, language, modeScope, wide }) {
   const safeConditions = Array.isArray(conditions) ? conditions : []
+  const factorOptions = eventConditionFactorOptions(modeScope)
 
   function updateCondition(index, key, value) {
     onChange(safeConditions.map((condition, conditionIndex) => conditionIndex === index ? { ...(condition || {}), [key]: value } : condition))
@@ -1699,36 +1771,36 @@ function ConditionListEditor({ label, conditions, onChange, disabled, wide }) {
   }
 
   return (
-    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={label}>
+    <section className={`admin-resource-custom-field ${wide ? 'is-wide' : ''}`} aria-label={adminText(language, label)}>
       <div className="admin-list-editor__heading">
-        <div><strong>{label}</strong><small>Add rules only when an event should be limited to a specific environment. Empty means any environment.</small></div>
-        <span className="admin-list-editor__count">{safeConditions.length} {safeConditions.length === 1 ? 'condition' : 'conditions'}</span>
+        <div><strong>{adminText(language, label)}</strong><small>{adminText(language, 'When conditions match, the event uses its trigger chance and starts after any warning or recovery updates. Empty means any environment.')}</small></div>
+        <span className="admin-list-editor__count">{safeConditions.length} {language === 'th' ? 'เงื่อนไข' : safeConditions.length === 1 ? 'condition' : 'conditions'}</span>
       </div>
       <div className="admin-event-condition-list__stack">
         {safeConditions.length === 0 ? (
-          <div className="admin-list-editor__empty">No conditions. This event can be considered in any matching mode.</div>
+          <div className="admin-list-editor__empty">{adminText(language, 'No conditions. This event can be considered in any matching mode.')}</div>
         ) : safeConditions.map((condition, index) => {
           const isRange = ['between', 'outside'].includes(condition?.operator)
           return (
             <div className="admin-event-condition-row" key={index}>
-              <div className="admin-event-condition-row__head"><span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span><strong>Condition {index + 1}</strong><button aria-label={`Remove condition ${index + 1}`} disabled={disabled} title="Remove condition" type="button" onClick={() => removeCondition(index)}><span aria-hidden="true">×</span></button></div>
+              <div className="admin-event-condition-row__head"><span className="admin-list-editor__index">{String(index + 1).padStart(2, '0')}</span><strong>{adminText(language, 'Condition')} {index + 1}</strong><button aria-label={`${adminText(language, 'Remove condition')} ${index + 1}`} disabled={disabled} title={adminText(language, 'Remove condition')} type="button" onClick={() => removeCondition(index)}><span aria-hidden="true">×</span></button></div>
               <div className="admin-event-condition-row__grid">
-                <label><span>Factor</span><select disabled={disabled} value={condition?.factor ?? ''} onChange={(event) => updateCondition(index, 'factor', event.target.value)}><option value="">Choose factor</option>{eventFactorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                <label><span>Rule</span><select disabled={disabled} value={condition?.operator ?? ''} onChange={(event) => updateCondition(index, 'operator', event.target.value)}><option value="">Choose rule</option>{eventOperatorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                <label><span>{adminText(language, 'Factor')}</span><select disabled={disabled} value={condition?.factor ?? ''} onChange={(event) => updateCondition(index, 'factor', event.target.value)}><option value="">{adminText(language, 'Choose factor')}</option>{factorOptions.map((option) => <option key={option.value} value={option.value}>{adminText(language, option.label)}</option>)}</select></label>
+                <label><span>{adminText(language, 'Rule')}</span><select disabled={disabled} value={condition?.operator ?? ''} onChange={(event) => updateCondition(index, 'operator', event.target.value)}><option value="">{adminText(language, 'Choose rule')}</option>{eventOperatorOptions.map((option) => <option key={option.value} value={option.value}>{adminText(language, option.label)}</option>)}</select></label>
                 {isRange ? (
                   <>
-                    <label><span>Minimum</span><input disabled={disabled} type="number" value={condition?.min ?? ''} onChange={(event) => updateCondition(index, 'min', event.target.value)} /></label>
-                    <label><span>Maximum</span><input disabled={disabled} type="number" value={condition?.max ?? ''} onChange={(event) => updateCondition(index, 'max', event.target.value)} /></label>
+                    <label><span>{adminText(language, 'Minimum')}</span><input disabled={disabled} type="number" value={condition?.min ?? ''} onChange={(event) => updateCondition(index, 'min', event.target.value)} /></label>
+                    <label><span>{adminText(language, 'Maximum')}</span><input disabled={disabled} type="number" value={condition?.max ?? ''} onChange={(event) => updateCondition(index, 'max', event.target.value)} /></label>
                   </>
                 ) : (
-                  <label className="is-value"><span>Value</span><input disabled={disabled} type="number" value={condition?.value ?? ''} onChange={(event) => updateCondition(index, 'value', event.target.value)} /></label>
+                  <label className="is-value"><span>{adminText(language, 'Value')}</span><input disabled={disabled} type="number" value={condition?.value ?? ''} onChange={(event) => updateCondition(index, 'value', event.target.value)} /></label>
                 )}
               </div>
             </div>
           )
         })}
       </div>
-      <button className="admin-list-editor__add" disabled={disabled} type="button" onClick={() => onChange([...safeConditions, { factor: '', operator: '', value: '', min: '', max: '' }])}><span aria-hidden="true">+</span>Add condition</button>
+      <button className="admin-list-editor__add" disabled={disabled} type="button" onClick={() => onChange([...safeConditions, { factor: '', operator: '', value: '', min: '', max: '' }])}><span aria-hidden="true">+</span>{adminText(language, 'Add condition')}</button>
     </section>
   )
 }
@@ -1737,8 +1809,8 @@ function EffectMapEditor({ label, value, onChange, disabled, wide }) {
   const effects = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
   const factorDelta = effects.factor_delta && typeof effects.factor_delta === 'object' && !Array.isArray(effects.factor_delta) ? effects.factor_delta : {}
   const storedFactors = Object.keys(factorDelta)
-  const factors = [...eventFactorOptions, ...storedFactors.filter((factor) => !eventFactorOptions.some((option) => option.value === factor)).map((factor) => ({ value: factor, label: eventFactorLabel(factor) }))]
-  const canAdd = eventFactorOptions.some((option) => !Object.prototype.hasOwnProperty.call(factorDelta, option.value))
+  const factors = [...environmentFactorOptions, ...storedFactors.filter((factor) => !environmentFactorOptions.some((option) => option.value === factor)).map((factor) => ({ value: factor, label: eventFactorLabel(factor) }))]
+  const canAdd = environmentFactorOptions.some((option) => !Object.prototype.hasOwnProperty.call(factorDelta, option.value))
 
   function updateFactor(oldFactor, newFactor) {
     const nextDelta = { ...factorDelta }
@@ -1759,7 +1831,7 @@ function EffectMapEditor({ label, value, onChange, disabled, wide }) {
   }
 
   function addFactor() {
-    const nextFactor = eventFactorOptions.find((option) => !Object.prototype.hasOwnProperty.call(factorDelta, option.value))?.value
+    const nextFactor = environmentFactorOptions.find((option) => !Object.prototype.hasOwnProperty.call(factorDelta, option.value))?.value
     if (nextFactor) onChange({ ...effects, factor_delta: { ...factorDelta, [nextFactor]: 0 } })
   }
 
@@ -2031,6 +2103,11 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
       }
 
       if (key === 'type' && value !== 'prank' && Object.prototype.hasOwnProperty.call(current, 'pest_id')) next.pest_id = ''
+      if (config.id === 'event-definitions' && key === 'mode_scope' && !['outdoor', 'seasonal'].includes(value)) {
+        const weatherFactors = new Set(eventWeatherFactorOptions.map((option) => option.value))
+        next.conditions = (Array.isArray(current.conditions) ? current.conditions : [])
+          .filter((condition) => !weatherFactors.has(condition?.factor))
+      }
 
       return next
     })
@@ -2172,7 +2249,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
   return (
     <div className="admin-editor-backdrop" role="presentation">
       <form ref={dialogRef} className="admin-resource-editor" data-resource={config.id} role="dialog" aria-modal="true" aria-labelledby="admin-resource-editor-title" tabIndex="-1" onSubmit={submit}>
-        <header className="admin-editor__header"><div><small>{config.label.toUpperCase()} / {record?.id ? `RECORD #${record.id}` : 'NEW RECORD'}</small><h2 id="admin-resource-editor-title">{record?.id ? `Edit ${config.label}` : config.createLabel}</h2></div><button type="button" onClick={requestClose} aria-label="Close editor">×</button></header>
+        <header className="admin-editor__header"><div><small>{adminText(language, config.label).toUpperCase()} / {record?.id ? `${language === 'th' ? 'ข้อมูล' : 'RECORD'} #${record.id}` : adminText(language, 'NEW RECORD')}</small><h2 id="admin-resource-editor-title">{adminText(language, record?.id ? `Edit ${config.label}` : config.createLabel)}</h2></div><button type="button" onClick={requestClose} aria-label={adminText(language, 'Close editor')}>×</button></header>
         <div className="admin-resource-editor__body">
           {isPrankItem && <div className="admin-prank-pest-note"><span className="admin-prank-pest-note__visual">{selectedPrankPestImage ? <img alt="" src={selectedPrankPestImage} /> : <AppIcon name="pest" />}</span><div><strong>{language === 'th' ? 'ใช้ข้อมูลจากศัตรูพืชโดยอัตโนมัติ' : 'Pest assets are linked automatically'}</strong><p>{language === 'th' ? 'เลือกศัตรูพืชด้านล่าง ระบบจะใช้รูปและโมเดล 3 มิติจากข้อมูลศัตรูพืช ไม่ต้องอัปโหลดซ้ำ' : 'Choose a pest below. Its image and 3D model will be reused, so no duplicate upload is needed.'}</p>{selectedPrankPest && <small>{language === 'th' ? 'กำลังใช้' : 'Using'}: {lookupLabel.pests(selectedPrankPest)}</small>}</div></div>}
           <div className="admin-resource-form-grid">
@@ -2270,6 +2347,8 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                   disabled={status !== 'idle'}
                   key={field.key}
                   label={field.label}
+                  language={language}
+                  modeScope={form.mode_scope}
                   onChange={(conditions) => updateField(field.key, conditions)}
                   wide={field.wide}
                 />
@@ -2289,7 +2368,9 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                 ) : field.type === 'select' ? (
                   <select required={fieldRequired(field)} value={fieldValue(field)} onChange={(event) => updateField(field.key, event.target.value)}>{field.options.map((option) => {
                     const optionValue = typeof option === 'object' ? option.value : option
-                    const optionLabel = typeof option === 'object' ? option.label : option
+                    const optionLabel = plantPartStateCopy[field.key]
+                      ? localizedPlantPartStateOption(field.key, optionValue, language)
+                      : typeof option === 'object' ? option.label : option
                     return <option key={optionValue} value={optionValue}>{optionLabel}</option>
                   })}{fieldValue(field) !== '' && !field.options.some((option) => String(typeof option === 'object' ? option.value : option) === String(fieldValue(field))) && <option value={fieldValue(field)}>{fieldValue(field)} (existing)</option>}</select>
                 ) : field.type === 'lookup' || field.type === 'lookup-key' ? (
@@ -2313,6 +2394,8 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                 ) : (
                   <input aria-invalid={invalidLanguage} className={invalidLanguage ? 'is-language-invalid' : ''} required={fieldRequired(field)} type={field.type || 'text'} step={field.step} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
                 )}
+                {plantPartStateCopy[field.key] && <PlantPartStateDescription fieldKey={field.key} language={language} value={fieldValue(field)} />}
+                <LocalizedFieldHint hint={field.hint} language={language} />
                 {languageValidation?.message && <small className="admin-language-field-error" role="alert">{languageValidation.message}</small>}
               </label>
               )
@@ -2320,9 +2403,9 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
           </div>
         </div>
         {error && <div className="admin-editor__error admin-resource-editor__conflict" role="alert"><span className="admin-resource-editor__conflict-icon"><AppIcon name="warning" /></span><div><strong>{language === 'th' ? 'บันทึกไม่ได้ — พบข้อมูลซ้ำหรือขัดแย้ง' : 'Cannot save — duplicate or conflicting data'}</strong><p>{error}</p><small>{language === 'th' ? 'ข้อมูลที่กรอกยังอยู่ในฟอร์ม แก้ไขจุดที่แจ้งแล้วบันทึกอีกครั้ง' : 'Your form values are preserved. Correct the conflict and save again.'}</small></div></div>}
-        <footer className="admin-editor__footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span>{config.previewType && <button className="admin-preview-trigger" disabled={status !== 'idle'} type="button" onClick={openPreview}><AppIcon name="eye" />Preview</button>}<button disabled={status !== 'idle'} type="button" onClick={requestClose}>Cancel</button><button className="is-primary" disabled={status !== 'idle'} type="submit"><AppIcon name="save" />{status === 'uploading' ? 'Uploading files…' : status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
+        <footer className="admin-editor__footer"><span className={`admin-unsaved-state ${dirty ? 'is-dirty' : ''}`}>{dirty ? 'Unsaved changes' : 'No unsaved changes'}</span>{config.previewType && <button className="admin-preview-trigger" disabled={status !== 'idle'} type="button" onClick={openPreview}><AppIcon name="eye" />{language === 'th' ? 'พรีวิว' : 'Preview'}</button>}<button disabled={status !== 'idle'} type="button" onClick={requestClose}>Cancel</button><button className="is-primary" disabled={status !== 'idle'} type="submit"><AppIcon name="save" />{status === 'uploading' ? 'Uploading files…' : status === 'saving' ? 'Saving…' : 'Save record'}</button></footer>
       </form>
-      {previewRecord && <AdminAssetPreview config={config} language={language} record={previewRecord.data} onClose={closePreview} />}
+      {previewRecord && <AdminAssetPreview config={config} language={language} lookups={lookups} record={previewRecord.data} onClose={closePreview} />}
     </div>
   )
 }
@@ -2897,7 +2980,7 @@ function ResourceView({ groupKey, language = 'en' }) {
         <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
         {visibleColumns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
         {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.viewOnly ? <AdminReadOnlyRecordState config={config} language={language} record={record} /> : cancelledSimulation ? <div className="admin-locked-status"><StatusBadge status="cancelled" /><small>{language === 'th' ? 'ดูเท่านั้น' : 'View only'}</small></div> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-        <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{config.previewType && <button className="is-preview" type="button" onClick={() => setPreviewRecord(record)}><AppIcon name={config.icon} />Preview</button>}<button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />{language === 'th' ? 'เปิดดู' : 'View'}</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
+        <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{config.previewType && <button className="is-preview" type="button" onClick={() => setPreviewRecord(record)}><AppIcon name={config.icon} />{language === 'th' ? 'พรีวิว' : 'Preview'}</button>}<button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />{language === 'th' ? 'เปิดดู' : 'View'}</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
       </tr>
     )
   }
@@ -2956,7 +3039,7 @@ function ResourceView({ groupKey, language = 'en' }) {
 
       {pagination && <AdminPagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={(page) => { setSelectedIds([]); load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page }) }} />}
       {selectedRecord && <ResourceDetailsDrawer config={config} language={language} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onRestore={() => restoreRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
-      {previewRecord && <AdminAssetPreview config={config} language={language} record={previewRecord} onClose={() => setPreviewRecord(null)} />}
+      {previewRecord && <AdminAssetPreview config={config} language={language} lookups={lookups} record={previewRecord} onClose={() => setPreviewRecord(null)} />}
       {editor && <ResourceEditor config={config} language={language} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async (savedRecord) => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, trashed }), groupKey === 'plants' ? refreshPlantSetup(savedRecord) : Promise.resolve()]); setLookups(lookupPayload.data ?? {}) }} />}
     </div>
   )

@@ -185,6 +185,7 @@ class SimulatorController extends Controller
             'soil_temp' => ['required', 'numeric', 'min:-20', 'max:80'],
             'air_temp' => ['required', 'numeric', 'min:-20', 'max:80'],
             'rain' => ['nullable', 'numeric', 'min:0', 'max:500'],
+            'wind_speed' => ['nullable', 'numeric', 'min:0', 'max:300'],
             'root_temperature_controlled' => ['nullable', 'boolean'],
         ]);
 
@@ -204,7 +205,7 @@ class SimulatorController extends Controller
         $eventState = $events->advance($simulator, $factors);
         // PlantSimulationEngine acquires and reloads the locked Simulator
         // itself, so refreshing it here only added another network round trip.
-        $updated = $engine->tick($simulator, $eventState['factors']);
+        $updated = $engine->tick($simulator, $eventState['factors'], $eventState['resource_deltas']);
         if ($updated->mode === 'seasonal') {
             $updated = $seasonalWeather->synchronizeWithContext($updated);
         }

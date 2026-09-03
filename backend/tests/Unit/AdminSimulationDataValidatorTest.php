@@ -123,6 +123,17 @@ class AdminSimulationDataValidatorTest extends TestCase
         $this->assertHasError('event-definitions', ['name_en' => 'Wind', 'name_th' => 'ลม', 'conditions' => [], 'response_action_keys' => ['windbreak', 'WINDBREAK']], 'response_action_keys');
     }
 
+    public function test_weather_event_factors_are_limited_to_weather_driven_modes(): void
+    {
+        $rainCondition = [['factor' => 'rain', 'operator' => 'above', 'value' => 10]];
+        $windCondition = [['factor' => 'wind_speed', 'operator' => 'above', 'value' => 30]];
+
+        $this->assertHasError('event-definitions', ['name_en' => 'Rain', 'name_th' => 'ฝน', 'mode_scope' => 'greenhouse', 'conditions' => $rainCondition], 'conditions.0.factor');
+        $this->assertHasError('event-definitions', ['name_en' => 'Wind', 'name_th' => 'ลม', 'mode_scope' => 'both', 'conditions' => $windCondition], 'conditions.0.factor');
+        $this->assertEmpty($this->errors('event-definitions', ['name_en' => 'Rain', 'name_th' => 'ฝน', 'mode_scope' => 'outdoor', 'conditions' => $rainCondition]));
+        $this->assertEmpty($this->errors('event-definitions', ['name_en' => 'Wind', 'name_th' => 'ลม', 'mode_scope' => 'seasonal', 'conditions' => $windCondition]));
+    }
+
     /** @param array<string, mixed> $data */
     private function errors(string $resource, array $data, ?int $recordId = null): array
     {

@@ -202,6 +202,9 @@ class AdminSimulationDataValidator
             if (! $factor || ! $operator) {
                 continue;
             }
+            if (! in_array($data['mode_scope'] ?? null, ['outdoor', 'seasonal'], true) && in_array($factor, ['rain', 'wind_speed'], true)) {
+                $validator->errors()->add("conditions.{$index}.factor", 'Rain and wind are available only for outdoor or seasonal events.');
+            }
             $signature = json_encode([$factor, $operator, $condition['value'] ?? null, $condition['min'] ?? null, $condition['max'] ?? null]);
             if (isset($seen[$signature])) {
                 $validator->errors()->add("conditions.{$index}", 'This event contains the same environmental condition more than once.');

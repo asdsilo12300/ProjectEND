@@ -53,8 +53,9 @@ class AdminResourceController extends Controller
     public function lookups(): JsonResponse
     {
         $lookups = $this->cache->rememberLookups(fn (): array => [
-            'plants' => Plant::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en'])->toArray(),
-            'stages' => PlantGrowthStage::query()->orderBy('plant_id')->orderBy('stage_no')->get(['id', 'plant_id', 'stage_no', 'stage_name'])->toArray(),
+            'plants' => Plant::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en', 'base_image_url', 'base_model_url'])->toArray(),
+            'stages' => PlantGrowthStage::query()->orderBy('plant_id')->orderBy('stage_no')->get(['id', 'plant_id', 'stage_no', 'stage_name', 'required_growth_point', 'image_url', 'model_url'])->toArray(),
+            'plantVariants' => PlantVisualVariant::query()->where('is_active', true)->orderBy('plant_id')->orderByDesc('priority')->get(['id', 'plant_id', 'stage_id', 'state_key', 'label', 'model_url', 'leaf_color', 'stem_color', 'leaf_state', 'stem_state', 'scale', 'priority'])->toArray(),
             'pests' => Pest::query()->orderBy('name_en')->get(['id', 'name_th', 'name_en', 'image_url', 'model_url', 'placement_mode'])->toArray(),
             'items' => Item::query()->orderBy('name')->get(['id', 'name', 'type', 'action_key'])->toArray(),
             'itemTypes' => ItemType::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name_en')->get(['id', 'key', 'name_en', 'name_th'])->toArray(),
@@ -462,7 +463,7 @@ class AdminResourceController extends Controller
                 'warning_ticks' => ['required', 'integer', 'between:0,20'], 'duration_ticks' => ['required', 'integer', 'between:1,50'],
                 'cooldown_ticks' => ['required', 'integer', 'between:1,100'],
                 'conditions' => ['nullable', 'array'], 'effects' => ['nullable', 'array'], 'response_action_keys' => ['nullable', 'array'],
-                'conditions.*.factor' => ['nullable', 'string', Rule::in(['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp'])],
+                'conditions.*.factor' => ['nullable', 'string', Rule::in(['water', 'light', 'fertilizer', 'soil_humidity', 'air_humidity', 'soil_temp', 'air_temp', 'rain', 'wind_speed'])],
                 'conditions.*.operator' => ['nullable', 'string', Rule::in(['above', 'above_or_equal', 'below', 'below_or_equal', 'between', 'outside', 'equals', '='])],
                 'conditions.*.value' => ['nullable', 'numeric'], 'conditions.*.min' => ['nullable', 'numeric'], 'conditions.*.max' => ['nullable', 'numeric'],
                 'effects.factor_delta' => ['nullable', 'array'], 'effects.factor_delta.*' => ['numeric', 'between:-100,100'],

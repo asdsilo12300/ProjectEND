@@ -28,9 +28,16 @@ class SimulationEventService
             $events = SimulationEvent::query()->with('definition')->where('simulator_id', $simulator->id)
                 ->whereIn('status', ['announced', 'active'])->orderBy('starts_tick')->get();
 
+            $resourceDeltas = ['water' => 0.0, 'fertilizer' => 0.0];
             foreach ($events->where('status', 'active') as $event) {
                 foreach (Arr::get($event->effect_snapshot ?? [], 'factor_delta', []) as $factor => $delta) {
-                    if (array_key_exists($factor, $factors)) $factors[$factor] = (float) $factors[$factor] + (float) $delta;
+                    if (array_key_exists($factor, $resourceDeltas)) {
+                        // Consumable reserves are applied after this cycle's
+                        // natural use so a +100 event visibly fills the meter.
+                        $resourceDeltas[$factor] += (float) $delta;
+                    } elseif (array_key_exists($factor, $factors)) {
+                        $factors[$factor] = (float) $factors[$factor] + (float) $delta;
+                    }
                 }
             }
             $modifiers = SimulationModifier::query()->with('action')->where('simulator_id', $simulator->id)
@@ -43,6 +50,7 @@ class SimulationEventService
 
             return [
                 'factors' => $this->clampFactors($factors),
+                'resource_deltas' => $resourceDeltas,
                 'events' => $events,
                 'modifiers' => $modifiers,
                 'tick' => $tick,
@@ -53,30 +61,73 @@ class SimulationEventService
     /** @param array<string, int|float|null> $factors */
     private function schedule(Simulator $simulator, int $tick, array $factors): void
     {
-        // Seasonal hazards come from the persisted weather timeline. Random
-        // events here would contradict the weather shown in the forecast HUD.
-        if ($simulator->mode === 'seasonal') return;
-
-        $activeHarmful = SimulationEvent::query()->where('simulator_id', $simulator->id)
-            ->whereIn('status', ['announced', 'active'])->whereHas('definition', fn ($q) => $q->where('is_harmful', true))->exists();
-        if ($activeHarmful) return;
-
         $harvests = $simulator->user()->withCount(['plantHistories as completed_harvests' => fn ($q) => $q->whereNotNull('simulator_id')])->first()?->completed_harvests ?? 0;
         if ($harvests === 0 && $tick <= 2) return;
-        $allowedSeverity = $harvests === 0 ? ['low'] : ($harvests < 5 ? ['low', 'medium'] : ['low', 'medium', 'high']);
-        $last = SimulationEvent::query()->with('definition')->where('simulator_id', $simulator->id)->latest('ends_tick')->first();
-        if ($last && $tick <= (int) $last->ends_tick + max(1, (int) ($last->definition?->cooldown_ticks ?? 2))) return;
+
+        // Cooldown belongs to an event definition, not the whole simulator.
+        // Different events may overlap, while the same definition cannot be
+        // announced again until its own active and recovery periods finish.
+        $latestByDefinition = SimulationEvent::query()
+            ->where('simulator_id', $simulator->id)
+            ->orderByDesc('ends_tick')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('event_definition_id')
+            ->keyBy('event_definition_id');
 
         $definitions = EventDefinition::query()->where('is_active', true)
-            ->whereIn('mode_scope', ['both', $simulator->mode])->whereIn('severity', $allowedSeverity)->orderBy('id')->get()
-            ->filter(fn (EventDefinition $definition): bool => $this->matchesConditions($definition->conditions ?? [], $factors));
-        if ($definitions->isEmpty()) return;
-        $roll = (abs(crc32($simulator->id.':'.$tick.':event')) % 100) + 1;
-        $chance = min(38, max(4, (int) round($definitions->avg('trigger_chance'))));
-        if ($roll > $chance) return;
+            // Severity describes the event and its presentation. It must not
+            // silently override the administrator's mode, condition, chance,
+            // and weight settings based on a player's harvest count.
+            ->whereIn('mode_scope', ['both', $simulator->mode])->orderBy('id')->get()
+            ->filter(function (EventDefinition $definition) use ($latestByDefinition, $tick): bool {
+                $previous = $latestByDefinition->get($definition->id);
+                if (! $previous) return true;
+                if (in_array($previous->status, ['announced', 'active'], true)) return false;
 
-        $weighted = $definitions->flatMap(fn ($definition) => array_fill(0, max(1, min(50, (int) $definition->weight)), $definition));
-        $definition = $weighted[abs(crc32($simulator->id.':'.$tick.':pick')) % $weighted->count()];
+                return $tick > (int) $previous->ends_tick + max(1, (int) $definition->cooldown_ticks);
+            })
+            ->filter(fn (EventDefinition $definition): bool => $this->matchesConditions($definition->conditions ?? [], $factors));
+        // A matching conditional event is more specific than a generic random
+        // event. Prefer it so a configured threshold such as water < 95 is not
+        // displaced by an unrelated conditionless event in the same cycle.
+        $conditionedDefinitions = $definitions
+            ->filter(fn (EventDefinition $definition): bool => ($definition->conditions ?? []) !== []);
+        if ($conditionedDefinitions->isNotEmpty()) {
+            $definitions = $conditionedDefinitions;
+        }
+        // Seasonal weather is authoritative. Only definitions tied to an
+        // explicit environment condition may react to that timeline; generic
+        // conditionless random events remain disabled to avoid contradicting
+        // the forecast shown to the player.
+        if ($simulator->mode === 'seasonal') {
+            $definitions = $definitions->filter(fn (EventDefinition $definition): bool => ($definition->conditions ?? []) !== []);
+        }
+        if ($definitions->isEmpty()) return;
+        // Trigger chance belongs to each definition. The previous scheduler
+        // averaged every matching definition and capped the result at 38%, so
+        // an administrator setting 100% could still fail silently.
+        $definitions = $definitions->filter(function (EventDefinition $definition) use ($simulator, $tick): bool {
+            $chance = max(0, min(100, (int) $definition->trigger_chance));
+            if ($chance === 0) return false;
+            if ($chance === 100) return true;
+
+            $roll = (abs(crc32($simulator->id.':'.$tick.':trigger:'.$definition->id)) % 100) + 1;
+            return $roll <= $chance;
+        })->values();
+        if ($definitions->isEmpty()) return;
+
+        // Honour the full configured weight (1–100) when more than one event
+        // passes its chance roll, without expanding models into a large array.
+        $totalWeight = (int) $definitions->sum(fn (EventDefinition $definition): int => max(1, (int) $definition->weight));
+        $weightedPick = abs(crc32($simulator->id.':'.$tick.':pick')) % $totalWeight;
+        $definition = $definitions->first(function (EventDefinition $candidate) use (&$weightedPick): bool {
+            $weight = max(1, (int) $candidate->weight);
+            if ($weightedPick < $weight) return true;
+            $weightedPick -= $weight;
+            return false;
+        });
+        if (! $definition) return;
         $starts = $tick + (int) $definition->warning_ticks;
         SimulationEvent::query()->create([
             'simulator_id' => $simulator->id, 'event_definition_id' => $definition->id,

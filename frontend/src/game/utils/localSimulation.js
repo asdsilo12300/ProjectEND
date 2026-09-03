@@ -57,6 +57,7 @@ export function buildSimulationFactors(climate, outdoorWeather, mode = 'greenhou
     soil_temp: first('soil_temperature_6cm') ?? climate.soilTemp ?? climate.temp,
     air_temp: first('temperature_2m') ?? climate.temp,
     rain: current?.rain ?? 0,
+    wind_speed: current?.wind_speed_10m ?? first('wind_speed_10m') ?? 0,
     root_temperature_controlled: mode === 'greenhouse' && climate.soilTemp != null && Number.isFinite(Number(climate.soilTemp)),
   }
 }

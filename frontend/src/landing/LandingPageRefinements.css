@@ -453,7 +453,6 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
   clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
 }
 
-.landing-mode-explorer__panel-topline,
 .landing-mode-explorer__panel-eyebrow,
 .landing-mode-explorer__panel h3,
 .landing-mode-explorer__panel > p,
@@ -461,10 +460,6 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
   position: relative;
   z-index: 2;
   max-width: 58%;
-}
-
-.landing-mode-explorer__panel-topline {
-  max-width: none;
 }
 
 .landing-mode-explorer__asset {
@@ -581,7 +576,6 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
     transform: none;
   }
 
-  .landing-mode-explorer__panel-topline,
   .landing-mode-explorer__panel-eyebrow,
   .landing-mode-explorer__panel h3,
   .landing-mode-explorer__panel > p,
@@ -1044,7 +1038,6 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
 
 .landing-shell[data-theme='light'] .landing-mode-card__copy small,
 .landing-shell[data-theme='light'] .landing-mode-card__number,
-.landing-shell[data-theme='light'] .landing-mode-explorer__panel-topline span:first-child,
 .landing-shell[data-theme='light'] .landing-mode-explorer__panel-eyebrow,
 .landing-shell[data-theme='light'] .landing-mode-explorer__panel-footer .landing-text-link {
   color: var(--mode-accent);

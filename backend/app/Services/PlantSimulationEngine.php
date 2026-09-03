@@ -21,11 +21,11 @@ class PlantSimulationEngine
     /**
      * @param  array<string, int|float|null>  $factors
      */
-    public function tick(Simulator $simulator, array $factors): Simulator
+    public function tick(Simulator $simulator, array $factors, array $eventResourceDeltas = []): Simulator
     {
         $simulatorId = $simulator->getKey();
 
-        return DB::transaction(function () use ($simulatorId, $factors): Simulator {
+        return DB::transaction(function () use ($simulatorId, $factors, $eventResourceDeltas): Simulator {
             $simulator = Simulator::query()
                 ->whereKey($simulatorId)
                 ->lockForUpdate()
@@ -38,7 +38,7 @@ class PlantSimulationEngine
             $simulator->loadMissing(['plant.conditionRules', 'plant.visualVariants', 'currentStage']);
             $plant = $simulator->plant;
             $repairedLegacyRootTemperature = $this->repairLegacyGreenhouseRootTemperature($simulator, $plant, $factors);
-            $resourceState = $this->consumePlantResources($simulator, $plant, $factors);
+            $resourceState = $this->consumePlantResources($simulator, $plant, $factors, $eventResourceDeltas);
             $factors['water'] = $resourceState['water'];
             $factors['fertilizer'] = $resourceState['fertilizer'];
             $matchedRules = $plant->conditionRules
@@ -231,7 +231,7 @@ class PlantSimulationEngine
      * @param  array<string, int|float|null>  $factors
      * @return array<string, int|float|string|bool|null>
      */
-    private function consumePlantResources(Simulator $simulator, Plant $plant, array $factors): array
+    private function consumePlantResources(Simulator $simulator, Plant $plant, array $factors, array $eventResourceDeltas = []): array
     {
         $water = $this->clamp((int) Arr::get($factors, 'water', $simulator->water), 0, 100);
         $fertilizer = $this->clamp((int) Arr::get($factors, 'fertilizer', $simulator->fertilizer), 0, 100);
@@ -259,7 +259,8 @@ class PlantSimulationEngine
             2.2 + ($growthRatio * 1.8) + $heatLoad + $dryAirLoad + $lightLoad + $weatherDemand,
         )));
         $rainRecovery = min(12, (int) round($rain * 4));
-        $nextWater = $this->clamp($water - $waterConsumed + $rainRecovery, 0, 100);
+        $eventWaterDelta = (float) Arr::get($eventResourceDeltas, 'water', 0);
+        $nextWater = $this->clamp($water - $waterConsumed + $rainRecovery + $eventWaterDelta, 0, 100);
 
         $tick = max(1, (int) ($simulator->event_tick_count ?? 1));
         $fertilizerCadence = 4;
@@ -275,7 +276,8 @@ class PlantSimulationEngine
             }
         }
         $fertilizerConsumed = $tick % $fertilizerCadence === 0 ? 1 : 0;
-        $nextFertilizer = $this->clamp($fertilizer - $fertilizerConsumed, 0, 100);
+        $eventFertilizerDelta = (float) Arr::get($eventResourceDeltas, 'fertilizer', 0);
+        $nextFertilizer = $this->clamp($fertilizer - $fertilizerConsumed + $eventFertilizerDelta, 0, 100);
 
         $healthDelta = 0;
         $growthDelta = 0;
