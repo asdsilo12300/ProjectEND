@@ -380,7 +380,7 @@ function applyFungusToPlant(object, fungusRisk = 0) {
   const fallbackMaterials = new Map()
 
   object.traverse((child) => {
-    if (!child.isMesh || !child.material || !child.geometry?.attributes?.uv) return
+    if (!child.isMesh || !child.material || !child.geometry?.attributes?.position) return
 
     const meshName = String(child.name ?? '').toLowerCase()
     const materials = Array.isArray(child.material) ? child.material : [child.material]

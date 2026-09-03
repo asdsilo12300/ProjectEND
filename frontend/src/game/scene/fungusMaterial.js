@@ -1,4 +1,4 @@
-import { Vector2 } from 'three'
+import { Vector2, Vector3 } from 'three'
 
 const fungusMaterialState = new WeakMap()
 
@@ -8,7 +8,7 @@ function clamp(value, min, max) {
 
 function getUvBounds(geometry) {
   const uv = geometry?.attributes?.uv
-  if (!uv?.count) return { min: new Vector2(0, 0), range: new Vector2(1, 1) }
+  if (!uv?.count) return { min: new Vector2(0, 0), range: new Vector2(1, 1), usable: false }
 
   const min = new Vector2(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)
   const max = new Vector2(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY)
@@ -19,9 +19,31 @@ function getUvBounds(geometry) {
     max.set(Math.max(max.x, x), Math.max(max.y, y))
   }
 
+  const width = max.x - min.x
+  const height = max.y - min.y
   return {
     min,
-    range: new Vector2(Math.max(0.001, max.x - min.x), Math.max(0.001, max.y - min.y)),
+    range: new Vector2(Math.max(0.001, width), Math.max(0.001, height)),
+    usable: width > 0.001 && height > 0.001,
+  }
+}
+
+function getPositionBounds(geometry) {
+  if (!geometry?.attributes?.position) {
+    return { min: new Vector3(0, 0, 0), range: new Vector3(1, 1, 1) }
+  }
+
+  geometry.computeBoundingBox()
+  const bounds = geometry.boundingBox
+  if (!bounds) return { min: new Vector3(0, 0, 0), range: new Vector3(1, 1, 1) }
+
+  return {
+    min: bounds.min.clone(),
+    range: new Vector3(
+      Math.max(0.001, bounds.max.x - bounds.min.x),
+      Math.max(0.001, bounds.max.y - bounds.min.y),
+      Math.max(0.001, bounds.max.z - bounds.min.z),
+    ),
   }
 }
 
@@ -35,6 +57,9 @@ export function updateFungusMaterial(material, risk = 0, seed = 0, geometry = nu
       fungusStrength: { value: 0 },
       fungusUvMin: { value: new Vector2(0, 0) },
       fungusUvRange: { value: new Vector2(1, 1) },
+      fungusPositionMin: { value: new Vector3(0, 0, 0) },
+      fungusPositionRange: { value: new Vector3(1, 1, 1) },
+      fungusUseUv: { value: 1 },
     }
     const originalCompile = material.onBeforeCompile?.bind(material)
 
@@ -45,26 +70,35 @@ export function updateFungusMaterial(material, risk = 0, seed = 0, geometry = nu
       shader.uniforms.fungusStrength = uniforms.fungusStrength
       shader.uniforms.fungusUvMin = uniforms.fungusUvMin
       shader.uniforms.fungusUvRange = uniforms.fungusUvRange
+      shader.uniforms.fungusPositionMin = uniforms.fungusPositionMin
+      shader.uniforms.fungusPositionRange = uniforms.fungusPositionRange
+      shader.uniforms.fungusUseUv = uniforms.fungusUseUv
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
           `#include <common>
-varying vec2 vFungusUv;`,
+varying vec2 vFungusUv;
+varying vec3 vFungusPosition;`,
         )
         .replace(
           '#include <uv_vertex>',
           `#include <uv_vertex>
-vFungusUv = uv;`,
+vFungusUv = uv;
+vFungusPosition = position;`,
         )
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
           `#include <common>
 varying vec2 vFungusUv;
+varying vec3 vFungusPosition;
 uniform float fungusSeed;
 uniform float fungusStrength;
 uniform vec2 fungusUvMin;
 uniform vec2 fungusUvRange;
+uniform vec3 fungusPositionMin;
+uniform vec3 fungusPositionRange;
+uniform float fungusUseUv;
 
 float fungusHash(vec2 point) {
   point = fract(point * vec2(123.34, 345.45));
@@ -76,7 +110,13 @@ float fungusHash(vec2 point) {
           '#include <map_fragment>',
           `#include <map_fragment>
 vec2 fungusNormalizedUv = clamp((vFungusUv - fungusUvMin) / fungusUvRange, 0.0, 1.0);
-vec2 fungusGridUv = fungusNormalizedUv * vec2(6.0, 8.0);
+vec3 fungusNormalizedPosition = clamp((vFungusPosition - fungusPositionMin) / fungusPositionRange, 0.0, 1.0);
+vec2 fungusProjectedUv = vec2(
+  fungusNormalizedPosition.x + fungusNormalizedPosition.z * 0.37,
+  fungusNormalizedPosition.y + fungusNormalizedPosition.z * 0.61
+);
+vec2 fungusSurfaceUv = mix(fungusProjectedUv, fungusNormalizedUv, fungusUseUv);
+vec2 fungusGridUv = fungusSurfaceUv * vec2(6.0, 8.0);
 vec2 fungusCell = floor(fungusGridUv);
 vec2 fungusLocal = fract(fungusGridUv) - 0.5;
 float fungusCellNoise = fungusHash(fungusCell + fungusSeed);
@@ -100,16 +140,20 @@ diffuseColor.rgb = mix(diffuseColor.rgb, fungusLesionColor, fungusVisibility * 0
 diffuseColor.rgb = mix(diffuseColor.rgb, fungusPowderColor, fungusPowder * fungusStrength * 0.92);`,
         )
     }
-    material.customProgramCacheKey = () => 'plant-surface-fungus-v3'
+    material.customProgramCacheKey = () => 'plant-surface-fungus-v4'
     material.needsUpdate = true
     state = { uniforms }
     fungusMaterialState.set(material, state)
   }
 
   const uvBounds = getUvBounds(geometry)
+  const positionBounds = getPositionBounds(geometry)
   state.uniforms.fungusSeed.value = Number(seed) || 0
   state.uniforms.fungusUvMin.value.copy(uvBounds.min)
   state.uniforms.fungusUvRange.value.copy(uvBounds.range)
+  state.uniforms.fungusPositionMin.value.copy(positionBounds.min)
+  state.uniforms.fungusPositionRange.value.copy(positionBounds.range)
+  state.uniforms.fungusUseUv.value = uvBounds.usable ? 1 : 0
   state.uniforms.fungusStrength.value = Number(risk) > 0
     ? 0.35 + clamp(risk, 0, 100) * 0.0065
     : 0

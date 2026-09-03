@@ -765,7 +765,12 @@ export function PlantRecommendationBanner({ awaitingFirstCycle = false, nextCycl
       pestRisk: recommendation.risk,
     }),
   }))
+  const recommendationPriority = { critical: 5, danger: 4, warning: 3, info: 2, success: 1 }
   const urgentRecommendations = [...eventRecommendations, ...pestRecommendations]
+    .sort((left, right) => (
+      (recommendationPriority[right.level] ?? 0) - (recommendationPriority[left.level] ?? 0)
+      || Number(right.risk ?? 0) - Number(left.risk ?? 0)
+    ))
   const recommendations = urgentRecommendations.length > 0
     ? urgentRecommendations
     : [{ key: 'plant-status', ...buildRecommendation(simulationVisual, recommendationContext) }]
