@@ -200,6 +200,10 @@ export function getAdminIssueReportSummary() {
   return apiFetch('/admin/issue-reports/summary', { cache: 'no-store' })
 }
 
+export function getAdminCommentReportSummary() {
+  return apiFetch('/admin/comment-reports/summary', { cache: 'no-store' })
+}
+
 export function getAdminIssueReport(id) {
   return apiFetch(`/admin/issue-reports/${id}`, { cache: 'no-store' })
 }
@@ -353,14 +357,19 @@ export async function getAdminResourceLookups() {
   return apiFetch('/admin/resources/lookups')
 }
 
-export async function getAdminResource(resource, { search = '', status = '', trashed = '', groupBy = '', page = 1, perPage = null } = {}) {
+export async function getAdminResource(resource, { search = '', status = '', reports = '', trashed = '', groupBy = '', page = 1, perPage = null } = {}) {
   const params = new URLSearchParams({ page: String(page) })
   if (perPage) params.set('per_page', String(perPage))
   if (search) params.set('search', search)
   if (status) params.set('status', status)
+  if (reports) params.set('reports', reports)
   if (trashed) params.set('trashed', trashed)
   if (groupBy) params.set('group_by', groupBy)
   return apiFetch(`/admin/resources/${encodeURIComponent(resource)}?${params.toString()}`)
+}
+
+export async function resolveAdminCommentReports(resource, recordId) {
+  return apiFetch(`/admin/resources/${encodeURIComponent(resource)}/${recordId}/reports/resolve`, { method: 'PATCH', body: '{}' })
 }
 
 export async function saveAdminResource(resource, record) {
@@ -622,6 +631,13 @@ export async function createPostCommentReply(postId, commentId, commentText) {
   })
 }
 
+export async function reportPostComment(postId, commentId, reason, details = '') {
+  return apiFetch(`/posts/${postId}/comments/${commentId}/report`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, details }),
+  })
+}
+
 export async function likePostComment(postId, commentId) {
   return apiFetch(`/posts/${postId}/comments/${commentId}/likes`, {
     method: 'POST',
@@ -692,6 +708,13 @@ export async function createSimulatorComment(simulatorId, commentText) {
   return apiFetch(`/simulators/${simulatorId}/comments`, {
     method: 'POST',
     body: JSON.stringify({ comment_text: commentText }),
+  })
+}
+
+export async function reportSimulatorComment(simulatorId, commentId, reason, details = '') {
+  return apiFetch(`/simulators/${simulatorId}/comments/${commentId}/report`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, details }),
   })
 }
 export async function finishSimulator(simulatorId) {

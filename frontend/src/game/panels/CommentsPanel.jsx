@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Panel } from '../components/Panel'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { AppIcon } from '../icons/FontAwesomeIcon'
-import { createSimulatorComment, getSimulatorComments, resolveAssetUrl } from '../../lib/api'
+import { createSimulatorComment, getSimulatorComments, reportSimulatorComment, resolveAssetUrl } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { COMMENT_CHARACTER_LIMIT, commentCharacterCount, isCommentWithinLimit } from '../socialLimits.js'
+import { CommentReportDialog, CommentReportMenu } from '../components/CommentReportDialog'
 
 const COMMENT_INPUT_MAX_HEIGHT = 176
 
@@ -67,6 +68,9 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
   const [draft, setDraft] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const [reportingComment, setReportingComment] = useState(null)
+  const [reportStatus, setReportStatus] = useState('idle')
+  const [reportError, setReportError] = useState('')
   const commentsViewportRef = useRef(null)
   const commentInputRef = useRef(null)
   const followLatestCommentRef = useRef(true)
@@ -196,7 +200,23 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
     }
   }
 
+  async function submitReport({ reason, details }) {
+    if (!reportingComment || !simulatorId) return
+    setReportStatus('posting')
+    setReportError('')
+    try {
+      await reportSimulatorComment(simulatorId, reportingComment.id, reason, details)
+      setComments((current) => current.map((comment) => String(comment.id) === String(reportingComment.id) ? { ...comment, reported_by_me: true } : comment))
+      setReportingComment(null)
+      setReportStatus('idle')
+    } catch (reportFailure) {
+      setReportError(reportFailure.message || (getAppLanguage() === 'th' ? 'ไม่สามารถส่งรายงานได้' : 'Unable to submit report'))
+      setReportStatus('idle')
+    }
+  }
+
   return (
+    <>
       <Panel id="comments" title={title} windows={windows} setWindows={setWindows} presentation={presentation} hideHeader={hideHeader} className={presentation === 'docked' ? 'comments-panel' : 'comments-panel w-[370px]'}>
         <div
           className="comments-panel__viewport grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto pr-1"
@@ -229,7 +249,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
               <article className="rounded-md border border-sky-200/15 bg-[#132026]/82 p-2.5" key={comment.id}>
                 <div className="mb-2 flex items-center gap-3">
                   <CommentAvatar className="h-8 w-8" user={author} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h3 className="truncate text-sm font-semibold text-lime-50">{displayName(author)}</h3>
                     <p className="text-xs text-slate-400">
                       {author.role ?? 'Learner'} ·{' '}
@@ -242,6 +262,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
                       </time>
                     </p>
                   </div>
+                  {currentUser && String(author.id) !== String(currentUser.id) && <CommentReportMenu disabled={Boolean(comment.reported_by_me)} language={getAppLanguage()} onReport={() => { setReportError(''); setReportingComment(comment) }} />}
                 </div>
                 <p className="whitespace-pre-wrap text-xs leading-5 text-slate-200">{comment.comment_text}</p>
               </article>
@@ -256,7 +277,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
           <label className="relative min-w-0 flex-1">
             <span className="sr-only">Comment</span>
             <textarea
-              className="block h-9 min-h-9 max-h-44 w-full resize-none overflow-y-hidden rounded-lg border border-sky-200/15 bg-[#071013]/75 px-3 py-2 pr-12 text-xs leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-55"
+              className="block h-9 min-h-9 max-h-44 w-full resize-none overflow-y-hidden rounded-lg border border-sky-200/15 bg-[#071013]/75 px-2 py-2 pr-10 text-[11px] leading-5 text-slate-100 placeholder:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-55"
               disabled={!simulatorId || status === 'posting'}
               maxLength={COMMENT_CHARACTER_LIMIT}
               onChange={(event) => setDraft(event.target.value)}
@@ -265,7 +286,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
               rows={1}
               value={draft}
             />
-            <small className={`pointer-events-none absolute bottom-1.5 right-2 text-[9px] font-semibold tabular-nums ${commentCharacterCount(draft) >= COMMENT_CHARACTER_LIMIT * 0.9 ? 'text-amber-300' : 'text-slate-500'}`} aria-live="polite">
+            <small className={`pointer-events-none absolute bottom-1.5 right-2 text-[10px] font-semibold tabular-nums ${commentCharacterCount(draft) >= COMMENT_CHARACTER_LIMIT * 0.9 ? 'text-amber-300' : 'text-slate-500'}`} aria-live="polite">
               {commentCharacterCount(draft)}/{COMMENT_CHARACTER_LIMIT}
             </small>
           </label>
@@ -279,5 +300,7 @@ export function CommentsPanel({ currentUser, onAuthRequired, onLoadStateChange, 
           </button>
         </form>
       </Panel>
+      {reportingComment && <CommentReportDialog busy={reportStatus === 'posting'} error={reportError} language={getAppLanguage()} onClose={() => { if (reportStatus !== 'posting') setReportingComment(null) }} onSubmit={submitReport} />}
+    </>
   )
 }

@@ -7,6 +7,7 @@ use App\Models\Achievement;
 use App\Models\AdminActivityLog;
 use App\Models\AnimationPreset;
 use App\Models\Comment;
+use App\Models\CommentReport;
 use App\Models\EventDefinition;
 use App\Models\Item;
 use App\Models\ItemType;
@@ -37,6 +38,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -87,6 +89,47 @@ class AdminResourceController extends Controller
         }
 
         return $this->moderationIndex($request, $resource);
+    }
+
+    public function commentReportSummary(): JsonResponse
+    {
+        if (! Schema::hasTable('comment_reports')) {
+            return response()->json(['data' => ['total' => 0, 'post' => 0, 'simulator' => 0]]);
+        }
+
+        $counts = CommentReport::query()
+            ->where('status', 'pending')
+            ->selectRaw('comment_type, COUNT(*) AS aggregate')
+            ->groupBy('comment_type')
+            ->pluck('aggregate', 'comment_type');
+
+        $post = (int) ($counts['post'] ?? 0);
+        $simulator = (int) ($counts['simulator'] ?? 0);
+
+        return response()->json(['data' => [
+            'total' => $post + $simulator,
+            'post' => $post,
+            'simulator' => $simulator,
+        ]]);
+    }
+
+    public function resolveCommentReports(Request $request, string $resource, int $record): JsonResponse
+    {
+        abort_unless(in_array($resource, ['comments', 'simulator-comments'], true), 404, 'This resource does not support comment reports.');
+        abort_unless(Schema::hasTable('comment_reports'), 404, 'Comment reporting is not available.');
+
+        $modelClass = $this->moderationModel($resource);
+        $model = $modelClass::query()->findOrFail($record);
+        $commentType = $resource === 'comments' ? 'post' : 'simulator';
+        $resolvedCount = CommentReport::query()
+            ->where('comment_type', $commentType)
+            ->where('comment_id', $model->id)
+            ->where('status', 'pending')
+            ->update(['status' => 'resolved', 'updated_at' => now()]);
+
+        AdminActivityLog::record($request->user(), 'resolved-comment-reports', $resource, $model->id, ['resolved_count' => $resolvedCount]);
+
+        return response()->json(['data' => ['resolved_count' => $resolvedCount]]);
     }
 
     public function store(Request $request, string $resource): JsonResponse
@@ -584,10 +627,11 @@ class AdminResourceController extends Controller
 
     private function moderationIndex(Request $request, string $resource): JsonResponse
     {
+        $reportRelations = Schema::hasTable('comment_reports') ? ['reports.reporter:id,username,email'] : [];
         $query = match ($resource) {
             'posts' => Post::query()->with('user:id,username,email,avatar_url')->withCount(['comments', 'likes']),
-            'comments' => Comment::query()->with('user:id,username,email,avatar_url')->withCount(['replies', 'likes']),
-            'simulator-comments' => SimulatorComment::query()->with(['user:id,username,email,avatar_url', 'simulator:id,user_id,plant_id,status']),
+            'comments' => Comment::query()->with(array_merge(['user:id,username,email,avatar_url'], $reportRelations))->withCount(['replies', 'likes']),
+            'simulator-comments' => SimulatorComment::query()->with(array_merge(['user:id,username,email,avatar_url', 'simulator:id,user_id,plant_id,status'], $reportRelations)),
             'simulators' => Simulator::query()->with([
                 'user:id,username,email,avatar_url',
                 'plant:id,name_th,name_en,base_image_url,base_model_url',
@@ -623,6 +667,14 @@ class AdminResourceController extends Controller
             $statusColumn = in_array($resource, ['posts', 'plant-histories'], true) ? 'visibility' : 'status';
             if ($resource !== 'activity-logs') {
                 $query->where($statusColumn, (string) $request->query('status'));
+            }
+        }
+
+        if (Schema::hasTable('comment_reports') && in_array($resource, ['comments', 'simulator-comments'], true)) {
+            if ($request->query('reports') === 'reported') {
+                $query->whereHas('reports', fn ($reports) => $reports->where('status', 'pending'));
+            } elseif ($request->query('reports') === 'unreported') {
+                $query->whereDoesntHave('reports', fn ($reports) => $reports->where('status', 'pending'));
             }
         }
 
@@ -696,6 +748,17 @@ class AdminResourceController extends Controller
             default => [],
         };
         $model->forceFill($data)->save();
+        if (
+            Schema::hasTable('comment_reports')
+            && in_array($resource, ['comments', 'simulator-comments'], true)
+            && in_array($data['status'] ?? null, ['hidden', 'suspended'], true)
+        ) {
+            CommentReport::query()
+                ->where('comment_type', $resource === 'comments' ? 'post' : 'simulator')
+                ->where('comment_id', $model->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'resolved', 'updated_at' => now()]);
+        }
         AdminActivityLog::record($request->user(), 'moderated', $resource, $model->id, ['before' => $before, 'after' => $model->fresh()->toArray()]);
 
         return response()->json(['data' => $model->fresh()]);

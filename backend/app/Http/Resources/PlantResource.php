@@ -19,6 +19,7 @@ class PlantResource extends JsonResource
             'base_model_url' => $this->publicUrl($this->base_model_url),
             'real_maturity_days' => (int) ($this->real_maturity_days ?? 90),
             'growth_reference_url' => $this->growth_reference_url,
+            'is_available' => ! $this->trashed(),
             'environment' => [
                 'water' => ['min' => $this->water_min, 'max' => $this->water_max],
                 'light' => ['min' => $this->light_min, 'max' => $this->light_max],

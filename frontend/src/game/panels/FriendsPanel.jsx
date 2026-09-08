@@ -288,7 +288,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
     >
       <AppIcon className="h-3.5 w-3.5" name="groups" />
       {requests.length > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-400 px-1 text-[10px] font-black leading-none text-[#101511]">
+        <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-400 px-1 text-sm font-black leading-none text-[#101511]">
           {requests.length > 9 ? '9+' : requests.length}
         </span>
       )}
@@ -311,11 +311,11 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
         <div className="grid min-w-0 flex-1 grid-cols-2 divide-x divide-lime-100/10">
           <div className="px-2">
             <strong className="block text-sm font-black text-lime-50">{visibleFriends.length}</strong>
-            <span className="block truncate text-[11px] text-slate-400">Friends</span>
+            <span className="block truncate text-sm text-slate-400">Friends</span>
           </div>
           <div className="px-3">
             <strong className="block text-sm font-black text-emerald-300">{onlineFriends.length}</strong>
-            <span className="block text-[11px] text-slate-400">Online</span>
+            <span className="block text-sm text-slate-400">Online</span>
           </div>
         </div>
         <button
@@ -381,7 +381,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                       <FriendAvatar user={result} presence={result.presence} status={connected ? 'accepted' : 'pending'} />
                       <span className="min-w-0 flex-1">
                         <strong className="block truncate text-xs text-lime-50">{displayName(result)}</strong>
-                        <span className="block truncate text-[11px] text-slate-400">@{result.username ?? result.email?.split('@')[0] ?? 'learner'}</span>
+                        <span className="block truncate text-sm text-slate-400">@{result.username ?? result.email?.split('@')[0] ?? 'learner'}</span>
                       </span>
                       <button
                         className="rounded-lg border border-lime-100/12 bg-white/[0.055] px-3 py-2 text-xs font-semibold text-lime-100 transition hover:border-lime-100/25 hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-55"
@@ -401,7 +401,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                 <div>
                   <AppIcon className="mx-auto h-5 w-5 text-slate-500" name="search" />
                   <p className="mt-2 text-xs font-semibold text-slate-300">No learners found</p>
-                  <p className="mt-1 text-[11px] leading-4 text-slate-500">Try another username or email.</p>
+                  <p className="mt-1 text-sm leading-4 text-slate-500">Try another username or email.</p>
                 </div>
               </div>
             )}
@@ -410,7 +410,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                 <div>
                   <AppIcon className="mx-auto h-5 w-5 text-slate-500" name="person" />
                   <p className="mt-2 text-xs font-semibold text-slate-300">Find a friend</p>
-                  <p className="mt-1 text-[11px] leading-4 text-slate-500">Search with a username or email address.</p>
+                  <p className="mt-1 text-sm leading-4 text-slate-500">Search with a username or email address.</p>
                 </div>
               </div>
             )}
@@ -437,7 +437,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
               return (
                 <button
                   key={tab.id}
-                  className={`relative flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md px-1 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${active ? 'bg-[#9bcf82]/18 text-lime-50 shadow-[inset_0_0_0_1px_rgba(155,207,130,.28)]' : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'}`}
+                  className={`relative flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md px-1 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 ${active ? 'bg-[#9bcf82]/18 text-lime-50 shadow-[inset_0_0_0_1px_rgba(155,207,130,.28)]' : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'}`}
                   type="button"
                   role="tab"
                   aria-selected={active}
@@ -446,7 +446,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                   <AppIcon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-[#aee094]' : ''}`} name={tab.icon} />
                   <span className="max-w-full whitespace-nowrap text-center leading-none">{tab.label}</span>
                   {tab.id === 'requests' && tab.count > 0 && (
-                    <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-400 px-1 text-[10px] font-black leading-none text-[#101511] shadow-[0_2px_5px_rgba(0,0,0,.35)]">
+                    <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-red-400 px-1 text-sm font-black leading-none text-[#101511] shadow-[0_2px_5px_rgba(0,0,0,.35)]">
                       {tab.count > 9 ? '9+' : tab.count}
                     </span>
                   )}
@@ -488,7 +488,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                           }}
                         >
                           <strong className="block truncate text-xs text-lime-50">{displayName(friend.user)}</strong>
-                          <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-slate-400">
+                          <span className="mt-0.5 flex items-center gap-1.5 truncate text-sm text-slate-400">
                             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isIncomingRequest || !isAccepted ? 'bg-amber-300' : friend.presence === 'online' ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                             <span className="truncate">{statusLabel}</span>
                           </span>
@@ -539,7 +539,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                           </div>
                         ) : (
                           <button
-                            className="rounded-full border border-amber-200/12 bg-amber-300/8 px-2.5 py-1.5 text-[11px] font-semibold text-amber-100 transition hover:border-amber-200/22 hover:bg-amber-300/12"
+                            className="rounded-full border border-amber-200/12 bg-amber-300/8 px-2.5 py-1.5 text-sm font-semibold text-amber-100 transition hover:border-amber-200/22 hover:bg-amber-300/12"
                             type="button"
                             onClick={() => setManageFriendId((value) => value === friend.id ? null : friend.id)}
                             aria-expanded={manageFriendId === friend.id}
@@ -551,11 +551,11 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
 
                       {manageFriendId === friend.id && (
                         <div className="mt-2 flex items-center justify-between gap-3 rounded-md border border-lime-100/8 bg-black/20 px-2.5 py-2" role="menu">
-                          <span className="text-[11px] text-slate-400">
+                          <span className="text-sm text-slate-400">
                             {isAccepted ? 'Friend options' : 'Invitation pending'}
                           </span>
                           <button
-                            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold text-red-200 transition hover:bg-red-400/10 hover:text-red-100"
+                            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-red-200 transition hover:bg-red-400/10 hover:text-red-100"
                             type="button"
                             role="menuitem"
                             onClick={() => confirmRemoval(friend)}
@@ -582,7 +582,7 @@ export function FriendsPanel({ windows, setWindows, user, onAuthRequired, onView
                   </p>
                   {!query.trim() && mode === 'list' && (
                     <button
-                      className="mt-2 text-[11px] font-semibold text-[#aee094] underline-offset-2 hover:underline"
+                      className="mt-2 text-sm font-semibold text-[#aee094] underline-offset-2 hover:underline"
                       type="button"
                       onClick={openInvite}
                     >

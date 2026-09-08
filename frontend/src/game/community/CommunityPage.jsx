@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
-import { createPostComment, createPostCommentReply, getCommunityInsights, getCommunityLeaderboard, getFriendPosts, getFriends, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
+import { createPostComment, createPostCommentReply, getCommunityInsights, getCommunityLeaderboard, getFriendPosts, getFriends, getPostComments, getPosts, getToken, inviteFriend, likePost, likePostComment, reportPostComment, resolveAssetUrl, searchUsers, unlikePost, unlikePostComment, updateMe } from '../../lib/api'
 import { getAppLanguage } from '../../i18n/appI18n'
 import { LoadingSkeleton } from '../components/LoadingSkeleton'
 import { ParticleNetworkBackground } from '../components/ParticleNetworkBackground'
@@ -8,6 +8,7 @@ import { LevelAvatar } from '../components/LevelAvatar'
 import { AppIcon } from '../icons/FontAwesomeIcon'
 import { formatPlantDuration } from '../../utils/plantDuration'
 import { COMMENT_CHARACTER_LIMIT, commentCharacterCount, isCommentWithinLimit } from '../socialLimits.js'
+import { CommentReportDialog, CommentReportMenu } from '../components/CommentReportDialog'
 
 const CommunityLanguageContext = createContext('en')
 const communityReturnStateKey = 'plant_game_community_return_state'
@@ -590,7 +591,7 @@ function FeedPost({ hidden = false, onHide, onOpenGame, onOpenPost, onRestore, o
   )
 }
 
-function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSelectUser, onStartReply, onSubmitReply, onToggleCommentLike, replyingToId, replyDrafts, submittingReply }) {
+function CommentItem({ burstKeys, comment, currentUser, depth = 0, onReplyDraftChange, onReport, onSelectUser, onStartReply, onSubmitReply, onToggleCommentLike, reportedIds, replyingToId, replyDrafts, submittingReply }) {
   const language = useCommunityLanguage()
   const author = displayName(comment.user)
   const replies = comment.replies ?? []
@@ -613,9 +614,12 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
         </div>
         <div className="min-w-0 flex-1">
           <div className="inline-block max-w-full rounded-2xl rounded-tl-md bg-white/[0.075] px-3 py-2">
-            <div className="group/profile relative w-fit">
-              <button className="block text-left text-xs font-black text-lime-50 transition hover:text-[#9bcf82] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" onClick={() => onSelectUser?.(comment.user)} type="button">{author}</button>
-              <ProfileHoverCard onSelectUser={onSelectUser} user={comment.user} />
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="group/profile relative min-w-0 flex-1">
+                <button className="block max-w-full truncate text-left text-xs font-black text-lime-50 transition hover:text-[#9bcf82] focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200" onClick={() => onSelectUser?.(comment.user)} type="button">{author}</button>
+                <ProfileHoverCard onSelectUser={onSelectUser} user={comment.user} />
+              </div>
+              {currentUser && String(comment.user?.id) !== String(currentUser.id) && <CommentReportMenu disabled={Boolean(comment.reported_by_me || reportedIds?.has(String(comment.id)))} language={language} onReport={() => onReport?.(comment)} />}
             </div>
             <p className="whitespace-pre-line text-sm leading-5 text-slate-100">{comment.comment_text}</p>
           </div>
@@ -678,12 +682,15 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
               key={reply.id}
               burstKeys={burstKeys}
               comment={reply}
+              currentUser={currentUser}
               depth={depth + 1}
               onReplyDraftChange={onReplyDraftChange}
+              onReport={onReport}
               onSelectUser={onSelectUser}
               onStartReply={onStartReply}
               onSubmitReply={onSubmitReply}
               onToggleCommentLike={onToggleCommentLike}
+              reportedIds={reportedIds}
               replyingToId={replyingToId}
               replyDrafts={replyDrafts}
               submittingReply={submittingReply}
@@ -696,6 +703,10 @@ function CommentItem({ burstKeys, comment, depth = 0, onReplyDraftChange, onSele
 }
 function PostModal({ actionError = '', commentBurstKeys, commentDraft, comments, commentsLoading = false, currentUser, onClose, onCommentDraftChange, onOpenGame, onReplyDraftChange, onSelectUser, onStartReply, onSubmitComment, onSubmitReply, onToggleCommentLike, onToggleLike, post, postBurstKey, replyingToId, replyDrafts, submittingComment, submittingReply }) {
   const language = useCommunityLanguage()
+  const [reportingComment, setReportingComment] = useState(null)
+  const [reportedIds, setReportedIds] = useState(() => new Set())
+  const [reportStatus, setReportStatus] = useState('idle')
+  const [reportError, setReportError] = useState('')
   if (!post) return null
 
   const postUser = post.user ?? { username: post.author, level: post.level }
@@ -704,7 +715,23 @@ function PostModal({ actionError = '', commentBurstKeys, commentDraft, comments,
     onSelectUser?.(selectedUser)
   }
 
+  async function submitReport({ reason, details }) {
+    if (!reportingComment) return
+    setReportStatus('posting')
+    setReportError('')
+    try {
+      await reportPostComment(post.id, reportingComment.id, reason, details)
+      setReportedIds((current) => new Set([...current, String(reportingComment.id)]))
+      setReportingComment(null)
+      setReportStatus('idle')
+    } catch (reportFailure) {
+      setReportError(reportFailure.message || copy(language, 'Unable to submit report', 'ไม่สามารถส่งรายงานได้'))
+      setReportStatus('idle')
+    }
+  }
+
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 px-4 pb-6 pt-20 backdrop-blur-sm"
       role="dialog"
@@ -775,11 +802,14 @@ function PostModal({ actionError = '', commentBurstKeys, commentDraft, comments,
                 key={comment.id}
                 burstKeys={commentBurstKeys}
                 comment={comment}
+                currentUser={currentUser}
                 onReplyDraftChange={onReplyDraftChange}
+                onReport={(selectedComment) => { setReportError(''); setReportingComment(selectedComment) }}
                 onSelectUser={selectProfile}
                 onStartReply={onStartReply}
                 onSubmitReply={onSubmitReply}
                 onToggleCommentLike={onToggleCommentLike}
+                reportedIds={reportedIds}
                 replyingToId={replyingToId}
                 replyDrafts={replyDrafts}
                 submittingReply={submittingReply}
@@ -825,6 +855,8 @@ function PostModal({ actionError = '', commentBurstKeys, commentDraft, comments,
         </form>
       </div>
     </div>
+    {reportingComment && <CommentReportDialog busy={reportStatus === 'posting'} error={reportError} language={language} onClose={() => { if (reportStatus !== 'posting') setReportingComment(null) }} onSubmit={submitReport} />}
+    </>
   )
 }
 
@@ -902,7 +934,7 @@ function InsightLineChart({ language, mode, series }) {
           return (
             <g key={ratio}>
               <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="rgba(185,229,164,.11)" strokeDasharray="4 7" />
-              <text x={padding.left - 8} y={y + 4} fill="#64748b" fontSize="10" textAnchor="end">{Math.round(maxValue * ratio)}</text>
+              <text x={padding.left - 8} y={y + 4} fill="#64748b" fontSize="14" textAnchor="end">{Math.round(maxValue * ratio)}</text>
             </g>
           )
         })}
@@ -937,8 +969,8 @@ function InsightLineChart({ language, mode, series }) {
         ) : null}
         {series.length ? (
           <>
-            <text x={padding.left} y={height - 8} fill="#64748b" fontSize="10">{dateFormatter.format(new Date(`${series[0].date}T00:00:00`))}</text>
-            <text x={width - padding.right} y={height - 8} fill="#64748b" fontSize="10" textAnchor="end">{dateFormatter.format(new Date(`${series[series.length - 1].date}T00:00:00`))}</text>
+            <text x={padding.left} y={height - 8} fill="#64748b" fontSize="14">{dateFormatter.format(new Date(`${series[0].date}T00:00:00`))}</text>
+            <text x={width - padding.right} y={height - 8} fill="#64748b" fontSize="14" textAnchor="end">{dateFormatter.format(new Date(`${series[series.length - 1].date}T00:00:00`))}</text>
           </>
         ) : null}
       </svg>
@@ -1145,7 +1177,7 @@ function ProfileCenter({ actionBusy = false, actionError = '', friendsCount, hid
               <span>{levelInfo.exp}/{levelInfo.nextExp}</span>
             </div>
             <p className="mt-3 max-w-[58ch] whitespace-pre-line text-sm leading-6 text-slate-300">{bio}</p>
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[12px] text-slate-500">
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
               <span className="inline-flex items-center gap-1.5"><AppIcon className="h-4 w-4" name="history" />{formatJoinedDate(user?.created_at, language)}</span>
               <span className="inline-flex items-center gap-1.5"><AppIcon className="h-4 w-4" name="groups" />{profileFriendsCount} {copy(language, 'friends', 'เพื่อน')}</span>
               <span className="inline-flex items-center gap-1.5"><AppIcon className="h-4 w-4" name="plant" />{plantsGrownCount} {copy(language, 'plants grown', 'ต้นที่ปลูก')}</span>
@@ -2231,6 +2263,7 @@ export function CommunityPage({ currentUser = null, notificationError = '', noti
           />
         ) : null}
         <PostModal
+          key={selectedPost?.id ?? 'no-post'}
           actionError={postActionError}
           commentBurstKeys={reactionBursts}
           commentDraft={commentDraft}

@@ -18,7 +18,7 @@ class SocialNotificationTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['social_notifications', 'comment_likes', 'post_likes', 'comments', 'posts', 'users'] as $table) {
+        foreach (['comment_reports', 'social_notifications', 'comment_likes', 'post_likes', 'comments', 'posts', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -72,6 +72,18 @@ class SocialNotificationTest extends TestCase
             $table->foreignId('comment_id');
             $table->foreignId('user_id');
             $table->unique(['comment_id', 'user_id']);
+        });
+
+        Schema::create('comment_reports', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('reporter_id');
+            $table->string('comment_type', 24);
+            $table->unsignedBigInteger('comment_id');
+            $table->string('reason', 32);
+            $table->text('details')->nullable();
+            $table->string('status', 24)->default('pending');
+            $table->timestamps();
+            $table->unique(['reporter_id', 'comment_type', 'comment_id']);
         });
 
         Schema::create('social_notifications', function (Blueprint $table): void {
@@ -190,6 +202,89 @@ class SocialNotificationTest extends TestCase
             ->postJson("/api/posts/{$post->id}/comments/{$commentId}/replies", ['comment_text' => str_repeat('b', 281)])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('comment_text');
+    }
+
+    public function test_user_can_report_another_users_comment_and_duplicate_reports_are_updated(): void
+    {
+        $owner = $this->createUser('report-owner');
+        $author = $this->createUser('report-author');
+        $reporter = $this->createUser('reporter');
+        $post = Post::query()->create([
+            'user_id' => $owner->id,
+            'caption' => 'Report test',
+            'visibility' => 'public',
+        ]);
+        $comment = Comment::query()->create([
+            'post_id' => $post->id,
+            'user_id' => $author->id,
+            'comment_text' => 'Review this comment',
+            'status' => 'visible',
+        ]);
+
+        $this->withToken($this->token($reporter))
+            ->postJson("/api/posts/{$post->id}/comments/{$comment->id}/report", ['reason' => 'inappropriate'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->withToken($this->token($reporter))
+            ->postJson("/api/posts/{$post->id}/comments/{$comment->id}/report", ['reason' => 'other', 'details' => 'Repeated advertising'])
+            ->assertOk()
+            ->assertJsonPath('data.reason', 'other');
+
+        $this->assertDatabaseCount('comment_reports', 1);
+        $this->assertDatabaseHas('comment_reports', [
+            'reporter_id' => $reporter->id,
+            'comment_type' => 'post',
+            'comment_id' => $comment->id,
+            'details' => 'Repeated advertising',
+        ]);
+
+        Comment::query()->create([
+            'post_id' => $post->id,
+            'user_id' => $owner->id,
+            'comment_text' => 'No reports here',
+            'status' => 'visible',
+        ]);
+        $admin = $this->createUser('report-admin');
+        $admin->update(['role' => 'admin']);
+
+        $this->withToken($this->token($admin))
+            ->getJson('/api/admin/resources/comments?reports=reported')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $comment->id);
+
+        $this->withToken($this->token($admin))
+            ->getJson('/api/admin/resources/comments?reports=unreported')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->withToken($this->token($admin))
+            ->getJson('/api/admin/comment-reports/summary')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.post', 1)
+            ->assertJsonPath('data.simulator', 0);
+
+        $this->withToken($this->token($admin))
+            ->patchJson("/api/admin/resources/comments/{$comment->id}/reports/resolve")
+            ->assertOk()
+            ->assertJsonPath('data.resolved_count', 1);
+
+        $this->assertDatabaseHas('comment_reports', [
+            'comment_type' => 'post',
+            'comment_id' => $comment->id,
+            'status' => 'resolved',
+        ]);
+
+        $this->withToken($this->token($admin))
+            ->getJson('/api/admin/comment-reports/summary')
+            ->assertOk()
+            ->assertJsonPath('data.total', 0);
+
+        $this->withToken($this->token($author))
+            ->postJson("/api/posts/{$post->id}/comments/{$comment->id}/report", ['reason' => 'inappropriate'])
+            ->assertUnprocessable();
     }
 
     private function createUser(string $username): User

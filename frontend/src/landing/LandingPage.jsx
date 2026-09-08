@@ -635,7 +635,7 @@ function InteractiveLabPreview({ onStart }) {
   )
 }
 
-function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
+function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo, plantCount = 0 }) {
   const [selectedJourneyIndex, setSelectedJourneyIndex] = useState(null)
   const selectedJourney = selectedJourneyIndex === null ? null : journeySteps[selectedJourneyIndex]
 
@@ -676,7 +676,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
               Plant Growth Academy is a learning simulation where you shape a 3D plant's environment,
               observe its response, and build real understanding through every growing cycle.
             </p>
-            <p className="landing-hero__mission">Choose the conditions · Observe the response · Master the growing cycle</p>
             <div className="landing-actions landing-hero__actions">
               <GameButton className="landing-hero__start" data-tour="home-start" onClick={onStart}>
                 <PixelIcon name="lab" />
@@ -693,12 +692,6 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
             </button>
           </div>
 
-          <div className="landing-hero__feature-strip" aria-label="Academy highlights">
-            <span><AppIcon name="check" /> Account-based progress</span>
-            <span><AppIcon name="translate" /> Thai & English</span>
-            <span><AppIcon name="leaf" /> Research-backed learning</span>
-            <span><AppIcon name="controller" /> Interactive 3D lab</span>
-          </div>
         </div>
 
         <button
@@ -719,7 +712,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo }) {
           <div className="landing-container landing-game-summary__grid">
             <div><strong>3D</strong><span>living plant simulation</span></div>
             <div><strong>6</strong><span>connected growth factors</span></div>
-            <div><strong>2</strong><span>growing modes to explore</span></div>
+            <div><strong>{plantCount || '—'}</strong><span>plant species to explore</span></div>
             <div><strong>∞</strong><span>experiments to compare</span></div>
           </div>
         </section>
@@ -1423,7 +1416,7 @@ function ScrollGrowthHud({ language, pageKey }) {
   )
 }
 
-export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn, onOpenPage, onOpenDemo }) {
+export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onSignIn, onOpenPage, onOpenDemo, plantCount = 0 }) {
   const [articleSlug, setArticleSlug] = useState(null)
   const [language, setLanguage] = useState(() => loadSettings().language === 'th' ? 'th' : 'en')
   const [theme, setTheme] = useState(() => {
@@ -1498,7 +1491,7 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
         ? articleSlug
           ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />
           : <LearnPage user={user} onHome={openHome} onOpenArticle={openArticle} onStart={onStart} />
-        : <HomePage user={user} onStart={onStart} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onOpenDemo={onOpenDemo} />}
+        : <HomePage user={user} onStart={onStart} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onOpenDemo={onOpenDemo} plantCount={plantCount} />}
       <ScrollGrowthHud language={language} pageKey={`${page}:${articleSlug ?? 'library'}`} />
       <LandingFooter onHome={openHome} onLearn={openLearningLibrary} />
     </main>

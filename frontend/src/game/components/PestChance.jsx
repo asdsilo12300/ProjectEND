@@ -27,9 +27,9 @@ export function PestChance({ label, value, icon, color, imageUrl, active = false
           <AppIcon className="h-3 w-3 text-slate-500 transition group-hover:text-sky-200" name="help" />
         </span>
       </div>
-      <span className="mt-1 block truncate text-[13px] font-bold leading-4 text-lime-50" title={label}>{label}</span>
+      <span className="mt-1 block truncate text-sm font-bold leading-4 text-lime-50" title={label}>{label}</span>
       <div className="mt-1.5 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-        <span className={`min-w-0 truncate text-[9px] font-black uppercase leading-none ${active ? 'text-amber-200' : 'text-slate-400'}`}>
+        <span className={`min-w-0 whitespace-nowrap text-[10px] font-black uppercase leading-none tracking-[0.04em] ${active ? 'text-amber-200' : 'text-slate-400'}`}>
           {active ? 'ACTIVE' : 'RISK'}
         </span>
         <strong className="shrink-0 text-right text-xs leading-none text-lime-50">{value}%</strong>

@@ -720,6 +720,13 @@ export async function handleDemoApiRequest(path, options = {}) {
     return { handled: true, payload: { data: clone(simulatorById(seasonalContextMatch[1])?.seasonal_context ?? null) } }
   }
 
+  const simulatorCommentReportMatch = cleanPath.match(/^\/simulators\/([^/]+)\/comments\/([^/]+)\/report$/)
+  if (simulatorCommentReportMatch && method === 'POST') {
+    const [, simulatorId, commentId] = simulatorCommentReportMatch
+    session.simulatorComments.set(String(simulatorId), (session.simulatorComments.get(String(simulatorId)) ?? []).map((comment) => String(comment.id) === String(commentId) ? { ...comment, reported_by_me: true } : comment))
+    return { handled: true, payload: { data: { id: session.nextId++, reason: body.reason, details: body.details || null, status: 'pending' }, message: 'Comment reported.' } }
+  }
+
   const simulatorMatch = cleanPath.match(/^\/simulators\/([^/]+)(?:\/(tick|sync|finish|uproot|share|claim-maturity-reward|use-item|prank|histories|comments))?$/)
   if (simulatorMatch) {
     const [, simulatorId, action] = simulatorMatch
@@ -865,10 +872,11 @@ export async function handleDemoApiRequest(path, options = {}) {
     return { handled: true, payload: { data: { days, from: new Date(Date.now() - ((days - 1) * 86_400_000)).toISOString().slice(0, 10), to: nowIso().slice(0, 10), content: insightSeries(days, { posts: [0, 0, 1, 0, 0], likes: [1, 0, 2, 0, 1], comments: [0, 1, 0, 0, 1], replies: [0, 0, 1, 0, 0] }), activity: insightSeries(days, { posts: [0, 0, 1, 0, 0], likes: [0, 1, 1, 0, 2], comments: [1, 0, 0, 1, 0], replies: [0, 1, 0, 0, 0] }) } } }
   }
 
-  const postCommentsMatch = cleanPath.match(/^\/posts\/([^/]+)\/comments(?:\/([^/]+)(?:\/(replies|likes))?)?$/)
+  const postCommentsMatch = cleanPath.match(/^\/posts\/([^/]+)\/comments(?:\/([^/]+)(?:\/(replies|likes|report))?)?$/)
   if (postCommentsMatch) {
     const [, postId, commentId, action] = postCommentsMatch
-    const comments = session.postComments.get(String(postId)) ?? [demoComment('This comparison makes the result easy to understand.', 9401)]
+    const previewCommentAuthor = session.publicPosts.find((post) => String(post.user_id) !== String(session.user.id))?.user ?? session.user
+    const comments = session.postComments.get(String(postId)) ?? [{ ...demoComment('This comparison makes the result easy to understand.', 9401), user: clone(previewCommentAuthor) }]
     if (method === 'GET') return { handled: true, payload: { data: clone(comments) } }
     if (!commentId && method === 'POST') {
       const comment = validatedDemoComment(body.comment_text)
@@ -881,6 +889,10 @@ export async function handleDemoApiRequest(path, options = {}) {
       return { handled: true, payload: { data: clone(reply), comments_count: comments.length + 1 } }
     }
     if (action === 'likes') return { handled: true, payload: { liked_by_me: method !== 'DELETE', likes_count: method === 'DELETE' ? 0 : 1 } }
+    if (action === 'report' && method === 'POST') {
+      session.postComments.set(String(postId), comments.map((comment) => String(comment.id) === String(commentId) ? { ...comment, reported_by_me: true } : comment))
+      return { handled: true, payload: { data: { id: session.nextId++, reason: body.reason, details: body.details || null, status: 'pending' }, message: 'Comment reported.' } }
+    }
   }
 
   const postLikeMatch = cleanPath.match(/^\/posts\/([^/]+)\/likes$/)

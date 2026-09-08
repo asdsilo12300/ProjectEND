@@ -78,6 +78,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::post('/simulators/{simulator}/sync', [SimulatorController::class, 'sync']);
     Route::get('/simulators/{simulator}/comments', [SimulatorController::class, 'comments']);
     Route::post('/simulators/{simulator}/comments', [SimulatorController::class, 'storeComment']);
+    Route::post('/simulators/{simulator}/comments/{comment}/report', [SimulatorController::class, 'reportComment'])->middleware('throttle:10,10');
     Route::post('/simulators/{simulator}/finish', [SimulatorController::class, 'finish']);
     Route::post('/simulators/{simulator}/uproot', [SimulatorController::class, 'uproot']);
     Route::post('/simulators/{simulator}/share', [SimulatorController::class, 'share']);
@@ -110,6 +111,7 @@ Route::middleware('jwt')->group(function (): void {
     Route::get('/posts/{post}/comments', [PostController::class, 'comments']);
     Route::post('/posts/{post}/comments', [PostController::class, 'comment']);
     Route::post('/posts/{post}/comments/{comment}/replies', [PostController::class, 'reply']);
+    Route::post('/posts/{post}/comments/{comment}/report', [PostController::class, 'reportComment'])->middleware('throttle:10,10');
     Route::post('/posts/{post}/comments/{comment}/likes', [PostController::class, 'likeComment']);
     Route::delete('/posts/{post}/comments/{comment}/likes', [PostController::class, 'unlikeComment']);
     Route::post('/posts/{post}/likes', [PostController::class, 'like']);
@@ -139,6 +141,8 @@ Route::middleware('jwt')->group(function (): void {
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::patch('/users/{user}', [AdminUserController::class, 'update']);
         Route::get('/resources/lookups', [AdminResourceController::class, 'lookups']);
+        Route::get('/comment-reports/summary', [AdminResourceController::class, 'commentReportSummary']);
+        Route::patch('/resources/{resource}/{record}/reports/resolve', [AdminResourceController::class, 'resolveCommentReports']);
         Route::post('/resources/plants/{plant}/generate-setup', [AdminResourceController::class, 'generatePlantSetup']);
         Route::post('/media/images', [AdminMediaController::class, 'uploadImage']);
         Route::post('/model-bundles', [AdminModelBundleController::class, 'store']);

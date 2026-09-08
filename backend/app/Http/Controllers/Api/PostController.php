@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PostResource;
 use App\Models\Comment;
 use App\Models\CommentLike;
+use App\Models\CommentReport;
 use App\Models\Friendship;
 use App\Models\PlantHistory;
 use App\Models\Post;
@@ -17,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -154,6 +156,32 @@ class PostController extends Controller
         ], 201);
     }
 
+    public function reportComment(Request $request, Post $post, Comment $comment): JsonResponse
+    {
+        abort_unless((int) $comment->post_id === (int) $post->id, 404);
+        abort_if((int) $comment->user_id === (int) $request->user()->id, 422, 'You cannot report your own comment.');
+
+        $data = $request->validate([
+            'reason' => ['required', Rule::in(['inappropriate', 'other'])],
+            'details' => ['nullable', 'string', 'max:500', Rule::requiredIf(fn () => $request->input('reason') === 'other')],
+        ]);
+
+        $report = CommentReport::query()->updateOrCreate(
+            [
+                'reporter_id' => $request->user()->id,
+                'comment_type' => 'post',
+                'comment_id' => $comment->id,
+            ],
+            [
+                'reason' => $data['reason'],
+                'details' => trim((string) ($data['details'] ?? '')) ?: null,
+                'status' => 'pending',
+            ],
+        );
+
+        return response()->json(['data' => $report, 'message' => 'Comment reported.'], $report->wasRecentlyCreated ? 201 : 200);
+    }
+
     public function comments(Request $request, Post $post): JsonResponse
     {
         $comments = $post->comments()
@@ -282,6 +310,9 @@ class PostController extends Controller
             'created_at' => $comment->created_at,
             'likes_count' => $likes->count(),
             'liked_by_me' => $viewerId ? $likes->contains('user_id', $viewerId) : false,
+            'reported_by_me' => $viewerId && Schema::hasTable('comment_reports')
+                ? $comment->reports()->where('reporter_id', $viewerId)->exists()
+                : false,
             'replies' => $replies
                 ->where('status', 'visible')
                 ->sortBy('created_at')

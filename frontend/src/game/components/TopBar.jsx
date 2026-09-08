@@ -267,7 +267,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
         {demoMode ? (
           <div className="hidden min-w-0 sm:block">
             <strong className="block truncate text-sm text-lime-50">{demoPageName} Preview</strong>
-            <span className="block truncate text-[11px] text-slate-400">Browser-only sandbox - no data is saved</span>
+            <span className="block truncate text-sm text-slate-400">Browser-only sandbox - no data is saved</span>
           </div>
         ) : (
           <nav className="hidden h-16 min-w-0 items-end overflow-x-auto xl:flex" data-tour="global-navigation" aria-label="Primary">
@@ -295,7 +295,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
               }}
             >
               <AppIcon className="h-4 w-4" name="shield" />
-              <span className="hidden text-[10px] font-black tracking-[.12em] 2xl:inline">DEMO</span>
+              <span className="hidden text-sm font-black tracking-[.12em] 2xl:inline">DEMO</span>
             </button>
             {demoMenuOpen && (
               <section className="absolute right-0 top-14 z-[90] w-[min(310px,calc(100vw-24px))] overflow-hidden rounded-xl border border-amber-200/20 bg-[#12160f]/98 shadow-[0_22px_55px_rgba(0,0,0,.52)] backdrop-blur-xl" aria-label="Interactive demo session" role="dialog">
@@ -499,11 +499,11 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
 
                 <dl className="mt-3 grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-lime-100/10 bg-white/[0.035] px-3 py-2.5">
-                    <dt className="text-[11px] font-bold text-slate-400">Current balance</dt>
+                    <dt className="text-sm font-bold text-slate-400">Current balance</dt>
                     <dd className="mt-1 truncate text-sm font-black tabular-nums text-lime-100">{shownCoins}</dd>
                   </div>
                   <div className="rounded-lg border border-lime-100/10 bg-white/[0.035] px-3 py-2.5">
-                    <dt className="text-[11px] font-bold text-slate-400">Maximum balance</dt>
+                    <dt className="text-sm font-bold text-slate-400">Maximum balance</dt>
                     <dd className="mt-1 truncate text-sm font-black tabular-nums text-slate-200" title={shownMaxCoins}>{shownMaxCoins}</dd>
                   </div>
                 </dl>
@@ -554,7 +554,7 @@ export function TopBar({ activePage = 'lab', coinBalance = 0, coinDelta = null, 
               </div>
               <div className="mt-3 rounded-md border border-cyan-200/10 bg-[#0b1020]/65 px-2.5 py-2 shadow-[inset_0_0_18px_rgba(0,214,255,.08)]">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="font-mono text-[13px] font-black tabular-nums text-cyan-300">{learnerExpPercent.toFixed(0)}%</span>
+                  <span className="font-mono text-sm font-black tabular-nums text-cyan-300">{learnerExpPercent.toFixed(0)}%</span>
                   <span className="text-xs font-semibold text-slate-400">
                     EXP {learnerExperience}/{learnerNextExperience}
                   </span>

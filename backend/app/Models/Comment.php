@@ -32,5 +32,10 @@ class Comment extends Model
     {
         return $this->hasMany(CommentLike::class);
     }
-}
 
+    public function reports(): HasMany
+    {
+        return $this->hasMany(CommentReport::class, 'comment_id')
+            ->where('comment_type', 'post');
+    }
+}

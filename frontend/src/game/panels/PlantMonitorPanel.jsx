@@ -545,7 +545,7 @@ function normalizeTimelineValues(history, progress) {
 
 function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimate, progress, history, language, pace, rate, referenceUrl, stages }) {
   const isThai = language === 'th'
-  const plot = { left: 34, right: 254, top: 12, bottom: 92 }
+  const plot = { left: 28, right: 220, top: 14, bottom: 96 }
   const timelineValues = normalizeTimelineValues(history, progress)
   const pointData = timelineValues
     .map((value, index) => {
@@ -566,10 +566,10 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimat
 
   return (
     <div className="rounded-md border border-lime-100/10 bg-black/20 px-3 py-2">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-col items-start gap-2">
         <div>
-          <strong className="text-xs text-lime-50">{isThai ? 'การคำนวณการเติบโต' : 'Growth calculation'}</strong>
-          <p className="text-xs text-slate-400">
+          <strong className="block text-xs leading-5 text-lime-50">{isThai ? 'การคำนวณการเติบโต' : 'Growth calculation'}</strong>
+          <p className="text-xs text-white">
             {progress >= 100
               ? isThai ? 'เติบโตถึงวัยสมบูรณ์แล้ว' : 'Biological maturity reached'
               : cycleStatus === 'updating'
@@ -581,7 +581,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimat
         </div>
         <span className="shrink-0 whitespace-nowrap rounded bg-[#9bcf82]/12 px-2 py-1 text-xs font-bold leading-none text-lime-100">{pace.label}</span>
       </div>
-      <svg className="h-28 w-full" viewBox="0 0 300 120" role="img" aria-label="Calculated simulation time compared with real-life plant growth">
+      <svg className="h-40 w-full" viewBox="0 0 300 150" role="img" aria-label="Calculated simulation time compared with real-life plant growth">
         <defs>
           <linearGradient id="growthTimelineFill" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="#9bcf82" stopOpacity="0.3" />
@@ -594,7 +594,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimat
           return (
             <g key={percent}>
               <line x1={plot.left} x2={plot.right} y1={y} y2={y} stroke="rgba(216,243,201,.11)" strokeDasharray="3 4" />
-              <text x={plot.left - 5} y={y + 3} textAnchor="end" className="fill-slate-500 text-[8px]">{dayLabel}d</text>
+              <text x={plot.left - 5} y={y + 3} textAnchor="end" className="fill-white text-sm">{dayLabel}d</text>
             </g>
           )
         })}
@@ -603,7 +603,7 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimat
           return (
             <g key={stage.label}>
               <line x1={plot.right + 2} x2={plot.right + 6} y1={y} y2={y} stroke={progress >= stage.value ? '#9bcf82' : 'rgba(216,243,201,.25)'} />
-              <text x={plot.right + 9} y={y + 3} className={progress >= stage.value ? 'fill-lime-100 text-[7px]' : 'fill-slate-500 text-[7px]'}>{stage.label}</text>
+              <text x={plot.right + 9} y={y + 3} className="fill-white text-sm">{stage.label}</text>
             </g>
           )
         })}
@@ -614,10 +614,10 @@ function GrowthTimeline({ awaitingFirstCycle, cycleSeconds, cycleStatus, estimat
             <title>{`${point.secondsAgo === 0 ? 'Now' : `${formatGameTime(point.secondsAgo)} ago`} · ${point.value.toFixed(1)}% growth · ${formatRealDays(point.biologicalDays)} real days`}</title>
           </circle>
         ))}
-        {elapsedWindow > 0 && <text x={plot.left} y="108" textAnchor="start" className="fill-slate-500 text-[8px]">-{formatGameTime(elapsedWindow)}</text>}
-        {middleElapsed > 0 && <text x={(plot.left + plot.right) / 2} y="108" textAnchor="middle" className="fill-slate-600 text-[8px]">-{formatGameTime(middleElapsed)}</text>}
-        <text x={plot.right} y="108" textAnchor="end" className="fill-slate-400 text-[8px]">Now</text>
-        <text x={plot.left} y="118" className="fill-slate-600 text-[7px]">simulation time →</text>
+        {elapsedWindow > 0 && <text x={plot.left} y="118" textAnchor="start" className="fill-white text-sm">-{formatGameTime(elapsedWindow)}</text>}
+        {middleElapsed > 0 && <text x={(plot.left + plot.right) / 2} y="118" textAnchor="middle" className="fill-white text-sm">-{formatGameTime(middleElapsed)}</text>}
+        <text x={plot.right} y="118" textAnchor="end" className="fill-white text-sm">Now</text>
+        <text x={plot.left} y="142" className="fill-white text-sm">simulation time →</text>
       </svg>
       <RealGrowthScale estimate={estimate} language={language} pace={pace} referenceUrl={referenceUrl} />
     </div>
@@ -646,17 +646,16 @@ function RealGrowthScale({ estimate, language, pace, referenceUrl }) {
       : `At normal pace, one real-life growth day equals about ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} simulation seconds.`
 
   return (
-    <div className="mt-1 flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 border-t border-lime-100/10 pt-2 text-[10px]" aria-label="Real-life growth scale" title={tooltip}>
-      <span className="inline-flex items-center gap-1.5 font-bold text-sky-100">
+    <div className="mt-1 grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 border-t border-lime-100/10 pt-2 text-sm" aria-label="Real-life growth scale" title={tooltip}>
+      <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap font-bold text-sky-100">
         <AppIcon className="h-3 w-3 text-sky-300" name="history" />
-        {currentDays} / ~{maturityDays} {isThai ? 'วัน' : 'days'}
+        {currentDays}/~{maturityDays} {isThai ? 'วัน' : 'days'}
       </span>
-      <span aria-hidden="true" className="text-white/20">•</span>
-      <span className={isPaused ? 'font-semibold text-orange-200' : 'font-semibold text-slate-300'}>
-        {isPaused ? (isThai ? `หยุดชั่วคราว · ปกติ 1 วัน ≈ ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} วินาที` : `Paused · normal 1 day ≈ ${formatScaleSeconds(estimate.normalSecondsPerRealDay)}s`) : scaleLabel}
+      <span className={`col-span-2 whitespace-nowrap text-[12px] ${isPaused ? 'font-semibold text-orange-200' : 'font-semibold text-white'}`}>
+        {isPaused ? (isThai ? `หยุดชั่วคราว · ปกติ 1 วัน ≈ ${formatScaleSeconds(estimate.normalSecondsPerRealDay)} วิ` : `Paused · normal 1 day ≈ ${formatScaleSeconds(estimate.normalSecondsPerRealDay)}s`) : scaleLabel}
       </span>
       {referenceUrl && (
-        <a className="ml-auto shrink-0 text-sky-300/75 transition hover:text-white" href={referenceUrl} target="_blank" rel="noreferrer" aria-label="Open growth-time source" title="Growth-time source">
+        <a className="col-start-2 row-start-1 shrink-0 text-base font-bold text-sky-300 transition hover:text-white" href={referenceUrl} target="_blank" rel="noreferrer" aria-label="Open growth-time source" title="Growth-time source">
           {isThai ? 'แหล่งข้อมูล' : 'Source'} ↗
         </a>
       )}
@@ -695,27 +694,23 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
               <span className="text-sm font-black">2</span>
             </span>
             <strong className="mt-3 block text-sm text-lime-50">{language === 'th' ? 'เลือกพืชจากคลังห้องทดลอง' : 'Choose a plant from Lab assets'}</strong>
-            <span className="mt-1 block text-xs leading-5 text-slate-400">{language === 'th' ? 'สุขภาพ การเติบโต และความเสี่ยงศัตรูพืชจะแสดงหลังเริ่มการจำลอง' : 'Plant health, growth and pest risk will appear here after the simulation starts.'}</span>
+            <span className="mt-1 block text-xs leading-5 text-white">{language === 'th' ? 'สุขภาพ การเติบโต และความเสี่ยงศัตรูพืชจะแสดงหลังเริ่มการจำลอง' : 'Plant health, growth and pest risk will appear here after the simulation starts.'}</span>
           </div>
         ) : (
           <>
-        <div className="mb-3 flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-lime-100/15 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.08)]">
+        <div className="mb-3 grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-0.5">
+            <span className="row-span-2 grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-lime-100/15 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.08)]">
               {plantImageUrl ? (
                 <img className="h-full w-full object-cover object-center" src={plantImageUrl} alt="" draggable="false" />
               ) : (
                 <AppIcon className="h-7 w-7 text-[#9bcf82]" name="plant" />
               )}
             </span>
-            <div className="min-w-0">
-              <strong className="block text-[15px] font-black leading-5 text-lime-50" data-i18n-skip="true">{plantName}</strong>
-              <span className="text-xs leading-5 text-slate-300">
-                {stageName} · {growthProgress.toFixed(1)}% {language === 'th' ? 'เติบโต' : 'grown'}
-              </span>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center whitespace-nowrap rounded-md bg-[#9bcf82]/12 px-2 py-1 text-xs font-semibold leading-none text-lime-100">{pace.label}</div>
+            <strong className="min-w-0 truncate text-[15px] font-black leading-5 text-lime-50" data-i18n-skip="true">{plantName}</strong>
+            <div className="flex shrink-0 items-center whitespace-nowrap rounded-md bg-[#9bcf82]/12 px-2 py-1 text-[13px] font-semibold leading-none text-lime-100">{pace.label}</div>
+            <span className="col-start-2 col-end-4 whitespace-nowrap text-[13px] leading-5 text-white">
+              {stageName} · {growthProgress.toFixed(1)}% {language === 'th' ? 'เติบโต' : 'grown'}
+            </span>
         </div>
 
         <GrowthTimeline awaitingFirstCycle={awaitingFirstCycle} cycleSeconds={cycleSeconds} cycleStatus={cycleStatus} estimate={realGrowth} progress={growthProgress} history={growthHistory} language={language} pace={pace} rate={growthRate} referenceUrl={simulationVisual?.plant?.growth_reference_url} stages={growthStages} />
@@ -723,7 +718,7 @@ export function PlantMonitorPanel({ awaitingFirstCycle = false, cycleStatus = 'i
         <div className="mt-3 border-t border-lime-100/10 pt-3">
           <div className="lab-pest-monitor-heading mb-2 flex items-center justify-between">
             <strong className="text-xs text-lime-50">{language === 'th' ? 'ติดตามศัตรูพืช' : 'Pest monitoring'}</strong>
-            <span className="text-xs text-slate-400">{language === 'th' ? 'ความเสี่ยง' : 'risk'} · {cycleSeconds != null ? (language === 'th' ? `อัปเดตใน ${cycleSeconds} วินาที` : `updates in ${cycleSeconds}s`) : (language === 'th' ? 'รอบถัดไป' : 'next update')}</span>
+            <span className="text-xs text-white">{language === 'th' ? 'ความเสี่ยง' : 'risk'} · {cycleSeconds != null ? (language === 'th' ? `อัปเดตใน ${cycleSeconds} วินาที` : `updates in ${cycleSeconds}s`) : (language === 'th' ? 'รอบถัดไป' : 'next update')}</span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {visiblePestChances.map((pest) => (

@@ -86,7 +86,7 @@
   max-width: 390px;
   margin: 9px auto 20px;
   color: #91b7cf;
-  font-size: 13px;
+  font-size: 0.875rem;
   line-height: 1.55;
 }
 
@@ -105,7 +105,7 @@
   justify-content: space-between;
   gap: 20px;
   color: #a8d8ef;
-  font-size: 13px;
+  font-size: 0.875rem;
 }
 
 .simulation-operation-loader__compact-rows strong {
@@ -114,7 +114,7 @@
   padding: 4px 10px;
   background: rgba(255, 255, 255, 0.055);
   color: #819087;
-  font-size: 11px;
+  font-size: 0.875rem;
 }
 
 .simulation-operation-loader__compact-rows strong[data-complete='true'] {
@@ -129,7 +129,7 @@
   gap: 7px;
   margin: 16px 0 0;
   color: #84968a;
-  font-size: 11px;
+  font-size: 0.875rem;
 }
 
 .simulation-operation-loader__compact-notice svg { color: #64c9df; }
@@ -158,7 +158,7 @@
   display: block;
   margin-bottom: 3px;
   color: #9bcf82;
-  font-size: 10px;
+  font-size: 0.875rem;
   font-weight: 900;
   letter-spacing: 0.13em;
 }
@@ -200,12 +200,12 @@
   justify-content: space-between;
   gap: 12px;
   margin-top: 9px;
-  font-size: 12px;
+  font-size: 0.875rem;
 }
 
 .simulation-operation-loader__progress-copy strong {
   color: #eaf7df;
-  font-size: 13px;
+  font-size: 0.875rem;
 }
 
 .simulation-operation-loader__progress-copy span {
@@ -231,7 +231,7 @@
   border-radius: 11px;
   padding: 7px 10px;
   color: #718176;
-  font-size: 13px;
+  font-size: 0.875rem;
   font-weight: 650;
   transition: 200ms ease;
 }
@@ -254,7 +254,7 @@
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.055);
   color: #809285;
-  font-size: 10px;
+  font-size: 0.875rem;
   font-style: normal;
   font-weight: 900;
 }
@@ -283,7 +283,7 @@
   border-top: 1px solid rgba(191, 235, 169, 0.1);
   padding-top: 14px;
   color: #84968a;
-  font-size: 11px;
+  font-size: 0.875rem;
   line-height: 1.55;
 }
 
@@ -307,7 +307,7 @@
 @media (max-width: 520px) {
   .simulation-operation-loader { padding: 12px; }
   .simulation-operation-loader__card { border-radius: 17px; padding: 19px 16px; }
-  .simulation-operation-loader__description { font-size: 13px; }
+  .simulation-operation-loader__description { font-size: 0.875rem; }
   .simulation-operation-loader__progress-copy { align-items: flex-start; flex-direction: column; gap: 3px; }
 }
 

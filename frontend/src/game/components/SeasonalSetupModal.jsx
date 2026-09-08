@@ -107,18 +107,18 @@ export function SeasonalSetupModal({ busy = false, onCancel, onConfirm, plant })
   }
 
   return (
-    <div className="absolute inset-0 z-[85] grid place-items-center overflow-y-auto bg-black/65 px-4 py-8 backdrop-blur-sm" onClick={(event) => event.target === event.currentTarget && !busy && onCancel?.()}>
-      <section className="relative w-full max-w-[880px] overflow-hidden rounded-2xl border border-emerald-200/20 bg-[#0e1711] text-slate-100 shadow-[0_28px_80px_rgba(0,0,0,.55)]" role="dialog" aria-modal="true" aria-labelledby="seasonal-setup-title">
-        <header className="border-b border-white/10 bg-gradient-to-r from-emerald-950/80 to-lime-950/45 px-6 py-5 pr-16">
+    <div className="absolute inset-0 z-[85] grid place-items-center overflow-hidden bg-black/65 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-4" onClick={(event) => event.target === event.currentTarget && !busy && onCancel?.()}>
+      <section className="seasonal-setup-modal relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl border border-emerald-200/20 bg-[#0e1711] text-white shadow-[0_28px_80px_rgba(0,0,0,.55)] sm:max-h-[calc(100dvh-2rem)]" role="dialog" aria-modal="true" aria-labelledby="seasonal-setup-title">
+        <header className="shrink-0 border-b border-white/10 bg-gradient-to-r from-emerald-950/80 to-lime-950/45 px-5 py-4 pr-16 sm:px-6 sm:py-5">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-200">Seasonal Journey · {isThai ? 'ขั้นตอน 3 จาก 3' : 'Step 3 of 3'}</p>
           <h2 className="mt-1 text-2xl font-black text-white" id="seasonal-setup-title">{isThai ? `ตั้งค่าฤดูกาลสำหรับ ${plant?.name ?? 'พืช'}` : `Set the season for ${plant?.name ?? 'your plant'}`}</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-300">{isThai ? 'เลือกสถานที่และเดือนเริ่มต้น ระบบจะสร้างอากาศแบบเร่งเวลาที่เปิดซ้ำแล้วได้ Timeline เดิม' : 'Choose a location and starting month. The persisted accelerated weather timeline stays the same after reopening.'}</p>
+          <p className="mt-1 text-sm leading-6 text-white">{isThai ? 'เลือกสถานที่และเดือนเริ่มต้น ระบบจะสร้างอากาศแบบเร่งเวลาที่เปิดซ้ำแล้วได้ Timeline เดิม' : 'Choose a location and starting month. The persisted accelerated weather timeline stays the same after reopening.'}</p>
           <button type="button" className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-white/5 hover:bg-white/10" aria-label={isThai ? 'ปิด' : 'Close'} disabled={busy} onClick={onCancel}>
             <AppIcon className="h-4 w-4" name="close" />
           </button>
         </header>
 
-        <div className="grid gap-5 p-6 md:grid-cols-[1fr_1.05fr]">
+        <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto p-4 sm:p-5 md:grid-cols-[1fr_1.05fr] md:p-6">
           <div className="space-y-4">
             <div>
               <label className="mb-2 block text-sm font-bold text-lime-50">{isThai ? 'เดือนเริ่มปลูก' : 'Starting month'}</label>
@@ -135,12 +135,12 @@ export function SeasonalSetupModal({ busy = false, onCancel, onConfirm, plant })
                 </button>
               </div>
               <form className="flex gap-2" onSubmit={submitSearch}>
-                <input className="min-w-0 flex-1 rounded-lg border border-emerald-200/20 bg-[#111d15] px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-300" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={isThai ? 'ค้นหาเมือง จังหวัด หรือประเทศ' : 'Search city, region, or country'} />
+                <input className="min-w-0 flex-1 rounded-lg border border-emerald-200/20 bg-[#111d15] px-3 py-3 text-sm text-white outline-none placeholder:text-white/80 focus:border-emerald-300" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={isThai ? 'ค้นหาเมือง จังหวัด หรือประเทศ' : 'Search city, region, or country'} />
                 <button type="submit" className="grid w-12 place-items-center rounded-lg bg-emerald-300 text-emerald-950 disabled:opacity-50" disabled={query.trim().length < 2 || status === 'searching'} aria-label={isThai ? 'ค้นหา' : 'Search'}><AppIcon className="h-4 w-4" name="search" /></button>
               </form>
               {results.length > 0 && (
                 <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-white/10 bg-[#111d15] p-1">
-                  {results.map((result) => <button type="button" key={`${result.latitude}:${result.longitude}`} className="block w-full rounded-md px-3 py-2 text-left text-xs leading-5 text-slate-200 hover:bg-emerald-300/10" onClick={() => selectLocation(result)}>{result.name}</button>)}
+                  {results.map((result) => <button type="button" key={`${result.latitude}:${result.longitude}`} className="block w-full rounded-md px-3 py-2 text-left text-xs leading-5 text-white hover:bg-emerald-300/10" onClick={() => selectLocation(result)}>{result.name}</button>)}
                 </div>
               )}
             </div>
@@ -149,9 +149,9 @@ export function SeasonalSetupModal({ busy = false, onCancel, onConfirm, plant })
               {location ? (
                 <>
                   <iframe className="h-44 w-full border-0 opacity-90" title={isThai ? 'แผนที่สถานที่ปลูก' : 'Growing location map'} loading="lazy" src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.longitude - 0.04}%2C${location.latitude - 0.025}%2C${location.longitude + 0.04}%2C${location.latitude + 0.025}&layer=mapnik&marker=${location.latitude}%2C${location.longitude}`} />
-                  <div className="px-3 py-2 text-xs text-slate-300"><strong className="block truncate text-lime-50">{locationName}</strong>{location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</div>
+                  <div className="px-3 py-2 text-xs text-white"><strong className="block break-words text-lime-50">{locationName}</strong>{location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</div>
                 </>
-              ) : <div className="grid h-52 place-items-center px-6 text-center text-sm text-slate-400">{isThai ? 'เลือก GPS หรือค้นหาสถานที่เพื่อดูแผนที่และความเหมาะสม' : 'Use GPS or search for a place to preview the map and suitability.'}</div>}
+              ) : <div className="grid h-52 place-items-center px-6 text-center text-sm text-white">{isThai ? 'เลือก GPS หรือค้นหาสถานที่เพื่อดูแผนที่และความเหมาะสม' : 'Use GPS or search for a place to preview the map and suitability.'}</div>}
             </div>
           </div>
 
@@ -162,7 +162,7 @@ export function SeasonalSetupModal({ busy = false, onCancel, onConfirm, plant })
             ) : preview ? (
               <div className="mt-4 space-y-4">
                 <div className="rounded-xl border border-white/10 bg-black/15 p-4">
-                  <span className="text-xs text-slate-400">{isThai ? 'ฤดูกาลและเขตภูมิอากาศ' : 'Season and climate zone'}</span>
+                  <span className="text-xs text-white">{isThai ? 'ฤดูกาลและเขตภูมิอากาศ' : 'Season and climate zone'}</span>
                   <strong className="mt-1 block text-2xl text-white">{localSeasonLabel(preview.season_key, language)}</strong>
                   <span className="text-sm text-emerald-200">{localClimateZoneLabel(preview.climate_zone, language)}</span>
                 </div>
@@ -172,20 +172,20 @@ export function SeasonalSetupModal({ busy = false, onCancel, onConfirm, plant })
                 </div>
                 <div className={`rounded-xl border p-4 ${preview.suitability === 'excellent' ? 'border-emerald-300/30 bg-emerald-300/10' : preview.suitability === 'manageable' ? 'border-amber-300/30 bg-amber-300/10' : 'border-rose-300/35 bg-rose-300/10'}`}>
                   <div className="flex items-center justify-between gap-4"><strong className="text-lg text-white">{suitability[0]}</strong><span className="rounded-full bg-black/20 px-3 py-1 text-sm font-black">{preview.suitability_score}/100</span></div>
-                  <p className="mt-1 text-sm leading-6 text-slate-300">{suitability[1]}</p>
+                  <p className="mt-1 text-sm leading-6 text-white">{suitability[1]}</p>
                 </div>
-                <div className="rounded-lg border border-white/10 bg-black/15 p-3 text-xs leading-5 text-slate-300">
+                <div className="rounded-lg border border-white/10 bg-black/15 p-3 text-xs leading-5 text-white">
                   <strong className="block text-lime-50">{isThai ? 'แหล่งข้อมูล' : 'Weather source'}</strong>
                   {isThai ? preview.source_label_th : preview.source_label_en}
                 </div>
-                <p className="text-xs leading-5 text-slate-400">{isThai ? 'ระบบไม่ห้ามปลูกผิดฤดู วันตามปฏิทินยังเดินต่อแม้พืชหยุดโต และเหตุรุนแรงจะแจ้งล่วงหน้า' : 'Out-of-season planting is allowed. Calendar days continue when growth pauses, and severe weather is announced in advance.'}</p>
+                <p className="text-xs leading-5 text-white">{isThai ? 'ระบบไม่ห้ามปลูกผิดฤดู วันตามปฏิทินยังเดินต่อแม้พืชหยุดโต และเหตุรุนแรงจะแจ้งล่วงหน้า' : 'Out-of-season planting is allowed. Calendar days continue when growth pauses, and severe weather is announced in advance.'}</p>
               </div>
-            ) : <div className="grid min-h-[300px] place-items-center text-center text-sm leading-6 text-slate-400">{isThai ? 'ข้อมูลฤดูกาลจะแสดงหลังเลือกสถานที่' : 'Season data appears after choosing a location.'}</div>}
+            ) : <div className="grid min-h-[300px] place-items-center text-center text-sm leading-6 text-white">{isThai ? 'ข้อมูลฤดูกาลจะแสดงหลังเลือกสถานที่' : 'Season data appears after choosing a location.'}</div>}
           </div>
         </div>
         {error && <div className="mx-6 mb-4 rounded-lg border border-rose-300/25 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">{error}</div>}
-        <footer className="flex items-center justify-end gap-3 border-t border-white/10 px-6 py-4">
-          <button type="button" className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/5" disabled={busy} onClick={onCancel}>{isThai ? 'ยกเลิก' : 'Cancel'}</button>
+        <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-white/10 bg-[#0e1711] px-4 py-3 sm:px-6 sm:py-4">
+          <button type="button" className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/5" disabled={busy} onClick={onCancel}>{isThai ? 'ยกเลิก' : 'Cancel'}</button>
           <button type="button" className="inline-flex items-center gap-2 rounded-lg bg-emerald-300 px-5 py-2.5 text-sm font-black text-emerald-950 shadow-[0_10px_24px_rgba(110,231,183,.18)] disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !location || !preview || status === 'loading'} onClick={() => onConfirm?.({ location_name: locationName, location_timezone: preview.location_timezone, latitude: location.latitude, longitude: location.longitude, start_month: month })}>
             <AppIcon className="h-4 w-4" name="plant" />{busy ? (isThai ? 'กำลังสร้าง Timeline…' : 'Building timeline…') : (isThai ? 'เริ่มปลูกตามฤดูกาล' : 'Start Seasonal Journey')}
           </button>

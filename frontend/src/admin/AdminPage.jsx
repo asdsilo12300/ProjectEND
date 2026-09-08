@@ -19,7 +19,9 @@ import {
   getAdminResource,
   getAdminResourceLookups,
   getAdminUsers,
+  getAdminCommentReportSummary,
   getAdminIssueReportSummary,
+  resolveAdminCommentReports,
   restoreAdminContent,
   restoreAdminResource,
   saveAdminResource,
@@ -62,7 +64,7 @@ function adminAlertTheme() {
     color: isLight ? '#17231c' : '#edf4ef',
     customClass: {
       container: 'admin-swal-container',
-      popup: 'admin-swal-popup',
+      popup: isLight ? 'admin-swal-popup is-light' : 'admin-swal-popup',
       title: 'admin-swal-title',
       htmlContainer: 'admin-swal-text',
       actions: 'admin-swal-actions',
@@ -146,12 +148,12 @@ function loadAdminPreferences() {
   try {
     const saved = JSON.parse(window.localStorage.getItem(adminPreferenceKey) ?? '{}')
     return {
-      theme: saved.theme === 'light' ? 'light' : 'dark',
+      theme: saved.theme === 'dark' ? 'dark' : 'light',
       collapsed: Boolean(saved.collapsed),
       textSize: saved.textSize === 'large' ? 'large' : 'default',
     }
   } catch {
-    return { theme: 'dark', collapsed: false, textSize: 'default' }
+    return { theme: 'light', collapsed: false, textSize: 'default' }
   }
 }
 
@@ -467,6 +469,30 @@ function ColorPairPreview({ first, second }) {
 }
 
 const commonActiveField = { key: 'is_active', label: 'Active', type: 'boolean' }
+const plantNeedDefinitions = [
+  { key: 'water', labelEn: 'Water', labelTh: 'น้ำ', unit: 'ml', scale: 10, step: 10, min: 0, max: 1000 },
+  { key: 'light', labelEn: 'Light', labelTh: 'แสง', unit: 'lx', min: 0, max: 100 },
+  { key: 'fertilizer', labelEn: 'Fertilizer', labelTh: 'ปุ๋ย', unit: 'g', min: 0, max: 100 },
+  { key: 'soil_humidity', labelEn: 'Soil moisture', labelTh: 'ความชื้นในดิน', unit: '%', min: 0, max: 100 },
+  { key: 'air_humidity', labelEn: 'Air humidity', labelTh: 'ความชื้นในอากาศ', unit: '%RH', min: 0, max: 100 },
+  { key: 'soil_temp', labelEn: 'Soil temperature', labelTh: 'อุณหภูมิดิน', unit: '°C', step: 0.1, min: -50, max: 100 },
+  { key: 'air_temp', labelEn: 'Air temperature', labelTh: 'อุณหภูมิอากาศ', unit: '°C', step: 0.1, min: -50, max: 100 },
+]
+const plantNeedFieldKeys = new Set(plantNeedDefinitions.flatMap((factor) => [`${factor.key}_min`, `${factor.key}_max`]))
+
+function pendingCommentReportCount(record) {
+  return (record.reports ?? []).filter((report) => report.status === 'pending').length
+}
+
+function commentReportLabel(record) {
+  const total = record.reports?.length ?? 0
+  if (!total) return '—'
+  const pending = pendingCommentReportCount(record)
+  const isThai = document.documentElement.lang === 'th'
+  if (pending) return isThai ? `${pending} ยังไม่จัดการ · ${total} ทั้งหมด` : `${pending} pending · ${total} total`
+  return isThai ? `${total} จัดการแล้ว` : `${total} handled`
+}
+
 const resourceGroups = {
   plants: [
     {
@@ -484,7 +510,7 @@ const resourceGroups = {
       columns: [
         { label: 'Plant', render: (row) => localizedAdminName(row) },
         { label: 'Thai name', render: (row) => row.name_th },
-        { label: 'Water / light', render: (row) => `${row.water_min}–${row.water_max} / ${row.light_min}–${row.light_max}` },
+        { label: 'Water / light', render: (row) => `${Number(row.water_min) * 10}–${Number(row.water_max) * 10} ml / ${row.light_min}–${row.light_max} lx` },
         { label: 'Real maturity', render: (row) => `~${row.real_maturity_days ?? 90} days` },
         { label: 'Subtables', render: (row) => `${row.stages_count} stages · ${row.condition_rules_count} rules · ${row.visual_variants_count} visuals` },
       ],
@@ -637,8 +663,8 @@ const resourceGroups = {
   ],
   community: [
     { id: 'posts', label: 'Posts', icon: 'chat', moderation: true, noDelete: true, groupBy: 'user', serverGrouped: true, statusField: 'visibility', statusOptions: ['public', 'friends', 'private'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Caption', render: (row) => row.caption || 'No caption' }, { label: 'Engagement', render: (row) => `${row.comments_count} comments · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
-    { id: 'comments', label: 'Post comments', icon: 'chat', moderation: true, noDelete: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Thread', render: (row) => `${row.replies_count} replies · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
-    { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, noDelete: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'comments', label: 'Post comments', icon: 'chat', moderation: true, noDelete: true, reportFilter: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Reports', render: commentReportLabel }, { label: 'Thread', render: (row) => `${row.replies_count} replies · ${row.likes_count} likes` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
+    { id: 'simulator-comments', label: 'Simulation comments', icon: 'live', moderation: true, noDelete: true, reportFilter: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['visible', 'hidden', 'suspended'], columns: [{ label: 'Author', render: (row) => row.user?.username }, { label: 'Comment', render: (row) => row.comment_text }, { label: 'Reports', render: commentReportLabel }, { label: 'Simulation', render: (row) => `#${row.simulator_id}` }, { label: 'Created', render: (row) => formatDate(row.created_at, true) }] },
   ],
   simulations: [
     { id: 'simulators', label: 'Simulations', icon: 'controller', moderation: true, viewOnly: true, noDelete: true, noTrashFilter: true, groupBy: 'user', serverGrouped: true, statusField: 'status', statusOptions: ['active', 'completed', 'failed', 'cancelled'], extraStatusField: 'share_visibility', extraStatusOptions: ['private', 'friends', 'public'], columns: [{ label: 'Owner', render: (row) => row.user?.username }, { label: 'Plant / mode', render: (row) => `${localizedAdminName(row.plant) || 'Unknown'} · ${row.mode}` }, { label: 'Health / growth', render: (row) => `${row.health}% / ${row.growth_point} pts` }, { label: 'Started', render: (row) => formatDate(row.started_at, true) }] },
@@ -979,7 +1005,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
           rotate: 0,
           style: {
             colors: isLight ? '#405248' : '#9ba9a1',
-            fontSize: '11px',
+            fontSize: '0.875rem',
             fontWeight: 650,
           },
           formatter: (value, timestamp) => axisDate.format(new Date(Number(timestamp ?? value))),
@@ -1008,7 +1034,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
           text: adminText(language, 'Records'),
           style: {
             color: isLight ? '#526259' : '#718078',
-            fontSize: '11px',
+            fontSize: '0.875rem',
             fontWeight: 700,
           },
         },
@@ -1017,7 +1043,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
           formatter: (value) => Math.round(value),
           style: {
             colors: isLight ? '#405248' : '#9ba9a1',
-            fontSize: '11px',
+            fontSize: '0.875rem',
             fontWeight: 650,
           },
         },
@@ -1028,7 +1054,7 @@ function TrendChart({ trend = [], activeSeries, period = 'month', periodLabel = 
         verticalAlign: 'middle',
         style: {
           color: isLight ? '#526259' : '#839087',
-          fontSize: '13px',
+          fontSize: '0.875rem',
         },
       },
     }
@@ -2034,6 +2060,55 @@ function ItemEffectEditor({ disabled, label, onChange, value, wide }) {
   )
 }
 
+function PlantNeedsEditor({ disabled, form, language, onChange }) {
+  const isThai = language === 'th'
+
+  function displayValue(factor, boundary) {
+    const value = form[`${factor.key}_${boundary}`]
+    if (value === '' || value == null) return ''
+    return Number(value) * (factor.scale ?? 1)
+  }
+
+  function updateValue(factor, boundary, value) {
+    onChange(`${factor.key}_${boundary}`, value === '' ? '' : Number(value) / (factor.scale ?? 1))
+  }
+
+  return (
+    <section className="admin-resource-custom-field admin-plant-needs-editor is-wide" aria-labelledby="admin-plant-needs-title">
+      <header className="admin-plant-needs-editor__heading">
+        <span><AppIcon name="plant" /></span>
+        <div>
+          <strong id="admin-plant-needs-title">{isThai ? 'ช่วงปัจจัยที่พืชต้องการ' : 'Plant requirement ranges'}</strong>
+          <small>{isThai ? 'กรอกค่าต่ำสุดและสูงสุดด้วยหน่วยเดียวกับที่แสดงในคู่มือพืช' : 'Enter minimum and maximum values using the same units shown in the plant guide.'}</small>
+        </div>
+        <em>{isThai ? 'หน่วยตามคู่มือพืช' : 'PLANT GUIDE UNITS'}</em>
+      </header>
+      <div className="admin-plant-needs-editor__grid">
+        {plantNeedDefinitions.map((factor) => {
+          const label = isThai ? factor.labelTh : factor.labelEn
+          return (
+            <fieldset key={factor.key}>
+              <legend><strong>{label}</strong><span>{factor.unit}</span></legend>
+              <div>
+                <label>
+                  <span>{isThai ? 'ค่าต่ำสุด' : 'Minimum'}</span>
+                  <input aria-label={`${label} ${isThai ? 'ค่าต่ำสุด' : 'minimum'} (${factor.unit})`} disabled={disabled} min={factor.min} max={factor.max} required step={factor.step ?? 1} type="number" value={displayValue(factor, 'min')} onChange={(event) => updateValue(factor, 'min', event.target.value)} />
+                </label>
+                <i aria-hidden="true">–</i>
+                <label>
+                  <span>{isThai ? 'ค่าสูงสุด' : 'Maximum'}</span>
+                  <input aria-label={`${label} ${isThai ? 'ค่าสูงสุด' : 'maximum'} (${factor.unit})`} disabled={disabled} min={factor.min} max={factor.max} required step={factor.step ?? 1} type="number" value={displayValue(factor, 'max')} onChange={(event) => updateValue(factor, 'max', event.target.value)} />
+                </label>
+              </div>
+            </fieldset>
+          )
+        })}
+      </div>
+      <p><AppIcon name="help" />{isThai ? 'ค่าน้ำจะแปลงเป็นสเกลภายในให้อัตโนมัติ เช่น 400–800 ml จะบันทึกเป็น 40–80 และแสดงในคู่มือเป็น 400–800 ml' : 'Water is converted to the internal scale automatically; 400–800 ml is stored as 40–80 and remains 400–800 ml in the guide.'}</p>
+    </section>
+  )
+}
+
 function ResourceEditor({ config, language = 'en', record, lookups, onClose, onSaved }) {
   const [initialForm] = useState(() => {
     if (config.id !== 'items') return { ...config.defaults, ...record }
@@ -2258,6 +2333,11 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
               const invalidLanguage = Boolean(languageValidation?.message)
               const fieldClassName = `${field.wide ? 'is-wide' : ''} ${invalidLanguage ? 'has-language-error' : ''}`.trim()
 
+              if (config.id === 'plants' && field.key === 'water_min') {
+                return <PlantNeedsEditor disabled={status !== 'idle'} form={form} key="plant-needs" language={language} onChange={updateField} />
+              }
+              if (config.id === 'plants' && plantNeedFieldKeys.has(field.key)) return null
+
               return (
               field.type === 'image-upload' ? (
                 <ImageUploadField
@@ -2362,7 +2442,7 @@ function ResourceEditor({ config, language = 'en', record, lookups, onClose, onS
                   wide={field.wide}
                 />
               ) : <label className={fieldClassName} data-language-invalid={invalidLanguage ? 'true' : undefined} key={field.key}>
-                {field.label}{fieldRequired(field) && <em>*</em>}
+                <span className="admin-field-label">{field.label}{fieldRequired(field) && <em aria-hidden="true">*</em>}</span>
                 {field.type === 'textarea' || field.type === 'json' ? (
                   <textarea aria-invalid={invalidLanguage} className={`${field.type === 'json' ? 'admin-code-field' : ''} ${invalidLanguage ? 'is-language-invalid' : ''}`.trim()} required={fieldRequired(field)} rows={field.type === 'json' ? 8 : 4} value={fieldValue(field)} onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))} />
                 ) : field.type === 'select' ? (
@@ -2646,13 +2726,14 @@ function adminResourceRequestOptions(resourceConfig, options = {}) {
   return (resourceConfig?.groupBy || resourceConfig?.groupByPlant) ? { ...options, perPage: 200 } : options
 }
 
-function ResourceView({ groupKey, language = 'en' }) {
+function ResourceView({ commentReportSummary = { total: 0, post: 0, simulator: 0 }, groupKey, language = 'en', onCommentReportsChange }) {
   const configs = resourceGroups[groupKey]
   const [activeResource, setActiveResource] = useState(configs[0].id)
   const [payload, setPayload] = useState(null)
   const [lookups, setLookups] = useState({})
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
+  const [reportFilter, setReportFilter] = useState('')
   const [trashed, setTrashed] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [appliedFilter, setAppliedFilter] = useState('')
@@ -2698,9 +2779,11 @@ function ResourceView({ groupKey, language = 'en' }) {
           key,
           name: (groupRelation === 'user' ? relation?.username : localizedAdminName(relation)) || fallbackRelation,
           detail: groupRelation === 'user' ? relation?.email : '',
+          reportCount: 0,
           records: [],
         })
       }
+      groups.get(key).reportCount += (record.reports ?? []).filter((report) => report.status === 'pending').length
       groups.get(key).records.push({ index, record })
     })
 
@@ -2782,7 +2865,7 @@ function ResourceView({ groupKey, language = 'en' }) {
       }
       refreshInFlightRef.current = true
       try {
-        const result = await getAdminResource(config.id, adminResourceRequestOptions(config, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }))
+        const result = await getAdminResource(config.id, adminResourceRequestOptions(config, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed, page: pagination?.current_page ?? 1 }))
         if (!cancelled) {
           setPayload(result)
           setLastUpdatedAt(new Date())
@@ -2801,7 +2884,7 @@ function ResourceView({ groupKey, language = 'en' }) {
       cancelled = true
       window.clearTimeout(refreshTimer)
     }
-  }, [appliedFilter, appliedSearch, config, editor, groupRelation, pagination?.current_page, selectedRecord, trashed])
+  }, [appliedFilter, appliedSearch, config, editor, groupRelation, pagination?.current_page, reportFilter, selectedRecord, trashed])
 
   async function chooseResource(resource) {
     setSelectedIds([])
@@ -2809,6 +2892,7 @@ function ResourceView({ groupKey, language = 'en' }) {
     setActiveResource(resource)
     setSearch('')
     setFilter('')
+    setReportFilter('')
     setAppliedSearch('')
     setAppliedFilter('')
     setTrashed('')
@@ -2846,7 +2930,7 @@ function ResourceView({ groupKey, language = 'en' }) {
     setError('')
     try {
       await generateAdminPlantSetup(plant.id)
-      await Promise.all([load(config.id, { search: appliedSearch, status: appliedFilter, trashed }), refreshPlantSetup()])
+      await Promise.all([load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed }), refreshPlantSetup()])
       await showAdminSuccess(language === 'th' ? 'สร้างชุดแนะนำแล้ว' : 'Recommended setup generated', language === 'th' ? 'เพิ่มกฎและรูปแบบที่ขาดเรียบร้อยแล้ว' : 'Missing rules and visual states were added.')
     } catch (setupError) {
       setError(setupError.message || (language === 'th' ? 'ไม่สามารถสร้างชุดแนะนำได้' : 'Unable to generate the recommended setup.'))
@@ -2876,13 +2960,38 @@ function ResourceView({ groupKey, language = 'en' }) {
       const updates = { [config.statusField]: field === config.statusField ? value : record[config.statusField] }
       if (config.extraStatusField) updates[config.extraStatusField] = field === config.extraStatusField ? value : record[config.extraStatusField]
       await saveAdminResource(config.id, { id: record.id, ...updates })
-      await load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 })
+      await load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed, page: pagination?.current_page ?? 1 })
+      if (config.reportFilter && ['hidden', 'suspended'].includes(value)) await onCommentReportsChange?.()
       setSelectedRecord((current) => current?.id === record.id ? { ...current, [field]: value } : current)
       await showAdminSuccess('Change applied')
       return true
     } catch (updateError) {
       setError(updateError.message || 'Unable to update this record.')
       return false
+    }
+  }
+
+  async function resolveReports(record) {
+    const count = pendingCommentReportCount(record)
+    if (!count) return
+    const confirmed = await confirmAdminAction({
+      title: language === 'th' ? 'ยืนยันว่าจัดการรายงานแล้ว?' : 'Mark reports as handled?',
+      text: language === 'th' ? `รายงานที่ค้างอยู่ ${count} รายการของความคิดเห็นนี้จะถูกนำออกจากไฮไลต์` : `${count} pending reports for this comment will be removed from the highlight.`,
+      confirmButtonText: language === 'th' ? 'จัดการแล้ว' : 'Mark handled',
+      icon: 'question',
+    })
+    if (!confirmed) return
+    setError('')
+    try {
+      await resolveAdminCommentReports(config.id, record.id)
+      await Promise.all([
+        load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed, page: pagination?.current_page ?? 1 }),
+        onCommentReportsChange?.(),
+      ])
+      setSelectedRecord(null)
+      await showAdminSuccess(language === 'th' ? 'จัดการรายงานแล้ว' : 'Reports handled')
+    } catch (resolveError) {
+      setError(resolveError.message || (language === 'th' ? 'ไม่สามารถจัดการรายงานได้' : 'Unable to resolve reports.'))
     }
   }
 
@@ -2899,7 +3008,7 @@ function ResourceView({ groupKey, language = 'en' }) {
     try {
       await deleteAdminResource(config.id, record.id)
       const [, lookupPayload] = await Promise.all([
-        load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }),
+        load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed, page: pagination?.current_page ?? 1 }),
         getAdminResourceLookups(),
       ])
       setLookups(lookupPayload.data ?? {})
@@ -2927,7 +3036,7 @@ function ResourceView({ groupKey, language = 'en' }) {
     try {
       await restoreAdminResource(config.id, record.id)
       const [, lookupPayload] = await Promise.all([
-        load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }),
+        load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed, page: pagination?.current_page ?? 1 }),
         getAdminResourceLookups(),
       ])
       setLookups(lookupPayload.data ?? {})
@@ -2957,7 +3066,7 @@ function ResourceView({ groupKey, language = 'en' }) {
       const failedIds = ids.filter((_, index) => results[index].status === 'rejected')
       setSelectedIds(failedIds)
       const [, lookupPayload] = await Promise.all([
-        load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page: pagination?.current_page ?? 1 }),
+        load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed, page: pagination?.current_page ?? 1 }),
         getAdminResourceLookups(),
       ])
       setLookups(lookupPayload.data ?? {})
@@ -2974,13 +3083,14 @@ function ResourceView({ groupKey, language = 'en' }) {
 
   function renderResourceRecord(record, index, grouped = false) {
     const cancelledSimulation = config.id === 'simulators' && record.status === 'cancelled'
+    const pendingReports = pendingCommentReportCount(record)
     return (
-      <tr className={`${grouped ? 'admin-plant-child-row' : ''} ${cancelledSimulation ? 'is-locked-record' : ''} ${record.deleted_at ? 'is-trashed' : ''} ${selectedIdSet.has(record.id) ? 'is-selected' : ''}`.trim()} key={record.id}>
+      <tr className={`${grouped ? 'admin-plant-child-row' : ''} ${cancelledSimulation ? 'is-locked-record' : ''} ${pendingReports ? 'is-pending-report' : ''} ${record.deleted_at ? 'is-trashed' : ''} ${selectedIdSet.has(record.id) ? 'is-selected' : ''}`.trim()} key={record.id}>
         {selectionEnabled && <td className="admin-selection-cell"><AdminSelectionCheckbox checked={selectedIdSet.has(record.id)} disabled={Boolean(record.deleted_at) || bulkDeleting} label={language === 'th' ? `เลือกรายการที่ ${record.id}` : `Select record ${record.id}`} onChange={(checked) => toggleRecord(record.id, checked)} /></td>}
         <td className="admin-index-cell">{pagination ? (pagination.current_page - 1) * pagination.per_page + index + 1 : index + 1}</td>
         {visibleColumns.map((column) => <td key={column.label}><span className="admin-table-value">{column.render(record) ?? '—'}</span></td>)}
         {!config.readOnly && <td>{record.deleted_at ? <StatusBadge status="archived" /> : config.viewOnly ? <AdminReadOnlyRecordState config={config} language={language} record={record} /> : cancelledSimulation ? <div className="admin-locked-status"><StatusBadge status="cancelled" /><small>{language === 'th' ? 'ดูเท่านั้น' : 'View only'}</small></div> : config.moderation ? <div className="admin-moderation-controls"><select aria-label={`Change ${config.statusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.statusField]} onChange={(event) => updateModeration(record, config.statusField, event.target.value)}>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>{config.extraStatusField && <select aria-label={`Change ${config.extraStatusField.replaceAll('_', ' ')} for record #${record.id}`} disabled={selectedIds.length > 0 || bulkDeleting} value={record[config.extraStatusField]} onChange={(event) => updateModeration(record, config.extraStatusField, event.target.value)}>{config.extraStatusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</div> : <StatusBadge status={record.is_active === false ? 'disabled' : 'active'} />}</td>}
-        <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{config.previewType && <button className="is-preview" type="button" onClick={() => setPreviewRecord(record)}><AppIcon name={config.icon} />{language === 'th' ? 'พรีวิว' : 'Preview'}</button>}<button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />{language === 'th' ? 'เปิดดู' : 'View'}</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
+        <td><div className="admin-row-actions">{selectedIds.length === 0 && <>{pendingReports > 0 && <button className="is-resolve-report" type="button" aria-label={language === 'th' ? `ทำเครื่องหมายรายงาน ${pendingReports} รายการว่าจัดการแล้ว` : `Mark ${pendingReports} reports as handled`} onClick={() => resolveReports(record)}><AppIcon name="check" />{language === 'th' ? 'จัดการแล้ว' : 'Handled'}</button>}{config.previewType && <button className="is-preview" type="button" onClick={() => setPreviewRecord(record)}><AppIcon name={config.icon} />{language === 'th' ? 'พรีวิว' : 'Preview'}</button>}<button className="is-view" type="button" onClick={() => setSelectedRecord(record)}><AppIcon name="eye" />{language === 'th' ? 'เปิดดู' : 'View'}</button>{!record.deleted_at && !config.moderation && !config.readOnly && <button className="is-edit" type="button" onClick={() => setEditor(record)}><AppIcon name="settings" />Edit</button>}{!record.deleted_at && !config.readOnly && !config.noDelete && <button className="is-danger" type="button" aria-label={`Move record #${record.id} to trash`} onClick={() => removeRecord(record)}><AppIcon name="trash" /></button>}{record.deleted_at && <button className="is-restore" type="button" onClick={() => restoreRecord(record)}><AppIcon name="history" />Restore</button>}</>}</div></td>
       </tr>
     )
   }
@@ -2988,16 +3098,20 @@ function ResourceView({ groupKey, language = 'en' }) {
   return (
     <div className="admin-view admin-resource-view">
       <div className="admin-subtable-tabs" role="tablist" aria-label="Database tables">
-        {configs.map((item) => <button className={activeResource === item.id ? 'is-active' : ''} type="button" role="tab" aria-selected={activeResource === item.id} key={item.id} onClick={() => chooseResource(item.id)}><AppIcon name={item.icon} /><span>{item.label}</span></button>)}
+        {configs.map((item) => {
+          const pending = item.id === 'comments' ? commentReportSummary.post : item.id === 'simulator-comments' ? commentReportSummary.simulator : 0
+          return <button className={`${activeResource === item.id ? 'is-active' : ''} ${pending ? 'has-pending-reports' : ''}`.trim()} type="button" role="tab" aria-selected={activeResource === item.id} key={item.id} onClick={() => chooseResource(item.id)}><AppIcon name={item.icon} /><span>{item.label}</span>{pending > 0 && <em className="admin-subtable-report-badge" aria-label={language === 'th' ? `มี ${pending} รายงานที่ยังไม่จัดการ` : `${pending} pending reports`}>{pending > 99 ? '99+' : pending}</em>}</button>
+        })}
       </div>
 
       {groupKey === 'plants' && <PlantSetupReminder language={language} plants={setupPlants} selectedPlantId={setupPlantId} onSelectPlant={setSetupPlantId} onOpenStep={openPlantSetupStep} />}
 
       {selectedIds.length === 0 ? <div className="admin-content-toolbar">
-        <form onSubmit={(event) => { event.preventDefault(); setSelectedIds([]); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed, page: 1 }) }}>
+        <form onSubmit={(event) => { event.preventDefault(); setSelectedIds([]); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, reports: reportFilter, trashed, page: 1 }) }}>
           <input aria-label={`Search ${config.label}`} placeholder="Search records" value={search} onChange={(event) => setSearch(event.target.value)} />
-          {config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => { const value = event.target.value; setSelectedIds([]); setFilter(value); setAppliedSearch(search); setAppliedFilter(value); load(config.id, { search, status: value, trashed, page: 1 }) }}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}
-          {!config.readOnly && !config.noTrashFilter && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setSelectedIds([]); setTrashed(value); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}
+          {config.statusOptions && <select aria-label={`Filter ${config.label} by status`} value={filter} onChange={(event) => { const value = event.target.value; setSelectedIds([]); setFilter(value); setAppliedSearch(search); setAppliedFilter(value); load(config.id, { search, status: value, reports: reportFilter, trashed, page: 1 }) }}><option value="">All status</option>{config.statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>}
+          {config.reportFilter && <select aria-label={language === 'th' ? 'กรองตามการรายงานความคิดเห็น' : 'Filter by comment reports'} value={reportFilter} onChange={(event) => { const value = event.target.value; setSelectedIds([]); setReportFilter(value); load(config.id, { search: appliedSearch, status: appliedFilter, reports: value, trashed, page: 1 }) }}><option value="">{language === 'th' ? 'การรายงานทั้งหมด' : 'All reports'}</option><option value="reported">{language === 'th' ? 'มีรายงาน' : 'Reported'}</option><option value="unreported">{language === 'th' ? 'ไม่มีรายงาน' : 'Not reported'}</option></select>}
+          {!config.readOnly && !config.noTrashFilter && <select aria-label={`Filter ${config.label} by trash status`} value={trashed} onChange={(event) => { const value = event.target.value; setSelectedIds([]); setTrashed(value); setAppliedSearch(search); setAppliedFilter(filter); load(config.id, { search, status: filter, reports: reportFilter, trashed: value, page: 1 }) }}><option value="">Active records</option><option value="only">Trash</option><option value="with">Active + trash</option></select>}
           <button className="admin-search-submit" type="submit" aria-label={`Search ${config.label}`} title="Search"><AppIcon name="search" /></button>
         </form>
         {!config.moderation && !config.readOnly && !config.noCreate && <button className="admin-primary-button" type="button" onClick={() => setEditor({ ...config.defaults })}><AppIcon name="plus" />{config.createLabel}</button>}
@@ -3018,12 +3132,12 @@ function ResourceView({ groupKey, language = 'en' }) {
               const selectedCount = group.records.filter(({ record }) => selectedIdSet.has(record.id)).length
               return (
                 <Fragment key={group.key}>
-                  <tr className={`admin-plant-group-row ${expanded ? 'is-expanded' : ''}`}>
+                  <tr className={`admin-plant-group-row ${expanded ? 'is-expanded' : ''} ${group.reportCount > 0 ? 'is-reported' : ''}`}>
                     <td colSpan={tableColumnCount}>
                       <button aria-expanded={expanded} type="button" onClick={() => togglePlantGroup(group.key)}>
                         <span className="admin-plant-group-row__icon"><AppIcon name={groupRelation === 'user' ? 'groups' : groupRelation === 'pest' ? 'pest' : 'plant'} /></span>
-                        <span className="admin-plant-group-row__title"><strong>{group.name}</strong><small>{group.detail || `${group.records.length} ${adminText(language, config.label)}`}</small>{group.detail && <small>{group.records.length} {adminText(language, config.label)}</small>}</span>
-                        <span className="admin-plant-group-row__meta">{selectedCount > 0 && <b>{language === 'th' ? `เลือก ${selectedCount}` : `${selectedCount} selected`}</b>}{cancelledCount > 0 && <em className="is-locked">{cancelledCount} {language === 'th' ? 'ยกเลิก' : 'cancelled'}</em>}<em>{availableCount} {language === 'th' ? 'รายการ' : 'records'}</em></span>
+                        <span className="admin-plant-group-row__title"><strong>{group.name}{group.reportCount > 0 && <i className="admin-comment-report-dot" role="img" aria-label={language === 'th' ? `มีรายงานความคิดเห็น ${group.reportCount} รายการ` : `${group.reportCount} comment reports`} />}</strong><small>{group.detail || `${group.records.length} ${adminText(language, config.label)}`}</small>{group.detail && <small>{group.records.length} {adminText(language, config.label)}</small>}</span>
+                        <span className="admin-plant-group-row__meta">{group.reportCount > 0 && <em className="is-reported">{group.reportCount} {language === 'th' ? 'รายงาน' : 'reports'}</em>}{selectedCount > 0 && <b>{language === 'th' ? `เลือก ${selectedCount}` : `${selectedCount} selected`}</b>}{cancelledCount > 0 && <em className="is-locked">{cancelledCount} {language === 'th' ? 'ยกเลิก' : 'cancelled'}</em>}<em>{availableCount} {language === 'th' ? 'รายการ' : 'records'}</em></span>
                         <AppIcon className="admin-plant-group-row__chevron" name="arrowForward" />
                       </button>
                     </td>
@@ -3037,10 +3151,10 @@ function ResourceView({ groupKey, language = 'en' }) {
         {!loading && !records.length && <div className="admin-empty"><AppIcon name={config.icon} /><strong>No records found</strong><span>This database table does not have matching records yet.</span></div>}
       </section>
 
-      {pagination && <AdminPagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={(page) => { setSelectedIds([]); load(config.id, { search: appliedSearch, status: appliedFilter, trashed, page }) }} />}
+      {pagination && <AdminPagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={(page) => { setSelectedIds([]); load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed, page }) }} />}
       {selectedRecord && <ResourceDetailsDrawer config={config} language={language} record={selectedRecord} onClose={() => setSelectedRecord(null)} onEdit={() => { setEditor(selectedRecord); setSelectedRecord(null) }} onDelete={() => removeRecord(selectedRecord)} onRestore={() => restoreRecord(selectedRecord)} onModerate={(field, value) => updateModeration(selectedRecord, field, value)} />}
       {previewRecord && <AdminAssetPreview config={config} language={language} lookups={lookups} record={previewRecord} onClose={() => setPreviewRecord(null)} />}
-      {editor && <ResourceEditor config={config} language={language} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async (savedRecord) => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, trashed }), groupKey === 'plants' ? refreshPlantSetup(savedRecord) : Promise.resolve()]); setLookups(lookupPayload.data ?? {}) }} />}
+      {editor && <ResourceEditor config={config} language={language} record={editor} lookups={lookups} onClose={() => setEditor(null)} onSaved={async (savedRecord) => { setEditor(null); const [lookupPayload] = await Promise.all([getAdminResourceLookups(), load(config.id, { search: appliedSearch, status: appliedFilter, reports: reportFilter, trashed }), groupKey === 'plants' ? refreshPlantSetup(savedRecord) : Promise.resolve()]); setLookups(lookupPayload.data ?? {}) }} />}
     </div>
   )
 }
@@ -3072,6 +3186,7 @@ export function AdminPage({ user, onLogout }) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
   const [refreshState, setRefreshState] = useState('connecting')
   const [unseenReportCount, setUnseenReportCount] = useState(0)
+  const [commentReportSummary, setCommentReportSummary] = useState({ total: 0, post: 0, simulator: 0 })
   const contentFiltersRef = useRef({})
   const userFiltersRef = useRef({})
   const usersPayloadRef = useRef(null)
@@ -3180,11 +3295,23 @@ export function AdminPage({ user, onLogout }) {
     try { const payload = await getAdminIssueReportSummary(); setUnseenReportCount(Number(payload.data?.unseen ?? 0)) } catch { /* Keep navigation usable if support summary is temporarily unavailable. */ }
   }, [])
 
+  const loadCommentReportSummary = useCallback(async () => {
+    try {
+      const payload = await getAdminCommentReportSummary()
+      setCommentReportSummary({
+        total: Number(payload.data?.total ?? 0),
+        post: Number(payload.data?.post ?? 0),
+        simulator: Number(payload.data?.simulator ?? 0),
+      })
+    } catch { /* Keep moderation navigation usable if the report summary is temporarily unavailable. */ }
+  }, [])
+
   useEffect(() => {
-    const initialTimer = window.setTimeout(loadReportSummary, 0)
-    const timer = window.setInterval(() => { if (document.visibilityState !== 'hidden') loadReportSummary() }, 15000)
+    const loadSummaries = () => Promise.all([loadReportSummary(), loadCommentReportSummary()])
+    const initialTimer = window.setTimeout(loadSummaries, 0)
+    const timer = window.setInterval(() => { if (document.visibilityState !== 'hidden') loadSummaries() }, 15000)
     return () => { window.clearTimeout(initialTimer); window.clearInterval(timer) }
-  }, [loadReportSummary])
+  }, [loadCommentReportSummary, loadReportSummary])
 
   function openSection(nextSection) {
     if (!validAdminSections.has(nextSection)) return
@@ -3276,7 +3403,13 @@ export function AdminPage({ user, onLogout }) {
           {navigationGroups.map((group) => (
             <div className="admin-nav-group" key={group.label}>
               <small>{adminText(language, group.label)}</small>
-              {group.items.filter((item) => !hiddenAdminNavigationItems.has(item.id)).map((item) => <button className={section === item.id ? 'is-active' : ''} type="button" key={item.id} title={preferences.collapsed ? adminText(language, item.label) : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{adminText(language, item.label)}</b>{item.id === 'reports' && unseenReportCount > 0 ? <em className="admin-nav-badge">{unseenReportCount > 99 ? '99+' : unseenReportCount}</em> : <span />}</button>)}
+              {group.items.filter((item) => !hiddenAdminNavigationItems.has(item.id)).map((item) => {
+                const badgeCount = item.id === 'reports' ? unseenReportCount : item.id === 'community' ? commentReportSummary.total : 0
+                const badgeLabel = item.id === 'community'
+                  ? (language === 'th' ? `มีรายงานความคิดเห็นที่ยังไม่จัดการ ${badgeCount} รายการ` : `${badgeCount} pending comment reports`)
+                  : (language === 'th' ? `มีรายงานปัญหาที่ยังไม่อ่าน ${badgeCount} รายการ` : `${badgeCount} unseen problem reports`)
+                return <button className={`${section === item.id ? 'is-active' : ''} ${badgeCount > 0 ? 'has-pending-reports' : ''}`.trim()} type="button" key={item.id} title={preferences.collapsed ? `${adminText(language, item.label)}${badgeCount ? ` · ${badgeLabel}` : ''}` : undefined} onClick={() => openSection(item.id)}><AppIcon name={item.icon} /><b>{adminText(language, item.label)}</b>{badgeCount > 0 ? <em className="admin-nav-badge" aria-label={badgeLabel}>{badgeCount > 99 ? '99+' : badgeCount}</em> : <span />}</button>
+              })}
             </div>
           ))}
         </nav>
@@ -3302,7 +3435,7 @@ export function AdminPage({ user, onLogout }) {
           {status === 'ready' && section === 'contents' && <ContentsView contents={contents} language={language} onRefresh={loadContents} />}
           {status === 'ready' && section === 'users' && <UsersView currentUser={user} usersPayload={users} onRefresh={loadUsers} />}
           {status === 'ready' && section === 'reports' && <IssueReportsAdminView language={language} onSeenChange={loadReportSummary} />}
-          {status === 'ready' && resourceGroups[section] && <ResourceView key={section} groupKey={section} language={language} />}
+          {status === 'ready' && resourceGroups[section] && <ResourceView key={section} commentReportSummary={commentReportSummary} groupKey={section} language={language} onCommentReportsChange={loadCommentReportSummary} />}
         </div>
       </section>
     </main>

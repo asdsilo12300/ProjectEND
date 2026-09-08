@@ -77,7 +77,7 @@ export function PlantingSpot({ groundObject, label = 'Planting area', plantSelec
         </group>
       )}
       <Html position={[0, 0.08, 1.08]} center zIndexRange={[8, 0]}>
-        <div className={`pointer-events-none inline-flex select-none items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.09em] shadow-[0_7px_18px_rgba(0,0,0,.36)] backdrop-blur-sm ${plantSelected ? 'border-lime-100/18 bg-[#101511]/78 text-lime-100/75' : 'border-lime-100/30 bg-[#101511]/92 text-lime-50'}`}>
+        <div className={`pointer-events-none inline-flex select-none items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-sm font-black uppercase tracking-[0.09em] shadow-[0_7px_18px_rgba(0,0,0,.36)] backdrop-blur-sm ${plantSelected ? 'border-lime-100/18 bg-[#101511]/78 text-lime-100/75' : 'border-lime-100/30 bg-[#101511]/92 text-lime-50'}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${plantSelected ? 'bg-[#9bcf82]/65' : 'bg-[#c6ff9f] shadow-[0_0_7px_rgba(198,255,159,.65)]'}`} aria-hidden="true" />
           {label}
         </div>

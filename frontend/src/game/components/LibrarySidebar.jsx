@@ -168,6 +168,7 @@ function localizedPlantName(item, language) {
 }
 
 function plantStatusLabel(item, language) {
+  if (item.unavailable) return language === 'th' ? 'ปิดใช้งานแล้ว' : 'Unavailable'
   if (item.current) return language === 'th' ? 'กำลังปลูก' : 'Growing'
   if (item.planted) return language === 'th' ? 'ปลูกแล้ว' : 'Planted'
   if (item.readOnly) return language === 'th' ? 'ยังไม่ได้ปลูก' : 'Not planted'
@@ -178,7 +179,7 @@ function PlantLibraryCard({ item, itemLocked, itemName, language, lockLabel, onA
   const statusLabel = plantStatusLabel(item, language)
   return (
     <div
-      className={`lab-plant-card group relative flex min-w-0 items-center rounded-md border transition ${selected && !itemLocked ? 'border-lime-200/45 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.16)]' : 'border-lime-100/10 bg-white/[0.045]'} ${itemLocked ? 'opacity-70' : 'hover:border-lime-200/35 hover:bg-white/[0.075]'}`}
+      className={`lab-plant-card group relative flex min-w-0 items-center rounded-md border transition ${selected && !itemLocked ? 'border-lime-200/45 bg-[#9bcf82]/12 shadow-[inset_0_0_0_1px_rgba(155,207,130,.16)]' : 'border-lime-100/10 bg-white/[0.045]'} ${item.unavailable ? 'grayscale opacity-45' : itemLocked ? 'opacity-70' : 'hover:border-lime-200/35 hover:bg-white/[0.075]'}`}
       data-plant-current={item.current ? 'true' : 'false'}
       data-tour="lab-plant-card"
     >
@@ -201,16 +202,17 @@ function PlantLibraryCard({ item, itemLocked, itemName, language, lockLabel, onA
           <LibraryThumb item={item} />
         </span>
         <span className="lab-plant-card__copy min-w-0 flex-1">
-          <strong className="block truncate text-[12px] text-lime-50" data-i18n-skip="true">{itemName}</strong>
-          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-400" aria-label={statusLabel}>
-            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : item.readOnly ? 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
+          <strong className="block truncate text-sm text-lime-50" data-i18n-skip="true">{itemName}</strong>
+          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-white" aria-label={statusLabel}>
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.unavailable ? 'bg-slate-500' : item.current ? 'bg-[#9bcf82] shadow-[0_0_0_3px_rgba(155,207,130,.16)]' : item.planted ? 'bg-sky-300 shadow-[0_0_0_3px_rgba(125,211,252,.12)]' : item.readOnly ? 'bg-rose-400 shadow-[0_0_0_3px_rgba(251,113,133,.12)]' : 'bg-slate-500 shadow-[0_0_0_3px_rgba(100,116,139,.12)]'}`} />
             <span className="shrink-0">{statusLabel}</span>
           </span>
         </span>
       </button>
       <button
         aria-label={language === 'th' ? `เปิดคู่มือพืช ${itemName}` : `Open ${itemName} plant guide`}
-        className="lab-plant-card__guide mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-lime-100/12 bg-black/20 text-slate-400 transition hover:border-emerald-200/30 hover:bg-emerald-300/10 hover:text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+        className="lab-plant-card__guide mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-lime-100/12 bg-black/20 text-slate-400 transition hover:border-emerald-200/30 hover:bg-emerald-300/10 hover:text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={item.unavailable}
         onClick={() => onShowPlantInfo?.(item)}
         data-tour="lab-plant-guide-button"
         title={language === 'th' ? `คู่มือพืช: ${itemName}` : `Plant guide: ${itemName}`}
@@ -316,7 +318,7 @@ function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, lan
       )}
       {temporaryEffectActive && (
         <span
-          className="absolute right-2 top-2 inline-flex min-w-[42px] items-center justify-center gap-1 rounded-full border border-cyan-100/25 bg-[#09242a]/95 px-1.5 py-1 text-[10px] font-black tabular-nums text-cyan-100 shadow-[0_4px_12px_rgba(0,0,0,.4)]"
+          className="absolute right-2 top-2 inline-flex min-w-[42px] items-center justify-center gap-1 rounded-full border border-cyan-100/25 bg-[#09242a]/95 px-1.5 py-1 text-sm font-black tabular-nums text-cyan-100 shadow-[0_4px_12px_rgba(0,0,0,.4)]"
           aria-label={lockLabel}
           role="timer"
         >
@@ -326,16 +328,16 @@ function ItemLibraryCard({ activeModifiers, currentTime, item, inventoryMap, lan
       )}
       <strong className="mt-1.5 block truncate text-xs text-lime-50">{itemName}</strong>
       {(!isBasicPlantSupply || mockItems || isZeroQuantity) && (
-        <span className="block truncate text-xs text-slate-400">{mockItems ? (language === 'th' ? 'เร็ว ๆ นี้' : 'Coming soon') : isZeroQuantity ? (language === 'th' ? 'สินค้าหมด' : 'Out of stock') : itemDetail}</span>
+        <span className="block truncate text-xs text-white">{mockItems ? (language === 'th' ? 'เร็ว ๆ นี้' : 'Coming soon') : isZeroQuantity ? (language === 'th' ? 'สินค้าหมด' : 'Out of stock') : itemDetail}</span>
       )}
       {!isBasicPlantSupply && !mockItems && (successText || failText) && (
         <span className="pointer-events-none absolute left-1.5 right-1.5 top-[54px] z-30 rounded-md border border-lime-100/15 bg-[#07100b]/95 p-2 text-xs leading-relaxed text-slate-200 opacity-0 shadow-[0_10px_22px_rgba(0,0,0,.42)] transition group-hover:opacity-100 group-focus-visible:opacity-100">
           <span className="block font-black text-lime-100">{successText}</span>
-          <span className="block text-slate-400">{failText}</span>
+          <span className="block text-white">{failText}</span>
         </span>
       )}
       {mockItems && (
-        <span className="mt-1 block rounded border border-lime-100/10 bg-black/25 px-1.5 py-0.5 text-xs font-semibold text-slate-400">
+        <span className="mt-1 block rounded border border-lime-100/10 bg-black/25 px-1.5 py-0.5 text-xs font-semibold text-white">
           {language === 'th' ? 'เร็ว ๆ นี้' : 'Coming soon'}
         </span>
       )}
@@ -377,7 +379,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
         {!isDocked && <div className="flex shrink-0 items-center gap-3 border-b border-lime-100/10 px-3 py-3">
           <span className="min-w-0 flex-1">
             <strong className="block text-sm text-lime-50">{language === 'th' ? 'อุปกรณ์ห้องทดลอง' : 'Lab assets'}</strong>
-            <span className="text-xs text-slate-400">{readOnly
+            <span className="text-xs text-white">{readOnly
               ? (language === 'th' ? 'ดูพืชที่ปลูกหรือเลือกไอเทมแกล้งเพื่อน' : 'view planted species or choose a prank')
               : (language === 'th' ? 'จัดการพืชที่ปลูกหรือเลือกวิธีดูแล' : 'manage planted species or choose a treatment')}</span>
           </span>
@@ -410,11 +412,27 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
           const visibleItems = items
           const groupedItems = section === 'Items' ? buildItemGroups(visibleItems, readOnly ? [] : itemTypes) : []
           const selectedGroup = groupedItems.find((group) => group.id === effectiveItemGroup) ?? groupedItems[0]
+          const plantGroups = section === 'Plants'
+            ? [
+                {
+                  id: 'planted',
+                  label: language === 'th' ? 'ปลูกแล้ว' : 'Planted',
+                  items: visibleItems
+                    .filter((item) => item.current || item.planted)
+                    .sort((left, right) => Number(Boolean(right.current)) - Number(Boolean(left.current))),
+                },
+                {
+                  id: 'unplanted',
+                  label: language === 'th' ? 'ยังไม่ได้ปลูก' : 'Not planted',
+                  items: visibleItems.filter((item) => !item.current && !item.planted),
+                },
+              ].filter((group) => group.items.length > 0)
+            : []
 
           return (
             <section className="lab-library-section mb-2 min-w-0 max-w-full" data-section={section.toLowerCase()} data-tour={section === 'Plants' ? 'lab-plants' : 'lab-items'} key={section}>
               <button
-                className="lab-library-section__toggle flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-slate-200 transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+                className="lab-library-section__toggle flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-white transition hover:bg-white/[0.06] hover:text-lime-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
                 type="button"
                 aria-expanded={expanded}
                 onClick={() => onToggle(section)}
@@ -434,7 +452,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                   {!loading && visibleItems.length === 0 && (
                     <div className={`${section === 'Items' ? 'col-span-2' : ''} rounded-md border border-dashed border-lime-100/15 bg-[#101511]/70 px-3 py-3 text-center`}>
                       <strong className="block text-xs text-lime-50">{language === 'th' ? `ยังไม่มี${section === 'Plants' ? 'พืช' : 'เครื่องมือ'}ในฐานข้อมูล` : `No ${section.toLowerCase()} in database`}</strong>
-                      <span className="mt-0.5 block text-xs leading-relaxed text-slate-400">{language === 'th' ? 'เพิ่มข้อมูลในฐานข้อมูลเพื่อเปิดใช้งานส่วนนี้' : 'Run the seeder or add records to enable this section.'}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-white">{language === 'th' ? 'เพิ่มข้อมูลในฐานข้อมูลเพื่อเปิดใช้งานส่วนนี้' : 'Run the seeder or add records to enable this section.'}</span>
                     </div>
                   )}
                   {!loading && section === 'Items' && groupedItems.length > 0 && (
@@ -450,7 +468,7 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                           title={`${group.label[language]} — ${group.detail[language]}`}
                         >
                           <ItemGroupIcon className={`h-4 w-4 ${selectedGroup?.id === group.id ? group.iconClass.split(' ').at(-1) : ''}`} icon={group.icon} />
-                          <span className="absolute right-1 top-1 min-w-4 rounded-full bg-black/35 px-1 py-0.5 text-center text-[9px] font-black leading-none">{group.items.length}</span>
+                          <span className="absolute right-1 top-1 min-w-4 rounded-full bg-black/35 px-1 py-0.5 text-center text-sm font-black leading-none">{group.items.length}</span>
                         </button>
                       ))}
                     </nav>
@@ -462,16 +480,16 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                           <ItemGroupIcon className="h-3.5 w-3.5" icon={selectedGroup.icon} />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <strong className="block text-[12px] font-extrabold leading-tight text-lime-50">{selectedGroup.label[language]}</strong>
-                          <span className="mt-0.5 block text-[11px] leading-tight text-slate-400">{selectedGroup.detail[language]}</span>
+                          <strong className="block text-sm font-extrabold leading-tight text-lime-50">{selectedGroup.label[language]}</strong>
+                          <span className="mt-0.5 block text-sm leading-tight text-white">{selectedGroup.detail[language]}</span>
                         </span>
-                        <span className="rounded-full border border-white/10 bg-black/20 px-1.5 py-0.5 text-[10px] font-bold text-slate-300" aria-label={language === 'th' ? `${selectedGroup.items.length} ไอเทม` : `${selectedGroup.items.length} items`}>
+                        <span className="rounded-full border border-white/10 bg-black/20 px-1.5 py-0.5 text-sm font-bold text-white" aria-label={language === 'th' ? `${selectedGroup.items.length} ไอเทม` : `${selectedGroup.items.length} items`}>
                           {selectedGroup.items.length}
                         </span>
                       </header>
                       <div className="grid min-w-0 max-w-full grid-cols-2 gap-1.5">
                         {selectedGroup.items.length === 0 && (
-                          <div className="col-span-2 rounded-md border border-dashed border-white/10 bg-black/15 px-2 py-3 text-center text-[11px] leading-relaxed text-slate-400">
+                          <div className="col-span-2 rounded-md border border-dashed border-white/10 bg-black/15 px-2 py-3 text-center text-sm leading-relaxed text-white">
                             {language === 'th' ? 'ประเภทนี้ยังไม่มีไอเทม แอดมินสามารถเพิ่มไอเทมและเลือกประเภทนี้ได้' : 'This category has no items yet. Add an item and select this category in Admin.'}
                           </div>
                         )}
@@ -498,31 +516,45 @@ export function LibrarySidebar({ activeEvents = [], activeModifiers = [], busy =
                       </div>
                     </section>
                   )}
-                  {!loading && section === 'Plants' && visibleItems.map((item) => {
-                    const itemName = localizedPlantName(item, language)
-                    const friendPlantUnavailable = readOnly && !item.planted
-                    const itemLocked = busy || friendPlantUnavailable
-                    const lockLabel = friendPlantUnavailable
-                      ? (language === 'th' ? 'เพื่อนคนนี้ยังไม่ได้ปลูกพืชชนิดนี้' : 'This friend has not planted this species')
-                      : busy
-                        ? (language === 'th' ? 'กำลังบันทึกพืชปัจจุบัน' : 'Saving the current plant')
-                        : undefined
+                  {!loading && section === 'Plants' && plantGroups.map((group) => (
+                    <section className="lab-plant-group grid gap-1.5" data-plant-group={group.id} key={group.id}>
+                      <header className="lab-plant-group__heading flex items-center gap-2 px-1 py-1 text-white">
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${group.id === 'planted' ? 'bg-lime-300' : 'bg-slate-400'}`} />
+                        <strong className="flex-1 text-sm font-black">{group.label}</strong>
+                        <span className="rounded-full border border-white/15 bg-white/[0.07] px-2 py-0.5 text-sm font-black">{group.items.length}</span>
+                      </header>
+                      <div className="grid gap-1.5">
+                        {group.items.map((item) => {
+                          const itemName = localizedPlantName(item, language)
+                          const friendPlantUnavailable = readOnly && !item.planted
+                          const plantUnavailable = Boolean(item.unavailable)
+                          const itemLocked = busy || friendPlantUnavailable || plantUnavailable
+                          const lockLabel = plantUnavailable
+                            ? (language === 'th' ? 'พืชชนิดนี้ถูกปิดใช้งานโดยผู้ดูแล' : 'This plant was disabled by an administrator')
+                            : friendPlantUnavailable
+                            ? (language === 'th' ? 'เพื่อนคนนี้ยังไม่ได้ปลูกพืชชนิดนี้' : 'This friend has not planted this species')
+                            : busy
+                              ? (language === 'th' ? 'กำลังบันทึกพืชปัจจุบัน' : 'Saving the current plant')
+                              : undefined
 
-                    return (
-                      <PlantLibraryCard
-                        item={{ ...item, readOnly }}
-                        itemLocked={itemLocked}
-                        itemName={itemName}
-                        language={language}
-                        key={item.id}
-                        lockLabel={lockLabel}
-                        onApply={onApply}
-                        onShowPlantInfo={onShowPlantInfo}
-                        selected={Boolean(item.current)}
-                        setDrawerOpen={setDrawerOpen}
-                      />
-                    )
-                  })}
+                          return (
+                            <PlantLibraryCard
+                              item={{ ...item, readOnly }}
+                              itemLocked={itemLocked}
+                              itemName={itemName}
+                              language={language}
+                              key={item.id}
+                              lockLabel={lockLabel}
+                              onApply={onApply}
+                              onShowPlantInfo={onShowPlantInfo}
+                              selected={Boolean(item.current)}
+                              setDrawerOpen={setDrawerOpen}
+                            />
+                          )
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               )}
             </section>

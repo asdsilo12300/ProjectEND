@@ -59,7 +59,7 @@
 .onboarding-eyebrow {
   display: block;
   color: #89dda4;
-  font-size: 11px;
+  font-size: 0.875rem;
   font-weight: 900;
   letter-spacing: 0.16em;
   line-height: 1.4;
@@ -76,7 +76,7 @@
   border-radius: 10px;
   padding: 0 15px;
   color: #d8e7d3;
-  font-size: 13px;
+  font-size: 0.875rem;
   font-weight: 850;
   line-height: 1.2;
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
@@ -183,7 +183,7 @@
   background: rgba(7, 13, 9, 0.84);
   padding: 6px 9px;
   color: #dff1d8;
-  font-size: 10px;
+  font-size: 0.875rem;
   font-weight: 800;
   backdrop-filter: blur(9px);
 }
@@ -236,7 +236,7 @@
   background: rgba(16, 29, 19, 0.94);
   padding: 8px 12px;
   color: #bfe9ac;
-  font-size: 11px;
+  font-size: 0.875rem;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
@@ -284,7 +284,7 @@
   background: rgba(255, 255, 255, 0.03);
   padding: 8px 10px;
   color: #b6c7b1;
-  font-size: 11px;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -304,7 +304,7 @@
   display: block;
   margin-top: 14px;
   color: #6f826d;
-  font-size: 11px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -351,7 +351,7 @@
 .help-center__header small {
   display: block;
   color: #7f9a7b;
-  font-size: 9px;
+  font-size: 0.875rem;
   font-weight: 900;
   letter-spacing: 0.17em;
 }
@@ -407,7 +407,7 @@
 .help-center__navigation > p {
   padding: 0 9px 10px;
   color: #647961;
-  font-size: 9px;
+  font-size: 0.875rem;
   font-weight: 900;
   letter-spacing: 0.16em;
 }
@@ -468,7 +468,7 @@
 .help-center__navigation strong {
   overflow: hidden;
   color: #cbdac6;
-  font-size: 12px;
+  font-size: 0.875rem;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -481,7 +481,7 @@
 .help-center__navigation small {
   margin-top: 3px;
   color: #657663;
-  font-size: 10px;
+  font-size: 0.875rem;
 }
 
 .help-center__complete {
@@ -516,7 +516,7 @@
 .help-center__intro p {
   margin-top: 12px;
   color: #9daf99;
-  font-size: 13px;
+  font-size: 0.875rem;
   line-height: 1.7;
 }
 
@@ -546,7 +546,7 @@
 .help-center__steps header small {
   display: block;
   color: #6f866b;
-  font-size: 9px;
+  font-size: 0.875rem;
   font-weight: 900;
   letter-spacing: 0.15em;
 }
@@ -554,7 +554,7 @@
 .help-center__steps header h4 {
   margin-top: 3px;
   color: #dcebd7;
-  font-size: 13px;
+  font-size: 0.875rem;
   font-weight: 800;
 }
 
@@ -564,7 +564,7 @@
   background: rgba(140, 207, 109, 0.1);
   padding: 6px 9px;
   color: #9bd281;
-  font-size: 10px;
+  font-size: 0.875rem;
   font-weight: 800;
 }
 
@@ -588,7 +588,7 @@
 
 .help-center__step-number {
   color: #61715f;
-  font-size: 10px;
+  font-size: 0.875rem;
   font-weight: 900;
   letter-spacing: 0.08em;
 }
@@ -615,14 +615,14 @@
 
 .help-center__steps li strong {
   color: #dbe9d6;
-  font-size: 12px;
+  font-size: 0.875rem;
   font-weight: 800;
 }
 
 .help-center__steps li small {
   margin-top: 4px;
   color: #81907e;
-  font-size: 11px;
+  font-size: 0.875rem;
   line-height: 1.55;
 }
 
@@ -720,7 +720,7 @@
 
 .guided-tour__header small {
   color: #71916f;
-  font-size: 9px;
+  font-size: 0.875rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -756,7 +756,7 @@
 .guided-tour__card > p {
   padding: 17px 17px 5px;
   color: #a9b9a5;
-  font-size: 13px;
+  font-size: 0.875rem;
   line-height: 1.7;
 }
 
@@ -770,7 +770,7 @@
   background: rgba(245, 158, 11, 0.09);
   padding: 9px 11px;
   color: #fde7a7;
-  font-size: 11px;
+  font-size: 0.875rem;
   font-weight: 750;
   line-height: 1.5;
 }
@@ -816,7 +816,7 @@
    palette instead of leaving dark dialogs floating over the light game UI. */
 html.settings-theme-light .onboarding-overlay,
 html.settings-theme-light .guided-tour {
-  color: #203429;
+  color: #000;
 }
 
 html.settings-theme-light .onboarding-overlay {
@@ -834,7 +834,7 @@ html.settings-theme-light .help-center,
 html.settings-theme-light .guided-tour__card {
   border-color: #9eb59f;
   background: #f3f6ef;
-  color: #203429;
+  color: #000;
   box-shadow: 0 28px 72px rgba(32, 52, 41, 0.24);
 }
 
@@ -865,7 +865,7 @@ html.settings-theme-light .help-center__intro h3,
 html.settings-theme-light .help-center__steps header h4,
 html.settings-theme-light .help-center__steps li strong,
 html.settings-theme-light .guided-tour__header strong {
-  color: #203429;
+  color: #000;
 }
 
 html.settings-theme-light .onboarding-prompt__content > p,
@@ -873,14 +873,14 @@ html.settings-theme-light .onboarding-prompt__content > small,
 html.settings-theme-light .help-center__intro p,
 html.settings-theme-light .help-center__steps li small,
 html.settings-theme-light .guided-tour__card > p {
-  color: #526a5b;
+  color: #000;
 }
 
 html.settings-theme-light .onboarding-prompt__meta span,
 html.settings-theme-light .help-center__steps {
   border-color: #b7cbb8;
   background: #e1ece0;
-  color: #3f5948;
+  color: #000;
 }
 
 html.settings-theme-light .help-center__header {
@@ -900,7 +900,7 @@ html.settings-theme-light .help-center__close,
 html.settings-theme-light .guided-tour__header button {
   border-color: #a9bea9;
   background: #edf3e9;
-  color: #3f5948;
+  color: #000;
 }
 
 html.settings-theme-light .help-center__close:hover,
@@ -918,7 +918,7 @@ html.settings-theme-light .help-center__navigation {
 html.settings-theme-light .help-center__navigation > p,
 html.settings-theme-light .help-center__navigation small,
 html.settings-theme-light .help-center__step-number {
-  color: #526a5b;
+  color: #000;
 }
 
 html.settings-theme-light .help-center__navigation button:hover {
@@ -933,13 +933,13 @@ html.settings-theme-light .help-center__navigation button.is-active {
 
 html.settings-theme-light .help-center__navigation button > span:first-child {
   background: #d3e1d2;
-  color: #526a5b;
+  color: #000;
 }
 
 html.settings-theme-light .help-center__navigation button.is-active > span:first-child,
 html.settings-theme-light .help-center__navigation button.is-active strong,
 html.settings-theme-light .help-center__navigation strong {
-  color: #203429;
+  color: #000;
 }
 
 html.settings-theme-light .help-center__content {
@@ -960,7 +960,7 @@ html.settings-theme-light .help-center__steps > header > span {
 html.settings-theme-light .onboarding-button--secondary {
   border-color: #9eb59f;
   background: #e1ece0;
-  color: #203429;
+  color: #000;
 }
 
 html.settings-theme-light .onboarding-button--secondary:hover:not(:disabled) {
@@ -969,7 +969,7 @@ html.settings-theme-light .onboarding-button--secondary:hover:not(:disabled) {
 }
 
 html.settings-theme-light .onboarding-button--quiet {
-  color: #496151;
+  color: #000;
 }
 
 html.settings-theme-light .onboarding-button--quiet:hover:not(:disabled) {

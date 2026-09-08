@@ -107,7 +107,7 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
                 <span className="growing-mode-card__asset"><img src={option.asset} alt="" /></span>
                 {isDisabled
                   ? <span className="growing-mode-card__disabled-badge"><AppIcon name="lock" /> {isThai ? 'ปิดใช้งาน' : 'Disabled'}</span>
-                  : option.badge && <span className="rounded-full bg-current/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em]">{option.badge[language]}</span>}
+                  : option.badge && <span className="rounded-full bg-current/10 px-2.5 py-1 text-sm font-black uppercase tracking-[0.12em]">{option.badge[language]}</span>}
               </span>
               <strong className="growing-mode-card__title">{option.title[language]}</strong>
               <span className="growing-mode-card__detail">{option.detail[language]}</span>
@@ -123,7 +123,7 @@ export function GrowingModePicker({ plantName = '', onCancel, onSelect }) {
                     : (isThai ? 'เลือกโหมดนี้' : 'Choose this mode')}
                 {!isUnavailable && <AppIcon className="h-3 w-3" name="arrowRight" />}
               </span>
-              {option.recommended && !isDisabled && <span className="mt-3 rounded-lg bg-lime-300/10 px-2.5 py-2 text-[10px] font-bold leading-4 text-lime-100">{isThai ? 'แนะนำสำหรับผู้เริ่มต้น' : 'Recommended for beginners'}</span>}
+              {option.recommended && !isDisabled && <span className="mt-3 rounded-lg bg-lime-300/10 px-2.5 py-2 text-sm font-bold leading-4 text-lime-100">{isThai ? 'แนะนำสำหรับผู้เริ่มต้น' : 'Recommended for beginners'}</span>}
             </button>
             )
           })}

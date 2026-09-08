@@ -73,7 +73,7 @@
 .game-toast__content strong {
   display: block;
   color: var(--toast-accent);
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: 850;
   letter-spacing: 0.11em;
   line-height: 1.2;
@@ -83,7 +83,7 @@
 .game-toast__content p {
   margin: 0.3rem 0 0;
   color: #e2ebe3;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 650;
   line-height: 1.45;
   overflow-wrap: anywhere;

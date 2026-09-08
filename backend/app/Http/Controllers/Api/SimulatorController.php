@@ -14,6 +14,7 @@ use App\Models\SimulationLog;
 use App\Models\SimulationPest;
 use App\Models\Simulator;
 use App\Models\SimulatorComment;
+use App\Models\CommentReport;
 use App\Models\SocialNotification;
 use App\Models\UserItem;
 use App\Services\MediaStorage;
@@ -933,6 +934,33 @@ class SimulatorController extends Controller
         return response()->json(['data' => $this->commentPayload($comment->load('user'))], 201);
     }
 
+    public function reportComment(Request $request, Simulator $simulator, SimulatorComment $comment): JsonResponse
+    {
+        $this->authorizeSimulatorConversation($request, $simulator);
+        abort_unless((int) $comment->simulator_id === (int) $simulator->id, 404);
+        abort_if((int) $comment->user_id === (int) $request->user()->id, 422, 'You cannot report your own comment.');
+
+        $data = $request->validate([
+            'reason' => ['required', Rule::in(['inappropriate', 'other'])],
+            'details' => ['nullable', 'string', 'max:500', Rule::requiredIf(fn () => $request->input('reason') === 'other')],
+        ]);
+
+        $report = CommentReport::query()->updateOrCreate(
+            [
+                'reporter_id' => $request->user()->id,
+                'comment_type' => 'simulator',
+                'comment_id' => $comment->id,
+            ],
+            [
+                'reason' => $data['reason'],
+                'details' => trim((string) ($data['details'] ?? '')) ?: null,
+                'status' => 'pending',
+            ],
+        );
+
+        return response()->json(['data' => $report, 'message' => 'Comment reported.'], $report->wasRecentlyCreated ? 201 : 200);
+    }
+
     private function authorizeSimulatorConversation(Request $request, Simulator $simulator): void
     {
         $userId = (int) $request->user()->id;
@@ -964,6 +992,9 @@ class SimulatorController extends Controller
             'simulator_id' => $comment->simulator_id,
             'comment_text' => $comment->comment_text,
             'created_at' => $comment->created_at?->toISOString(),
+            'reported_by_me' => Schema::hasTable('comment_reports')
+                ? $comment->reports()->where('reporter_id', request()->user()?->id)->exists()
+                : false,
             'user' => [
                 'id' => $comment->user?->id,
                 'username' => $comment->user?->username,

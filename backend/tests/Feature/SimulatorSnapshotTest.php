@@ -343,7 +343,7 @@ class SimulatorSnapshotTest extends TestCase
         ]);
     }
 
-    public function test_deleted_plant_is_hidden_from_catalog_and_catalog_is_not_browser_cached(): void
+    public function test_deleted_plant_stays_in_catalog_as_unavailable_and_catalog_is_not_browser_cached(): void
     {
         $plant = $this->seedPlayablePlant('Maintenance Plant');
         $plant->delete();
@@ -351,7 +351,10 @@ class SimulatorSnapshotTest extends TestCase
 
         $response = app(PlantController::class)->index();
 
-        $this->assertSame([], $response->getData(true)['data']);
+        $data = $response->getData(true)['data'];
+        $this->assertCount(1, $data);
+        $this->assertSame($plant->id, $data[0]['id']);
+        $this->assertFalse($data[0]['is_available']);
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
     }
 

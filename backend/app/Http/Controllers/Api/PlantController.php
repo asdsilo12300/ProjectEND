@@ -19,7 +19,7 @@ class PlantController extends Controller
         $plants = $this->cache->remember(
             'plants',
             fn (): array => PlantResource::collection(
-                Plant::query()->playable()->with(['stages', 'knowledge'])->orderBy('name_th')->get(),
+                Plant::query()->withTrashed()->playable()->with(['stages', 'knowledge'])->orderBy('name_th')->get(),
             )->response()->getData(true)['data'] ?? [],
         );
 

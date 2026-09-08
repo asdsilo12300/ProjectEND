@@ -245,7 +245,7 @@ function SavedGrowthCalculation({ calculation, copy }) {
 
       {chartSamples.length > 1 ? (
         <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/15 px-2 pb-1.5 pt-1">
-          <p className="px-1 pt-1 text-[11px] font-semibold text-slate-400">{copy.recentGrowth}</p>
+          <p className="px-1 pt-1 text-sm font-semibold text-slate-400">{copy.recentGrowth}</p>
           <svg className="mt-1 h-20 w-full" viewBox="0 0 520 130" role="img" aria-label={`${copy.recentGrowth}: ${compactNumber(progress)}%`}>
             <line x1="12" x2="508" y1="20" y2="20" stroke="rgba(148,163,184,.14)" strokeDasharray="4 5" />
             <line x1="12" x2="508" y1="66" y2="66" stroke="rgba(148,163,184,.12)" strokeDasharray="4 5" />

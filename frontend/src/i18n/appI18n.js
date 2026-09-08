@@ -659,6 +659,7 @@ const thaiMessages = {
   'living plant simulation': 'ระบบจำลองพืชที่มีชีวิต',
   'connected growth factors': 'ปัจจัยการเติบโตที่เชื่อมโยงกัน',
   'growing modes to explore': 'รูปแบบการปลูกให้สำรวจ',
+  'plant species to explore': 'ชนิดพืชที่พร้อมให้สำรวจ',
   'experiments to compare': 'การทดลองสำหรับเปรียบเทียบ',
   'Choose your growing path': 'เลือกเส้นทางการปลูกของคุณ',
   'One plant. Three ways to understand it.': 'พืชหนึ่งต้น เรียนรู้ได้สามรูปแบบ',

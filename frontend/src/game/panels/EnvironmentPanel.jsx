@@ -139,9 +139,9 @@ function buildWeatherCards(readings, isThai) {
       value: readings?.windSpeed == null
         ? '--'
         : `${Math.round(readings.windSpeed)} km/h`,
-      icon: climateIcons.air.icon,
+      icon: 'wind',
       color: climateIcons.air.color,
-      imageUrl: climateIcons.air.imageUrl,
+      imageUrl: null,
     },
   ]
 }
@@ -253,7 +253,7 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
               </div>
               <div className="environment-weather-block__actions">
                 {outdoorWeather?.location && (
-                  <span className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${outdoorWeather.location.source === 'fallback' ? 'bg-amber-300/10 text-amber-100' : 'bg-lime-100/10 text-lime-100'}`}>
+                  <span className={`rounded-md px-2 py-1 text-sm font-bold uppercase tracking-wide ${outdoorWeather.location.source === 'fallback' ? 'bg-amber-300/10 text-amber-100' : 'bg-lime-100/10 text-lime-100'}`}>
                     {locationSourceLabel(outdoorWeather.location.source, isThai)}
                   </span>
                 )}
@@ -269,7 +269,7 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
                 </button>}
                 {!isSeasonal && plantSelected && !readOnly && (
                   <button
-                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-emerald-500/25 bg-emerald-50 px-2 text-[10px] font-black text-emerald-900 transition hover:bg-emerald-100"
+                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-emerald-500/25 bg-emerald-50 px-2 text-sm font-black text-emerald-900 transition hover:bg-emerald-100"
                     type="button"
                     onClick={onTransferLocation}
                   >
@@ -281,7 +281,7 @@ export function EnvironmentPanel({ climate, windows, setWindows, mode = 'greenho
             </div>
 
             {!isSeasonal && outdoorWeather?.location?.source === 'fallback' && (
-              <p className="mb-2 rounded-md border border-amber-200/15 bg-amber-300/[0.06] px-2.5 py-2 text-[10px] leading-4 text-amber-100/85">
+              <p className="mb-2 rounded-md border border-amber-200/15 bg-amber-300/[0.06] px-2.5 py-2 text-sm leading-4 text-amber-100/85">
                 {isThai ? 'ไม่สามารถใช้สิทธิ์ตำแหน่งได้ โปรดอนุญาตการเข้าถึงตำแหน่งในเบราว์เซอร์ แล้วกดปุ่มรีเฟรช' : 'Location permission is unavailable. Allow location access in your browser, then press the refresh button.'}
               </p>
             )}

@@ -460,6 +460,7 @@ function localizedText(english, thai) {
 }
 
 function plantAssetFromApi(plant, planted = false) {
+  const unavailable = plant?.is_available === false || Boolean(plant?.deleted_at)
   return {
     id: `plant-${plant.id}`,
     backendId: plant.id,
@@ -474,6 +475,7 @@ function plantAssetFromApi(plant, planted = false) {
     modelUrl: plant.base_model_url,
     plantData: plant,
     planted,
+    unavailable,
   }
 }
 
@@ -702,10 +704,10 @@ function PlantMaintenanceOverlay({ busy = false, hasPreviousPlant = false, plant
       <div className="soft-grid absolute inset-0 opacity-35" />
       <section className="relative w-full max-w-[470px] overflow-hidden rounded-2xl border border-amber-100/20 bg-[#101711]/98 p-6 text-center text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.58),0_0_55px_rgba(205,151,55,.08)]" role="alert" aria-live="assertive">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-amber-200/20 bg-amber-200/10 text-amber-200 shadow-[0_0_28px_rgba(245,188,77,.12)]"><AppIcon className="h-6 w-6" name="tool" /></div>
-        <small className="mt-5 block text-[10px] font-black uppercase tracking-[.2em] text-amber-200/75">{isThai ? 'สถานะพืช' : 'Plant status'}</small>
+        <small className="mt-5 block text-sm font-black uppercase tracking-[.2em] text-amber-200/75">{isThai ? 'สถานะพืช' : 'Plant status'}</small>
         <h2 className="mt-2 text-xl font-black text-lime-50">{isThai ? 'พืชชนิดนี้ปิดปรับปรุงอยู่' : 'This plant is under maintenance'}</h2>
         <p className="mx-auto mt-3 max-w-[360px] text-sm leading-6 text-slate-300">{isThai ? `“${plantName}” ถูกนำออกจากรายการปลูกชั่วคราว จึงไม่สามารถเปิดการจำลองนี้ต่อได้` : `“${plantName}” has been temporarily removed from the planting catalog, so this simulation cannot continue.`}</p>
-        <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 text-xs leading-5 text-slate-400">{isThai ? 'พืชชนิดนี้จะไม่แสดงในรายการเลือกปลูกจนกว่าผู้ดูแลระบบจะเปิดใช้งานอีกครั้ง' : 'This species will stay hidden from plant choices until an administrator makes it available again.'}</div>
+        <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.035] px-4 py-3 text-xs leading-5 text-slate-400">{isThai ? 'รายการพืชชนิดนี้จะแสดงเป็นสีเทาและไม่สามารถเลือกได้ จนกว่าผู้ดูแลระบบจะกู้คืนอีกครั้ง' : 'This plant remains visible in gray but cannot be selected until an administrator restores it.'}</div>
         <button className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#9bcf82] px-5 text-sm font-black text-[#0b160e] transition hover:bg-[#b0e29a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lime-200 disabled:cursor-wait disabled:opacity-55" disabled={busy} type="button" onClick={onChooseAnother}><AppIcon className="h-4 w-4" name="plant" />{busy ? (isThai ? 'กำลังเปิดพืชล่าสุด…' : 'Opening the latest plant…') : hasPreviousPlant ? (isThai ? 'กลับไปพืชล่าสุด' : 'Return to latest plant') : (isThai ? 'เลือกพืชชนิดใหม่' : 'Choose a new plant')}</button>
       </section>
     </div>
@@ -1497,7 +1499,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (activePage !== 'lab' || !user || !getToken()) {
+    if (!['home', 'learn', 'lab'].includes(activePage)) {
       return undefined
     }
 
@@ -1523,7 +1525,7 @@ function App() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [activePage, user])
+  }, [activePage])
 
   useEffect(() => {
     if (
@@ -1537,7 +1539,7 @@ function App() {
     ) return
 
     const currentPlantId = Number(simulationVisual.plant_id ?? simulationVisual.plant?.id ?? selectedPlant?.backendId ?? 0)
-    if (!currentPlantId || plantCatalog.some((plant) => Number(plant.id) === currentPlantId)) return
+    if (!currentPlantId || plantCatalog.some((plant) => Number(plant.id) === currentPlantId && plant?.is_available !== false && !plant?.deleted_at)) return
 
     const maintenanceTimer = window.setTimeout(() => {
       setPlantMaintenance({
@@ -3835,6 +3837,7 @@ function App() {
           onSignIn={openAuth}
           onOpenPage={openGamePageFromLanding}
           onOpenDemo={enterDemoSession}
+          plantCount={plantCatalog.filter((plant) => plant?.is_available !== false && !plant?.deleted_at).length}
         />
         {demoMode && (
           <DemoSafetyBar

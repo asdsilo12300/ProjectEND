@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+.comment-report-menu__popover {
+  background: #080c0a !important;
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+.comment-report-menu__action {
+  background: transparent !important;
+  color: #fff !important;
+}
+
+.comment-report-menu__action:hover,
+.comment-report-menu__action:focus-visible {
+  background: rgb(251 113 133 / 0.16) !important;
+}
+
+@theme {
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.5;
+}
+
 :root {
   --pg-bg: #f3f6ef;
   --pg-canvas: #e8f0e7;
@@ -8,8 +29,10 @@
   --pg-panel: #d3e1d2;
   --pg-structure: #294b36;
   --pg-border: #b7cbb8;
-  --pg-text: #203429;
-  --pg-text-muted: #526a5b;
+  --pg-text: #000;
+  --pg-text-muted: #000;
+  --pg-muted: var(--pg-text-muted);
+  --pg-brand: var(--pg-primary);
   --pg-primary: #327d4b;
   --pg-primary-strong: #28663d;
   --pg-focus: #327d4b;
@@ -34,8 +57,8 @@ html.settings-theme-dark {
   --pg-panel: #284a35;
   --pg-structure: #d8f3c9;
   --pg-border: #345943;
-  --pg-text: #e8f2e4;
-  --pg-text-muted: #abc3b1;
+  --pg-text: #fff;
+  --pg-text-muted: #fff;
   --pg-primary: #8fd878;
   --pg-primary-strong: #b2f09c;
   --pg-focus: #b2f09c;
@@ -92,6 +115,26 @@ html.settings-reduced-motion *::after {
 button,
 input {
   font: inherit;
+}
+
+small {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+html.settings-theme-light :where(input, textarea)::placeholder,
+.admin-theme--light :where(input, textarea)::placeholder {
+  color: #000;
+  opacity: 1;
+}
+
+html.settings-theme-dark :where([class*="text-slate-"], [class*="text-gray-"]) {
+  color: #fff !important;
+}
+
+html.settings-theme-dark :where(input, textarea)::placeholder {
+  color: #fff;
+  opacity: .82;
 }
 
 .game-themed-scrollbar,

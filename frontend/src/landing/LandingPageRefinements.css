@@ -88,7 +88,7 @@
 .landing-hero__content--banner .landing-hero__mission {
   margin: 15px 0 0;
   color: #a9cfbc;
-  font-size: 12px;
+  font-size: 0.875rem;
   font-weight: 850;
   line-height: 1.5;
   letter-spacing: .1em;
@@ -145,7 +145,7 @@
   background: transparent;
   color: #d3d8cb;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.875rem;
   font-weight: 800;
   letter-spacing: .05em;
   cursor: pointer;
@@ -182,7 +182,7 @@
   border: 1px solid rgb(225 178 70 / 34%);
   background: rgb(5 13 10 / 72%);
   color: #d5d9ce;
-  font-size: 10px;
+  font-size: 0.875rem;
   font-weight: 850;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -198,7 +198,7 @@
 .landing-hero--quest-banner .landing-scroll-cue {
   bottom: 3px;
   color: #cfac57;
-  font-size: 9px;
+  font-size: 0.875rem;
   letter-spacing: .14em;
   text-transform: uppercase;
   text-shadow: 0 2px 8px #000;
@@ -216,7 +216,7 @@
 
 .landing-shell[data-theme='light'] .landing-hero__content--banner h1 { color: #fff8db; }
 .landing-shell[data-theme='light'] .landing-hero__content--banner .landing-hero__tagline { color: #e8eee3; }
-.landing-shell[data-theme='light'] .landing-hero__content--banner .landing-hero__mission { color: #a9cfbc; }
+.landing-shell[data-theme='light'] .landing-hero__content--banner .landing-hero__mission { color: #000; }
 
 @media (max-width: 760px) {
   .landing-hero--quest-banner,
@@ -247,7 +247,7 @@
 
   .landing-hero__mission {
     max-width: 330px;
-    font-size: 9px;
+    font-size: 0.875rem;
     line-height: 1.65;
   }
 
@@ -260,7 +260,7 @@
     width: 100%;
     min-width: 0;
     min-height: 60px;
-    font-size: 13px;
+    font-size: 0.875rem;
   }
 
   .landing-hero__feature-strip {
@@ -274,14 +274,14 @@
   .landing-hero__feature-strip span {
     justify-content: center;
     padding-inline: 8px;
-    font-size: 8px;
+    font-size: 0.875rem;
     letter-spacing: .04em;
   }
 }
 
 @media (max-width: 420px) {
   .landing-hero__feature-strip span:nth-child(n + 3) { display: none; }
-  .landing-hero__secondary { font-size: 11px; }
+  .landing-hero__secondary { font-size: 0.875rem; }
 }
 
 html[lang='th'] .landing-hero__content--banner h1 {
@@ -423,7 +423,7 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
 .landing-mode-card__number {
   padding-top: 8px;
   color: color-mix(in srgb, var(--mode-accent) 58%, #a0afa5);
-  font-size: 11px;
+  font-size: 0.875rem;
 }
 
 .landing-mode-card__copy strong {
@@ -560,7 +560,7 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
   }
 
   .landing-mode-card__copy strong { font-size: 15px; }
-  .landing-mode-card__copy small { font-size: 8px; }
+  .landing-mode-card__copy small { font-size: 0.875rem; }
 
   .landing-mode-explorer__panel {
     min-height: 520px;
@@ -717,7 +717,7 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
   border-radius: 5px;
   background: rgba(5, 16, 8, 0.9);
   color: #e8ffd7;
-  font-size: 10px;
+  font-size: 0.875rem;
   font-weight: 850;
   letter-spacing: 0.06em;
   text-overflow: ellipsis;
@@ -764,7 +764,7 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
 .product-tour-player__caption > span {
   flex: 0 0 auto;
   padding-top: 3px;
-  font-size: 12px;
+  font-size: 0.875rem;
 }
 
 .product-tour-player__caption strong {
@@ -773,7 +773,7 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
 }
 
 .product-tour-player__caption p {
-  font-size: 13px;
+  font-size: 0.875rem;
   line-height: 1.55;
 }
 
@@ -799,12 +799,12 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
 
 .product-tour-timeline strong {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.875rem;
   line-height: 1.35;
 }
 
 .product-tour-timeline__number {
-  font-size: 11px;
+  font-size: 0.875rem;
 }
 
 @media (max-width: 980px) {
@@ -847,7 +847,7 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
     top: 10px;
     right: 12px;
     left: 12px;
-    font-size: 8px;
+    font-size: 0.875rem;
   }
 
   .product-tour-player__caption,
@@ -871,14 +871,14 @@ html[lang='th'] .landing-hero__actions .landing-hero__start {
   .product-tour-player__caption p {
     display: -webkit-box;
     overflow: hidden;
-    font-size: 10px;
+    font-size: 0.875rem;
     line-height: 1.4;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
 
   .product-tour-player__caption > span {
-    font-size: 9px;
+    font-size: 0.875rem;
   }
 
   .product-tour-player__control {
@@ -1124,7 +1124,7 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
   max-width: 100%;
   overflow: hidden;
   color: #bfd0ba;
-  font-size: 8px;
+  font-size: 0.875rem;
   font-weight: 800;
   letter-spacing: .02em;
   text-align: center;
@@ -1159,6 +1159,6 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
     height: 70px;
   }
 
-  .landing-growth-hud__readout strong { font-size: 13px; }
-  .landing-growth-hud__readout span { font-size: 7px; }
+  .landing-growth-hud__readout strong { font-size: 0.875rem; }
+  .landing-growth-hud__readout span { font-size: 0.875rem; }
 }

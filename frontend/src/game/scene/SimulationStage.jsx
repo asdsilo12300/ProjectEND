@@ -184,7 +184,7 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
               <span className="grid h-5 w-5 place-items-center rounded bg-white/[0.08]" style={{ color: stat.color }}>
                 <AppIcon className="h-3.5 w-3.5" name={stat.icon} />
               </span>
-              <span className="text-xs font-semibold text-slate-300">{stat.label}</span>
+            <span className="text-xs font-semibold text-white">{stat.label}</span>
               <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.12]">
                 <span className="block h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${stat.value}%`, backgroundColor: stat.color }} />
               </span>
@@ -206,7 +206,7 @@ function PlantStatusHud({ awaitingFirstCycle = false, cycleSeconds = null, cycle
                   <span className="grid h-5 w-5 place-items-center rounded bg-white/[0.07]" style={{ color }}>
                     <img className="h-4 w-4 object-contain" src={need.imageUrl} alt="" aria-hidden="true" draggable="false" />
                   </span>
-                  <span className="text-xs font-semibold text-slate-200">{need.label}</span>
+                  <span className="text-xs font-semibold text-white">{need.label}</span>
                   <strong className="text-xs font-black text-lime-50">{Math.round(need.value)}%</strong>
                 </div>
                 <span className="block h-2 overflow-hidden rounded-full bg-white/[0.1]">
@@ -438,9 +438,9 @@ function SeasonalStatusPanel({ context, plantSelected, simulatedTime, solarLight
             <PixelWeatherAsset sprite={`season-${seasonKey ?? 'spring'}`} />
           </span>
           <span className="min-w-0">
-            <span className="seasonal-status-panel__season-label block text-[11px] font-black uppercase tracking-[0.12em]">{isThai ? 'ฤดูกาลปัจจุบัน' : 'Current season'}</span>
+            <span className="seasonal-status-panel__season-label block text-sm font-black uppercase tracking-[0.12em]">{isThai ? 'ฤดูกาลปัจจุบัน' : 'Current season'}</span>
             <strong className="mt-0.5 block whitespace-nowrap text-base leading-tight text-lime-50">{seasonLabel}</strong>
-            <span className="block truncate text-[11px] text-slate-300">{dateLabel} · {weatherSummary(day, isThai)}</span>
+            <span className="block text-sm leading-5 text-white">{dateLabel} · {weatherSummary(day, isThai)}</span>
           </span>
         </div>
         <div className="flex min-w-0 flex-col items-center justify-center px-3 py-2 text-center">
@@ -448,40 +448,40 @@ function SeasonalStatusPanel({ context, plantSelected, simulatedTime, solarLight
             <AppIcon className="h-3.5 w-3.5" name={solarLighting.isDay ? 'lightMode' : 'darkMode'} />
           </span>
           <strong className="mt-1 text-lg leading-none text-white">{timeLabel}</strong>
-          <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-300">{solarLighting.isDay ? (isThai ? 'กลางวัน' : 'Daytime') : (isThai ? 'กลางคืน' : 'Nighttime')}</span>
+          <span className="mt-1 text-sm font-bold uppercase tracking-[0.12em] text-white">{solarLighting.isDay ? (isThai ? 'กลางวัน' : 'Daytime') : (isThai ? 'กลางคืน' : 'Nighttime')}</span>
         </div>
         <div className="min-w-0 px-3 py-2.5 text-right">
-          <span className="text-[11px] font-black uppercase tracking-[0.12em] text-cyan-200/75">{isThai ? 'ความคืบหน้า' : 'Journey progress'}</span>
-          <strong className="mt-0.5 block truncate text-sm text-cyan-50">{plantSelected ? `${context?.calendar_day ?? 0} ${isThai ? 'วันปฏิทิน' : 'calendar days'}` : '—'}</strong>
-          <span className="block truncate text-[11px] text-slate-300">{Number(context?.biological_days ?? 0).toFixed(1)} {isThai ? 'วันเติบโตสะสม' : 'biological days'}</span>
+          <span className="text-sm font-black uppercase tracking-[0.12em] text-cyan-200/75">{isThai ? 'ความคืบหน้า' : 'Journey progress'}</span>
+          <strong className="mt-0.5 block text-sm leading-5 text-white">{plantSelected ? `${context?.calendar_day ?? 0} ${isThai ? 'วันปฏิทิน' : 'calendar days'}` : '—'}</strong>
+          <span className="block text-sm leading-5 text-white">{Number(context?.biological_days ?? 0).toFixed(1)} {isThai ? 'วันเติบโตสะสม' : 'biological days'}</span>
         </div>
       </div>
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t border-emerald-100/10 bg-black/20 px-3 py-2">
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-cyan-100">
+      <div className="seasonal-status-panel__footer grid grid-cols-2 items-center gap-x-2 gap-y-1 border-t border-emerald-100/10 bg-black/20 px-3 py-1.5">
+        <div className="seasonal-status-panel__timescale flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-white">
           <AppIcon className="h-3 w-3" name="clock" />
           <span>{context?.seconds_per_day ?? 18} {isThai ? 'วินาที = 1 วันจำลอง' : 'seconds = 1 simulated day'}</span>
         </div>
-        <div className="flex min-w-0 items-center justify-center gap-1.5 overflow-hidden" aria-label={isThai ? 'อากาศล่าสุดและพยากรณ์ 5 วันจำลอง' : 'Latest weather and five simulated day forecast'}>
+        <div className="seasonal-status-panel__forecast col-span-2 flex min-w-0 flex-nowrap items-center justify-center gap-1" aria-label={isThai ? 'อากาศล่าสุดและพยากรณ์ 5 วันจำลอง' : 'Latest weather and five simulated day forecast'}>
           <span
-            className="seasonal-status-panel__latest seasonal-weather-chip seasonal-weather-chip--latest grid min-w-[62px] grid-cols-[auto_auto] items-center justify-center gap-x-1 rounded-md border px-1.5 py-1 text-center text-[10px]"
+            className="seasonal-status-panel__latest seasonal-weather-chip seasonal-weather-chip--latest grid min-w-[58px] grid-cols-[auto_auto] items-center justify-center gap-x-1 rounded-md border px-1 py-1 text-center text-[13px]"
             data-weather={seasonalWeatherIcon(day)}
             title={`${isThai ? 'อากาศล่าสุด' : 'Latest weather'} · ${day.date ?? ''} · ${weatherSummary(day, isThai)}`}
           >
-            <small className="col-span-2 mb-0.5 block text-[8px] font-black uppercase tracking-[0.1em]">{isThai ? 'ล่าสุด' : 'Latest'}</small>
+            <small className="col-span-2 mb-0.5 block text-[13px] font-black uppercase tracking-[0.08em]">{isThai ? 'ล่าสุด' : 'Latest'}</small>
             <PixelWeatherAsset sprite={seasonalWeatherSprite(day)} />
             <b>{Math.round(Number(day.temperature_mean ?? 0))}°</b>
           </span>
-          <span className="shrink-0 text-[9px] font-bold text-slate-400" aria-hidden="true">{isThai ? 'ถัดไป' : 'Next'}</span>
+          <span className="shrink-0 text-[13px] font-bold text-white" aria-hidden="true">{isThai ? 'ถัดไป' : 'Next'}</span>
           {forecast.slice(0, 5).map((forecastDay) => (
-            <span key={forecastDay.date} className={`seasonal-weather-chip grid min-w-[42px] grid-cols-[auto_auto] items-center justify-center gap-x-1 rounded-md border px-1.5 py-1 text-center text-[10px] ${forecastDay.risk ? 'is-risk' : ''}`} data-weather={seasonalWeatherIcon(forecastDay)} title={`${forecastDay.date} · ${weatherSummary(forecastDay, isThai)}${forecastDay.risk ? ` · ${seasonalRiskLabel(forecastDay, isThai)} · ${seasonalActionLabel(forecastDay.recommended_action, isThai)}` : ''}`}>
+            <span key={forecastDay.date} className={`seasonal-weather-chip grid min-w-[39px] grid-cols-[auto_auto] items-center justify-center gap-x-1 rounded-md border px-1 py-1 text-center text-[13px] ${forecastDay.risk ? 'is-risk' : ''}`} data-weather={seasonalWeatherIcon(forecastDay)} title={`${forecastDay.date} · ${weatherSummary(forecastDay, isThai)}${forecastDay.risk ? ` · ${seasonalRiskLabel(forecastDay, isThai)} · ${seasonalActionLabel(forecastDay.recommended_action, isThai)}` : ''}`}>
               <PixelWeatherAsset sprite={seasonalWeatherSprite(forecastDay)} />
               <b className="text-lime-50">{Math.round(Number(forecastDay.temperature_mean ?? 0))}°</b>
             </span>
           ))}
         </div>
-        <div className="min-w-0 text-right text-[11px] leading-4 text-slate-300" title={context?.[isThai ? 'source_label_th' : 'source_label_en']}>
-          <span className="block max-w-[220px] truncate font-semibold text-emerald-100">{context?.[isThai ? 'source_label_th' : 'source_label_en'] ?? '—'}</span>
-          <span className="block max-w-[220px] truncate">{isThai ? 'ฤดูถัดไป: ' : 'Next: '}{nextSeasonLabel}</span>
+        <div className="seasonal-status-panel__source min-w-0 whitespace-nowrap text-left text-[13px] leading-5 text-white" title={context?.[isThai ? 'source_label_th' : 'source_label_en']}>
+          <span className="font-semibold text-white">{context?.[isThai ? 'source_label_th' : 'source_label_en'] ?? '—'}</span>
+          <span> · {isThai ? 'ฤดูถัดไป: ' : 'Next: '}{nextSeasonLabel}</span>
         </div>
       </div>
     </section>
@@ -530,7 +530,7 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
           <strong className="game-outdoor-hud__value mt-0.5 truncate text-base leading-tight">
             {plantSelected ? `${formatRealDays(estimate.equivalentDays)} / ~${formatRealDays(estimate.maturityDays)}` : '—'}
           </strong>
-          <span className="game-outdoor-hud__meta mt-0.5 truncate text-[10px]">{plantSelected ? (isThai ? 'วันเทียบชีวิตจริง' : 'real-life equivalent') : (isThai ? 'ยังไม่ได้เลือกพืช' : 'No plant selected')}</span>
+          <span className="game-outdoor-hud__meta mt-0.5 truncate text-sm">{plantSelected ? (isThai ? 'วันเทียบชีวิตจริง' : 'real-life equivalent') : (isThai ? 'ยังไม่ได้เลือกพืช' : 'No plant selected')}</span>
         </div>
 
         <div className="game-outdoor-hud__cell game-outdoor-hud__cell--clock flex min-w-[118px] flex-col items-center justify-center px-3 py-2.5 text-center">
@@ -544,13 +544,13 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
           >
             {outdoorClock.label}
           </time>
-          <span className="game-outdoor-hud__phase mt-1 text-[9px] font-bold uppercase tracking-[0.12em]">{dayPhase}</span>
+          <span className="game-outdoor-hud__phase mt-1 text-sm font-bold uppercase tracking-[0.12em]">{dayPhase}</span>
         </div>
 
         <div className="game-outdoor-hud__cell game-outdoor-hud__cell--weather flex min-w-0 flex-col justify-center px-4 py-3 text-right">
           <span className="game-outdoor-hud__eyebrow">{isThai ? 'ฝนวันนี้' : 'Today’s rain'}</span>
           <strong className={`game-outdoor-hud__rain mt-0.5 truncate text-sm leading-tight ${rainNow > 0 ? 'is-raining' : dailyRain > 0 ? 'has-rain' : ''}`}>{rainLabel}</strong>
-          <span className="game-outdoor-hud__meta mt-0.5 truncate text-[10px]">
+          <span className="game-outdoor-hud__meta mt-0.5 truncate text-sm">
             {weatherReady
               ? `${dailyRain.toFixed(1)} mm${rainProbability == null ? '' : ` · ${Math.round(rainProbability)}%`}`
               : '—'}
@@ -558,7 +558,7 @@ function OutdoorStatusPanel({ outdoorReadings, plantSelected, simulationVisual, 
         </div>
       </div>
 
-      <div className="game-outdoor-hud__telemetry flex items-center justify-center gap-2 px-3 py-1.5 text-[10px]">
+      <div className="game-outdoor-hud__telemetry flex items-center justify-center gap-2 px-3 py-1.5 text-sm">
         <AppIcon className="h-3 w-3" name="clock" />
         <span>
           {plantSelected
@@ -597,7 +597,7 @@ function ControlledGrowthStatusPanel({
 
   return (
     <section
-      className="controlled-growth-status-panel game-growth-hud min-w-0 flex-[0_0_258px] overflow-hidden text-slate-100"
+      className="controlled-growth-status-panel game-growth-hud min-w-0 flex-[0_0_300px] overflow-hidden text-slate-100"
       aria-label={isThai ? 'ข้อมูลวันเติบโตโหมดควบคุมปัจจัย' : 'Environment control growth status'}
       aria-live="polite"
     >
@@ -606,11 +606,11 @@ function ControlledGrowthStatusPanel({
           <AppIcon className="h-4 w-4" name="sprout" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3">
-            <span className="game-growth-hud__eyebrow text-[9px] font-black uppercase tracking-[0.14em]">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <span className="game-growth-hud__eyebrow whitespace-nowrap text-sm font-black uppercase tracking-[0.08em]">
               {isThai ? 'วันเติบโต' : 'Growth day'}
             </span>
-            <span className="game-growth-hud__mode rounded-md px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em]">
+            <span className="game-growth-hud__mode whitespace-nowrap rounded-md px-1.5 py-0.5 text-[13px] font-bold uppercase tracking-[0.04em]">
               {isThai ? 'ควบคุมปัจจัย' : 'Controlled'}
             </span>
           </div>
@@ -627,7 +627,7 @@ function ControlledGrowthStatusPanel({
         />
       </div>
 
-      <div className="game-growth-hud__controls flex items-center gap-1 px-2 py-1.5 text-[9px] leading-tight text-slate-200">
+      <div className="game-growth-hud__controls flex items-center gap-1 px-2 py-1.5 text-sm leading-tight text-white">
         <span className="game-growth-hud__timescale mr-auto inline-flex min-w-0 items-center gap-1 whitespace-nowrap" title={lockedReason || (isThai ? 'อัตราเวลาเทียบการเติบโตจริง' : 'Real-life growth time scale')}>
           <AppIcon className="h-2.5 w-2.5 text-cyan-300" name="clock" />
           {timeScaleLabel}

@@ -14,7 +14,7 @@ function KnowledgeList({ icon, items, title, tone = 'emerald' }) {
         <AppIcon className="h-3.5 w-3.5" name={icon} />
         {title}
       </strong>
-      <ul className="mt-2 grid gap-1.5 text-[11px] leading-4 text-slate-300">
+      <ul className="mt-2 grid gap-1.5 text-sm leading-4 text-white">
         {items.map((item) => (
           <li className="flex gap-2" key={item}>
             <span aria-hidden="true" className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
@@ -54,18 +54,18 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
       <section
         aria-labelledby="pest-knowledge-title"
         aria-modal="true"
-        className="flex max-h-[84vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-lime-100/20 bg-[#101511] text-slate-100 shadow-[0_28px_90px_rgba(0,0,0,.68)]"
+        className="flex max-h-[84vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-lime-100/20 bg-[#101511] text-white shadow-[0_28px_90px_rgba(0,0,0,.68)]"
         data-i18n-skip="true"
         role="dialog"
       >
         <header className="flex shrink-0 items-center justify-between gap-4 border-b border-lime-100/10 px-4 py-3">
           <span className="min-w-0">
-            <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">{copy('Pest knowledge', 'ข้อมูลศัตรูพืช')}</span>
-            <strong className="mt-0.5 block truncate text-base text-lime-50" id="pest-knowledge-title">{knowledge.name}</strong>
+            <span className="block text-sm font-black uppercase tracking-[0.16em] text-amber-300">{copy('Pest knowledge', 'ข้อมูลศัตรูพืช')}</span>
+            <strong className="mt-0.5 block break-words text-base text-lime-50" id="pest-knowledge-title">{knowledge.name}</strong>
           </span>
           <button
             aria-label={copy('Close pest guide', 'ปิดข้อมูลศัตรูพืช')}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-lime-100/15 bg-white/[0.045] text-slate-300 transition hover:bg-white/[0.09] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-lime-100/15 bg-white/[0.045] text-white transition hover:bg-white/[0.09] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-lime-200"
             onClick={onClose}
             type="button"
           >
@@ -86,7 +86,7 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
                 )}
               </div>
               {knowledge.photo?.sourceUrl && (
-                <figcaption className="border-t border-lime-100/10 bg-black/25 px-2 py-1.5 text-[8px] leading-3 text-slate-400">
+                <figcaption className="border-t border-lime-100/10 bg-black/25 px-2 py-1.5 text-sm leading-3 text-white">
                   <span>{copy('Photo', 'ภาพ')}: </span>
                   <a className="text-sky-300 hover:text-sky-200" href={knowledge.photo.sourceUrl} rel="noreferrer" target="_blank">{knowledge.photo.credit || copy('View reference', 'ดูแหล่งอ้างอิง')}</a>
                   {knowledge.photo.license && <span> · </span>}
@@ -103,13 +103,13 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
                   {pest.active ? copy('Active now', 'กำลังระบาด') : copy(`Current risk ${risk}%`, `ความเสี่ยงปัจจุบัน ${risk}%`)}
                 </span>
               </div>
-              <dl className="mt-3 grid grid-cols-[106px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs leading-5">
-                <dt className="text-slate-500">{copy('Group / family', 'กลุ่ม / วงศ์')}</dt>
-                <dd className="truncate italic text-lime-50" title={knowledge.scientificName}>{knowledge.scientificName}</dd>
-                <dt className="text-slate-500">{copy('Simulation status', 'สถานะในระบบจำลอง')}</dt>
-                <dd className="text-slate-200">{pest.active ? copy('Treatment recommended now', 'แนะนำให้กำจัดในตอนนี้') : copy('Monitor at the next update', 'ติดตามในการอัปเดตครั้งถัดไป')}</dd>
+              <dl className="mt-3 grid grid-cols-[138px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs leading-5">
+                <dt className="whitespace-nowrap text-white">{copy('Group / family', 'กลุ่ม / วงศ์')}</dt>
+                <dd className="break-words italic text-lime-50" title={knowledge.scientificName}>{knowledge.scientificName}</dd>
+                <dt className="whitespace-nowrap text-white">{copy('Simulation status', 'สถานะในระบบจำลอง')}</dt>
+                <dd className="text-white">{pest.active ? copy('Treatment recommended now', 'แนะนำให้กำจัดในตอนนี้') : copy('Monitor at the next update', 'ติดตามในการอัปเดตครั้งถัดไป')}</dd>
               </dl>
-              <p className="mt-3 text-xs leading-5 text-slate-300">{knowledge.summary}</p>
+              <p className="mt-3 text-xs leading-5 text-white">{knowledge.summary}</p>
             </div>
           </div>
 
@@ -125,8 +125,8 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
             </strong>
             <ol className="mt-2 grid gap-2">
               {knowledge.prevention.map((instruction, index) => (
-                <li className="flex gap-2.5 text-xs leading-5 text-slate-300" key={instruction}>
-                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-300/12 text-[10px] font-black text-sky-200">{index + 1}</span>
+                <li className="flex gap-2.5 text-xs leading-5 text-white" key={instruction}>
+                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-300/12 text-sm font-black text-sky-200">{index + 1}</span>
                   <span>{instruction}</span>
                 </li>
               ))}
@@ -137,9 +137,9 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <span>
                 <strong className="block text-sm text-lime-50">{copy('Items that can remove this pest', 'ไอเทมที่ใช้กำจัดได้')}</strong>
-                <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">{copy('Select the item in Lab assets, then click the matching pest on the plant.', 'เลือกไอเทมจากคลัง แล้วกดศัตรูพืชชนิดที่ตรงกันบนต้น')}</span>
+                <span className="mt-0.5 block text-sm leading-4 text-slate-400">{copy('Select the item in Lab assets, then click the matching pest on the plant.', 'เลือกไอเทมจากคลัง แล้วกดศัตรูพืชชนิดที่ตรงกันบนต้น')}</span>
               </span>
-              <span className="rounded-md bg-violet-300/10 px-2 py-1 text-[10px] font-bold text-violet-200">{copy('Simulation values', 'ค่าภายในระบบจำลอง')}</span>
+              <span className="rounded-md bg-violet-300/10 px-2 py-1 text-sm font-bold text-violet-200">{copy('Simulation values', 'ค่าภายในระบบจำลอง')}</span>
             </div>
             <div className={`mt-3 grid gap-2 ${knowledge.treatments.length > 1 ? 'sm:grid-cols-2' : ''}`}>
               {knowledge.treatments.length === 0 ? (
@@ -151,23 +151,23 @@ export function PestKnowledgeModal({ language = 'en', onClose, pest }) {
                   {treatment.imageUrl ? <img className="h-[52px] w-[52px] rounded-md bg-[#9bcf82] object-contain" src={treatment.imageUrl} alt="" draggable="false" /> : <span className="grid h-[52px] w-[52px] place-items-center rounded-md bg-[#9bcf82]/15 text-[#9bcf82]"><AppIcon className="h-6 w-6" name="tool" /></span>}
                   <span className="min-w-0">
                     <strong className="block truncate text-xs text-lime-50">{treatment.name}</strong>
-                    <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{treatment.detail}</span>
+                    <span className="mt-0.5 block text-sm leading-4 text-slate-400">{treatment.detail}</span>
                   </span>
                   <span className="rounded-md border border-emerald-200/15 bg-emerald-300/10 px-2 py-1 text-center">
                     <strong className="block text-xs text-emerald-200">{treatment.success}%</strong>
-                    <small className="block text-[9px] text-slate-400">{copy('success', 'สำเร็จ')}</small>
+                    <small className="block text-sm text-slate-400">{copy('success', 'สำเร็จ')}</small>
                   </span>
                 </article>
               ))}
             </div>
-            <p className="mt-2.5 flex gap-2 rounded-lg border border-amber-200/10 bg-amber-300/[0.045] px-2.5 py-2 text-[10px] leading-4 text-amber-50/80">
+            <p className="mt-2.5 flex gap-2 rounded-lg border border-amber-200/10 bg-amber-300/[0.045] px-2.5 py-2 text-sm leading-4 text-amber-50/80">
               <AppIcon className="mt-0.5 h-3 w-3 shrink-0 text-amber-300" name="help" />
               {copy('Success percentages describe this simulation only; they are not real-world pesticide efficacy claims.', 'เปอร์เซ็นต์ความสำเร็จเป็นค่าของระบบจำลองเท่านั้น ไม่ใช่การรับรองประสิทธิภาพของสารกำจัดศัตรูพืชในชีวิตจริง')}
             </p>
           </section>
 
           {knowledge.sources.length > 0 && <section className="mt-4 border-t border-lime-100/10 pt-3">
-            <strong className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{copy('Sources and further reading', 'แหล่งอ้างอิงและอ่านเพิ่มเติม')}</strong>
+            <strong className="text-sm uppercase tracking-[0.12em] text-slate-500">{copy('Sources and further reading', 'แหล่งอ้างอิงและอ่านเพิ่มเติม')}</strong>
             <div className="mt-2 grid gap-1.5">
               {knowledge.sources.map((source) => (
                 <a

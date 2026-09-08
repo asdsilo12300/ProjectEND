@@ -113,7 +113,7 @@ export function PlantKnowledgeModal({ onClose, plantAsset }) {
               </div>
               {knowledge.photo ? (
                 <figcaption
-                  className="flex flex-wrap items-center gap-x-1 px-2.5 py-2 text-[10px] leading-4 text-slate-400"
+                  className="flex flex-wrap items-center gap-x-1 px-2.5 py-2 text-sm leading-4 text-slate-400"
                   data-i18n-skip="true"
                 >
                   <span>Photo:</span>
