@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import learnAboutPlantsBanner from '../assets/learn-about-plants-banner.jpg'
 import plantGrowthLogo from '../assets/Logo for Plant Growth Academy Simulation Game-Photoroom.png'
 import { AppIcon } from '../game/icons/FontAwesomeIcon'
@@ -288,13 +288,14 @@ function LandingHeader({ page, user, onHome, onLearn, onOpenPage, onStart, onSig
               <button type="button" onClick={() => run(() => onOpenPage?.('shop'))}><PixelIcon name="shop" /><span>Shop</span></button>
               <button type="button" onClick={() => run(() => onOpenPage?.('history'))}><PixelIcon name="history" /><span>History</span></button>
               <button type="button" onClick={() => run(() => onOpenPage?.('community'))}><PixelIcon name="community" /><span>Community</span></button>
+              <button className="landing-nav__cta" type="button" onClick={() => run(onStart)}>
+                <PixelIcon name="lab" />
+                <span>Open Plant Lab</span>
+              </button>
             </>
-          ) : null}
-          {!user && <button type="button" onClick={() => run(onSignIn)}><AppIcon name="key" /><span>Log in</span></button>}
-          <button className="landing-nav__cta" type="button" onClick={() => run(onStart)}>
-            <PixelIcon name="lab" />
-            <span>{user ? 'Open Plant Lab' : 'Start growing'}</span>
-          </button>
+          ) : (
+            <button className="landing-nav__login" type="button" onClick={() => run(onSignIn)}><AppIcon name="key" /><span>Log in</span></button>
+          )}
         </nav>
         <div className="landing-header__actions">
           <button
@@ -635,9 +636,225 @@ function InteractiveLabPreview({ onStart }) {
   )
 }
 
+const homeArchiveTabs = [
+  { key: 'overview', icon: 'eco', label: 'Overview', description: 'Highlights, learning goals, and growing modes' },
+  { key: 'how', icon: 'history', label: 'How to play', description: 'A guided tour from setup to harvest' },
+  { key: 'lab', icon: 'controller', label: 'Plant Lab', description: 'Interactive controls and connected spaces' },
+  { key: 'science', icon: 'bolt', label: 'Plant science', description: 'The factors behind every growing decision' },
+]
+
+function HomeArchivePanel({ activeKey, onClose, onLearn, onOpenDemo, onOpenPage, onSelectJourney, onStart, plantCount, user }) {
+  const activeTab = homeArchiveTabs.find((tab) => tab.key === activeKey) ?? homeArchiveTabs[0]
+
+  return (
+    <section
+      aria-labelledby="home-archive-title"
+      className="landing-home-archive landing-home-archive--scene"
+      id="home-archive-panel"
+      role="region"
+    >
+      <header className="landing-home-archive__header">
+        <div>
+          <span className="landing-home-archive__eyebrow"><AppIcon name={activeTab.icon} /> FIELD GUIDE</span>
+          <h2 id="home-archive-title">{activeTab.label}</h2>
+          <p>{activeTab.description}</p>
+        </div>
+        <button className="landing-home-archive__close" type="button" onClick={onClose} aria-label="Back to home">
+          <AppIcon name="close" />
+        </button>
+      </header>
+
+      <div
+        className={`landing-home-archive__content landing-home-archive__content--${activeKey}`}
+        tabIndex={0}
+      >
+          {activeKey === 'overview' && (
+            <>
+              <section className="landing-game-summary" aria-label="Simulation highlights">
+                <div className="landing-container landing-game-summary__grid">
+                  <div><strong>3D</strong><span>living plant simulation</span></div>
+                  <div><strong>6</strong><span>connected growth factors</span></div>
+                  <div><strong>{plantCount || '—'}</strong><span>plant species to explore</span></div>
+                  <div><strong>∞</strong><span>experiments to compare</span></div>
+                </div>
+              </section>
+              <section className="landing-section landing-game-intro" id="about">
+                <div className="landing-container">
+                  <div className="landing-game-intro__copy">
+                    <h2>A science learning simulation built around meaningful choices.</h2>
+                    <p>Instead of memorizing plant facts, you investigate them. Every adjustment changes the simulation, giving you clear feedback to observe, question, and understand.</p>
+                  </div>
+                  <div className="landing-game-intro__pillars">
+                    {features.slice(0, 3).map((feature, index) => (
+                      <GamePanel as="article" key={feature.title}>
+                        <span>0{index + 1}</span>
+                        <div className="landing-icon-box"><PixelIcon name={index === 0 ? 'lab' : index === 1 ? 'history' : 'community'} /></div>
+                        <h3>{feature.title}</h3>
+                        <p>{feature.description}</p>
+                      </GamePanel>
+                    ))}
+                  </div>
+                </div>
+              </section>
+              <ModeExplorer user={user} onStart={onStart} onOpenDemo={onOpenDemo} />
+            </>
+          )}
+
+          {activeKey === 'how' && (
+            <>
+              <ProductTour />
+              <section className="landing-section landing-journey" aria-labelledby="archive-journey-title">
+                <div className="landing-container">
+                  <div className="landing-section-heading landing-section-heading--center">
+                    <h2 id="archive-journey-title">From first login to your first harvest.</h2>
+                    <p>Four clear steps help new players begin quickly while leaving room for deeper experimentation.</p>
+                  </div>
+                  <div className="landing-journey__grid">
+                    {journeySteps.map((step, index) => (
+                      <GamePanel
+                        as="article"
+                        aria-haspopup="dialog"
+                        aria-label={`View details: ${step.title}`}
+                        key={step.title}
+                        onClick={() => onSelectJourney(index)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            onSelectJourney(index)
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className={`landing-journey__visual landing-journey__visual--${index + 1}`}>
+                          <img src={step.image} alt={step.imageAlt} />
+                          <strong>0{index + 1}</strong>
+                        </div>
+                        <div className="landing-journey__content">
+                          <span className="landing-journey__icon"><AppIcon name={step.icon} /></span>
+                          <h3>{step.title}</h3>
+                          <p>{step.description}</p>
+                          <div className="landing-journey__open">View full step <AppIcon name="arrowForward" /></div>
+                        </div>
+                      </GamePanel>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+          {activeKey === 'lab' && (
+            <>
+              <InteractiveLabPreview onStart={onStart} />
+              <section className="landing-section landing-spaces" aria-labelledby="archive-spaces-title">
+                <div className="landing-container">
+                  <div className="landing-section-heading landing-spaces__heading">
+                    <div><h2 id="archive-spaces-title">Every page supports the next experiment.</h2></div>
+                    <p>The lab, learning content, tools, records, and community work together as one connected experience.</p>
+                  </div>
+                  <div className="landing-spaces__grid">
+                    {gameSpaces.map((space) => (
+                      <article className={`landing-space-card landing-space-card--${space.preview}`} key={space.page}>
+                        <div className="landing-space-card__preview">
+                          <img src={space.image} alt={space.imageAlt} loading="lazy" decoding="async" />
+                          <span className="landing-space-card__icon"><PixelIcon name={space.page === 'settings' ? 'lab' : space.page} /></span>
+                        </div>
+                        <div className="landing-space-card__body">
+                          <small>{space.eyebrow}</small>
+                          <h3>{space.title}</h3>
+                          <p>{space.description}</p>
+                          <button
+                            data-testid={`landing-demo-${space.page}`}
+                            type="button"
+                            onClick={() => user ? onOpenPage(space.page) : onOpenDemo(space.page)}
+                          >
+                            {user ? `Explore ${space.title}` : `Try ${space.title} preview`}
+                            <AppIcon name="arrowForward" />
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+          {activeKey === 'science' && (
+            <>
+              <section className="landing-section landing-section--factors">
+                <div className="landing-container">
+                  <div className="landing-section-heading landing-section-heading--center">
+                    <h2>Six factors, one connected system.</h2>
+                    <p>Use these principles to diagnose problems and make better decisions inside the plant lab.</p>
+                  </div>
+                  <div className="landing-factor-grid">
+                    {factors.map((factor) => (
+                      <GamePanel as="article" className="landing-factor-card" key={factor.title}>
+                        <div className="landing-icon-box"><PixelIcon name={factor.title.toLowerCase()} /></div>
+                        <div className="landing-factor-card__title"><h3>{factor.title}</h3><strong>{factor.value}</strong></div>
+                        <p>{factor.description}</p>
+                      </GamePanel>
+                    ))}
+                  </div>
+                </div>
+              </section>
+              <section className="landing-section landing-science-bridge">
+                <div className="landing-container landing-science-bridge__inner">
+                  <div className="landing-science-bridge__visual">
+                    <span><AppIcon name="bolt" />Light</span><i>+</i>
+                    <span><AppIcon name="drop" />Water</span><i>+</i>
+                    <span><AppIcon name="air" />CO₂</span><i>→</i>
+                    <span><AppIcon name="eco" />Growth</span>
+                  </div>
+                  <div>
+                    <h2>Every control connects to real plant science.</h2>
+                    <p>Use the Knowledge Library to understand plant structures, environmental factors, and photosynthesis—then test those ideas in the simulation.</p>
+                    <button className="landing-text-link" type="button" onClick={onLearn}>Open the Knowledge Library<AppIcon name="arrowForward" /></button>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+      </div>
+
+      <footer className="landing-home-archive__footer">
+        <span><AppIcon name="sprout" /> Ready to begin your growing cycle?</span>
+        <GameButton onClick={() => { onClose(); onStart() }}>
+          <PixelIcon name="lab" />
+          {user ? 'Continue your experiment' : 'Play the simulation'}
+          <AppIcon name="arrowForward" />
+        </GameButton>
+      </footer>
+    </section>
+  )
+}
+
 function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo, plantCount = 0 }) {
+  const [activeArchiveKey, setActiveArchiveKey] = useState(null)
   const [selectedJourneyIndex, setSelectedJourneyIndex] = useState(null)
+  const archiveTriggerRef = useRef(null)
   const selectedJourney = selectedJourneyIndex === null ? null : journeySteps[selectedJourneyIndex]
+
+  function openArchive(key, trigger) {
+    if (!activeArchiveKey) archiveTriggerRef.current = trigger
+    setActiveArchiveKey(key)
+  }
+
+  const closeArchive = useCallback(() => {
+    setActiveArchiveKey(null)
+    window.requestAnimationFrame(() => archiveTriggerRef.current?.focus())
+  }, [])
+
+  useEffect(() => {
+    if (!activeArchiveKey || selectedJourney) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') closeArchive()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [activeArchiveKey, closeArchive, selectedJourney])
 
   useEffect(() => {
     if (!selectedJourney) return undefined
@@ -658,7 +875,7 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo, plantCount =
 
   return (
     <>
-      <section className="landing-hero landing-hero--quest-banner" data-tour="home-hero">
+      <section className={`landing-hero landing-hero--quest-banner ${activeArchiveKey ? 'is-archive-scene-open' : ''}`} data-tour="home-hero">
         <img
           className="landing-hero__image"
           src="/media/landing-game-ui/plant-academy-cavern-hero-v1.png"
@@ -683,185 +900,41 @@ function HomePage({ user, onStart, onLearn, onOpenPage, onOpenDemo, plantCount =
                 <AppIcon name="arrowForward" />
               </GameButton>
             </div>
+          </div>
+        </div>
+        <nav className="landing-hero__archive-launcher" aria-label="Explore the academy">
+          {homeArchiveTabs.map((tab) => (
             <button
-              className="landing-hero__secondary"
+              aria-label={tab.label}
+              aria-controls="home-archive-panel"
+              aria-pressed={activeArchiveKey === tab.key}
+              className={activeArchiveKey === tab.key ? 'is-active' : ''}
+              key={tab.key}
               type="button"
-              onClick={() => document.querySelector('.landing-product-tour')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={(event) => openArchive(tab.key, event.currentTarget)}
             >
-              See how the field lab works <AppIcon name="arrowForward" />
+              <span><AppIcon name={tab.icon} /></span>
+              <span className="landing-hero__archive-label">
+                <strong>{tab.label}</strong>
+              </span>
+              <AppIcon name="arrowForward" />
             </button>
-          </div>
-
-        </div>
-
-        <button
-          className="landing-scroll-cue"
-          type="button"
-          aria-label="Scroll to explore"
-          onClick={() => document.querySelector('.landing-home-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-        >
-          <span>Scroll to explore</span>
-          <i aria-hidden="true" />
-        </button>
+          ))}
+        </nav>
+        {activeArchiveKey ? (
+          <HomeArchivePanel
+            activeKey={activeArchiveKey}
+            onClose={closeArchive}
+            onLearn={onLearn}
+            onOpenDemo={onOpenDemo}
+            onOpenPage={onOpenPage}
+            onSelectJourney={setSelectedJourneyIndex}
+            onStart={onStart}
+            plantCount={plantCount}
+            user={user}
+          />
+        ) : null}
       </section>
-
-      <div className="landing-home-content particle-network-surface">
-        <ParticleNetworkBackground variant="green" />
-
-        <section className="landing-game-summary" aria-label="Simulation highlights">
-          <div className="landing-container landing-game-summary__grid">
-            <div><strong>3D</strong><span>living plant simulation</span></div>
-            <div><strong>6</strong><span>connected growth factors</span></div>
-            <div><strong>{plantCount || '—'}</strong><span>plant species to explore</span></div>
-            <div><strong>∞</strong><span>experiments to compare</span></div>
-          </div>
-        </section>
-
-        <ModeExplorer user={user} onStart={onStart} onOpenDemo={onOpenDemo} />
-
-      <section className="landing-section landing-game-intro" id="about">
-        <div className="landing-container">
-          <div className="landing-game-intro__copy" data-reveal="up">
-            <h2>A science learning simulation built around meaningful choices.</h2>
-            <p>Instead of memorizing plant facts, you investigate them. Every adjustment changes the simulation, giving you clear feedback to observe, question, and understand.</p>
-          </div>
-          <div className="landing-game-intro__pillars">
-            {features.slice(0, 3).map((feature, index) => (
-              <GamePanel as="article" data-reveal="up" key={feature.title} style={{ '--reveal-delay': `${index * 90}ms` }}>
-                <span>0{index + 1}</span>
-                <div className="landing-icon-box"><PixelIcon name={index === 0 ? 'lab' : index === 1 ? 'history' : 'community'} /></div>
-                <h3>{feature.title}</h3>
-                <p>{feature.description}</p>
-              </GamePanel>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <ProductTour />
-
-      <InteractiveLabPreview onStart={onStart} />
-
-      <section className="landing-section landing-journey" aria-labelledby="journey-title">
-        <div className="landing-container">
-          <div className="landing-section-heading landing-section-heading--center" data-reveal="up">
-            <h2 id="journey-title">From first login to your first harvest.</h2>
-            <p>Four clear steps help new players begin quickly while leaving room for deeper experimentation.</p>
-          </div>
-          <div className="landing-journey__grid">
-            {journeySteps.map((step, index) => (
-              <GamePanel
-                as="article"
-                aria-haspopup="dialog"
-                aria-label={`View details: ${step.title}`}
-                data-reveal="up"
-                key={step.title}
-                onClick={() => setSelectedJourneyIndex(index)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    setSelectedJourneyIndex(index)
-                  }
-                }}
-                role="button"
-                style={{ '--reveal-delay': `${index * 80}ms` }}
-                tabIndex={0}
-              >
-                <div className={`landing-journey__visual landing-journey__visual--${index + 1}`}>
-                  <img src={step.image} alt={step.imageAlt} />
-                  <strong>0{index + 1}</strong>
-                </div>
-                <div className="landing-journey__content">
-                  <span className="landing-journey__icon"><AppIcon name={step.icon} /></span>
-                  <h3>{step.title}</h3>
-                  <p>{step.description}</p>
-                  <div className="landing-journey__open">View full step <AppIcon name="arrowForward" /></div>
-                </div>
-              </GamePanel>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section landing-spaces" aria-labelledby="spaces-title">
-        <div className="landing-container">
-          <div className="landing-section-heading landing-spaces__heading" data-reveal="up">
-            <div>
-              <h2 id="spaces-title">Every page supports the next experiment.</h2>
-            </div>
-            <p>The lab, learning content, tools, records, and community work together as one connected experience.</p>
-          </div>
-          <div className="landing-spaces__grid">
-            {gameSpaces.map((space, index) => (
-              <article className={`landing-space-card landing-space-card--${space.preview}`} data-reveal="up" key={space.page} style={{ '--reveal-delay': `${(index % 3) * 80}ms` }}>
-                <div className="landing-space-card__preview">
-                  <img src={space.image} alt={space.imageAlt} loading="lazy" decoding="async" />
-                  <span className="landing-space-card__icon"><PixelIcon name={space.page === 'settings' ? 'lab' : space.page} /></span>
-                </div>
-                <div className="landing-space-card__body">
-                  <small>{space.eyebrow}</small>
-                  <h3>{space.title}</h3>
-                  <p>{space.description}</p>
-                  <button
-                    data-testid={`landing-demo-${space.page}`}
-                    type="button"
-                    onClick={() => {
-                      if (space.page === 'learn') {
-                        onLearn()
-                        return
-                      }
-                      if (user) onOpenPage(space.page)
-                      else onOpenDemo(space.page)
-                    }}
-                  >
-                    {user
-                      ? `Explore ${space.title}`
-                      : space.page === 'learn'
-                        ? 'Learn more'
-                        : `Try ${space.title} preview`}
-                    <AppIcon name="arrowForward" />
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section landing-science-bridge">
-        <div className="landing-container landing-science-bridge__inner" data-reveal="up">
-          <div className="landing-science-bridge__visual">
-            <span><AppIcon name="bolt" />Light</span>
-            <i>+</i>
-            <span><AppIcon name="drop" />Water</span>
-            <i>+</i>
-            <span><AppIcon name="air" />CO₂</span>
-            <i>→</i>
-            <span><AppIcon name="eco" />Growth</span>
-          </div>
-          <div>
-            <h2>Every control connects to real plant science.</h2>
-            <p>Use the Knowledge Library to understand plant structures, environmental factors, and photosynthesis—then test those ideas in the simulation.</p>
-            <button className="landing-text-link" type="button" onClick={onLearn}>Open the Knowledge Library<AppIcon name="arrowForward" /></button>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section landing-final-cta">
-        <div className="landing-container landing-final-cta__inner" data-reveal="up">
-          <div className="landing-final-cta__icon">
-            <img src={plantGrowthLogo} alt="Plant Growth Academy" />
-          </div>
-          <h2>Start with one plant. Leave with a better question.</h2>
-          <p>Sign in to begin your first growing cycle and keep every result connected to your learner profile.</p>
-          <GameButton onClick={onStart}>
-            <PixelIcon name="lab" />
-            {user ? 'Continue your experiment' : 'Continue with Google and play'}
-            <AppIcon name="arrowForward" />
-          </GameButton>
-        </div>
-      </section>
-      </div>
       {selectedJourney ? (
         <JourneyDetailModal
           index={selectedJourneyIndex}
@@ -1481,7 +1554,7 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
   }, [articleSlug, page])
 
   return (
-    <main className="landing-shell" data-theme={theme}>
+    <main className={`landing-shell ${page === 'home' ? 'landing-shell--home' : ''}`} data-theme={theme}>
       <LandingHeader page={page} user={user} onHome={openHome} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onStart={onStart} onSignIn={onSignIn} />
       <div className="landing-display-controls" aria-label={language === 'th' ? 'การตั้งค่าการแสดงผล' : 'Display preferences'}>
         <LandingLanguageToggle language={language} onLanguageChange={changeLanguage} />
@@ -1492,8 +1565,8 @@ export function LandingPage({ page = 'home', user, onHome, onLearn, onStart, onS
           ? <LearningArticlePage key={articleSlug} slug={articleSlug} user={user} onBack={openLearningLibrary} onStart={onStart} />
           : <LearnPage user={user} onHome={openHome} onOpenArticle={openArticle} onStart={onStart} />
         : <HomePage user={user} onStart={onStart} onLearn={openLearningLibrary} onOpenPage={onOpenPage} onOpenDemo={onOpenDemo} plantCount={plantCount} />}
-      <ScrollGrowthHud language={language} pageKey={`${page}:${articleSlug ?? 'library'}`} />
-      <LandingFooter onHome={openHome} onLearn={openLearningLibrary} />
+      {page !== 'home' ? <ScrollGrowthHud language={language} pageKey={`${page}:${articleSlug ?? 'library'}`} /> : null}
+      {page !== 'home' ? <LandingFooter onHome={openHome} onLearn={openLearningLibrary} /> : null}
     </main>
   )
 }
