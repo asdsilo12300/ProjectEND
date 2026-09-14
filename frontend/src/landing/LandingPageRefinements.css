@@ -1556,7 +1556,7 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
 }
 
 .landing-shell--home .landing-hero__content--banner {
-  padding-inline: clamp(224px, 18vw, 286px) clamp(24px, 5vw, 80px);
+  padding-inline: clamp(24px, 5vw, 80px) clamp(224px, 18vw, 286px);
   transition: opacity 180ms ease, transform 240ms ease, visibility 180ms ease;
 }
 
@@ -1571,7 +1571,8 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
   position: absolute;
   z-index: 8;
   top: 50%;
-  left: clamp(12px, 2vw, 30px);
+  right: clamp(12px, 2vw, 30px);
+  left: auto;
   display: grid;
   width: clamp(202px, 16vw, 240px);
   grid-template-columns: 1fr;
@@ -1619,7 +1620,7 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
 .landing-home-archive--scene {
   position: absolute;
   z-index: 7;
-  inset: clamp(12px, 2vh, 20px) clamp(12px, 2vw, 28px) clamp(12px, 2vh, 20px) clamp(218px, 18vw, 268px);
+  inset: clamp(12px, 2vh, 20px) clamp(218px, 18vw, 268px) clamp(12px, 2vh, 20px) clamp(12px, 2vw, 28px);
   grid-template-rows: auto minmax(0, 1fr) auto;
   border-color: rgb(181 207 142 / 58%);
   background: rgb(5 15 10 / 84%);
@@ -1637,7 +1638,7 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
   font-size: 12px;
 }
 
-.landing-home-archive--scene .landing-home-archive__close { margin-right: 104px; }
+.landing-home-archive--scene .landing-home-archive__close { margin-right: 0; }
 
 .landing-home-archive--scene .landing-home-archive__content {
   background:
@@ -1658,11 +1659,12 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
 
 @media (max-width: 900px) {
   .landing-shell--home .landing-hero__content--banner {
-    padding-inline: 188px 24px;
+    padding-inline: 24px 188px;
   }
 
   .landing-hero__archive-launcher {
-    left: 10px;
+    right: 10px;
+    left: auto;
     width: 178px;
   }
 
@@ -1671,13 +1673,13 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
     grid-template-columns: 34px minmax(0, 1fr) 12px;
   }
 
-  .landing-home-archive--scene { inset: 8px 8px 8px 184px; }
+  .landing-home-archive--scene { inset: 8px 184px 8px 8px; }
 }
 
 @media (max-width: 760px) {
   .landing-shell--home .landing-hero__content--banner {
     width: 100%;
-    padding: 12px 10px 12px 72px;
+    padding: 12px 72px 12px 10px;
   }
 
   .landing-shell--home .landing-hero__content--banner .landing-hero__copy { width: 100%; }
@@ -1698,7 +1700,8 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
 
   .landing-hero__archive-launcher {
     top: 50%;
-    left: 5px;
+    right: 5px;
+    left: auto;
     width: 58px;
     gap: 7px;
   }
@@ -1726,7 +1729,7 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
   .landing-hero__archive-launcher > button:hover { transform: translateX(2px); }
 
   .landing-home-archive--scene {
-    inset: 5px 5px 5px 68px;
+    inset: 5px 68px 5px 5px;
     border-inline: 1px solid rgb(181 207 142 / 58%);
     border-bottom: 1px solid rgb(181 207 142 / 58%);
     border-radius: 5px;
@@ -1804,8 +1807,9 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
   position: relative;
   overflow: hidden;
   border-radius: 4px;
-  background: linear-gradient(90deg, rgb(225 239 194 / 13%), rgb(89 137 70 / 5%) 72%, transparent);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 24%), inset 3px 0 rgb(160 206 111 / 42%);
+  background: linear-gradient(90deg, rgb(13 42 26 / 96%), rgb(6 24 15 / 94%));
+  box-shadow: 0 10px 26px rgb(0 0 0 / 42%), inset 3px 0 rgb(160 206 111 / 52%);
+  backdrop-filter: blur(8px);
   text-shadow: 0 2px 8px rgb(0 0 0 / 78%);
 }
 
@@ -1837,7 +1841,7 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
 }
 
 .landing-hero__archive-launcher > button:hover {
-  background: linear-gradient(90deg, rgb(173 216 127 / 25%), rgb(98 153 75 / 12%) 76%, transparent);
+  background: linear-gradient(90deg, rgb(35 78 42 / 98%), rgb(11 38 22 / 97%));
   box-shadow: 0 11px 28px rgb(0 0 0 / 34%), inset 4px 0 #d9b552;
 }
 
@@ -1849,7 +1853,7 @@ html[lang='th'] .landing-journey .landing-section-heading h2 {
 }
 
 .landing-hero__archive-launcher > button.is-active {
-  background: linear-gradient(90deg, rgb(188 225 139 / 30%), rgb(97 150 70 / 14%) 76%, transparent);
+  background: linear-gradient(90deg, rgb(46 91 47 / 99%), rgb(14 43 24 / 98%));
   box-shadow: 0 12px 32px rgb(0 0 0 / 38%), inset 4px 0 #f0c75e;
 }
 

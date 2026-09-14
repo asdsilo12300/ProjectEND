@@ -637,10 +637,10 @@ function InteractiveLabPreview({ onStart }) {
 }
 
 const homeArchiveTabs = [
-  { key: 'overview', icon: 'eco', label: 'Overview', description: 'Highlights, learning goals, and growing modes' },
-  { key: 'how', icon: 'history', label: 'How to play', description: 'A guided tour from setup to harvest' },
-  { key: 'lab', icon: 'controller', label: 'Plant Lab', description: 'Interactive controls and connected spaces' },
-  { key: 'science', icon: 'bolt', label: 'Plant science', description: 'The factors behind every growing decision' },
+  { key: 'overview', icon: 'eco', label: 'Website content', description: 'Highlights, learning goals, and growing modes' },
+  { key: 'how', icon: 'history', label: 'Steps', description: 'A guided tour from setup to harvest' },
+  { key: 'lab', icon: 'controller', label: 'Experiment', description: 'Interactive controls and connected spaces' },
+  { key: 'science', icon: 'bolt', label: 'More content', description: 'The factors behind every growing decision' },
 ]
 
 function HomeArchivePanel({ activeKey, onClose, onLearn, onOpenDemo, onOpenPage, onSelectJourney, onStart, plantCount, user }) {
